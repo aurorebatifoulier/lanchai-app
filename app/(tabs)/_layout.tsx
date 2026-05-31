@@ -1,35 +1,93 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import { Platform, StyleSheet, View, Text } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { COLORS } from '@/constants/Colors';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+function TabIcon({ name, color, focused }: { name: string; color: string; focused: boolean }) {
+  return (
+    <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+      <Feather name={name as never} size={20} color={focused ? COLORS.amber : COLORS.fg3} />
+    </View>
+  );
+}
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: COLORS.amber,
+        tabBarInactiveTintColor: COLORS.fg3,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarItemStyle: styles.tabItem,
+        tabBarBackground: () => <View style={styles.tabBarBg} />,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ focused }) => <TabIcon name="home" color={COLORS.amber} focused={focused} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="catalogue"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Catalogue',
+          tabBarIcon: ({ focused }) => <TabIcon name="grid" color={COLORS.amber} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reservations"
+        options={{
+          title: 'Reservations',
+          tabBarIcon: ({ focused }) => <TabIcon name="file-text" color={COLORS.amber} focused={focused} />,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: 'My Account',
+          tabBarIcon: ({ focused }) => <TabIcon name="user" color={COLORS.amber} focused={focused} />,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.softGray200,
+    height: Platform.OS === 'ios' ? 88 : 68,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+    paddingTop: 8,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  tabBarBg: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+    letterSpacing: 0.1,
+  },
+  tabItem: {
+    paddingTop: 0,
+  },
+  tabIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconActive: {
+    // The active icon stays transparent — color change handled by Feather icon color
+  },
+});
