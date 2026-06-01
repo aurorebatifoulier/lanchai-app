@@ -15,6 +15,8 @@ export default function RootLayout() {
         <Stack.Screen name="product/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="category/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="booking/[productId]" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+        <Stack.Screen name="booking/new" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+        <Stack.Screen name="booking/confirmation" options={{ animation: 'fade' }} />
       </Stack>
       <StatusBar style="dark" />
     </GestureHandlerRootView>

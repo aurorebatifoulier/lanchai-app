@@ -214,10 +214,10 @@ export default function ProductDetailScreen() {
         </View>
         <TouchableOpacity
           style={styles.rentBtn}
-          onPress={() => router.push(`/booking/${product.id}`)}
+          onPress={() => router.push({ pathname: '/booking/new', params: { productId: product.id } })}
           activeOpacity={0.85}
         >
-          <Text style={styles.rentBtnText}>Rent now</Text>
+          <Text style={styles.rentBtnText}>Reserve</Text>
           <Feather name="arrow-right" size={16} color={COLORS.carbon} />
         </TouchableOpacity>
       </View>
