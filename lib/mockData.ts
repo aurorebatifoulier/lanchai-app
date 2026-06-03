@@ -145,8 +145,6 @@ export const MOCK_PRODUCTS: Product[] = [
     iconName: 'camera',
     iconSet: 'Feather',
     cardBg: 'dark',
-    tag: 'BEST SELLER',
-    tagStyle: 'dark',
   },
   {
     id: '4',
@@ -188,8 +186,6 @@ export const MOCK_PRODUCTS: Product[] = [
     iconName: 'coffee',
     iconSet: 'Feather',
     cardBg: 'dark',
-    tag: 'BEST SELLER',
-    tagStyle: 'dark',
   },
   {
     id: '6',
