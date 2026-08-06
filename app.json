@@ -10,6 +10,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.lanchai.app",
       "supportsTablet": true
     },
     "android": {
