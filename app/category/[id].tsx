@@ -1,25 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
-import { getProductsByCategory } from '@/lib/firestore';
+import BackButton from '@/components/BackButton';
+import { useAuth } from '@/contexts/AuthContext';
+import { getProductsByCategory, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
 import { Product, CATEGORIES, CATEGORY_DETAILS, ProductCategory } from '@/lib/mockData';
+import { getMinPrice } from '@/utils/pricing';
+import { useExchangeRate } from '@/lib/exchangeRate';
+import { toLak } from '@/utils/currency';
+import { useLoyaltyTier } from '@/lib/loyalty';
+import { getProductAccessState } from '@/utils/productAccess';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+  const exchangeRate = useExchangeRate();
+  const userTier = useLoyaltyTier();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const catId = id as ProductCategory;
   const catDetails = CATEGORY_DETAILS[catId];
@@ -27,12 +39,39 @@ export default function CategoryScreen() {
 
   useEffect(() => {
     if (catId) {
-      getProductsByCategory(catId).then(data => {
-        setProducts(data);
-        setLoading(false);
-      });
+      getProductsByCategory(catId)
+        .then(data => {
+          setProducts(data);
+          setLoading(false);
+        })
+        .catch(() => {
+          setLoadError(true);
+          setLoading(false);
+        });
     }
   }, [catId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      getFavorites(user.uid).then(ids => setFavorites(new Set(ids)));
+    }, [user])
+  );
+
+  const handleToggleFavorite = useCallback((productId: string) => {
+    if (!user) return;
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+        removeFavorite(user.uid, productId);
+      } else {
+        next.add(productId);
+        addFavorite(user.uid, productId);
+      }
+      return next;
+    });
+  }, [user]);
 
   const bgColors: Record<string, string> = {
     amber: COLORS.amber,
@@ -51,9 +90,13 @@ export default function CategoryScreen() {
       {/* Hero */}
       <View style={[styles.hero, { backgroundColor: heroBg }]}>
         <View style={styles.heroTopBar}>
-          <TouchableOpacity style={[styles.backBtn, isDark && styles.backBtnDark]} onPress={() => router.back()}>
-            <Feather name="arrow-left" size={20} color={isDark ? COLORS.porcelain : COLORS.carbon} />
-          </TouchableOpacity>
+          <BackButton
+            onPress={() => router.back()}
+            variant="bare"
+            size={20}
+            color={isDark ? COLORS.porcelain : COLORS.carbon}
+            style={[styles.backBtn, isDark && styles.backBtnDark]}
+          />
           <Text style={[styles.topBarTitle, { color: isDark ? COLORS.porcelain : COLORS.carbon }]}>LANCHAI</Text>
           <TouchableOpacity style={[styles.backBtn, isDark && styles.backBtnDark]}>
             <Feather name="search" size={20} color={isDark ? COLORS.porcelain : COLORS.carbon} />
@@ -113,6 +156,18 @@ export default function CategoryScreen() {
       {/* Products */}
       {loading ? (
         <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
+      ) : loadError ? (
+        <View style={styles.emptyState}>
+          <Feather name="alert-circle" size={28} color={COLORS.fg3} />
+          <Text style={styles.emptyStateTitle}>Couldn't load items</Text>
+          <Text style={styles.emptyStateSub}>Check your connection and try again.</Text>
+        </View>
+      ) : products.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Feather name="package" size={28} color={COLORS.fg3} />
+          <Text style={styles.emptyStateTitle}>No items yet</Text>
+          <Text style={styles.emptyStateSub}>Check back soon — we're adding more.</Text>
+        </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.gridContent}>
           <View style={styles.grid}>
@@ -121,6 +176,10 @@ export default function CategoryScreen() {
                 key={p.id}
                 product={p}
                 onPress={() => router.push(`/product/${p.id}`)}
+                exchangeRate={exchangeRate}
+                userTier={userTier ?? null}
+                isFavorite={favorites.has(p.id)}
+                onToggleFavorite={() => handleToggleFavorite(p.id)}
               />
             ))}
           </View>
@@ -130,7 +189,7 @@ export default function CategoryScreen() {
   );
 }
 
-function CategoryProductCard({ product, onPress }: { product: Product; onPress: () => void }) {
+function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite }: { product: Product; onPress: () => void; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void }) {
   const bgColors: Record<string, string> = {
     amber: COLORS.amber,
     dark: COLORS.carbon,
@@ -139,11 +198,22 @@ function CategoryProductCard({ product, onPress }: { product: Product; onPress: 
   };
   const bg = bgColors[product.cardBg] ?? COLORS.warmBeige;
   const iconColor = product.cardBg === 'dark' ? COLORS.amber : COLORS.carbon;
+  const minPrice = getMinPrice(product);
+  const accessState = getProductAccessState(product, userTier);
 
   return (
     <TouchableOpacity style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.prodImg, { backgroundColor: bg }]}>
-        {product.tag && (
+        {accessState.badgeLabel ? (
+          <View style={[
+            styles.prodTag,
+            { backgroundColor: accessState.badgeTone === 'unlocked' ? COLORS.amber : COLORS.carbon },
+          ]}>
+            <Text style={[styles.prodTagText, accessState.badgeTone === 'locked' && { color: COLORS.white }]}>
+              {accessState.badgeLabel}
+            </Text>
+          </View>
+        ) : product.tag ? (
           <View style={[
             styles.prodTag,
             product.tagStyle === 'dark' && styles.prodTagDark,
@@ -153,14 +223,18 @@ function CategoryProductCard({ product, onPress }: { product: Product; onPress: 
               {product.tag}
             </Text>
           </View>
-        )}
-        {product.stockLeft <= 1 && !product.tag && (
+        ) : product.stockLeft <= 1 ? (
           <View style={[styles.prodTag, { backgroundColor: '#C8412C' }]}>
             <Text style={[styles.prodTagText, { color: '#FAFAF7' }]}>1 LEFT</Text>
           </View>
-        )}
-        <TouchableOpacity style={styles.prodFav}>
-          <Feather name="heart" size={12} color={COLORS.carbon} />
+        ) : null}
+        <TouchableOpacity
+          style={styles.prodFav}
+          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          activeOpacity={0.8}
+        >
+          <Feather name="heart" size={12} color={isFavorite ? COLORS.danger : COLORS.carbon} />
         </TouchableOpacity>
         <Feather name={product.iconName as never} size={52} color={iconColor} />
       </View>
@@ -168,14 +242,20 @@ function CategoryProductCard({ product, onPress }: { product: Product; onPress: 
         <Text style={styles.prodName} numberOfLines={1}>{product.name}</Text>
         <Text style={styles.prodSub} numberOfLines={1}>{product.shortDesc}</Text>
         <View style={styles.prodBottom}>
-          <View style={styles.prodPriceRow}>
-            <Text style={styles.prodPrice}>{product.pricePerDay}K</Text>
-            <Text style={styles.prodPriceUnit}> LAK/day</Text>
-          </View>
-          <View style={styles.ratingRow}>
-            <Feather name="star" size={10} color={COLORS.amber} />
-            <Text style={styles.ratingText}>{product.rating}</Text>
-          </View>
+          {minPrice != null && exchangeRate != null ? (
+            <View style={styles.prodPriceRow}>
+              <Text style={styles.prodPrice}>From {toLak(minPrice, exchangeRate).toLocaleString('en-US')}</Text>
+              <Text style={styles.prodPriceUnit}> LAK/day</Text>
+            </View>
+          ) : (
+            <Text style={styles.prodSub}>Price not set</Text>
+          )}
+          {product.averageRating != null && (
+            <View style={styles.ratingRow}>
+              <Feather name="star" size={10} color={COLORS.amber} />
+              <Text style={styles.ratingText}>{product.averageRating.toFixed(1)}</Text>
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -268,7 +348,7 @@ const styles = StyleSheet.create({
   filterChip: {
     height: 34,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: 8,
     borderWidth: 1.5,
     borderColor: COLORS.softGray,
     backgroundColor: COLORS.white,
@@ -317,6 +397,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.fg2,
   },
+  // Empty / error states
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.carbon,
+    marginTop: 8,
+  },
+  emptyStateSub: {
+    fontSize: 13,
+    color: COLORS.fg3,
+    textAlign: 'center',
+  },
+
   // Grid
   gridContent: {
     padding: 16,
@@ -347,7 +447,7 @@ const styles = StyleSheet.create({
     left: 8,
     height: 20,
     paddingHorizontal: 8,
-    borderRadius: 999,
+    borderRadius: 6,
     backgroundColor: COLORS.porcelain,
     alignItems: 'center',
     justifyContent: 'center',

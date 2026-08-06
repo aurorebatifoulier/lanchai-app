@@ -13,10 +13,15 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '@/constants/Colors';
 
 interface WhyRentSlide {
   id: string;
-  image: string;
+  // Local asset from assets/images/. null = placeholder tint shown until photo is added.
+  // When ready: replace null with require('@/assets/images/FILENAME.jpg')
+  // Recommended size: 800 × 400 px (2:1 ratio)
+  image: number | null;
+  tint: string;  // background color shown when image is null or loading
   icon: string;
   title: string;
   tagline: string;
@@ -26,7 +31,8 @@ interface WhyRentSlide {
 const SLIDES: WhyRentSlide[] = [
   {
     id: 'save',
-    image: 'https://picsum.photos/seed/piggy/800/400',
+    image: null, // → assets/images/why-spend-less.jpg  (savings / money scene — e.g. wallet, price tag)
+    tint: '#1B3124',
     icon: 'wallet-outline',
     title: 'Spend Less',
     tagline: 'Own less. Do more.',
@@ -34,7 +40,8 @@ const SLIDES: WhyRentSlide[] = [
   },
   {
     id: 'space',
-    image: 'https://picsum.photos/seed/minimal/800/400',
+    image: null, // → assets/images/why-live-lighter.jpg (minimal, airy living space)
+    tint: '#2A2D38',
     icon: 'home-outline',
     title: 'Live Lighter',
     tagline: 'No storage. No clutter.',
@@ -42,7 +49,8 @@ const SLIDES: WhyRentSlide[] = [
   },
   {
     id: 'eco',
-    image: 'https://picsum.photos/seed/nature2/800/400',
+    image: null, // → assets/images/why-consume-better.jpg (eco / nature / green scene)
+    tint: '#1A2E20',
     icon: 'leaf-outline',
     title: 'Consume Better',
     tagline: 'Use. Return. Repeat.',
@@ -50,7 +58,8 @@ const SLIDES: WhyRentSlide[] = [
   },
   {
     id: 'access',
-    image: 'https://picsum.photos/seed/equipment/800/400',
+    image: null, // → assets/images/why-access-more.jpg (professional gear laid out — camera, tools, etc.)
+    tint: COLORS.carbon,
     icon: 'star-outline',
     title: 'Access More',
     tagline: 'Professional equipment. Whenever you need it.',
@@ -102,12 +111,14 @@ export default function WhyRentSection() {
           scrollEventThrottle={16}
         >
           {SLIDES.map((slide, i) => (
-            <View key={slide.id} style={[styles.slide, { width }]}>
-              <Image
-                source={{ uri: slide.image }}
-                style={StyleSheet.absoluteFillObject}
-                resizeMode="cover"
-              />
+            <View key={slide.id} style={[styles.slide, { width, backgroundColor: slide.tint }]}>
+              {slide.image != null && (
+                <Image
+                  source={slide.image}
+                  style={StyleSheet.absoluteFillObject}
+                  resizeMode="cover"
+                />
+              )}
               <View style={styles.overlay} />
               <View style={styles.slideContent}>
                 <Ionicons name={slide.icon as never} size={32} color="#FFFFFF" style={styles.slideIcon} />
@@ -132,13 +143,13 @@ export default function WhyRentSection() {
 const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
-    backgroundColor: '#FAFAF7',
+    backgroundColor: COLORS.porcelain,
   },
   carouselWrapper: {
     marginHorizontal: -20,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#FAFAF7',
+    backgroundColor: COLORS.porcelain,
   },
   slide: {
     height: 200,
@@ -159,7 +170,7 @@ const styles = StyleSheet.create({
   slideTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: COLORS.white,
     letterSpacing: -0.4,
     marginBottom: 4,
     lineHeight: 26,
@@ -167,7 +178,7 @@ const styles = StyleSheet.create({
   slideTagline: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#F4B400',
+    color: COLORS.amber,
     marginBottom: 6,
   },
   slideDesc: {
@@ -182,18 +193,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 10,
-    backgroundColor: '#FAFAF7',
+    backgroundColor: COLORS.porcelain,
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#CCCCCC',
+    backgroundColor: COLORS.disabledGray,
   },
   dotActive: {
     width: 18,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#F4B400',
+    backgroundColor: COLORS.amber,
   },
 });

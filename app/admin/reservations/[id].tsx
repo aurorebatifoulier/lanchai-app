@@ -1,0 +1,1372 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+  ActivityIndicator,
+  Linking,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { Feather } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+  getUserProfile,
+  getProduct,
+  type RentalDoc,
+  type ReservationStatus,
+  type UserProfile,
+} from '@/lib/firestore';
+import type { Product } from '@/lib/mockData';
+import { COLORS } from '@/constants/Colors';
+import BackButton from '@/components/BackButton';
+import { overdueSeverity, overdueLabel } from '@/utils/overdue';
+import { STATUS_CONFIG } from '../reservations';
+import { useExchangeRate, useThbRate } from '@/lib/exchangeRate';
+import { convertUsdTo } from '@/utils/damageCharge';
+import { convertLakTo } from '@/utils/currency';
+import { SettlementSummary } from '@/components/SettlementSummary';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtLak(n: number): string {
+  return `${n.toLocaleString('en-US')} LAK`;
+}
+
+type DepositUrgency = 'normal' | 'urgent' | 'overdue';
+
+function depositUrgency(returnedAt: Timestamp | undefined): DepositUrgency {
+  if (!returnedAt) return 'normal';
+  const hoursElapsed = (Date.now() - returnedAt.toMillis()) / 3_600_000;
+  if (hoursElapsed >= 48) return 'overdue';
+  if (hoursElapsed >= 42) return 'urgent'; // last 6h of the 48h refund window
+  return 'normal';
+}
+
+function fmtTimestamp(ts: any): string {
+  if (!ts) return '—';
+  try {
+    const d: Date =
+      typeof ts.toDate === 'function' ? ts.toDate() : new Date((ts as number) * 1000);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return '—';
+  }
+}
+
+// ── sendNotif ─────────────────────────────────────────────────────────────────
+// Fire-and-forget: writes one notification doc for the renter.
+// Wrapped in try/catch so a Firestore error never blocks the admin action.
+
+async function sendNotif(
+  renterId: string,
+  payload: {
+    type: string;
+    title: string;
+    body: string;
+    icon: string;
+    iconColor: string;
+    deepLink: string;
+  },
+): Promise<void> {
+  try {
+    await addDoc(collection(db, 'notifications', renterId, 'items'), {
+      ...payload,
+      createdAt: serverTimestamp(),
+      readAt: null,
+    });
+  } catch (err) {
+    console.warn('[sendNotif] Failed to write notification:', err);
+  }
+}
+
+// ── ConfirmBox ────────────────────────────────────────────────────────────────
+// Inline replacement for Alert.alert — never fails silently on Android.
+
+function ConfirmBox({
+  text,
+  confirmLabel,
+  onCancel,
+  onConfirm,
+  destructive = false,
+  muted = false,
+  confirmDisabled = false,
+  children,
+}: {
+  text: string;
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  destructive?: boolean;
+  // Secondary/resigned styling — for actions that resolve something without it being a
+  // success (e.g. writing off an outstanding balance as uncollectible). Distinct from
+  // destructive, which is for actions with irreversible/alarming consequences.
+  muted?: boolean;
+  confirmDisabled?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View style={[cb.box, destructive && cb.boxDestructive]}>
+      <Text style={cb.text}>{text}</Text>
+      {children}
+      <View style={cb.btnRow}>
+        <TouchableOpacity style={cb.keepBtn} onPress={onCancel} activeOpacity={0.8}>
+          <Text style={cb.keepText}>Keep</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            cb.confirmBtn,
+            destructive && cb.confirmBtnDestructive,
+            muted && cb.confirmBtnMuted,
+            confirmDisabled && cb.confirmBtnDisabled,
+          ]}
+          onPress={onConfirm}
+          activeOpacity={0.8}
+          disabled={confirmDisabled}
+        >
+          <Text style={[
+            cb.confirmText,
+            destructive && cb.confirmTextDestructive,
+            muted && cb.confirmTextMuted,
+          ]}>
+            {confirmLabel}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+export default function AdminReservationDetailScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  // ── Data state ────────────────────────────────────────────────────────────
+  const [reservation,   setReservation]   = useState<RentalDoc | null>(null);
+  const [renterProfile, setRenterProfile] = useState<UserProfile | null>(null);
+  const [product,       setProduct]       = useState<Product | null>(null);
+  const [loading,       setLoading]       = useState(true);
+  const exchangeRate = useExchangeRate();
+  const thbRate       = useThbRate();
+
+  // ── Action state ──────────────────────────────────────────────────────────
+  const [actioning,     setActioning]     = useState(false);
+  const [actionError,   setActionError]   = useState<string | null>(null);
+  // One confirm dialog at a time; null = buttons visible
+  const [confirmAction, setConfirmAction] = useState<
+    'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost' | null
+  >(null);
+  const [settleStaffName,        setSettleStaffName]        = useState('');
+  const [writeOffStaffName,      setWriteOffStaffName]      = useState('');
+  const [writeOffNotes,          setWriteOffNotes]          = useState('');
+  const [lostStaffName,          setLostStaffName]          = useState('');
+  const [lostNotes,              setLostNotes]              = useState('');
+  const [lostChargeAmountInput,  setLostChargeAmountInput]  = useState('');
+  const [lostChargeTouched,      setLostChargeTouched]      = useState(false);
+
+  // ── Phone edit state ──────────────────────────────────────────────────────
+  const [editingPhone,   setEditingPhone]   = useState(false);
+  const [phoneInput,     setPhoneInput]     = useState('');
+  const [savingPhone,    setSavingPhone]    = useState(false);
+  const [phoneError,     setPhoneError]     = useState<string | null>(null);
+  const [verifyingPhone, setVerifyingPhone] = useState(false);
+
+  // ── Load reservation ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return;
+    getDoc(doc(db, 'reservations', id))
+      .then(snap => {
+        if (!snap.exists()) { setLoading(false); return; }
+        const r = { id: snap.id, ...snap.data() } as RentalDoc;
+        setReservation(r);
+        getProduct(r.productId).then(setProduct).catch(() => setProduct(null));
+        getUserProfile(r.renterId)
+          .then(p => { if (p) setRenterProfile(p); })
+          .catch(() => {})
+          .finally(() => setLoading(false));
+      })
+      .catch(() => setLoading(false));
+  }, [id]);
+
+  // ── Action executor ───────────────────────────────────────────────────────
+  const runAction = useCallback(async (
+    firestoreUpdates: Record<string, unknown>,
+    localUpdates: Partial<Omit<RentalDoc, 'id'>>,
+    onSuccess?: () => void,
+  ) => {
+    if (!id || actioning) return;
+    setActioning(true);
+    setActionError(null);
+    setConfirmAction(null);
+    try {
+      await updateDoc(doc(db, 'reservations', id), {
+        ...firestoreUpdates,
+        updatedAt: serverTimestamp(),
+      });
+      setReservation(prev => prev ? { ...prev, ...localUpdates } : prev);
+      onSuccess?.();
+    } catch (err: any) {
+      console.error('[AdminReservationDetail] action error:', err?.code, err?.message);
+      setActionError('Failed to update. Please try again.');
+    } finally {
+      setActioning(false);
+    }
+  }, [id, actioning]);
+
+  // ── Lost/stolen charge — always 100% of replacement value. Currency comes from the
+  // reservation's already-locked deposit currency; 'LAK' is a defensive fallback only —
+  // status === 'active' structurally guarantees a completed handover checklist already
+  // exists, so this branch is effectively unreachable in practice. Declared here (not in
+  // the "Derived" section below, which sits after early-return guards) since it drives a
+  // hook and hooks can't be called conditionally. ─────────────────────────────────
+  const lostChargeCurrency: 'LAK' | 'USD' | 'THB' = reservation?.handoverChecklist?.depositCurrency ?? 'LAK';
+  const lostDefaultChargeAmount: number | null = product?.retailPrice != null
+    ? convertUsdTo(product.retailPrice, lostChargeCurrency, exchangeRate, thbRate)
+    : null;
+  useEffect(() => {
+    if (!lostChargeTouched && lostDefaultChargeAmount != null) {
+      setLostChargeAmountInput(String(lostDefaultChargeAmount));
+    }
+  }, [lostDefaultChargeAmount, lostChargeTouched]);
+  // Whole units only, rounded up — matches the app's currency convention everywhere else.
+  const parsedLostCharge = parseFloat(lostChargeAmountInput);
+  const lostChargeAmount = !isNaN(parsedLostCharge) && parsedLostCharge > 0 ? Math.ceil(parsedLostCharge) : null;
+
+  // Late-return penalty, read-only here (no override — unlike the checklist flow, this
+  // one stays simple) — an item can be both overdue and then reported lost, so it needs
+  // to fold into the combined outstanding balance even though it's never editable in
+  // this particular flow.
+  const lostLateChargeAmount: number | null = (reservation?.latePenaltyAmount ?? 0) > 0
+    ? convertLakTo(reservation!.latePenaltyAmount!, lostChargeCurrency, exchangeRate, thbRate)
+    : null;
+
+  // ── Phone handlers ────────────────────────────────────────────────────────
+  const handleEditPhone = useCallback(() => {
+    const current = renterProfile?.phoneNumber ?? renterProfile?.phone ?? '';
+    setPhoneInput(current);
+    setPhoneError(null);
+    setEditingPhone(true);
+  }, [renterProfile]);
+
+  const handleSavePhone = useCallback(async () => {
+    const trimmed = phoneInput.trim();
+    if (!trimmed) {
+      setPhoneError('Phone number cannot be empty.');
+      return;
+    }
+    // Basic E.164 validation: +<country code><number>, 8–15 digits total
+    if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
+      setPhoneError('Enter a valid number in E.164 format, e.g. +8562012345678');
+      return;
+    }
+    if (!reservation) return;
+    setSavingPhone(true);
+    setPhoneError(null);
+    try {
+      await updateDoc(doc(db, 'users', reservation.renterId), {
+        phoneNumber: trimmed,
+        phone: trimmed,
+        phoneVerified: false,
+      });
+      setRenterProfile(p => p ? { ...p, phoneNumber: trimmed, phone: trimmed, phoneVerified: false } : p);
+      setEditingPhone(false);
+    } catch {
+      setPhoneError('Failed to save. Please try again.');
+    } finally {
+      setSavingPhone(false);
+    }
+  }, [phoneInput, reservation]);
+
+  const handleVerifyPhone = useCallback(async () => {
+    if (!reservation) return;
+    setVerifyingPhone(true);
+    try {
+      await updateDoc(doc(db, 'users', reservation.renterId), { phoneVerified: true });
+      setRenterProfile(p => p ? { ...p, phoneVerified: true } : p);
+    } catch {
+      // Non-critical — show nothing, admin can retry
+    } finally {
+      setVerifyingPhone(false);
+    }
+  }, [reservation]);
+
+  // ── Shared header ─────────────────────────────────────────────────────────
+  const header = (
+    <View style={d.header}>
+      <BackButton onPress={() => router.back()} />
+      <Text style={d.headerTitle}>Reservation</Text>
+      <View style={{ width: 40 }} />
+    </View>
+  );
+
+  if (loading) {
+    return (
+      <View style={[d.root, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
+        {header}
+        <View style={d.centered}><ActivityIndicator color={COLORS.amber} /></View>
+      </View>
+    );
+  }
+
+  if (!reservation) {
+    return (
+      <View style={[d.root, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
+        {header}
+        <View style={d.centered}>
+          <Text style={d.notFound}>Reservation not found.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const status          = reservation.status as ReservationStatus;
+  const depositReturned = reservation.depositReturned ?? false;
+  const badge           = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending_payment;
+  const depUrgency: DepositUrgency = (status === 'returned' && !depositReturned)
+    ? depositUrgency(reservation.returnedAt)
+    : 'normal';
+  const isReturnOverdue = status === 'active' && reservation.returnAt.toMillis() < Date.now();
+
+  // Once a handover checklist has been submitted, the deposit was actually received in
+  // whatever currency the admin chose there — show that instead of the original LAK
+  // figure. Before handover, no currency choice has been made yet, so show LAK as usual.
+  const handoverDeposit = reservation.handoverChecklist;
+  const depositDisplay = (handoverDeposit?.depositCurrency && handoverDeposit?.depositAmount != null)
+    ? `${handoverDeposit.depositAmount.toLocaleString('en-US')} ${handoverDeposit.depositCurrency}`
+    : fmtLak(reservation.deposit);
+
+  // ── Damage/late charges — set by the return checklist or "Report lost/stolen".
+  // Damage charge and late-return penalty stay separate fields throughout; only the
+  // net-deposit/outstanding math below sums them. ─────────────────────────────────
+  const hasCharge = (reservation.chargeAmount != null || reservation.lateChargeAmount != null)
+    && reservation.chargeCurrency != null;
+  const outstandingBalance = reservation.outstandingBalance ?? 0;
+  const outstandingSettled = reservation.outstandingSettled ?? false;
+  const outstandingWrittenOff = reservation.outstandingWrittenOff ?? false;
+  const depositHeldAmount = handoverDeposit?.depositAmount ?? reservation.deposit;
+  // What's actually left to hand back to the renter once the combined charge has
+  // consumed part (or all) of the deposit — only meaningful when there's no outstanding
+  // balance (i.e. the charges, if any, were fully covered by the deposit with money left over).
+  const totalReservationCharge = (reservation.chargeAmount ?? 0) + (reservation.lateChargeAmount ?? 0);
+  const netDepositReturnAmount = hasCharge
+    ? Math.max(0, depositHeldAmount - totalReservationCharge)
+    : depositHeldAmount;
+  const netDepositDisplay = hasCharge
+    ? `${netDepositReturnAmount.toLocaleString('en-US')} ${reservation.chargeCurrency}`
+    : depositDisplay;
+
+  const identityPhone  = renterProfile?.phoneNumber ?? renterProfile?.phone ?? null;
+  const renterPhotoURL = renterProfile?.photoURL ?? null;
+  const phoneVerified = renterProfile?.phoneVerified ?? false;
+  const phone    = renterProfile?.phone ?? null;
+  const whatsapp = renterProfile?.whatsappSameAsPhone
+    ? renterProfile?.phone
+    : renterProfile?.whatsapp ?? null;
+
+  const renterDisplayName =
+    renterProfile
+      ? [renterProfile.firstName, renterProfile.lastName].filter(Boolean).join(' ') ||
+        renterProfile.displayName ||
+        reservation.renterName
+      : reservation.renterName;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return (
+    <View style={[d.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+      {header}
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[d.scroll, { paddingBottom: insets.bottom + 40 }]}
+      >
+        {/* ── Status + deposit chips ────────────────────────────────────── */}
+        <View style={[d.statusRow, isReturnOverdue && { backgroundColor: '#FFF1F2', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 }]}>
+          {isReturnOverdue ? (() => {
+            const sev = overdueSeverity(reservation.returnAt);
+            const bg  = sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FEE2E2'     : COLORS.amberTint;
+            const fg  = sev === 'severe' ? '#FFFFFF'     : sev === 'moderate' ? COLORS.danger : COLORS.amberTintText;
+            return (
+              <View style={[d.statusBadge, { backgroundColor: bg }]}>
+                <Text style={[d.statusBadgeText, { color: fg }]}>{overdueLabel(reservation.returnAt)}</Text>
+              </View>
+            );
+          })() : (
+            <View style={[d.statusBadge, { backgroundColor: badge.bg }]}>
+              <Text style={[d.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>
+            </View>
+          )}
+          {depositReturned ? (
+            <View style={d.depositReturned}>
+              <Feather name="check-circle" size={12} color="#065F46" />
+              <Text style={d.depositReturnedText}>Deposit returned</Text>
+            </View>
+          ) : (
+            <View style={[
+              d.depositPending,
+              depUrgency === 'overdue' && { backgroundColor: COLORS.danger, borderColor: COLORS.danger },
+              depUrgency === 'urgent'  && { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+            ]}>
+              <Text style={[
+                d.depositPendingText,
+                depUrgency === 'overdue' && { color: '#FFFFFF' },
+                depUrgency === 'urgent'  && { color: COLORS.danger },
+              ]}>
+                {status === 'returned' && depUrgency === 'overdue'
+                  ? `Deposit overdue: ${depositDisplay}`
+                  : status === 'returned'
+                  ? `Return deposit: ${depositDisplay}`
+                  : `Deposit: ${depositDisplay}`}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── BOOKING INFO ──────────────────────────────────────────────── */}
+        <View style={d.card}>
+          <Text style={d.cardLabel}>Booking info</Text>
+          <InfoRow label="Product"  value={reservation.productName} />
+          <InfoRow
+            label="Quantity"
+            value={`${reservation.quantity} unit${reservation.quantity !== 1 ? 's' : ''}`}
+          />
+          <InfoRow
+            label="Duration"
+            value={`${reservation.durationDays} day${reservation.durationDays !== 1 ? 's' : ''} (24h)`}
+          />
+        </View>
+
+        {/* ── DATES ─────────────────────────────────────────────────────── */}
+        <View style={d.card}>
+          <Text style={d.cardLabel}>Dates</Text>
+          <InfoRow label="Pick-up" value={reservation.pickupLabel} />
+          <InfoRow label="Return"  value={reservation.returnLabel} />
+        </View>
+
+        {/* ── RENTER ────────────────────────────────────────────────────── */}
+        <View style={d.card}>
+          <Text style={d.cardLabel}>Renter</Text>
+          {/* Avatar + name */}
+          <View style={d.renterAvatarRow}>
+            <View style={d.renterAvatarCircle}>
+              {renterPhotoURL ? (
+                <ExpoImage
+                  source={{ uri: renterPhotoURL }}
+                  style={d.renterAvatarCircleImg}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={d.renterAvatarInitial}>
+                  {(renterDisplayName?.charAt(0) ?? '?').toUpperCase()}
+                </Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={d.renterAvatarName}>{renterDisplayName ?? '—'}</Text>
+              <Text style={d.renterIdSmall} numberOfLines={1}>{reservation.renterId}</Text>
+            </View>
+          </View>
+
+          {/* ── Phone identity & verification status ── */}
+          {editingPhone ? (
+            <View style={d.phoneEditSection}>
+              <View style={d.phoneEditInputRow}>
+                <TextInput
+                  style={d.phoneEditInput}
+                  value={phoneInput}
+                  onChangeText={setPhoneInput}
+                  placeholder="+8562012345678"
+                  placeholderTextColor={COLORS.fg3}
+                  keyboardType="phone-pad"
+                  autoFocus
+                  editable={!savingPhone}
+                />
+              </View>
+              {phoneError ? (
+                <Text style={d.phoneEditError}>{phoneError}</Text>
+              ) : null}
+              <View style={d.phoneEditBtns}>
+                <TouchableOpacity
+                  style={d.phoneEditCancelBtn}
+                  onPress={() => setEditingPhone(false)}
+                  disabled={savingPhone}
+                  activeOpacity={0.8}
+                >
+                  <Text style={d.phoneEditCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={d.phoneEditSaveBtn}
+                  onPress={handleSavePhone}
+                  disabled={savingPhone}
+                  activeOpacity={0.8}
+                >
+                  {savingPhone ? (
+                    <ActivityIndicator size="small" color={COLORS.carbon} />
+                  ) : (
+                    <Text style={d.phoneEditSaveText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={d.phoneVerifyRow}>
+              <View style={d.phoneVerifyLeft}>
+                <Feather name="phone" size={14} color={COLORS.fg3} />
+                <Text style={d.phoneVerifyNumber}>
+                  {identityPhone ?? 'No phone on file'}
+                </Text>
+              </View>
+              <View style={d.phoneVerifyRight}>
+                {identityPhone ? (
+                  phoneVerified ? (
+                    <View style={d.verifiedBadge}>
+                      <Feather name="check-circle" size={12} color="#065F46" />
+                      <Text style={d.verifiedBadgeText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={d.unverifiedBadge}>
+                        <Feather name="clock" size={12} color="#92400E" />
+                        <Text style={d.unverifiedBadgeText}>Not verified</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={d.verifyBtn}
+                        onPress={handleVerifyPhone}
+                        disabled={verifyingPhone}
+                        activeOpacity={0.8}
+                      >
+                        {verifyingPhone ? (
+                          <ActivityIndicator size="small" color={COLORS.carbon} />
+                        ) : (
+                          <Text style={d.verifyBtnText}>Mark verified</Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )
+                ) : (
+                  <View style={d.unverifiedBadge}>
+                    <Feather name="alert-circle" size={12} color="#92400E" />
+                    <Text style={d.unverifiedBadgeText}>Missing</Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={d.editPhoneBtn}
+                  onPress={handleEditPhone}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="edit-2" size={13} color={COLORS.fg3} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {(phone || whatsapp) && (
+            <View style={d.contactRow}>
+              {phone && (
+                <TouchableOpacity
+                  style={d.contactBtn}
+                  onPress={() => Linking.openURL(`tel:${phone}`)}
+                  activeOpacity={0.75}
+                >
+                  <Feather name="phone" size={14} color={COLORS.carbon} />
+                  <Text style={d.contactBtnText}>{phone}</Text>
+                </TouchableOpacity>
+              )}
+              {whatsapp && (
+                <TouchableOpacity
+                  style={d.contactBtn}
+                  onPress={() =>
+                    Linking.openURL(`https://wa.me/${whatsapp.replace(/[^0-9+]/g, '')}`)
+                  }
+                  activeOpacity={0.75}
+                >
+                  <Feather name="message-circle" size={14} color={COLORS.carbon} />
+                  <Text style={d.contactBtnText}>WhatsApp</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* ── PRICE BREAKDOWN ───────────────────────────────────────────── */}
+        <View style={d.card}>
+          <Text style={d.cardLabel}>Price breakdown</Text>
+          <InfoRow label="Rate"     value={`${fmtLak(reservation.pricePerDay)} / day`} />
+          <InfoRow label="Subtotal" value={fmtLak(reservation.subtotal)} />
+          {reservation.couponApplied && (
+            <InfoRow
+              label="Coupon applied"
+              value={`−${fmtLak(reservation.couponApplied.discountAmount)} (${reservation.couponApplied.percent}% off)`}
+              muted
+            />
+          )}
+          <View style={d.divider} />
+          <InfoRow label="Total to pay"         value={fmtLak(reservation.total)}   bold />
+          <InfoRow label="Deposit (refundable)"  value={depositDisplay} muted />
+        </View>
+
+        {/* ── SETTLEMENT SUMMARY ───────────────────────────────────────── */}
+        {hasCharge && (
+          <SettlementSummary
+            chargeAmount={reservation.chargeAmount}
+            chargeReason={reservation.chargeReason}
+            lateChargeAmount={reservation.lateChargeAmount}
+            lateChargeReason={reservation.lateChargeReason}
+            depositAmount={depositHeldAmount}
+            depositCurrency={reservation.chargeCurrency!}
+            depositAppliedToCharge={reservation.depositAppliedToCharge ?? 0}
+            outstandingBalance={outstandingBalance}
+            outstandingSettled={reservation.outstandingSettled}
+            outstandingSettledBy={reservation.outstandingSettledBy}
+            outstandingWrittenOff={reservation.outstandingWrittenOff}
+            outstandingWrittenOffBy={reservation.outstandingWrittenOffBy}
+          />
+        )}
+
+        {/* ── NOTES ─────────────────────────────────────────────────────── */}
+        {!!reservation.notes && (
+          <View style={d.card}>
+            <Text style={d.cardLabel}>Notes</Text>
+            <Text style={d.notesText}>{reservation.notes}</Text>
+          </View>
+        )}
+
+        {/* ── META ──────────────────────────────────────────────────────── */}
+        <View style={d.metaRow}>
+          <Feather name="clock" size={12} color={COLORS.fg3} />
+          <Text style={d.metaText}>Created: {fmtTimestamp(reservation.createdAt)}</Text>
+        </View>
+
+        {/* ── CHECKLISTS ────────────────────────────────────────────────── */}
+        {(reservation.handoverChecklist?.confirmedAt || reservation.returnChecklist?.confirmedAt) && (
+          <View style={d.card}>
+            <Text style={d.cardLabel}>Checklists</Text>
+            {reservation.handoverChecklist?.confirmedAt && (
+              <TouchableOpacity
+                style={d.checklistLinkRow}
+                onPress={() => router.push(`/admin/reservations/${id}/checklist?type=handover&mode=view`)}
+                activeOpacity={0.75}
+              >
+                <Feather name="clipboard" size={14} color={COLORS.carbon} />
+                <Text style={d.checklistLinkText}>View handover checklist</Text>
+                <Feather name="chevron-right" size={16} color={COLORS.fg3} />
+              </TouchableOpacity>
+            )}
+            {reservation.returnChecklist?.confirmedAt && (
+              <TouchableOpacity
+                style={d.checklistLinkRow}
+                onPress={() => router.push(`/admin/reservations/${id}/checklist?type=return&mode=view`)}
+                activeOpacity={0.75}
+              >
+                <Feather name="clipboard" size={14} color={COLORS.carbon} />
+                <Text style={d.checklistLinkText}>View return checklist</Text>
+                <Feather name="chevron-right" size={16} color={COLORS.fg3} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ── ACTIONS ────────────────────────────────────────────────────── */}
+        <View style={d.actionsCard}>
+          <Text style={d.cardLabel}>Actions</Text>
+
+          {/* Error banner */}
+          {actionError && (
+            <View style={d.errorBanner}>
+              <Feather name="alert-circle" size={14} color={COLORS.danger} />
+              <Text style={d.errorBannerText}>{actionError}</Text>
+            </View>
+          )}
+
+          {/* Loading spinner — while Firestore write is in flight */}
+          {actioning && (
+            <View style={d.actionLoading}>
+              <ActivityIndicator color={COLORS.amber} />
+            </View>
+          )}
+
+          {/* ── Confirm dialogs — only one open at a time ─────────────── */}
+          {!actioning && confirmAction === 'confirm_payment' && (
+            <ConfirmBox
+              text="Confirm that payment has been received and activate this booking?"
+              confirmLabel="Confirm payment"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                { status: 'confirmed' },
+                { status: 'confirmed' },
+                () => sendNotif(reservation.renterId, {
+                  type: 'rental',
+                  icon: 'check',
+                  iconColor: 'green',
+                  title: 'Reservation confirmed',
+                  body: `Your ${reservation.productName} booking for ${reservation.pickupLabel} is confirmed.`,
+                  deepLink: `/rentals/${id}`,
+                }),
+              )}
+            />
+          )}
+          {!actioning && confirmAction === 'pickup' && (
+            <ConfirmBox
+              text="Confirm the renter has picked up the item?"
+              confirmLabel="Mark as picked up"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                { status: 'active' },
+                { status: 'active' },
+                () => {
+                  sendNotif(reservation.renterId, {
+                    type: 'rental',
+                    icon: 'box',
+                    iconColor: 'carbon',
+                    title: 'Rental started',
+                    body: `You've picked up the ${reservation.productName}. Return by ${reservation.returnLabel}.`,
+                    deepLink: `/rentals/${id}`,
+                  });
+                  // Mark phone as verified in-person at pickup (if not already).
+                  if (!phoneVerified) {
+                    updateDoc(doc(db, 'users', reservation.renterId), { phoneVerified: true })
+                      .then(() => setRenterProfile(p => p ? { ...p, phoneVerified: true } : p))
+                      .catch(err => console.warn('[AdminReservationDetail] phoneVerified update failed:', err));
+                  }
+                },
+              )}
+            />
+          )}
+          {!actioning && confirmAction === 'returned' && (
+            <ConfirmBox
+              text="Confirm the renter has returned the item?"
+              confirmLabel="Mark as returned"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                { status: 'returned', returnedAt: serverTimestamp() },
+                { status: 'returned' },
+                () => {
+                  sendNotif(reservation.renterId, {
+                    type: 'rental',
+                    icon: 'check',
+                    iconColor: 'green',
+                    title: 'Rental completed',
+                    body: `Thanks for returning the ${reservation.productName}.`,
+                    deepLink: `/rentals/${id}`,
+                  });
+                  setTimeout(() => {
+                    sendNotif(reservation.renterId, {
+                      type: 'system',
+                      icon: 'star',
+                      iconColor: 'coral',
+                      title: 'How was your rental?',
+                      body: `Leave a review for ${reservation.productName} and help others.`,
+                      deepLink: `/review/${reservation.productId}?reservationId=${id}`,
+                    });
+                  }, 3000);
+                },
+              )}
+            />
+          )}
+          {!actioning && confirmAction === 'deposit' && (
+            <ConfirmBox
+              text={`Confirm the ${netDepositDisplay} deposit has been returned to the renter?`}
+              confirmLabel="Confirm"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                { depositReturned: true },
+                { depositReturned: true },
+                () => sendNotif(reservation.renterId, {
+                  type: 'rental',
+                  icon: 'check',
+                  iconColor: 'green',
+                  title: 'Deposit returned',
+                  body: `Your ${netDepositDisplay} deposit for ${reservation.productName} has been returned.`,
+                  deepLink: `/rentals/${id}`,
+                }),
+              )}
+            />
+          )}
+          {!actioning && confirmAction === 'settle_outstanding' && (
+            <ConfirmBox
+              text={`Confirm the ${outstandingBalance.toLocaleString('en-US')} ${reservation.chargeCurrency} outstanding balance has been collected from the renter?`}
+              confirmLabel="Mark as settled"
+              confirmDisabled={settleStaffName.trim().length === 0}
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                {
+                  outstandingSettled: true,
+                  outstandingSettledAt: serverTimestamp(),
+                  outstandingSettledBy: settleStaffName.trim(),
+                },
+                { outstandingSettled: true, outstandingSettledBy: settleStaffName.trim() },
+              )}
+            >
+              <TextInput
+                style={d.nameInput}
+                placeholder="Staff member name"
+                placeholderTextColor={COLORS.fg3}
+                value={settleStaffName}
+                onChangeText={setSettleStaffName}
+              />
+            </ConfirmBox>
+          )}
+          {!actioning && confirmAction === 'write_off_outstanding' && (
+            <ConfirmBox
+              text={`Confirm the ${outstandingBalance.toLocaleString('en-US')} ${reservation.chargeCurrency} outstanding balance cannot be collected and should be written off? This does not record it as paid.`}
+              confirmLabel="Write off balance"
+              confirmDisabled={writeOffStaffName.trim().length === 0}
+              muted
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                {
+                  outstandingWrittenOff: true,
+                  outstandingWrittenOffAt: serverTimestamp(),
+                  outstandingWrittenOffBy: writeOffStaffName.trim(),
+                  ...(writeOffNotes.trim() ? { outstandingWrittenOffNotes: writeOffNotes.trim() } : {}),
+                },
+                {
+                  outstandingWrittenOff: true,
+                  outstandingWrittenOffBy: writeOffStaffName.trim(),
+                  ...(writeOffNotes.trim() ? { outstandingWrittenOffNotes: writeOffNotes.trim() } : {}),
+                },
+              )}
+            >
+              <TextInput
+                style={d.nameInput}
+                placeholder="Staff member name"
+                placeholderTextColor={COLORS.fg3}
+                value={writeOffStaffName}
+                onChangeText={setWriteOffStaffName}
+              />
+              <TextInput
+                style={d.nameInput}
+                placeholder="Notes (optional) — e.g. unreachable, police report filed"
+                placeholderTextColor={COLORS.fg3}
+                value={writeOffNotes}
+                onChangeText={setWriteOffNotes}
+              />
+            </ConfirmBox>
+          )}
+          {!actioning && confirmAction === 'lost' && (
+            <ConfirmBox
+              text={
+                lostChargeAmount != null
+                  ? `Report this item lost/stolen? A charge of ${lostChargeAmount.toLocaleString('en-US')} ${lostChargeCurrency} (100% of replacement value)${lostLateChargeAmount != null ? `, plus a ${lostLateChargeAmount.toLocaleString('en-US')} ${lostChargeCurrency} late-return penalty already on this reservation,` : ''} will be recorded, and the reservation will be closed as lost.`
+                  : product?.retailPrice == null
+                  ? "Replacement value not set for this product — charge can't be calculated. Set it on the product's admin page first."
+                  : 'Enter a valid charge amount to continue.'
+              }
+              confirmLabel="Report lost/stolen"
+              confirmDisabled={lostChargeAmount == null || lostStaffName.trim().length === 0}
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => {
+                if (lostChargeAmount == null) return;
+                const combinedCharge = lostChargeAmount + (lostLateChargeAmount ?? 0);
+                const depositApplied = Math.min(combinedCharge, depositHeldAmount);
+                const outstanding = Math.max(0, combinedCharge - depositHeldAmount);
+                const lateFields = lostLateChargeAmount != null ? {
+                  lateChargeAmount: lostLateChargeAmount,
+                  lateChargeReason: reservation.lateChargeReason ?? 'Late return penalty',
+                } : {};
+                runAction(
+                  {
+                    status: 'lost',
+                    chargeAmount: lostChargeAmount,
+                    chargeCurrency: lostChargeCurrency,
+                    chargeReason: lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
+                    chargeSeverity: 'lostStolen',
+                    chargePercent: 100,
+                    ...lateFields,
+                    depositAppliedToCharge: depositApplied,
+                    outstandingBalance: outstanding,
+                  },
+                  {
+                    status: 'lost',
+                    chargeAmount: lostChargeAmount,
+                    chargeCurrency: lostChargeCurrency,
+                    chargeReason: lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
+                    chargeSeverity: 'lostStolen',
+                    chargePercent: 100,
+                    ...lateFields,
+                    depositAppliedToCharge: depositApplied,
+                    outstandingBalance: outstanding,
+                  },
+                  () => sendNotif(reservation.renterId, {
+                    type: 'rental',
+                    icon: 'alert',
+                    iconColor: 'coral',
+                    title: 'Item reported lost/stolen',
+                    body: `Your ${reservation.productName} rental has been closed as lost/stolen. Contact us for details.`,
+                    deepLink: `/rentals/${id}`,
+                  }),
+                );
+              }}
+              destructive
+            >
+              {product?.retailPrice != null && (
+                <View style={d.numRow}>
+                  <TextInput
+                    style={[d.nameInput, { flex: 1, marginBottom: 0 }]}
+                    keyboardType="number-pad"
+                    value={lostChargeAmountInput}
+                    onChangeText={t => { setLostChargeAmountInput(t); setLostChargeTouched(true); }}
+                    placeholder="0"
+                    placeholderTextColor={COLORS.fg3}
+                  />
+                  <Text style={d.currencyUnit}>{lostChargeCurrency}</Text>
+                </View>
+              )}
+              {lostLateChargeAmount != null && (
+                <Text style={d.readOnlyLateChargeText}>
+                  + {lostLateChargeAmount.toLocaleString('en-US')} {lostChargeCurrency} late-return penalty (already on this reservation, not editable here)
+                </Text>
+              )}
+              <TextInput
+                style={d.nameInput}
+                placeholder="Staff member name"
+                placeholderTextColor={COLORS.fg3}
+                value={lostStaffName}
+                onChangeText={setLostStaffName}
+              />
+              <TextInput
+                style={d.nameInput}
+                placeholder="Notes (optional)"
+                placeholderTextColor={COLORS.fg3}
+                value={lostNotes}
+                onChangeText={setLostNotes}
+              />
+            </ConfirmBox>
+          )}
+          {!actioning && confirmAction === 'cancel' && (
+            <ConfirmBox
+              text="Cancel this reservation? This action cannot be undone. The renter will not be notified automatically."
+              confirmLabel="Cancel reservation"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction(
+                { status: 'cancelled' },
+                { status: 'cancelled' },
+                () => sendNotif(reservation.renterId, {
+                  type: 'rental',
+                  icon: 'alert',
+                  iconColor: 'coral',
+                  title: 'Reservation cancelled',
+                  body: `Your booking for ${reservation.productName} was cancelled. Contact us if you have questions.`,
+                  deepLink: `/rentals/${id}`,
+                }),
+              )}
+              destructive
+            />
+          )}
+
+          {/* ── Action buttons — shown only when no confirm is open ──── */}
+          {!actioning && confirmAction === null && (
+            <>
+              {/* Linear status transitions */}
+              {status === 'pending_payment' && (
+                <TouchableOpacity
+                  style={d.primaryBtn}
+                  onPress={() => setConfirmAction('confirm_payment')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={d.primaryBtnText}>Confirm payment</Text>
+                </TouchableOpacity>
+              )}
+              {status === 'confirmed' && (
+                <TouchableOpacity
+                  style={d.primaryBtn}
+                  onPress={() => reservation.handoverChecklist?.confirmedAt
+                    ? setConfirmAction('pickup')
+                    : router.push(`/admin/reservations/${id}/checklist?type=handover`)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={d.primaryBtnText}>Mark as picked up</Text>
+                </TouchableOpacity>
+              )}
+              {status === 'active' && (
+                <TouchableOpacity
+                  style={d.primaryBtn}
+                  onPress={() => reservation.returnChecklist?.confirmedAt
+                    ? setConfirmAction('returned')
+                    : router.push(`/admin/reservations/${id}/checklist?type=return`)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={d.primaryBtnText}>Mark as returned</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Report lost/stolen — only while the item is out with the renter */}
+              {status === 'active' && (
+                <TouchableOpacity
+                  style={d.cancelLink}
+                  onPress={() => setConfirmAction('lost')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={d.cancelLinkText}>Report lost/stolen</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Outstanding balance — takes priority over the deposit-return action,
+                  since a charge that meets/exceeds the deposit leaves nothing to give
+                  back; the renter now owes the shop instead. Two parallel, mutually
+                  exclusive resolution paths: actually collected ("settled") or
+                  confirmed uncollectible ("written off") — never both. */}
+              {outstandingBalance > 0 && !outstandingSettled && !outstandingWrittenOff && (
+                <>
+                  <TouchableOpacity
+                    style={d.primaryBtn}
+                    onPress={() => setConfirmAction('settle_outstanding')}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={d.primaryBtnText}>Mark outstanding as settled</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={d.secondaryBtn}
+                    onPress={() => setConfirmAction('write_off_outstanding')}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={d.secondaryBtnText}>Write off / uncollectible</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {/* Deposit (independent of status, only after return, and only when
+                  there's actually something left to hand back — outstandingBalance > 0
+                  means the charges already consumed the full deposit, permanently, so
+                  this stays hidden even after the outstanding balance is settled). */}
+              {status === 'returned' && !depositReturned && outstandingBalance === 0 && (
+                <TouchableOpacity
+                  style={d.primaryBtn}
+                  onPress={() => setConfirmAction('deposit')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={d.primaryBtnText}>Mark deposit as returned</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Cancel — only before pickup */}
+              {(status === 'pending_payment' || status === 'confirmed') && (
+                <TouchableOpacity
+                  style={d.cancelLink}
+                  onPress={() => setConfirmAction('cancel')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={d.cancelLinkText}>Cancel reservation</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* End states */}
+              {status === 'cancelled' && (
+                <View style={d.endState}>
+                  <Feather name="x-circle" size={15} color={COLORS.fg3} />
+                  <Text style={d.endStateText}>This reservation has been cancelled.</Text>
+                </View>
+              )}
+              {status === 'returned' && depositReturned && (
+                <View style={d.endState}>
+                  <Feather name="check-circle" size={15} color={COLORS.success} />
+                  <Text style={d.endStateText}>All done — item returned and deposit settled.</Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── InfoRow ───────────────────────────────────────────────────────────────────
+
+function InfoRow({
+  label,
+  value,
+  bold,
+  muted,
+  small,
+}: {
+  label: string;
+  value: string | null | undefined;
+  bold?: boolean;
+  muted?: boolean;
+  small?: boolean;
+}) {
+  if (!value) return null;
+  return (
+    <View style={ir.row}>
+      <Text style={ir.label}>{label}</Text>
+      <Text
+        style={[ir.value, bold && ir.bold, muted && ir.muted, small && ir.small]}
+        numberOfLines={small ? 1 : undefined}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const ir = StyleSheet.create({
+  row: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingVertical: 8,
+  },
+  label: { fontSize: 13, fontWeight: '500', color: COLORS.fg3, flex: 1 },
+  value: {
+    fontSize: 13, fontWeight: '600', color: COLORS.carbon,
+    flex: 1.5, textAlign: 'right',
+  },
+  bold:  { fontWeight: '800', fontSize: 15 },
+  muted: { color: COLORS.fg3, fontWeight: '500' },
+  small: { fontSize: 10, fontWeight: '400', color: COLORS.fg3 },
+});
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const d = StyleSheet.create({
+  root:     { flex: 1, backgroundColor: COLORS.porcelain },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  notFound: { fontSize: 14, fontWeight: '500', color: COLORS.fg3 },
+
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
+  },
+  headerTitle: {
+    position: 'absolute', left: 0, right: 0, textAlign: 'center',
+    fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
+  },
+
+  scroll: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
+
+  // Status + deposit row
+  statusRow:        { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  statusBadge:      { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  statusBadgeText:  { fontSize: 13, fontWeight: '800' },
+
+  depositPending: {
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: COLORS.amberTint, borderWidth: 1, borderColor: COLORS.amberTintBorder,
+  },
+  depositPendingText: { fontSize: 12, fontWeight: '700', color: COLORS.amberTintText },
+
+  depositReturned: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#A7F3D0',
+  },
+  depositReturnedText: { fontSize: 12, fontWeight: '700', color: '#065F46' },
+
+  // Info cards
+  card: { backgroundColor: COLORS.white, borderRadius: 12, padding: 16 },
+  cardLabel: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 1.4,
+    color: COLORS.fg3, textTransform: 'uppercase', marginBottom: 4,
+  },
+  divider: { height: 1, backgroundColor: COLORS.softGray200, marginVertical: 6 },
+
+  nameInput: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: COLORS.carbon, marginBottom: 8,
+  },
+  numRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  currencyUnit: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
+  readOnlyLateChargeText: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginBottom: 8 },
+
+  // Renter contact
+  contactRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  contactBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: COLORS.warmBeige,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+  },
+  contactBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
+
+  notesText: {
+    fontSize: 14, fontWeight: '400', color: COLORS.carbon, lineHeight: 20, marginTop: 6,
+  },
+
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4,
+  },
+  metaText: { fontSize: 12, fontWeight: '500', color: COLORS.fg3 },
+
+  // Checklist view links
+  checklistLinkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10,
+  },
+  checklistLinkText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.carbon },
+
+  // ── Actions card ─────────────────────────────────────────────────────────
+  actionsCard: {
+    backgroundColor: COLORS.white, borderRadius: 12, padding: 16, gap: 10,
+  },
+
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    padding: 12, borderRadius: 10,
+    backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5',
+  },
+  errorBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#B91C1C' },
+
+  actionLoading: { paddingVertical: 12, alignItems: 'center' },
+
+  primaryBtn: {
+    height: 52, borderRadius: 10,
+    backgroundColor: COLORS.amber,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  primaryBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.1 },
+
+  // Secondary/muted action button — for a resolution path that isn't a positive
+  // outcome (e.g. writing off a balance as uncollectible), visually distinct from the
+  // primary amber button used for the actual collection action.
+  secondaryBtn: {
+    height: 52, borderRadius: 10,
+    backgroundColor: COLORS.white,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  secondaryBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.fg2, letterSpacing: -0.1 },
+
+  cancelLink: { alignItems: 'center', paddingVertical: 8 },
+  cancelLinkText: { fontSize: 13, fontWeight: '600', color: COLORS.danger },
+
+  endState: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  endStateText: { fontSize: 13, fontWeight: '500', color: COLORS.fg3 },
+
+  // Phone verification row in Renter card
+  phoneVerifyRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  phoneVerifyLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  phoneVerifyRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  phoneVerifyNumber: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
+
+  // Phone edit section
+  phoneEditSection: { paddingVertical: 8, gap: 8 },
+  phoneEditInputRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.softGray200, borderRadius: 10,
+    backgroundColor: COLORS.warmBeige, paddingHorizontal: 12,
+  },
+  phoneEditInput: {
+    flex: 1, height: 44, fontSize: 14, fontWeight: '600', color: COLORS.carbon,
+  },
+  phoneEditError: { fontSize: 12, fontWeight: '500', color: COLORS.danger },
+  phoneEditBtns: { flexDirection: 'row', gap: 10 },
+  phoneEditCancelBtn: {
+    flex: 1, height: 40, borderRadius: 8,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    backgroundColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  phoneEditCancelText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
+  phoneEditSaveBtn: {
+    flex: 1, height: 40, borderRadius: 8,
+    backgroundColor: COLORS.amber,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  phoneEditSaveText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
+
+  // Mark verified + edit phone buttons
+  verifyBtn: {
+    height: 32, paddingHorizontal: 10, borderRadius: 8,
+    backgroundColor: COLORS.amber,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  verifyBtnText: { fontSize: 12, fontWeight: '800', color: COLORS.carbon },
+  editPhoneBtn: {
+    width: 32, height: 32, borderRadius: 8,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    backgroundColor: COLORS.warmBeige,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  verifiedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: '#D1FAE5', borderWidth: 1, borderColor: '#A7F3D0',
+  },
+  verifiedBadgeText: { fontSize: 12, fontWeight: '700', color: '#065F46' },
+
+  unverifiedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: COLORS.amberTint, borderWidth: 1, borderColor: COLORS.amberTintBorder,
+  },
+  unverifiedBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.amberTintText },
+
+  // Renter avatar in Renter card
+  renterAvatarRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 10,
+  },
+  renterAvatarCircle: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: COLORS.warmBeige,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', flexShrink: 0,
+  },
+  renterAvatarCircleImg: {
+    width: 44, height: 44,
+  },
+  renterAvatarInitial: {
+    fontSize: 16, fontWeight: '800', color: COLORS.fg2,
+  },
+  renterAvatarName: {
+    fontSize: 15, fontWeight: '700', color: COLORS.carbon,
+  },
+  renterIdSmall: {
+    fontSize: 10, fontWeight: '400', color: COLORS.fg3, marginTop: 2,
+  },
+});
+
+// ── ConfirmBox styles ─────────────────────────────────────────────────────────
+
+const cb = StyleSheet.create({
+  box: {
+    backgroundColor: COLORS.warmBeige,
+    borderRadius: 10, padding: 14, gap: 12,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+  },
+  boxDestructive: {
+    backgroundColor: '#FEF2F2', borderColor: '#FCA5A5',
+  },
+  text: { fontSize: 13, fontWeight: '500', color: COLORS.carbon, lineHeight: 18 },
+  btnRow: { flexDirection: 'row', gap: 10 },
+  keepBtn: {
+    flex: 1, height: 42, borderRadius: 8,
+    backgroundColor: COLORS.white,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  keepText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
+  confirmBtn: {
+    flex: 1, height: 42, borderRadius: 8,
+    backgroundColor: COLORS.amber,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  confirmBtnDestructive: { backgroundColor: COLORS.danger },
+  confirmBtnMuted: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+  },
+  confirmBtnDisabled: { opacity: 0.4 },
+  confirmText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
+  confirmTextDestructive: { color: COLORS.white },
+  confirmTextMuted: { color: COLORS.fg2 },
+});

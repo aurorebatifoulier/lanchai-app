@@ -1,4 +1,12 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(firebase deploy *)",
+      "Bash(firebase --help)",
+      "Bash(firebase firestore *)",
+      "Bash(python3 -c ' *)"
+    ]
+  },
   "enabledPlugins": {
     "expo@claude-plugins-official": true
   }

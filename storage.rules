@@ -1,0 +1,119 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LANCHAI — Firebase Storage Security Rules
+//
+// Paths covered:
+//   products/{productId}/{imageId}              — product listing photos
+//   chat-images/{uid}/{fileName}                — renter↔admin chat photo attachments
+//   chat-videos/{uid}/{fileName}                — renter↔admin chat video attachments
+//   reservations/{reservationId}/{type}/{file}  — handover/return checklist photos
+//
+// Admin detection mirrors firestore.rules exactly:
+//   firestore.rules uses:  exists(/databases/$(database)/documents/admins/$(uid))
+//   storage.rules uses:    firestore.exists(/databases/(default)/documents/admins/$(uid))
+//
+// The only difference is syntax: Storage rules must prefix `firestore.` and
+// hard-code `(default)` (the Firestore database name) instead of `$(database)`,
+// since the Storage rule evaluation context has no `$(database)` binding.
+// The check is otherwise identical — a document must exist at admins/{uid}.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null &&
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    // ── Product images ────────────────────────────────────────────────────
+    // Public read so product images display in the app without requiring auth.
+    // Write is admin-only: authenticated + present in the admins collection.
+    match /products/{productId}/{imageId} {
+      allow read:  if true;
+      allow write: if isAdmin()
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Chat images ───────────────────────────────────────────────────────
+    // Path: chat-images/{uid}/{fileName}  (uid = renterId; fileName = Date.now())
+    //
+    // Read: any authenticated user. Firebase Storage download URLs embed an
+    //   unguessable token; the URL is stored in Firestore behind per-conversation
+    //   access control, so the token is the real security gate here.
+    //
+    // Write: the renter whose UID matches the path segment, OR any admin.
+    //   The admin chat (app/admin-chat/[conversationId].tsx) calls
+    //   uploadChatImage(conversationId, ...) where conversationId == renterId,
+    //   so the admin's own UID != uid in the path — hence the isAdmin() branch.
+    match /chat-images/{uid}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && (request.auth.uid == uid || isAdmin())
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Chat videos ───────────────────────────────────────────────────────
+    // Path: chat-videos/{uid}/{fileName}  (uid = renterId; fileName = Date.now().mp4)
+    // Same read/write rationale as chat-images above. Size cap is a hard backstop —
+    // the client (lib/chat.ts's uploadChatVideo) already rejects gallery-picked
+    // videos over 50MB before starting the upload; recorded videos are capped at
+    // the source (60s max, medium quality) and stay well under this ceiling.
+    match /chat-videos/{uid}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && (request.auth.uid == uid || isAdmin())
+                   && request.resource.size < 60 * 1024 * 1024
+                   && request.resource.contentType.matches('video/.*');
+    }
+
+    // ── Rental checklist photos ───────────────────────────────────────────────
+    // Path: reservations/{reservationId}/{checklistType}/{fileName}
+    //   checklistType is 'handover' or 'return'; fileName is Date.now()-based.
+    //
+    // Read: any authenticated user (matches products/chat-images precedent — the
+    //   download URL is stored behind Firestore reservation access control anyway).
+    // Write: admin only — condition photos are captured by staff, never by renters.
+    match /reservations/{reservationId}/{checklistType}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin()
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Profile photos ────────────────────────────────────────────────────────
+    // Path: profile-photos/{uid}/{fileName}
+    //
+    // Read: any authenticated user (needed to display avatars in admin views).
+    // Write: the user whose UID matches the path segment only.
+    match /profile-photos/{uid}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── BtoB business registration documents ──────────────────────────────────
+    // Path: businessDocs/{uid}/{fileName}
+    //
+    // Read: the owning user, OR any admin (admins must review the document to
+    //   approve/reject the application).
+    // Write: the user whose UID matches the path segment only, at signup.
+    match /businessDocs/{uid}/{fileName} {
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Default deny for everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

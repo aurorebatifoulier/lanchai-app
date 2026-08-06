@@ -2,6 +2,7 @@
   "expo": {
     "name": "LANCHAI",
     "slug": "lanchai-app",
+    "owner": "baurores-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,7 +20,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -28,21 +33,40 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "LANCHAI needs camera access to scan rental QR codes at pickup."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LANCHAI needs access to your photos so you can send images in the chat."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#FAFAF7",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#FAFAF7"
           }
         }
-      ]
+      ],
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": false,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "14284447-1346-4dac-9b0a-a50b52d59dd3"
+      }
     }
   }
 }

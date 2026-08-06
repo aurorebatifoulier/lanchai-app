@@ -5,29 +5,29 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Platform,
   TextInput,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import { getProduct, createReservation } from '@/lib/firestore';
+import { COLORS } from '@/constants/Colors';
+import BackButton from '@/components/BackButton';
+import { getProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
-import { calculateTotalPrice, calculateDays } from '@/utils/pricing';
 import { getAvailableStock } from '@/utils/availability';
-
-// ── Dark theme palette ──────────────────────────────────────────────────────
-const BG     = '#000000';
-const CARD   = '#111111';
-const BORDER = '#2A2A2A';
-const YELLOW = '#F4B400';
-const WHITE  = '#FFFFFF';
-const GRAY   = 'rgba(255,255,255,0.5)';
-const DIM    = 'rgba(255,255,255,0.2)';
-const SUCCESS = '#2E8B57';
-const DANGER  = '#C8412C';
+import { getEffectiveRate } from '@/utils/pricing';
+import { useShopInfo } from '@/lib/shop';
+import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
+import { toLak, formatLak } from '@/utils/currency';
+import { PriceLak } from '@/components/PriceLak';
+import { useAuth } from '@/contexts/AuthContext';
+import { getUserProfile, type UserProfile } from '@/lib/firestore';
+import { useLoyaltyConfig, depositPercentFor, useLoyaltyTier } from '@/lib/loyalty';
+import { getAvailableTimeSlots } from '@/utils/timeSlots';
+import { getProductAccessState } from '@/utils/productAccess';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -35,7 +35,7 @@ const MONTHS = [
 ];
 const DOW = ['M','T','W','T','F','S','S'];
 
-// ── Calendar helpers ─────────────────────────────────────────────────────────
+// ── Calendar helpers ──────────────────────────────────────────────────────────
 type CalDay = { d: number; date: Date; muted?: boolean };
 
 function buildCalendarDays(year: number, month: number): CalDay[] {
@@ -67,24 +67,51 @@ function fmtDate(d: Date) {
   return `${dow[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
 }
 
-// ── Screen ───────────────────────────────────────────────────────────────────
+function buildDateTime(date: Date, timeStr: string): Date {
+  const dt = new Date(date);
+  const [h, m] = timeStr.split(':').map(Number);
+  dt.setHours(h, m, 0, 0);
+  return dt;
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 export default function BookingNewScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [calYear, setCalYear] = useState(today.getFullYear());
-  const [calMonth, setCalMonth] = useState(today.getMonth());
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [notes, setNotes] = useState('');
+  const shop = useShopInfo();
+  const exchangeRate = useExchangeRate();
+  const vatPercent = useVatPercent();
+  const { user } = useAuth();
+  const userTier = useLoyaltyTier();
+  const loyaltyConfig = useLoyaltyConfig();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserProfile(user.uid).then(setProfile).catch(() => {});
+  }, [user]);
+
+  const [product, setProduct]               = useState<Product | null>(null);
+  const [loading, setLoading]               = useState(true);
+  const [calYear, setCalYear]               = useState(today.getFullYear());
+  const [calMonth, setCalMonth]             = useState(today.getMonth());
+  const [startDate, setStartDate]           = useState<Date | null>(null);
+  const [endDate, setEndDate]               = useState<Date | null>(null);
+  const [pickupTime, setPickupTime]         = useState<string | null>(null);
+  const [returnTime, setReturnTime]         = useState<string | null>(null);
+  const [quantity, setQuantity]             = useState(1);
+  const [notes, setNotes]                   = useState('');
   const [availableStock, setAvailableStock] = useState(1);
-  const [submitting, setSubmitting] = useState(false);
+
+  const [showPickupDateModal,  setShowPickupDateModal]  = useState(false);
+  const [showReturnDateModal,  setShowReturnDateModal]  = useState(false);
+  const [showPickupTimeModal,  setShowPickupTimeModal]  = useState(false);
+  const [showReturnTimeModal,  setShowReturnTimeModal]  = useState(false);
 
   useEffect(() => {
     if (!productId) return;
@@ -103,26 +130,48 @@ export default function BookingNewScreen() {
     });
   }, [startDate, endDate]);
 
-  const calDays = buildCalendarDays(calYear, calMonth);
-  const numDays = startDate && endDate ? calculateDays(startDate, endDate) : 0;
-  const totalPrice =
-    product && startDate && endDate
-      ? calculateTotalPrice(product.pricePerDay, startDate, endDate, quantity)
+  // ── Derived ─────────────────────────────────────────────────────────────────
+  const pickupDateTime = startDate && pickupTime ? buildDateTime(startDate, pickupTime) : null;
+  const returnDateTime = endDate && returnTime ? buildDateTime(endDate, returnTime) : null;
+
+  const isReturnValid = !!(
+    pickupDateTime && returnDateTime &&
+    returnDateTime.getTime() > pickupDateTime.getTime()
+  );
+
+  // 24h-block billing: Fri 10:00 → Sat 10:00 = exactly 24h = 1 day
+  const billableDays =
+    pickupDateTime && returnDateTime && isReturnValid
+      ? Math.max(1, Math.ceil((returnDateTime.getTime() - pickupDateTime.getTime()) / (1000 * 60 * 60 * 24)))
       : 0;
 
-  const handleDayPress = (day: CalDay) => {
+  const dayRateUsd = product && billableDays > 0 ? getEffectiveRate(product, billableDays) : null;
+  const dayRateLak = dayRateUsd != null && exchangeRate != null ? toLak(dayRateUsd, exchangeRate) : null;
+  const subtotal   = dayRateLak != null && billableDays > 0 ? dayRateLak * billableDays * quantity : 0;
+  const discPct  =
+    dayRateUsd != null && product && product.pricePerDay > 0 && dayRateUsd < product.pricePerDay
+      ? Math.round((1 - dayRateUsd / product.pricePerDay) * 100)
+      : 0;
+
+  const ready =
+    !!startDate && !!endDate && !!pickupTime && !!returnTime &&
+    isReturnValid && quantity >= 1 && availableStock > 0 && dayRateLak !== null;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  const handlePickupDayPress = (day: CalDay) => {
     if (day.muted || day.date < today) return;
-    if (!startDate || (startDate && endDate)) {
-      setStartDate(new Date(day.date));
-      setEndDate(null);
-    } else if (sameDay(day.date, startDate)) {
-      setStartDate(null);
-    } else if (day.date < startDate) {
-      setStartDate(new Date(day.date));
-      setEndDate(null);
-    } else {
-      setEndDate(new Date(day.date));
-    }
+    if (sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0) return;
+    setStartDate(new Date(day.date));
+    if (endDate && endDate < day.date) setEndDate(null);
+    setShowPickupDateModal(false);
+  };
+
+  const handleReturnDayPress = (day: CalDay) => {
+    if (day.muted || day.date < today) return;
+    if (startDate && day.date < startDate) return;
+    if (sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0) return;
+    setEndDate(new Date(day.date));
+    setShowReturnDateModal(false);
   };
 
   const prevMonth = () => {
@@ -134,81 +183,156 @@ export default function BookingNewScreen() {
     else setCalMonth(m => m + 1);
   };
 
-  const handleSubmit = async () => {
-    if (!product || !startDate || !endDate || submitting) return;
-    setSubmitting(true);
-    try {
-      const id = await createReservation({
-        userId: 'user1',
-        productId: product.id,
-        productName: product.name,
-        productIcon: product.iconName,
-        productIconSet: product.iconSet,
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
-        store: 'LANCHAI · Setthathirath',
-        status: 'upcoming',
-        totalPrice,
-        depositAmount: product.deposit,
-        paidNow: product.deposit,
-        payAtPickup: totalPrice - product.deposit,
-        bookingId: 'LCH-' + Date.now(),
-        cardBg: product.cardBg,
-        daysCurrent: 0,
-        daysTotal: numDays,
-      });
-      router.replace({
-        pathname: '/booking/confirmation',
-        params: {
-          bookingId: id,
-          productName: product.name,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          quantity: String(quantity),
-          totalPrice: String(totalPrice),
-        },
-      });
-    } catch {
-      // mock mode — navigate anyway with a generated ID
-      router.replace({
-        pathname: '/booking/confirmation',
-        params: {
-          bookingId: 'LCH-' + Date.now(),
-          productName: product.name,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          quantity: String(quantity),
-          totalPrice: String(totalPrice),
-        },
-      });
-    } finally {
-      setSubmitting(false);
-    }
+  const openPickupDateModal = () => {
+    setCalYear(today.getFullYear());
+    setCalMonth(today.getMonth());
+    setShowPickupDateModal(true);
   };
 
+  const openReturnDateModal = () => {
+    const ref = startDate ?? today;
+    setCalYear(ref.getFullYear());
+    setCalMonth(ref.getMonth());
+    setShowReturnDateModal(true);
+  };
+
+  // Selecting pick-up time defaults the return time to the same slot
+  const handlePickupTimeSelect = (slot: string) => {
+    setPickupTime(slot);
+    setReturnTime(slot);
+  };
+
+  const handleSubmit = () => {
+    if (!product || !ready || dayRateLak === null || exchangeRate == null || !startDate || !endDate || !pickupTime || !returnTime || !pickupDateTime || !returnDateTime) return;
+    const depositPercent = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
+    const depositLak = Math.round(toLak(product.deposit, exchangeRate) * depositPercent / 100);
+    router.push({
+      pathname: '/booking/summary',
+      params: {
+        productId: product.id,
+        productName: product.name,
+        productImage: product.images?.[0] ?? '',
+        pickupDateISO: pickupDateTime.toISOString(),
+        returnDateISO: returnDateTime.toISOString(),
+        pickupDateLabel: fmtDate(startDate),
+        pickupTimeLabel: pickupTime,
+        returnDateLabel: fmtDate(endDate),
+        returnTimeLabel: returnTime,
+        billableDays: String(billableDays),
+        quantity: String(quantity),
+        pricePerDay: String(dayRateLak),
+        subtotal: String(subtotal),
+        deposit: String(depositLak),
+        notes,
+      },
+    });
+  };
+
+  // ── Loading / not found ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <SafeAreaView style={s.root}>
-        <StatusBar style="light" />
-        <ActivityIndicator color={YELLOW} style={{ flex: 1 }} />
-      </SafeAreaView>
+      <View style={[s.root, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
+        <ActivityIndicator color={COLORS.amber} style={{ flex: 1 }} />
+      </View>
     );
   }
   if (!product) return null;
 
-  const ready = !!startDate && !!endDate && quantity >= 1 && availableStock > 0;
+  // Defense in depth — the product detail screen already disables the CTA for a
+  // tier-locked product, but this covers a direct/deep-linked entry to this screen.
+  const accessState = getProductAccessState(product, userTier ?? null);
+  if (accessState.locked) {
+    return (
+      <View style={[s.root, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
+        <View style={[s.header, { paddingTop: insets.top + 8 }]}>
+          <BackButton onPress={() => router.back()} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle}>Your booking</Text>
+            <Text style={s.headerSub} numberOfLines={1}>{product.name}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 }}>
+          <Feather name="lock" size={32} color={COLORS.fg3} />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.carbon, textAlign: 'center' }}>
+            Booking restricted
+          </Text>
+          <Text style={{ fontSize: 13, fontWeight: '500', color: COLORS.fg3, textAlign: 'center' }}>
+            {accessState.message}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
+  const ctaLabel = ready
+    ? 'Confirm booking'
+    : !startDate || !endDate
+    ? 'Select dates'
+    : !pickupTime
+    ? 'Select pick-up time'
+    : !returnTime
+    ? 'Select return time'
+    : 'Confirm booking';
+
+  // ── Shared calendar grid renderer ─────────────────────────────────────────
+  const renderCalGrid = (
+    onDayPress: (day: CalDay) => void,
+    selectedDate: Date | null,
+    isReturnModal: boolean,
+  ) => {
+    const days = buildCalendarDays(calYear, calMonth);
+    return (
+      <View style={s.calGrid}>
+        {DOW.map((d, i) => (
+          <View key={i} style={s.calDow}>
+            <Text style={s.calDowText}>{d}</Text>
+          </View>
+        ))}
+        {days.map((day, i) => {
+          const isPast        = !day.muted && day.date < today;
+          const isBeforeStart = isReturnModal && startDate && !day.muted && day.date < startDate;
+          // Today is unselectable once its remaining time slots (now + 1h prep buffer)
+          // are exhausted — no point letting the user pick a date with an empty time list.
+          const isTodayNoSlots = !day.muted && sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0;
+          const isSelected    = !!(selectedDate && !day.muted && sameDay(day.date, selectedDate));
+          const disabled      = !!day.muted || isPast || !!isBeforeStart || isTodayNoSlots;
+          return (
+            <TouchableOpacity
+              key={i}
+              style={[
+                s.calCell,
+                disabled && s.calCellDisabled,
+                isSelected && s.calCellEndpoint,
+              ]}
+              onPress={() => onDayPress(day)}
+              activeOpacity={disabled ? 1 : 0.7}
+            >
+              <Text style={[
+                s.calCellText,
+                disabled && s.calCellTextDisabled,
+                isSelected && s.calCellTextEndpoint,
+              ]}>
+                {day.d}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={s.root}>
-      <StatusBar style="light" />
+    <View style={s.root}>
+      <StatusBar style="dark" />
 
       {/* ── Header ── */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Feather name="arrow-left" size={18} color={WHITE} />
-        </TouchableOpacity>
+      <View style={[s.header, { paddingTop: insets.top + 8 }]}>
+        <BackButton onPress={() => router.back()} />
         <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Reserve</Text>
+          <Text style={s.headerTitle}>Your booking</Text>
           <Text style={s.headerSub} numberOfLines={1}>{product.name}</Text>
         </View>
       </View>
@@ -220,95 +344,93 @@ export default function BookingNewScreen() {
         keyboardShouldPersistTaps="handled"
       >
 
-        {/* ══ DATES ══════════════════════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>DATES</Text>
+        {/* ══ DATES & TIMES ═══════════════════════════════════════════════════ */}
+        <Text style={s.sectionLabel}>DATES & TIMES</Text>
 
-        <View style={s.cal}>
-          {/* Month nav */}
-          <View style={s.calNav}>
-            <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
-              <Feather name="chevron-left" size={18} color={WHITE} />
-            </TouchableOpacity>
-            <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-            <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
-              <Feather name="chevron-right" size={18} color={WHITE} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Grid */}
-          <View style={s.calGrid}>
-            {DOW.map((d, i) => (
-              <View key={i} style={s.calDow}>
-                <Text style={s.calDowText}>{d}</Text>
-              </View>
-            ))}
-            {calDays.map((day, i) => {
-              const isPast = !day.muted && day.date < today;
-              const isStart = !!(startDate && !day.muted && sameDay(day.date, startDate));
-              const isEnd = !!(endDate && !day.muted && sameDay(day.date, endDate));
-              const inRange = !!(
-                startDate && endDate && !day.muted &&
-                day.date > startDate && day.date < endDate
-              );
-              const disabled = !!day.muted || isPast;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    s.calCell,
-                    disabled && s.calCellDisabled,
-                    inRange && s.calCellRange,
-                    (isStart || isEnd) && s.calCellEndpoint,
-                  ]}
-                  onPress={() => handleDayPress(day)}
-                  activeOpacity={disabled ? 1 : 0.7}
-                >
-                  <Text style={[
-                    s.calCellText,
-                    disabled && s.calCellTextDisabled,
-                    inRange && s.calCellTextInRange,
-                    (isStart || isEnd) && s.calCellTextEndpoint,
-                  ]}>
-                    {day.d}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Date chips */}
-        <View style={s.dateChips}>
-          <View style={[s.dateChip, startDate && s.dateChipFilled]}>
-            <Text style={[s.dateChipEye, startDate && s.dateChipEyeDark]}>PICK UP</Text>
-            <Text style={[s.dateChipVal, startDate && s.dateChipValDark]}>
+        <View style={s.fieldGrid}>
+          {/* Row 1: Pick-up date | Pick-up time */}
+          <TouchableOpacity
+            style={[s.fieldBtn, startDate && s.fieldBtnFilled]}
+            onPress={openPickupDateModal}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.fieldBtnEye, startDate && s.fieldBtnEyeFilled]}>PICK-UP DATE</Text>
+            <Text style={[s.fieldBtnVal, startDate && s.fieldBtnValFilled]}>
               {startDate ? fmtDate(startDate) : 'Select'}
             </Text>
-          </View>
-          <Feather name="arrow-right" size={14} color={DIM} />
-          <View style={[s.dateChip, endDate && s.dateChipFilled]}>
-            <Text style={[s.dateChipEye, endDate && s.dateChipEyeDark]}>RETURN</Text>
-            <Text style={[s.dateChipVal, endDate && s.dateChipValDark]}>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.fieldBtn, pickupTime && s.fieldBtnFilled]}
+            onPress={() => setShowPickupTimeModal(true)}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.fieldBtnEye, pickupTime && s.fieldBtnEyeFilled]}>PICK-UP TIME</Text>
+            <Text style={[s.fieldBtnVal, pickupTime && s.fieldBtnValFilled]}>
+              {pickupTime ?? 'Select'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Row 2: Return date | Return time */}
+          <TouchableOpacity
+            style={[s.fieldBtn, endDate && s.fieldBtnFilled]}
+            onPress={openReturnDateModal}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.fieldBtnEye, endDate && s.fieldBtnEyeFilled]}>RETURN DATE</Text>
+            <Text style={[s.fieldBtnVal, endDate && s.fieldBtnValFilled]}>
               {endDate ? fmtDate(endDate) : 'Select'}
             </Text>
-          </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.fieldBtn, returnTime && s.fieldBtnFilled]}
+            onPress={() => setShowReturnTimeModal(true)}
+            activeOpacity={0.75}
+          >
+            <Text style={[s.fieldBtnEye, returnTime && s.fieldBtnEyeFilled]}>RETURN TIME</Text>
+            <Text style={[s.fieldBtnVal, returnTime && s.fieldBtnValFilled]}>
+              {returnTime ?? 'Select'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {startDate && endDate && (
-          <View style={s.durationBadge}>
-            <Feather name="clock" size={13} color={YELLOW} />
-            <Text style={s.durationBadgeText}>
-              {numDays} day{numDays !== 1 ? 's' : ''} rental
-            </Text>
-          </View>
+        {/* Duration chip — live, shown when both datetimes are available */}
+        {pickupDateTime && returnDateTime && (
+          !isReturnValid ? (
+            <View style={s.returnError}>
+              <Feather name="alert-circle" size={13} color={COLORS.danger} />
+              <Text style={s.returnErrorText}>Return must be after pick-up</Text>
+            </View>
+          ) : dayRateLak === null ? (
+            <View style={s.returnError}>
+              <Feather name="alert-circle" size={13} color={COLORS.danger} />
+              <Text style={s.returnErrorText}>Pricing for this item hasn't been set yet. Booking unavailable.</Text>
+            </View>
+          ) : (
+            <View style={s.durationChip}>
+              <View style={s.durationChipRow}>
+                <Feather name="clock" size={13} color={COLORS.success} />
+                <Text style={s.durationChipMain}>
+                  {billableDays} day{billableDays !== 1 ? 's' : ''} · 24h
+                </Text>
+                {discPct > 0 && (
+                  <View style={s.discountPill}>
+                    <Text style={s.discountPillText}>−{discPct}%</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={s.durationChipSub}>Rate applied: {formatLak(dayRateUsd!, exchangeRate)} / day</Text>
+            </View>
+          )
         )}
 
         {/* ══ QUANTITY ═══════════════════════════════════════════════════════ */}
         <Text style={[s.sectionLabel, { marginTop: 28 }]}>QUANTITY</Text>
 
         <View style={s.stockBadge}>
-          <View style={[s.stockDot, { backgroundColor: availableStock > 0 ? SUCCESS : DANGER }]} />
-          <Text style={[s.stockText, { color: availableStock > 0 ? SUCCESS : DANGER }]}>
+          <View style={[s.stockDot, { backgroundColor: availableStock > 0 ? COLORS.success : COLORS.danger }]} />
+          <Text style={[s.stockText, { color: availableStock > 0 ? COLORS.success : COLORS.danger }]}>
             {availableStock > 0 ? `${availableStock} in stock` : 'Out of stock'}
           </Text>
         </View>
@@ -318,7 +440,7 @@ export default function BookingNewScreen() {
             style={[s.qtyBtn, quantity <= 1 && s.qtyBtnOff]}
             onPress={() => quantity > 1 && setQuantity(q => q - 1)}
           >
-            <Feather name="minus" size={20} color={quantity <= 1 ? DIM : WHITE} />
+            <Feather name="minus" size={20} color={quantity <= 1 ? COLORS.softGray : COLORS.carbon} />
           </TouchableOpacity>
           <View style={s.qtyDisplay}>
             <Text style={s.qtyNum}>{quantity}</Text>
@@ -328,16 +450,18 @@ export default function BookingNewScreen() {
             style={[s.qtyBtn, quantity >= availableStock && s.qtyBtnOff]}
             onPress={() => quantity < availableStock && setQuantity(q => q + 1)}
           >
-            <Feather name="plus" size={20} color={quantity >= availableStock ? DIM : WHITE} />
+            <Feather name="plus" size={20} color={quantity >= availableStock ? COLORS.softGray : COLORS.carbon} />
           </TouchableOpacity>
         </View>
 
         {/* ══ NOTES ══════════════════════════════════════════════════════════ */}
-        <Text style={[s.sectionLabel, { marginTop: 24 }]}>NOTES <Text style={s.sectionOptional}>(optional)</Text></Text>
+        <Text style={[s.sectionLabel, { marginTop: 24 }]}>
+          NOTES <Text style={s.sectionOptional}>(optional)</Text>
+        </Text>
         <TextInput
           style={s.notesInput}
           placeholder="Special instructions or questions…"
-          placeholderTextColor={DIM}
+          placeholderTextColor={COLORS.fg3}
           value={notes}
           onChangeText={setNotes}
           multiline
@@ -345,88 +469,193 @@ export default function BookingNewScreen() {
           textAlignVertical="top"
         />
 
-        {/* ══ SUMMARY ════════════════════════════════════════════════════════ */}
-        <Text style={[s.sectionLabel, { marginTop: 28 }]}>SUMMARY</Text>
-
-        <View style={s.summaryCard}>
-          <SumRow label="Item"     value={product.name} />
-          <SumRow label="Pick-up"  value={startDate ? fmtDate(startDate) : '—'} />
-          <SumRow label="Return"   value={endDate ? fmtDate(endDate) : '—'} />
-          <SumRow label="Duration" value={numDays > 0 ? `${numDays} days` : '—'} />
-          <SumRow label="Quantity" value={`${quantity} unit${quantity !== 1 ? 's' : ''}`} />
-
-          {/* Price breakdown */}
-          {totalPrice > 0 && (
-            <>
-              <View style={s.sumSep} />
-              <View style={s.priceBreakdown}>
-                <Text style={s.priceBreakdownText}>
-                  {product.pricePerDay}K × {numDays} day{numDays !== 1 ? 's' : ''} × {quantity}
-                </Text>
-                <Text style={s.priceBreakdownText}>{totalPrice}K LAK</Text>
-              </View>
-            </>
-          )}
-
-          <View style={s.sumTotalRow}>
-            <Text style={s.sumTotalLabel}>TOTAL</Text>
-            <Text style={s.sumTotalValue}>
-              {totalPrice > 0 ? `${totalPrice}K LAK` : '—'}
-            </Text>
-          </View>
-        </View>
-
+        {/* Trust */}
         <View style={s.trust}>
-          <Feather name="shield" size={13} color={YELLOW} />
-          <Text style={s.trustText}>Free cancellation up to 24h before pick-up.</Text>
+          <Feather name="check-circle" size={13} color={COLORS.success} />
+          <Text style={s.trustText}>Free cancellation up to 48h before pick-up.</Text>
         </View>
 
-        <View style={{ height: 110 }} />
+        <View style={{ height: 100 + insets.bottom }} />
       </ScrollView>
 
+      {/* ── Pick-up date modal ── */}
+      <Modal
+        visible={showPickupDateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPickupDateModal(false)}
+        statusBarTranslucent
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPickupDateModal(false)}
+        >
+          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Pick-up date</Text>
+              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowPickupDateModal(false)}>
+                <Text style={s.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.calNav}>
+              <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
+                <Feather name="chevron-left" size={18} color={COLORS.carbon} />
+              </TouchableOpacity>
+              <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
+              <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
+                <Feather name="chevron-right" size={18} color={COLORS.carbon} />
+              </TouchableOpacity>
+            </View>
+            {renderCalGrid(handlePickupDayPress, startDate, false)}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Return date modal ── */}
+      <Modal
+        visible={showReturnDateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReturnDateModal(false)}
+        statusBarTranslucent
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowReturnDateModal(false)}
+        >
+          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Return date</Text>
+              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowReturnDateModal(false)}>
+                <Text style={s.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.calNav}>
+              <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
+                <Feather name="chevron-left" size={18} color={COLORS.carbon} />
+              </TouchableOpacity>
+              <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
+              <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
+                <Feather name="chevron-right" size={18} color={COLORS.carbon} />
+              </TouchableOpacity>
+            </View>
+            {renderCalGrid(handleReturnDayPress, endDate, true)}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Pick-up time modal ── */}
+      <Modal
+        visible={showPickupTimeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPickupTimeModal(false)}
+        statusBarTranslucent
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPickupTimeModal(false)}
+        >
+          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Pick-up time</Text>
+              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowPickupTimeModal(false)}>
+                <Text style={s.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={s.modalSubtitle}>{shop.name} · {shop.hours}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={s.timeModalScroll} contentContainerStyle={s.timeModalList}>
+              {getAvailableTimeSlots(startDate).map(slot => {
+                const active = pickupTime === slot;
+                return (
+                  <TouchableOpacity
+                    key={slot}
+                    style={[s.timeModalRow, active && s.timeModalRowActive]}
+                    onPress={() => { handlePickupTimeSelect(slot); setShowPickupTimeModal(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.timeModalRowText, active && s.timeModalRowTextActive]}>{slot}</Text>
+                    {active && <Feather name="check" size={16} color={COLORS.carbon} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Return time modal ── */}
+      <Modal
+        visible={showReturnTimeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReturnTimeModal(false)}
+        statusBarTranslucent
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowReturnTimeModal(false)}
+        >
+          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Return time</Text>
+              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowReturnTimeModal(false)}>
+                <Text style={s.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={s.modalSubtitle}>Same shop hours apply · {shop.hours}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={s.timeModalScroll} contentContainerStyle={s.timeModalList}>
+              {getAvailableTimeSlots(endDate).map(slot => {
+                const active = returnTime === slot;
+                return (
+                  <TouchableOpacity
+                    key={slot}
+                    style={[s.timeModalRow, active && s.timeModalRowActive]}
+                    onPress={() => { setReturnTime(slot); setShowReturnTimeModal(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.timeModalRowText, active && s.timeModalRowTextActive]}>{slot}</Text>
+                    {active && <Feather name="check" size={16} color={COLORS.carbon} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ── Footer CTA ── */}
-      <View style={s.footer}>
-        {totalPrice > 0 && (
+      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {subtotal > 0 && isReturnValid && (
           <View style={s.footerLeft}>
-            <Text style={s.footerPrice}>{totalPrice}K LAK</Text>
+            <PriceLak lak={subtotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.footerPrice} />
             <Text style={s.footerPriceSub}>
-              {numDays} days · {quantity} unit{quantity !== 1 ? 's' : ''}
+              {billableDays} day{billableDays !== 1 ? 's' : ''} · {quantity} unit{quantity !== 1 ? 's' : ''}
             </Text>
           </View>
         )}
         <TouchableOpacity
-          style={[s.cta, !ready && s.ctaOff, totalPrice === 0 && { flex: 1 }]}
+          style={[s.cta, !ready && s.ctaOff, subtotal === 0 && { flex: 1 }]}
           onPress={handleSubmit}
-          disabled={!ready || submitting}
+          disabled={!ready}
           activeOpacity={0.85}
         >
-          {submitting ? (
-            <ActivityIndicator color={BG} size="small" />
-          ) : (
-            <Text style={[s.ctaText, !ready && s.ctaTextOff]}>
-              {ready ? 'Confirm reservation' : 'Select dates first'}
-            </Text>
-          )}
+          <Text style={[s.ctaText, !ready && s.ctaTextOff]}>{ctaLabel}</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
-  );
-}
-
-function SumRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={s.sumRow}>
-      <Text style={s.sumLabel}>{label}</Text>
-      <Text style={s.sumValue}>{value}</Text>
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: COLORS.porcelain,
   },
 
   // Header
@@ -434,60 +663,87 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingBottom: 12,
     gap: 14,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: COLORS.porcelain,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.softGray200,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: WHITE,
+    color: COLORS.carbon,
     letterSpacing: -0.3,
   },
   headerSub: {
     fontSize: 12,
     fontWeight: '500',
-    color: GRAY,
+    color: COLORS.fg3,
     marginTop: 1,
   },
 
   // Scroll
   content: {
     paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingTop: 20,
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.4,
-    color: GRAY,
+    color: COLORS.fg3,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionOptional: {
     fontSize: 10,
     fontWeight: '500',
-    color: DIM,
+    color: COLORS.softGray,
     textTransform: 'lowercase',
     letterSpacing: 0,
   },
 
-  // Calendar
-  cal: {
-    backgroundColor: CARD,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    marginBottom: 14,
+  // 2×2 field grid
+  fieldGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 10,
   },
+  fieldBtn: {
+    width: '48%',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    padding: 14,
+    gap: 4,
+  },
+  fieldBtnFilled: {
+    backgroundColor: COLORS.amber,
+    borderColor: COLORS.amber,
+  },
+  fieldBtnEye: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.fg3,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  fieldBtnEyeFilled: {
+    color: 'rgba(30,30,30,0.55)',
+  },
+  fieldBtnVal: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.fg3,
+    letterSpacing: -0.1,
+  },
+  fieldBtnValFilled: {
+    color: COLORS.carbon,
+  },
+
+  // Calendar (reused inside modals)
   calNav: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -495,17 +751,19 @@ const s = StyleSheet.create({
     marginBottom: 16,
   },
   calNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: BORDER,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: COLORS.warmBeige,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
     alignItems: 'center',
     justifyContent: 'center',
   },
   calMonthTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: WHITE,
+    color: COLORS.carbon,
     letterSpacing: -0.2,
   },
   calGrid: {
@@ -520,7 +778,7 @@ const s = StyleSheet.create({
   calDowText: {
     fontSize: 10,
     fontWeight: '700',
-    color: DIM,
+    color: COLORS.softGray,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -534,82 +792,152 @@ const s = StyleSheet.create({
   calCellDisabled: {
     opacity: 0.2,
   },
-  calCellRange: {
-    backgroundColor: 'rgba(244,180,0,0.15)',
-    borderRadius: 0,
-  },
   calCellEndpoint: {
-    backgroundColor: YELLOW,
+    backgroundColor: COLORS.amber,
     borderRadius: 10,
   },
   calCellText: {
     fontSize: 13,
     fontWeight: '600',
-    color: WHITE,
+    color: COLORS.carbon,
   },
   calCellTextDisabled: {
-    color: DIM,
-  },
-  calCellTextInRange: {
-    color: YELLOW,
-    fontWeight: '700',
+    color: COLORS.softGray,
   },
   calCellTextEndpoint: {
-    color: BG,
+    color: COLORS.carbon,
     fontWeight: '800',
   },
 
-  // Date chips
-  dateChips: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dateChip: {
+  // Modals (shared)
+  modalOverlay: {
     flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 12,
-    gap: 3,
+    backgroundColor: 'rgba(30,30,30,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  dateChipFilled: {
-    backgroundColor: YELLOW,
-    borderColor: YELLOW,
+  modalCard: {
+    width: '100%',
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    maxHeight: '85%',
   },
-  dateChipEye: {
-    fontSize: 9,
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
     fontWeight: '800',
-    color: DIM,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    color: COLORS.carbon,
+    letterSpacing: -0.3,
   },
-  dateChipEyeDark: {
-    color: 'rgba(0,0,0,0.45)',
+  modalDoneBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: COLORS.amber,
+    borderRadius: 10,
   },
-  dateChipVal: {
+  modalDoneText: {
     fontSize: 13,
     fontWeight: '700',
-    color: GRAY,
-    letterSpacing: -0.1,
+    color: COLORS.carbon,
   },
-  dateChipValDark: {
-    color: BG,
+  modalSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    marginBottom: 14,
+    marginTop: -8,
   },
 
-  // Duration badge
-  durationBadge: {
+  // Time modal list
+  timeModalScroll: {
+    maxHeight: 320,
+  },
+  timeModalList: {
+    gap: 4,
+  },
+  timeModalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: COLORS.porcelain,
+  },
+  timeModalRowActive: {
+    backgroundColor: COLORS.amber,
+  },
+  timeModalRowText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.fg2,
+  },
+  timeModalRowTextActive: {
+    fontWeight: '800',
+    color: COLORS.carbon,
+  },
+
+  // Duration chip (green status)
+  durationChip: {
+    backgroundColor: 'rgba(46,139,87,0.08)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(46,139,87,0.2)',
+  },
+  durationChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
   },
-  durationBadgeText: {
-    fontSize: 13,
+  durationChipMain: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.success,
+  },
+  durationChipSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.success,
+    marginTop: 3,
+    opacity: 0.85,
+  },
+  discountPill: {
+    backgroundColor: COLORS.amber,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  discountPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.carbon,
+  },
+
+  // Return error
+  returnError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: 'rgba(200,65,44,0.07)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(200,65,44,0.18)',
+  },
+  returnErrorText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: YELLOW,
+    color: COLORS.danger,
   },
 
   // Stock badge
@@ -617,7 +945,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   stockDot: {
     width: 8,
@@ -633,23 +961,24 @@ const s = StyleSheet.create({
   qtyControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD,
+    backgroundColor: COLORS.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: COLORS.softGray200,
     padding: 6,
-    gap: 0,
   },
   qtyBtn: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: BORDER,
+    backgroundColor: COLORS.warmBeige,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyBtnOff: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   qtyDisplay: {
     flex: 1,
@@ -659,93 +988,27 @@ const s = StyleSheet.create({
   qtyNum: {
     fontSize: 28,
     fontWeight: '800',
-    color: WHITE,
+    color: COLORS.carbon,
     letterSpacing: -0.5,
   },
   qtyUnit: {
     fontSize: 11,
     fontWeight: '500',
-    color: GRAY,
+    color: COLORS.fg3,
   },
 
   // Notes
   notesInput: {
-    backgroundColor: CARD,
+    backgroundColor: COLORS.white,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: COLORS.softGray200,
     padding: 14,
     fontSize: 14,
     fontWeight: '400',
-    color: WHITE,
+    color: COLORS.carbon,
     minHeight: 80,
     lineHeight: 20,
-  },
-
-  // Summary card
-  summaryCard: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    gap: 0,
-    overflow: 'hidden',
-  },
-  sumRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-  },
-  sumLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: GRAY,
-  },
-  sumValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: WHITE,
-    letterSpacing: -0.1,
-  },
-  sumSep: {
-    height: 1,
-    backgroundColor: BORDER,
-    marginVertical: 8,
-  },
-  priceBreakdown: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-  },
-  priceBreakdownText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: GRAY,
-  },
-  sumTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 14,
-  },
-  sumTotalLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: GRAY,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
-  sumTotalValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: YELLOW,
-    letterSpacing: -0.4,
   },
 
   // Trust
@@ -753,12 +1016,12 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 12,
+    marginTop: 16,
   },
   trustText: {
     fontSize: 12,
     fontWeight: '500',
-    color: GRAY,
+    color: COLORS.fg2,
   },
 
   // Footer
@@ -768,10 +1031,9 @@ const s = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 20,
     paddingTop: 14,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
-    backgroundColor: BG,
+    backgroundColor: COLORS.porcelain,
     borderTopWidth: 1,
-    borderTopColor: BORDER,
+    borderTopColor: COLORS.softGray200,
   },
   footerLeft: {
     flexShrink: 0,
@@ -779,40 +1041,35 @@ const s = StyleSheet.create({
   footerPrice: {
     fontSize: 18,
     fontWeight: '800',
-    color: WHITE,
+    color: COLORS.carbon,
     letterSpacing: -0.3,
   },
   footerPriceSub: {
     fontSize: 11,
     fontWeight: '500',
-    color: GRAY,
+    color: COLORS.fg3,
     marginTop: -2,
   },
   cta: {
     flex: 1,
     height: 52,
-    backgroundColor: YELLOW,
+    backgroundColor: COLORS.amber,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: YELLOW,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
   },
   ctaOff: {
-    backgroundColor: CARD,
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: COLORS.warmBeige,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
   },
   ctaText: {
     fontSize: 15,
     fontWeight: '800',
-    color: BG,
+    color: COLORS.carbon,
     letterSpacing: -0.2,
   },
   ctaTextOff: {
-    color: GRAY,
+    color: COLORS.fg3,
   },
 });

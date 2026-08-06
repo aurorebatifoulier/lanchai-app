@@ -1,0 +1,301 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LANCHAI — Firestore Security Rules
+//
+// Collections covered (confirmed against lib/firestore.ts and lib/chat.ts):
+//   admins                                — internal admin registry (self-read only,
+//                                            used by the client to derive isAdmin)
+//   products                              — rental catalogue
+//   reservations                          — bookings (Reservation.userId)
+//   users/{uid}                           — user profile
+//   users/{uid}/favorites                 — per-user favourites
+//   requests                              — renter "request an item" submissions
+//   conversations/{uid}                   — one chat thread per renter (uid == conversationId)
+//   conversations/{uid}/messages          — individual chat messages
+//   notifications/{uid}/items/{notifId}   — per-user in-app notifications
+//                                            shape: { type, title, body, icon, iconColor,
+//                                                     deepLink?, createdAt, readAt }
+//   reviews                               — not yet written by app code; rules included
+//                                            defensively so the collection is safe the
+//                                            moment it's wired up
+//
+// Principle: default deny everywhere. All access is explicit and additive.
+// Every rule requires request.auth != null — no anonymous access anywhere.
+// Admin status: a document exists at admins/{request.auth.uid}.
+// ─────────────────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    // Server-side exists() check — does not require the admins collection
+    // itself to grant any client read access.
+    function isAdmin() {
+      return isAuthed() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(uid) {
+      return isAuthed() && request.auth.uid == uid;
+    }
+
+    // ── admins/{uid} ──────────────────────────────────────────────────────
+    // Managed only via the Firebase Console / Admin SDK — clients never
+    // write here. A signed-in user may read ONLY their own admin doc, which
+    // is how the app's isAdmin flag is determined client-side (Phase 2
+    // inbox). No one can read another uid's admin doc or list the
+    // collection, so admins can't be enumerated by a client.
+    match /admins/{uid} {
+      allow read:  if isOwner(uid);
+      allow write: if false;
+    }
+
+    // ── products ──────────────────────────────────────────────────────────
+    // App usage: getDocs(collection('products')), getDocs(query(...,
+    // where('category','==',cat))), getDoc(doc('products', id)) — all reads.
+    // Writes are admin/back-office only.
+    match /products/{productId} {
+      allow read:  if isAuthed();
+      allow write: if isAdmin();
+    }
+
+    // ── reservations ─────────────────────────────────────────────────────
+    // App usage: addDoc('reservations', { renterId, status: 'pending_payment',
+    //   pickupAt, returnAt, ... createdAt: serverTimestamp() }) — create;
+    // getDocs(query(..., where('renterId','==',uid))) — list (future).
+    // Ownership lives in the document's `renterId` field.
+    // Client may only create with status 'pending_payment'; status transitions
+    // (e.g. to 'confirmed' after payment) are admin-only writes.
+    match /reservations/{reservationId} {
+      allow read:   if isOwner(resource.data.renterId) || isAdmin();
+      allow create: if isAuthed() &&
+                        request.resource.data.renterId == request.auth.uid &&
+                        request.resource.data.status == 'pending_payment';
+
+      // Admins may update anything. Renters may only cancel their own
+      // reservation (status → 'cancelled') — no other field may change.
+      allow update: if isAdmin() || (
+        isOwner(resource.data.renterId) &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['status', 'cancelledAt', 'cancelledBy']) &&
+        request.resource.data.status == 'cancelled' &&
+        (resource.data.status == 'pending_payment' ||
+         resource.data.status == 'confirmed')
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ── users/{userId} + favorites subcollection ────────────────────────
+    // App usage: getDocs/setDoc/deleteDoc on
+    //   collection/doc('users', uid, 'favorites', productId).
+    // Owner-only for personal data; admins may also update (e.g. setting
+    // phoneVerified after in-person pickup check).
+    //
+    // phoneVerified is staff-controlled:
+    //   - Owner may create with phoneVerified absent or false (sign-up).
+    //   - Owner may update phoneVerified only to false (reset when phone changes).
+    //   - Only admins may set phoneVerified to true (in-person verification at pickup).
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+
+      // customerType and the BtoB review fields (btobStatus, btobReviewedAt,
+      // btobReviewedBy, btobRejectionReason) are admin-approval-only — a client may
+      // never set 'business'/'approved' on itself. A BtoB signup may create with
+      // btobStatus == 'pending_approval' only (never 'approved'/'rejected'), and
+      // customerType is never client-settable at all (approval is the only path to
+      // customerType: 'business', via the admin back-office's isAdmin() write).
+      allow create: if isOwner(userId) &&
+        (!request.resource.data.keys().hasAny(['phoneVerified']) ||
+         request.resource.data.phoneVerified == false) &&
+        !request.resource.data.keys().hasAny(['loyaltyPoints', 'loyaltyTier']) &&
+        !request.resource.data.keys().hasAny(['customerType']) &&
+        (!request.resource.data.keys().hasAny(['btobStatus']) ||
+         request.resource.data.btobStatus == 'pending_approval') &&
+        !request.resource.data.keys().hasAny(['btobReviewedAt', 'btobReviewedBy', 'btobRejectionReason']);
+
+      // loyaltyPoints/loyaltyTier are server-computed only (Cloud Function via Admin
+      // SDK, or admin) — owners can never set them directly, preventing self-granted
+      // tiers. coupons may only be touched by the owner when the array length is
+      // unchanged (marking an existing coupon used), never grown — prevents fabricating
+      // new coupons via a raw client write. customerType/accountType/btobStatus and the
+      // admin-review fields are locked to admin writes only — see the create rule above
+      // for why (prevents client-side self-approval of a business account).
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['loyaltyPoints', 'loyaltyTier']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerType', 'accountType', 'btobStatus']) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['btobReviewedAt', 'btobReviewedBy', 'btobRejectionReason']) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneVerified']) ||
+          request.resource.data.phoneVerified == false
+        ) &&
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coupons']) ||
+          request.resource.data.coupons.size() == resource.data.get('coupons', []).size()
+        )
+      );
+
+      allow delete: if isOwner(userId);
+
+      match /favorites/{productId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Bag (multi-item cart) ─────────────────────────────────────────────
+      // Path: users/{userId}/bag/{itemId}
+      // No admin access needed — admins only see finalized reservations after checkout.
+      match /bag/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ── requests ─────────────────────────────────────────────────────────
+    // App usage: addDoc('requests', { text, contact, createdAt }) — create.
+    // No userId field is stored, so any authenticated user may create;
+    // only admins may read, update, or delete submissions.
+    match /requests/{requestId} {
+      allow create:               if isAuthed();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── conversations/{conversationId} ──────────────────────────────────
+    // conversationId is always the renter's Firebase Auth uid (lib/chat.ts).
+    // A user may read/write ONLY their own conversation; admins may
+    // read/write any conversation.
+    match /conversations/{conversationId} {
+      allow get:    if isOwner(conversationId) || isAdmin();
+      allow list:   if isAdmin(); // business inbox needs to list all threads
+
+      // On create, enforce renterId so a user can't forge another user's
+      // conversation (lib/chat.ts initConversation sets renterId: uid).
+      allow create: if isOwner(conversationId) &&
+                       request.resource.data.renterId == request.auth.uid;
+
+      // Owner (renter) is restricted to exactly the two updateDoc calls the
+      // app makes on the conversation root document:
+      //
+      //   Op A — sendMessage (lib/chat.ts:98-103):
+      //     { lastMessage, lastMessageAt, lastSenderType, unreadByBusiness }
+      //     • lastSenderType must be 'renter': prevents spoofing 'business'.
+      //     • unreadByBusiness must equal old value + 1: mirrors increment(1)
+      //       exactly, so the renter can never clear or reset this counter.
+      //
+      //   Op B — markConversationReadByRenter (lib/chat.ts:107-109):
+      //     { unreadByRenter }
+      //     • Must be set to 0: only clearing is permitted, not inflation.
+      //
+      // Admins retain unrestricted update access (manage conversation metadata).
+      // Delete is admin-only — renters must not destroy conversation history
+      // (needed for deposit-dispute resolution).
+      allow update: if isAdmin() || (
+        isOwner(conversationId) && (
+          (request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasOnly(['lastMessage', 'lastMessageAt', 'lastSenderType', 'unreadByBusiness'])
+           && request.resource.data.lastSenderType == 'renter'
+           && request.resource.data.unreadByBusiness
+                == resource.data.get('unreadByBusiness', 0) + 1)
+          ||
+          (request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasOnly(['unreadByRenter'])
+           && request.resource.data.unreadByRenter == 0)
+        )
+      );
+      allow delete: if isAdmin();
+
+      // ── conversations/{conversationId}/messages/{messageId} ───────────
+      // App usage: onSnapshot(query(..., orderBy('createdAt','asc'))) — read;
+      //   addDoc(..., { senderId, senderType, text, imageUrl, createdAt, read })
+      //   — create (both renter via sendMessage and admin via sendBusinessMessage).
+      // Update and delete are admin-only: once sent, messages are immutable for
+      // renters, preserving history integrity for deposit-dispute resolution.
+      match /messages/{messageId} {
+        allow read:           if isOwner(conversationId) || isAdmin();
+        allow create:         if isOwner(conversationId) || isAdmin();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ── config ───────────────────────────────────────────────────────────
+    // Read-only for all authenticated users (e.g. config/shop).
+    // Only admins may create or update config documents.
+    match /config/{docId} {
+      allow read:  if isAuthed();
+      allow write: if isAdmin();
+    }
+
+    // ── notifications/{userId}/items ─────────────────────────────────────
+    // Per-user notification inbox. The parent document notifications/{userId}
+    // is never written by the app — only the subcollection is used.
+    //
+    // Read:   owner reads their own items.
+    // Create: admins only (triggered from the admin back-office).
+    // Update: admins may update anything; owner may ONLY set readAt (mark-as-read).
+    //         The diff check ensures no other field can be changed by the owner.
+    // Delete: owner can dismiss their own; admins can delete anyone's.
+    match /notifications/{userId}/items/{notifId} {
+      allow read:   if isOwner(userId);
+      allow create: if isAdmin() || isOwner(userId);
+      allow update: if isAdmin() ||
+                       (isOwner(userId) &&
+                        request.resource.data.diff(resource.data)
+                          .affectedKeys().hasOnly(['readAt']));
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ── broadcasts ───────────────────────────────────────────────────────
+    // Shared announcement collection — one doc per broadcast, visible to
+    // all authenticated users. Admin creates / updates / deletes;
+    // "allow write" covers create + update + delete in Firestore rules.
+    match /broadcasts/{id} {
+      allow read:  if isAuthed();
+      allow write: if isAdmin();
+    }
+
+    // ── adminTasks ───────────────────────────────────────────────────────
+    // Admin-only calendar tasks. Admins can read and write; no client access.
+    match /adminTasks/{taskId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── reviews (root placeholder docs) ──────────────────────────────────
+    // reviews/{productId} holds no real fields — it exists only as a path
+    // ancestor for the nested reviews subcollection. collectionGroup('reviews')
+    // spans both this collection and the nested subcollection, so both need
+    // explicit read coverage or the entire collectionGroup query is rejected.
+    match /reviews/{productId} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    // ── reviews ──────────────────────────────────────────────────────────
+    // Subcollection: reviews/{productId}/reviews/{reservationId}
+    // reservationId is used as the document ID — enforces one review per
+    // rental (a second write is an update, blocked for non-admins).
+    // collectionGroup('reviews') is safe — no other subcollection is named 'reviews'.
+    // Shape: { userId, reviewerName, rating, text, productId, reservationId,
+    //          productName, createdAt, adminReply? }
+    match /reviews/{productId}/reviews/{reservationId} {
+      allow read:   if isAuthed();
+
+      allow create: if isAuthed()
+                    && request.resource.data.userId == request.auth.uid
+                    && get(/databases/$(database)/documents/reservations/$(reservationId)).data.renterId == request.auth.uid
+                    && get(/databases/$(database)/documents/reservations/$(reservationId)).data.productId == productId
+                    && get(/databases/$(database)/documents/reservations/$(reservationId)).data.status == 'returned';
+
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+  }
+}

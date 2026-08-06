@@ -1,0 +1,70 @@
+// lib/types.ts
+// Canonical TypeScript types for Firestore documents used by the admin back-office.
+// The client-side rendering interface (Product) lives in lib/mockData.ts and
+// shares the same field names. ProductDoc adds admin-only fields (status,
+// updatedAt, quantity) and documents the Firestore write shape explicitly.
+
+import type { Timestamp } from 'firebase/firestore';
+import type { ProductCategory } from './mockData';
+
+// ── Product ───────────────────────────────────────────────────────────────────
+
+export type ProductStatus = 'draft' | 'published' | 'archived';
+
+export interface ProductDoc {
+  id: string;
+  name: string;
+  shortDesc?: string;
+  description: string;
+  category: ProductCategory;
+
+  // Pricing tiers (USD) — converted to LAK for display everywhere renter-facing,
+  // via the live admin-set exchange rate (config/pricing). See lib/exchangeRate.ts.
+  pricePerDay: number;    // 1–2 day base rate
+  price3to6: number;
+  price7to13: number;
+  price14to29: number;
+  price30plus: number;
+
+  retailPrice?: number;   // approximate new retail price (USD)
+  deposit: number;        // refundable security deposit (USD)
+
+  // Inventory
+  quantity: number;       // stock count — exposed as stockLeft on the client Product
+  available: boolean;     // shown as availability chip on the product detail screen
+
+  // Admin lifecycle
+  status: ProductStatus;  // 'draft' = not visible to renters; 'published' = live
+
+  // Display (mirrors the client Product interface exactly)
+  iconName: string;
+  iconSet: 'Feather' | 'MaterialCommunityIcons' | 'Ionicons';
+  cardBg: 'amber' | 'dark' | 'beige' | 'default';
+  tag?: string;
+  tagStyle?: 'amber' | 'dark';
+  imageUrl?: string;
+  images?: string[];      // photo carousel — upload gated behind Firebase Blaze plan
+
+  // Discovery flags
+  isPopular?: boolean;
+  isNewThisWeek?: boolean;
+  isMostRented?: boolean;
+
+  // Counters (typically managed by cloud functions / admin in a later step)
+  averageRating?: number | null; // auto-calculated from reviews; null = no reviews yet
+  reviewCount?: number;
+  rentalCount?: number;
+  bookingsCount?: number;
+
+  // Specs
+  specs?: {
+    dimensions?: string;
+    weight?: string;
+    material?: string;
+    condition?: string;
+  };
+
+  // Timestamps — Firestore Timestamp in live data, Unix seconds in mock data
+  createdAt?: Timestamp | number;
+  updatedAt?: Timestamp | number;
+}

@@ -1,352 +1,418 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons';
+import { COLORS } from '@/constants/Colors';
+import { getReservationsByOrderId, getUserProfile, RentalDoc, type UserProfile } from '@/lib/firestore';
+import { QRThumb } from '@/components/QRThumb';
+import { QRLightbox } from '@/components/QRLightbox';
+import { useAuth } from '@/contexts/AuthContext';
+import { useVatPercent } from '@/lib/exchangeRate';
+import { PriceLak } from '@/components/PriceLak';
 
-// ── Dark theme palette ──────────────────────────────────────────────────────
-const BG     = '#000000';
-const CARD   = '#111111';
-const CARD2  = '#181818';
-const BORDER = '#2A2A2A';
-const YELLOW = '#F4B400';
-const WHITE  = '#FFFFFF';
-const GRAY   = 'rgba(255,255,255,0.5)';
+// ── QR code string formats (documented here for the admin scanner) ─────────────
+// Order-level QR (shown when there are 2+ items in an order):
+//   "LANCHAI-ORDER:{orderId}"
+// Per-item QR (one per reservation, always shown):
+//   "LANCHAI-RES:{reservationId}"
+// The scanner resolves orderId via `reservations` where `orderId == …`
+// and resolves reservationId via direct doc read `reservations/{reservationId}`.
 
-const MONTHS = [
-  'Jan','Feb','Mar','Apr','May','Jun',
-  'Jul','Aug','Sep','Oct','Nov','Dec',
-];
+const QR_ORDER = 150; // hero order QR at top (grouped)
+const QR_ITEM  = 72;  // per-item QRs on item cards + single-item hero
 
-function fmtDate(iso: string) {
-  try {
-    const d = new Date(iso);
-    const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    return `${dow[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-  } catch {
-    return iso;
-  }
-}
+interface Lightbox { value: string; label: string }
 
-// ── Screen ───────────────────────────────────────────────────────────────────
 export default function BookingConfirmationScreen() {
-  const {
-    bookingId,
-    productName,
-    startDate,
-    endDate,
-    quantity,
-    totalPrice,
-  } = useLocalSearchParams<{
-    bookingId: string;
-    productName: string;
-    startDate: string;
-    endDate: string;
-    quantity: string;
-    totalPrice: string;
-  }>();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { user } = useAuth();
+  const vatPercent = useVatPercent();
 
-  const qty = Number(quantity ?? 1);
-  const price = Number(totalPrice ?? 0);
+  const [reservations, setReservations] = useState<RentalDoc[]>([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(false);
+  const [lightbox,     setLightbox]     = useState<Lightbox | null>(null);
+  const [profile,      setProfile]      = useState<UserProfile | null>(null);
 
-  const rows = [
-    { label: 'Booking ID',  value: bookingId ?? '—',             mono: true  },
-    { label: 'Item',        value: productName ?? '—'                         },
-    { label: 'Pick-up',     value: startDate ? fmtDate(startDate) : '—'      },
-    { label: 'Return',      value: endDate ? fmtDate(endDate) : '—'           },
-    { label: 'Quantity',    value: `${qty} unit${qty !== 1 ? 's' : ''}`       },
-    { label: 'Total paid',  value: price > 0 ? `${price}K LAK` : '—'         },
-  ];
+  const closeLightbox = () => setLightbox(null);
+
+  useEffect(() => {
+    if (!orderId) { setLoading(false); setError(true); return; }
+    getReservationsByOrderId(orderId)
+      .then(res => {
+        if (res.length === 0) setError(true);
+        else setReservations(res);
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserProfile(user.uid).then(setProfile).catch(() => {});
+  }, [user]);
+
+  const totalRental  = reservations.reduce((s, r) => s + (r.subtotal ?? 0), 0);
+  const totalDeposit = reservations.reduce((s, r) => s + (r.deposit  ?? 0), 0);
+  const isSingle     = reservations.length === 1;
+
+  if (loading) {
+    return (
+      <View style={[s.root, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
+        <View style={s.centered}><ActivityIndicator color={COLORS.amber} /></View>
+      </View>
+    );
+  }
+
+  if (error || !orderId) {
+    return (
+      <View style={[s.root, { paddingTop: insets.top }]}>
+        <StatusBar style="dark" />
+        <View style={s.centered}>
+          <Text style={s.errorText}>Could not load booking details.</Text>
+          <TouchableOpacity onPress={() => router.replace('/(tabs)/reservations')}>
+            <Text style={s.errorLink}>View my rentals</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={s.root}>
-      <StatusBar style="light" />
+    <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+
       <ScrollView
-        contentContainerStyle={s.content}
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
       >
-        {/* ── Tick ── */}
-        <View style={s.tickWrap}>
-          <View style={s.tick}>
-            <Feather name="check" size={40} color={BG} />
+        {/* ── Hero QR (replaces check icon at top) ── */}
+        {isSingle ? (
+          // Single: neutral QR + product info; no separate item row below
+          <View style={s.heroSection}>
+            <QRThumb
+              value={`LANCHAI-RES:${reservations[0].id}`}
+              onPress={() => setLightbox({
+                value: `LANCHAI-RES:${reservations[0].id}`,
+                label: reservations[0].productName,
+              })}
+            />
+            <Text style={s.heroProductName}>{reservations[0].productName}</Text>
+            <View style={s.heroPeriodRow}>
+              <Text style={s.heroPeriodLabel}>Pick-up</Text>
+              <Text style={s.heroPickupText}>{reservations[0].pickupLabel}</Text>
+            </View>
+            <View style={s.heroPeriodRow}>
+              <Text style={s.heroPeriodLabel}>Return</Text>
+              <Text style={s.heroPickupText}>{reservations[0].returnLabel}</Text>
+            </View>
           </View>
-          <View style={s.tickRing} />
-        </View>
+        ) : (
+          // Grouped: amber-framed order QR (black QR on white, amber outer frame)
+          <View style={s.heroSection}>
+            <QRThumb
+              value={`LANCHAI-ORDER:${orderId}`}
+              size={QR_ORDER}
+              variant="order"
+              onPress={() => setLightbox({ value: `LANCHAI-ORDER:${orderId}`, label: 'Order QR' })}
+            />
+          </View>
+        )}
 
         {/* ── Headline ── */}
-        <Text style={s.headline}>
-          You're{' '}
-          <Text style={s.headlineAccent}>booked.</Text>
-        </Text>
-        <Text style={s.sub}>
-          We'll send you a confirmation text.{'\n'}
-          Bring your booking ID to pick up.
+        <Text style={s.title}>Booking confirmation</Text>
+        <Text style={s.subtitle}>
+          All set! Your items are waiting patiently and pretending not to be excited to see you.
         </Text>
 
-        {/* ── Booking card ── */}
-        <View style={s.card}>
-          {rows.map((row, i) => (
-            <View
-              key={i}
-              style={[s.row, i === rows.length - 1 && s.rowLast]}
-            >
-              <Text style={s.rowLabel}>{row.label}</Text>
-              <Text
-                style={[
-                  s.rowValue,
-                  row.mono && s.rowMono,
-                  row.label === 'Total paid' && s.rowValueAccent,
-                ]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {row.value}
-              </Text>
+        {/* ── Status chip ── */}
+        <View style={s.statusChip}>
+          <View style={s.statusDot} />
+          <Text style={s.statusText}>Pending payment at pick-up</Text>
+        </View>
+
+        {/* ── Per-item rows (grouped only — horizontal: text left, QR right) ── */}
+        {!isSingle && reservations.map(res => (
+          <View key={res.id} style={s.itemCard}>
+            <View style={s.itemInfo}>
+              <Text style={s.itemName} numberOfLines={2}>{res.productName}</Text>
+              <View style={s.itemDateRow}>
+                <Text style={s.itemDateLabel}>Pick-up</Text>
+                <Text style={s.itemPickupText}>{res.pickupLabel}</Text>
+              </View>
+              <View style={s.itemDateRow}>
+                <Text style={s.itemDateLabel}>Return</Text>
+                <Text style={s.itemPickupText}>{res.returnLabel}</Text>
+              </View>
             </View>
-          ))}
+            <QRThumb
+              value={`LANCHAI-RES:${res.id}`}
+              onPress={() =>
+                setLightbox({ value: `LANCHAI-RES:${res.id}`, label: res.productName })
+              }
+            />
+          </View>
+        ))}
+
+        {/* ── Totals reminder ── */}
+        <View style={s.totalsCard}>
+          <View style={s.totalsRow}>
+            <Text style={s.totalsLabel}>Total to pay at pick-up</Text>
+            <PriceLak lak={totalRental} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.totalsValue} style={{ alignItems: 'flex-end' }} />
+          </View>
+          <Text style={s.totalsDeposit}>
+            + {totalDeposit.toLocaleString('en-US')} LAK deposit, refunded within 48h after return
+          </Text>
         </View>
 
-        {/* ── Pick-up info ── */}
-        <View style={s.pickupCard}>
-          <View style={s.pickupIcon}>
-            <Feather name="map-pin" size={16} color={YELLOW} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.pickupTitle}>LANCHAI · Setthathirath shop</Text>
-            <Text style={s.pickupSub}>Vientiane · Mon–Sat 9am–7pm</Text>
-            <Text style={s.pickupSub}>Ready in 90 sec. Bring your booking ID.</Text>
-          </View>
-        </View>
-
-        {/* ── CTAs ── */}
+        {/* ── Actions ── */}
         <TouchableOpacity
-          style={s.btnPrimary}
+          style={s.primaryBtn}
           onPress={() => router.replace('/(tabs)/reservations')}
           activeOpacity={0.85}
         >
-          <Text style={s.btnPrimaryText}>View my reservations</Text>
-          <Feather name="arrow-right" size={16} color={BG} />
+          <Text style={s.primaryBtnText}>View my rentals</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={s.btnSecondary}
+          style={s.secondaryBtn}
           onPress={() => router.replace('/(tabs)')}
-          activeOpacity={0.8}
+          activeOpacity={0.75}
         >
-          <Text style={s.btnSecondaryText}>Back to home</Text>
+          <Text style={s.secondaryBtnText}>Back to home</Text>
         </TouchableOpacity>
-
-        {/* tagline */}
-        <Text style={s.tagline}>Rent. Return. Repeat.</Text>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* ── Lightbox overlay (absolutely positioned — no Modal, avoids Android SDK 54 issues) ── */}
+      {lightbox && (
+        <QRLightbox
+          value={lightbox.value}
+          label={lightbox.label}
+          onClose={closeLightbox}
+        />
+      )}
+    </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: COLORS.porcelain,
   },
-  content: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 32 : 48,
-    paddingBottom: 40,
-  },
-
-  // Tick
-  tickWrap: {
-    width: 96,
-    height: 96,
+  centered: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    gap: 16,
+    padding: 24,
   },
-  tick: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: YELLOW,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: YELLOW,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  tickRing: {
-    position: 'absolute',
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 1.5,
-    borderColor: 'rgba(244,180,0,0.25)',
-  },
-
-  // Headline
-  headline: {
-    fontSize: 38,
-    fontWeight: '800',
-    color: WHITE,
-    letterSpacing: -1,
+  errorText: {
+    fontSize: 14,
+    color: COLORS.fg3,
     textAlign: 'center',
-    marginBottom: 10,
   },
-  headlineAccent: {
-    color: YELLOW,
+  errorLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.carbon,
+    textDecorationLine: 'underline',
   },
-  sub: {
+
+  // Scroll content
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    alignItems: 'center',
+    gap: 16,
+  },
+
+  // ── Hero section (top, replaces check icon) ──────────────────────────────
+  heroSection: {
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  // Single: neutral QR + product info
+  heroProductName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.2,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  heroPeriodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  heroPeriodLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.fg3,
+    width: 52,
+    flexShrink: 0,
+  },
+  heroPickupText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.fg3,
+  },
+
+  // ── Headline ─────────────────────────────────────────────────────────────
+  title: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.4,
+    textAlign: 'center',
+  },
+  subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: GRAY,
-    lineHeight: 21,
+    color: COLORS.fg3,
+    lineHeight: 22,
     textAlign: 'center',
-    maxWidth: 280,
-    marginBottom: 32,
+    maxWidth: 300,
   },
 
-  // Booking card
-  card: {
-    width: '100%',
-    backgroundColor: CARD,
-    borderRadius: 20,
+  // ── Status chip ───────────────────────────────────────────────────────────
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(244,180,0,0.12)',
     borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-    marginBottom: 16,
+    borderColor: 'rgba(244,180,0,0.45)',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  row: {
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#C98F00',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7A5500',
+    letterSpacing: 0.2,
+  },
+
+  // ── Per-item cards (grouped only, horizontal layout) ─────────────────────
+  itemCard: {
+    alignSelf: 'stretch',
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+  },
+  itemInfo: {
+    flex: 1,
+    gap: 5,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.2,
+  },
+  itemDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  itemDateLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.fg3,
+    width: 52,
+    flexShrink: 0,
+  },
+  itemPickupText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.fg3,
+  },
+
+  // ── Totals reminder ───────────────────────────────────────────────────────
+  totalsCard: {
+    alignSelf: 'stretch',
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    padding: 16,
+    gap: 6,
+  },
+  totalsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
-    gap: 12,
   },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  rowLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: GRAY,
-  },
-  rowValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: WHITE,
-    letterSpacing: -0.1,
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  rowMono: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 12,
-    letterSpacing: 0.5,
-    color: YELLOW,
-  },
-  rowValueAccent: {
-    color: YELLOW,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  // Pick-up card
-  pickupCard: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 14,
-    marginBottom: 28,
-  },
-  pickupIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: CARD2,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  pickupTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: WHITE,
-    letterSpacing: -0.1,
-    marginBottom: 2,
-  },
-  pickupSub: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: GRAY,
-    lineHeight: 17,
-  },
-
-  // Buttons
-  btnPrimary: {
-    width: '100%',
-    height: 54,
-    backgroundColor: YELLOW,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
-    shadowColor: YELLOW,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  btnPrimaryText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: BG,
-    letterSpacing: -0.2,
-  },
-  btnSecondary: {
-    width: '100%',
-    height: 50,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  btnSecondaryText: {
+  totalsLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: GRAY,
+    color: COLORS.carbon,
+  },
+  totalsValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.3,
+  },
+  totalsDeposit: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: COLORS.fg3,
   },
 
-  tagline: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.15)',
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  primaryBtn: {
+    alignSelf: 'stretch',
+    height: 52,
+    backgroundColor: COLORS.amber,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  primaryBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.2,
+  },
+  secondaryBtn: {
+    alignSelf: 'stretch',
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.fg3,
+  },
+
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,7 +11,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  TextInput,
   Image,
   FlatList,
   ActivityIndicator,
@@ -19,128 +18,79 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { listenBagItems } from '@/lib/bag';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
 import LanchaiIcon from '@/components/LanchaiIcon';
-import { getProducts } from '@/lib/firestore';
+import SearchBar from '@/components/SearchBar';
+import { getProducts, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
-import WhyRentSection from '@/app/components/WhyRentSection';
-import TrustSection from '@/app/components/TrustSection';
+import { getMinPrice } from '@/utils/pricing';
+import { useExchangeRate } from '@/lib/exchangeRate';
+import { toLak } from '@/utils/currency';
+import { useLoyaltyTier } from '@/lib/loyalty';
+import { getProductAccessState } from '@/utils/productAccess';
+import WhyRentSection from '@/components/WhyRentSection';
+import TrustSection from '@/components/TrustSection';
 
 const CATEGORIES = [
-  { id: 'all',              name: 'All',               icon: 'grid-outline' },
-  { id: 'diy-garden',      name: 'DIY / Garden',      icon: 'hammer-outline' },
-  { id: 'cleaning-home',   name: 'Cleaning / Home',   icon: 'sparkles-outline' },
-  { id: 'kitchen',         name: 'Kitchen',            icon: 'restaurant-outline' },
-  { id: 'event',           name: 'Event',              icon: 'star-outline' },
-  { id: 'leisure',         name: 'Leisure',            icon: 'musical-notes-outline' },
-  { id: 'kids-baby',       name: 'Kids / Baby',        icon: 'happy-outline' },
-  { id: 'sports-outdoor',  name: 'Sports / Outdoor',  icon: 'bicycle-outline' },
-  { id: 'beauty-wellness', name: 'Beauty / Wellness',  icon: 'heart-outline' },
+  { id: 'all',     name: 'All',     icon: 'grid-outline'      },
+  { id: 'home',    name: 'Home',    icon: 'home-outline'      },
+  { id: 'kids',    name: 'Kids',    icon: 'happy-outline'     },
+  { id: 'outdoor', name: 'Outdoor', icon: 'compass-outline'   },
+  { id: 'tools',   name: 'Tools',   icon: 'construct-outline' },
+  { id: 'sports',  name: 'Sports',  icon: 'trophy-outline'    },
+  { id: 'fun',     name: 'Fun',     icon: 'book-outline'      },
 ] as const;
 
-const SLIDES = [
+interface HeroSlide {
+  // Local asset from assets/images/. null = placeholder tint shown until photo is added.
+  // When ready: replace null with require('@/assets/images/FILENAME.jpg')
+  // Recommended size: 1080 × 480 px (16:7 ratio)
+  image: number | null;
+  tint: string;  // background color shown when image is null or loading
+  title: string;
+  subtitle: string;
+  cta: string;
+  route: string;
+}
+
+const SLIDES: HeroSlide[] = [
   {
-    image: 'https://picsum.photos/seed/rent/800/400',
+    image: null, // → assets/images/hero-lifestyle.jpg  (LANCHAI store or rental lifestyle scene)
+    tint: COLORS.carbon,
     title: 'Why buy it when\nyou can rent it?',
     subtitle: 'Everything you need. Only when you need it.',
     cta: 'Explore Now',
-    route: '/catalogue',
+    route: '/explore',
   },
   {
-    image: 'https://picsum.photos/seed/outdoor/800/400',
+    image: null, // → assets/images/hero-outdoor.jpg   (outdoor / camping gear in nature)
+    tint: '#2D3A2E',
     title: 'Planning a weekend\noutdoors?',
     subtitle: 'Rent camping gear instead of buying it.',
     cta: 'Explore Camping',
-    route: '/category/sports-outdoor',
+    route: '/category/outdoor',
   },
   {
-    image: 'https://picsum.photos/seed/creator/800/400',
+    image: null, // → assets/images/hero-creator.jpg   (camera / content creation setup)
+    tint: COLORS.carbon,
     title: 'Creating content?',
     subtitle: 'Access professional equipment instantly.',
     cta: 'Explore Creator Gear',
-    route: '/catalogue',
+    route: '/explore',
   },
   {
-    image: 'https://picsum.photos/seed/tools/800/400',
+    image: null, // → assets/images/hero-tools.jpg     (power tools / DIY workshop)
+    tint: '#3A2A18',
     title: 'Working on a\nDIY project?',
     subtitle: 'Rent tools and get the job done.',
     cta: 'Explore Tools',
-    route: '/category/diy-garden',
-  },
-] as const;
-
-interface ProjectCollection {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  icon: string;
-  itemCount: number;
-}
-
-// TODO: replace with Firestore query: collection(db, "projectCollections")
-const PROJECT_COLLECTIONS: ProjectCollection[] = [
-  { id: 'events',   title: 'Party & Events',       description: '', icon: 'balloon-outline',  itemCount: 10, imageUrl: 'https://picsum.photos/seed/party/400/500' },
-  { id: 'home',     title: 'Home Improvement',      description: '', icon: 'hammer-outline',   itemCount: 15, imageUrl: 'https://picsum.photos/seed/home/400/500' },
-  { id: 'camping',  title: 'Camping Weekend',        description: '', icon: 'bonfire-outline',  itemCount: 12, imageUrl: 'https://picsum.photos/seed/camping/400/500' },
-  { id: 'creator',  title: 'Content Creator',        description: '', icon: 'camera-outline',   itemCount: 8,  imageUrl: 'https://picsum.photos/seed/creator2/400/500' },
-  { id: 'roadtrip', title: 'Road Trip Essentials',   description: '', icon: 'car-outline',      itemCount: 9,  imageUrl: 'https://picsum.photos/seed/roadtrip/400/500' },
-];
-
-const NEW_ARRIVALS_DATA: Product[] = [
-  {
-    id: 'new-1', name: 'Power Drill Pro', shortDesc: 'Professional cordless drill',
-    description: 'Heavy-duty 18V cordless drill for all your DIY projects.',
-    category: 'diy-garden', pricePerDay: 12, price8to30: 10, price30plus: 8,
-    deposit: 50, rating: 4.7, reviewCount: 8, rentalCount: 12,
-    available: true, stockLeft: 3, specs: { condition: 'Excellent' },
-    iconName: 'tool', iconSet: 'Feather', cardBg: 'default', tag: 'NEW', tagStyle: 'amber',
-  },
-  {
-    id: 'new-2', name: 'Camping Tent 4P', shortDesc: '4-person camping tent',
-    description: 'Spacious 4-person tent, easy to set up in minutes.',
-    category: 'sports-outdoor', pricePerDay: 15, price8to30: 12, price30plus: 10,
-    deposit: 80, rating: 4.9, reviewCount: 5, rentalCount: 7,
-    available: true, stockLeft: 2, specs: { condition: 'New' },
-    iconName: 'map', iconSet: 'Feather', cardBg: 'beige', tag: 'NEW', tagStyle: 'amber',
-  },
-  {
-    id: 'new-3', name: 'Sony A7 Camera', shortDesc: 'Full-frame mirrorless camera',
-    description: 'Professional Sony A7 III full-frame mirrorless camera.',
-    category: 'leisure', pricePerDay: 50, price8to30: 40, price30plus: 35,
-    deposit: 200, rating: 5.0, reviewCount: 3, rentalCount: 4,
-    available: true, stockLeft: 1, specs: { condition: 'Like New' },
-    iconName: 'camera', iconSet: 'Feather', cardBg: 'dark', tag: 'NEW', tagStyle: 'amber',
-  },
-];
-
-const HOT_PRODUCTS_DATA: Product[] = [
-  {
-    id: 'hot-1', name: 'Pressure Washer', shortDesc: 'High-pressure cleaning machine',
-    description: 'Powerful pressure washer for cars, patios and driveways.',
-    category: 'cleaning-home', pricePerDay: 18, price8to30: 15, price30plus: 12,
-    deposit: 60, rating: 4.8, reviewCount: 41, rentalCount: 95,
-    available: true, stockLeft: 2, specs: { condition: 'Good' },
-    iconName: 'droplet', iconSet: 'Feather', cardBg: 'amber', tag: '🔥 HOT', tagStyle: 'dark',
-  },
-  {
-    id: 'hot-2', name: 'Stand Mixer', shortDesc: 'Professional kitchen stand mixer',
-    description: 'KitchenAid-style stand mixer for baking enthusiasts.',
-    category: 'kitchen', pricePerDay: 20, price8to30: 16, price30plus: 13,
-    deposit: 80, rating: 4.9, reviewCount: 35, rentalCount: 88,
-    available: true, stockLeft: 3, specs: { condition: 'Excellent' },
-    iconName: 'coffee', iconSet: 'Feather', cardBg: 'beige', tag: '🔥 HOT', tagStyle: 'dark',
-  },
-  {
-    id: 'hot-3', name: 'PA Speaker System', shortDesc: 'Portable PA speaker with stand',
-    description: 'Professional PA system perfect for events and parties.',
-    category: 'event', pricePerDay: 35, price8to30: 28, price30plus: 22,
-    deposit: 120, rating: 4.8, reviewCount: 29, rentalCount: 76,
-    available: true, stockLeft: 2, specs: { condition: 'Good' },
-    iconName: 'speaker', iconSet: 'Feather', cardBg: 'dark', tag: '🔥 HOT', tagStyle: 'dark',
+    route: '/category/tools',
   },
 ];
 
@@ -153,19 +103,101 @@ const STEPS = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const userTier = useLoyaltyTier();
+  const exchangeRate = useExchangeRate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [activeCat, setActiveCat] = useState('all');
-  const [searchText, setSearchText] = useState('');
+  const [homeQuery, setHomeQuery] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [bagCount, setBagCount] = useState(0);
+  const [firstName, setFirstName] = useState<string>('');
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    getProducts().then(data => {
-      setProducts(data);
-      setLoading(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) { setLoading(false); return; }
+      setLoading(true);
+      setLoadError(false);
+      getProducts()
+        .then(data => { setProducts(data); setLoading(false); })
+        .catch(() => { setLoadError(true); setLoading(false); });
+    }, [user])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      getFavorites(user.uid).then(ids => setFavorites(new Set(ids)));
+    }, [user])
+  );
+
+  const handleToggleFavorite = useCallback((productId: string) => {
+    if (!user) return;
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+        removeFavorite(user.uid, productId);
+      } else {
+        next.add(productId);
+        addFavorite(user.uid, productId);
+      }
+      return next;
     });
-  }, []);
+  }, [user]);
 
-  const featured = products.slice(0, 4);
+  // Personalized greeting: firstName from users/{uid}, fallbacks to displayName first word
+  useEffect(() => {
+    if (!user) { setFirstName(''); return; }
+    getDoc(doc(db, 'users', user.uid)).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data() as { firstName?: string; displayName?: string };
+        const name = d.firstName?.trim() || d.displayName?.trim().split(' ')[0] || '';
+        setFirstName(name || user.displayName?.split(' ')[0] || '');
+      } else {
+        setFirstName(user.displayName?.split(' ')[0] || '');
+      }
+    }).catch(() => setFirstName(''));
+  }, [user]);
+
+  // Real-time unread notification count for bell badge
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    const q = query(
+      collection(db, 'notifications', user.uid, 'items'),
+      where('readAt', '==', null),
+    );
+    return onSnapshot(q, snap => setUnreadCount(snap.size), () => setUnreadCount(0));
+  }, [user]);
+
+  // Real-time bag item count for bag badge
+  useEffect(() => {
+    if (!user) { setBagCount(0); return; }
+    return listenBagItems(user.uid, items => setBagCount(items.length), () => setBagCount(0));
+  }, [user]);
+
+  const popularProducts = useMemo(
+    () => products.filter(p => p.showInPopular === true),
+    [products]
+  );
+
+  const newArrivals = useMemo(
+    () => products.filter(p => p.showInNew === true),
+    [products]
+  );
+
+  const premiumProducts = useMemo(
+    () => products.filter(p => p.isPremium === true),
+    [products]
+  );
+
+  const mostRented = useMemo(
+    () => [...products].sort((a, b) => (b.rentalCount ?? b.bookingsCount ?? 0) - (a.rentalCount ?? a.bookingsCount ?? 0)).slice(0, 5),
+    [products]
+  );
 
   const handleProductPress = useCallback((id: string) => {
     router.push(`/product/${id}`);
@@ -173,7 +205,7 @@ export default function HomeScreen() {
 
   const handleCategoryPress = useCallback((catId: string) => {
     if (catId === 'all') {
-      router.push('/catalogue');
+      router.push('/explore');
     } else {
       router.push(`/category/${catId}`);
     }
@@ -183,16 +215,44 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.topBtn}>
-          <Ionicons name="chatbubble-outline" size={22} color={COLORS.carbon} />
-        </TouchableOpacity>
-        <Text style={styles.wordmark}>LANCHAI</Text>
-        <TouchableOpacity style={styles.topBtn}>
-          <Feather name="bell" size={22} color={COLORS.carbon} />
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>2</Text>
-          </View>
-        </TouchableOpacity>
+        {/* Left: chat + notifications */}
+        <View style={styles.topLeftGroup}>
+          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/chat')}>
+            <Ionicons name="chatbubble-outline" size={22} color={COLORS.carbon} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/notifications')}>
+            <Feather name="bell" size={22} color={COLORS.carbon} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Logo — absolutely centred via a full-overlay wrapper */}
+        <View style={styles.logoWrapper} pointerEvents="none">
+          <Image
+            source={require('@/assets/images/lanchai-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Right: liked + bag */}
+        <View style={styles.topRightGroup}>
+          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/liked')}>
+            <Feather name="heart" size={22} color={COLORS.carbon} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/bag')}>
+            <Feather name="shopping-bag" size={22} color={COLORS.carbon} />
+            {bagCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{bagCount > 9 ? '9+' : bagCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -200,32 +260,21 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Location */}
-        <TouchableOpacity style={styles.locRow}>
-          <Feather name="map-pin" size={13} color={COLORS.amber} />
-          <Text style={styles.locText}>Vientiane, Laos</Text>
-          <Feather name="chevron-down" size={13} color={COLORS.fg3} />
-        </TouchableOpacity>
-
         {/* Carousel */}
         <HeroCarousel />
 
         {/* Search */}
-        <View style={styles.searchRow}>
-          <View style={styles.searchField}>
-            <Feather name="search" size={18} color={COLORS.fg3} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search for items"
-              placeholderTextColor={COLORS.fg3}
-              value={searchText}
-              onChangeText={setSearchText}
-            />
-          </View>
-          <TouchableOpacity style={styles.filterBtn}>
-            <Feather name="sliders" size={20} color={COLORS.carbon} />
-          </TouchableOpacity>
-        </View>
+        <SearchBar
+          value={homeQuery}
+          onChangeText={setHomeQuery}
+          onSubmit={() => {
+            if (homeQuery.trim()) {
+              router.push({ pathname: '/explore', params: { q: homeQuery.trim() } } as never);
+            }
+          }}
+          placeholder={firstName ? `Hi ${firstName}, what do you need today?` : 'What do you need today?'}
+          style={{ marginBottom: 18 }}
+        />
 
         {/* Category circles */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
@@ -241,7 +290,7 @@ export default function HomeScreen() {
               <View style={[styles.catCircle, activeCat === cat.id && styles.catCircleActive]}>
                 <Ionicons
                   name={cat.icon as never}
-                  size={20}
+                  size={28}
                   color={COLORS.carbon}
                 />
               </View>
@@ -250,58 +299,91 @@ export default function HomeScreen() {
           ))}
         </ScrollView>
 
-        {/* Popular near you */}
-        <View style={styles.sectionHead}>
-          <Text style={styles.sectionTitle}>Popular near you</Text>
-          <TouchableOpacity onPress={() => router.push('/catalogue')}>
-            <Text style={styles.seeAll}>See all</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-            {featured.map(p => (
-              <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} />
-            ))}
-          </ScrollView>
+        {/* New arrivals — hides when no products are flagged showInNew */}
+        {!loading && newArrivals.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>New arrivals</Text>
+              <TouchableOpacity onPress={() => router.push('/explore')}>
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
+              {newArrivals.map(p => (
+                <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
+              ))}
+            </ScrollView>
+          </>
         )}
 
-        {/* New Arrivals */}
-        <View style={styles.sectionHead}>
-          <Text style={styles.sectionTitle}>New Arrivals</Text>
-          <TouchableOpacity onPress={() => router.push('/catalogue')}>
-            <Text style={styles.seeAll}>See all</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-          {NEW_ARRIVALS_DATA.map(p => (
-            <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} />
-          ))}
-        </ScrollView>
+        {/* Popular near you — hides when no products are flagged showInPopular */}
+        {(!loading && !loadError && popularProducts.length === 0) ? null : (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>Popular near you</Text>
+              <TouchableOpacity onPress={() => router.push('/explore')}>
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            {loading ? (
+              <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />
+            ) : loadError ? (
+              <View style={styles.loadError}>
+                <Feather name="alert-circle" size={14} color={COLORS.danger} />
+                <Text style={styles.loadErrorText}>Couldn't load products. Check your connection and try again.</Text>
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
+                {popularProducts.map(p => (
+                  <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
+                ))}
+              </ScrollView>
+            )}
+          </>
+        )}
 
         {/* How LANCHAI works */}
         <HowItWorks />
 
-        {/* Explore by Project */}
-        <ExploreByProject />
-
-        {/* Most Rented This Month */}
-        <View style={styles.sectionHead}>
-          <Text style={styles.sectionTitle}>Most Rented This Month</Text>
-          <TouchableOpacity onPress={() => router.push('/catalogue')}>
-            <Text style={styles.seeAll}>See all</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-          {HOT_PRODUCTS_DATA.map(p => (
-            <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} tagBgOverride="#FF5722" />
-          ))}
-        </ScrollView>
+        {/* Premium — only shown when at least one product is flagged isPremium */}
+        {!loading && premiumProducts.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <View style={styles.premiumSectionTitle}>
+                <Feather name="award" size={14} color={COLORS.amber} />
+                <Text style={styles.sectionTitle}>Premium</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/explore')}>
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
+              {premiumProducts.map(p => (
+                <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* Why Rent */}
         <WhyRentSection />
+
+        {/* Most rented this month */}
+        {!loading && mostRented.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>Most rented this month</Text>
+              <TouchableOpacity onPress={() => router.push('/explore')}>
+                <Text style={styles.seeAll}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
+              {mostRented.map(p => (
+                <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
+              ))}
+            </ScrollView>
+          </>
+        )}
 
         {/* Trust */}
         <TrustSection />
@@ -310,7 +392,7 @@ export default function HomeScreen() {
   );
 }
 
-function ProductCard({ product, onPress, tagBgOverride }: { product: Product; onPress: () => void; tagBgOverride?: string }) {
+function ProductCard({ product, onPress, tagBgOverride, exchangeRate, userTier, isFavorite, onToggleFavorite }: { product: Product; onPress: () => void; tagBgOverride?: string; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void }) {
   const bgColors: Record<string, string> = {
     amber: COLORS.amber,
     dark: COLORS.carbon,
@@ -319,10 +401,29 @@ function ProductCard({ product, onPress, tagBgOverride }: { product: Product; on
   };
   const bg = bgColors[product.cardBg] ?? COLORS.warmBeige;
   const iconColor = product.cardBg === 'dark' ? COLORS.amber : COLORS.carbon;
+  const minPrice = getMinPrice(product);
+  const accessState = getProductAccessState(product, userTier);
+  const sectionBadge: { label: string; icon?: string; bg: string; text: string } | null =
+    accessState.badgeLabel ? {
+      label: accessState.badgeLabel,
+      bg:    accessState.badgeTone === 'unlocked' ? COLORS.amber : COLORS.carbon,
+      text:  accessState.badgeTone === 'unlocked' ? COLORS.carbon : COLORS.white,
+    } :
+    product.isPremium     ? { label: 'Premium', icon: 'award', bg: COLORS.amber,   text: COLORS.carbon } :
+    product.showInNew     ? { label: 'New',                    bg: COLORS.success, text: COLORS.white  } :
+    product.showInPopular ? { label: 'Popular',                bg: COLORS.carbon,  text: COLORS.white  } :
+    null;
 
   return (
     <TouchableOpacity style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.prodImg, { backgroundColor: bg }]}>
+        {product.images?.[0] ? (
+          <Image
+            source={{ uri: product.images[0] }}
+            style={StyleSheet.absoluteFillObject}
+            resizeMode="cover"
+          />
+        ) : null}
         {product.tag && (
           <View style={[
             styles.prodTag,
@@ -335,18 +436,39 @@ function ProductCard({ product, onPress, tagBgOverride }: { product: Product; on
             </Text>
           </View>
         )}
-        <TouchableOpacity style={styles.prodFav}>
-          <Feather name="heart" size={12} color={COLORS.carbon} />
+        <TouchableOpacity
+          style={styles.prodFav}
+          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          activeOpacity={0.8}
+        >
+          <Feather name="heart" size={12} color={isFavorite ? COLORS.danger : COLORS.carbon} />
         </TouchableOpacity>
-        <Feather name={product.iconName as never} size={44} color={iconColor} />
+        {sectionBadge && (
+          <View style={[styles.sectionBadge, { backgroundColor: sectionBadge.bg }]}>
+            {sectionBadge.icon && (
+              <Feather name={sectionBadge.icon as never} size={9} color={sectionBadge.text} />
+            )}
+            <Text style={[styles.sectionBadgeText, { color: sectionBadge.text }]}>
+              {sectionBadge.label}
+            </Text>
+          </View>
+        )}
+        {!product.images?.[0] && (
+          <Feather name={product.iconName as never} size={44} color={iconColor} />
+        )}
       </View>
       <View style={styles.prodBody}>
         <Text style={styles.prodName} numberOfLines={1}>{product.name}</Text>
-        <Text style={styles.prodPrice}>From {product.pricePerDay}K <Text style={styles.prodPriceUnit}>LAK / day</Text></Text>
-        <View style={styles.prodRating}>
-          <Feather name="star" size={11} color={COLORS.amber} />
-          <Text style={styles.prodRatingText}>{product.rating} ({product.reviewCount})</Text>
-        </View>
+        {minPrice != null && exchangeRate != null
+          ? <Text style={styles.prodPrice}>From {toLak(minPrice, exchangeRate).toLocaleString('en-US')} <Text style={styles.prodPriceUnit}>LAK / day</Text></Text>
+          : <Text style={styles.prodPriceUnavailable}>Price not set</Text>}
+        {product.averageRating != null && (
+          <View style={styles.prodRating}>
+            <Feather name="star" size={11} color={COLORS.amber} />
+            <Text style={styles.prodRatingText}>{product.averageRating.toFixed(1)} ({product.reviewCount})</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -416,75 +538,6 @@ function HowItWorks() {
   );
 }
 
-function ProjectCard({ project }: { project: ProjectCollection }) {
-  const router = useRouter();
-  const scale = useSharedValue(1);
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View style={[styles.projCard, animStyle]}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPressIn={() => { scale.value = withTiming(0.95, { duration: 150 }); }}
-        onPressOut={() => { scale.value = withTiming(1.0, { duration: 150 }); }}
-        onPress={() => router.push({ pathname: '/project/[id]', params: { projectId: project.id, projectName: project.title } } as never)}
-        style={styles.projCardInner}
-      >
-        <Image source={{ uri: project.imageUrl }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.75)']}
-          style={StyleSheet.absoluteFillObject}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-        />
-        <View style={styles.projCardContent}>
-          <Text style={styles.projCardTitle} numberOfLines={1} ellipsizeMode="tail">{project.title}</Text>
-          <Text style={styles.projCardCount}>{project.itemCount} Items</Text>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-function ExploreByProject() {
-  const router = useRouter();
-  const sectionOpacity = useSharedValue(0);
-  const sectionTranslateY = useSharedValue(20);
-
-  useEffect(() => {
-    sectionOpacity.value = withDelay(200, withTiming(1, { duration: 600 }));
-    sectionTranslateY.value = withDelay(200, withTiming(0, { duration: 600 }));
-  }, []);
-
-  const sectionAnimStyle = useAnimatedStyle(() => ({
-    opacity: sectionOpacity.value,
-    transform: [{ translateY: sectionTranslateY.value }],
-  }));
-
-  return (
-    <Animated.View style={[styles.projSection, sectionAnimStyle]}>
-      <View style={styles.projHeader}>
-        <Text style={styles.projHeaderTitle}>Explore by Project</Text>
-        <TouchableOpacity onPress={() => router.push('/catalogue')}>
-          <Text style={styles.seeAll}>See all</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView
-        horizontal={true}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 20 }}
-        style={styles.projStripOuter}
-      >
-        {PROJECT_COLLECTIONS.map(p => (
-          <ProjectCard key={p.id} project={p} />
-        ))}
-      </ScrollView>
-    </Animated.View>
-  );
-}
-
 function HeroCarousel() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -517,8 +570,10 @@ function HeroCarousel() {
         scrollEventThrottle={16}
       >
         {SLIDES.map((slide, i) => (
-          <View key={i} style={[styles.slide, { width }]}>
-            <Image source={{ uri: slide.image }} style={styles.slideImage} resizeMode="cover" />
+          <View key={i} style={[styles.slide, { width, backgroundColor: slide.tint }]}>
+            {slide.image != null && (
+              <Image source={slide.image} style={styles.slideImage} resizeMode="cover" />
+            )}
             <View style={styles.slideOverlay} />
             <View style={styles.slideContent}>
               <Text style={styles.slideTitle}>{slide.title}</Text>
@@ -542,14 +597,14 @@ function HeroCarousel() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAF7',
+    backgroundColor: COLORS.porcelain,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: COLORS.porcelain,
   },
   topBtn: {
@@ -559,6 +614,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
+  topLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  topRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   badge: {
     position: 'absolute',
     top: 4,
@@ -566,7 +629,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     backgroundColor: COLORS.amber,
-    borderRadius: 999,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
@@ -578,20 +641,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.carbon,
   },
-  wordmarkRow: {
-    flexDirection: 'row',
+  logoWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  wordmark: {
-    fontSize: 19,
-    fontWeight: '700',
-    letterSpacing: 5,
-    color: COLORS.carbon,
+  logo: {
+    width: 62,
+    height: 62,
   },
   scroll: {
     flex: 1,
-    backgroundColor: '#FAFAF7',
+    backgroundColor: COLORS.porcelain,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -600,6 +665,7 @@ const styles = StyleSheet.create({
   // Carousel
   carouselWrapper: {
     marginHorizontal: -20,
+    marginTop: 4,
     marginBottom: 16,
   },
   slide: {
@@ -626,7 +692,7 @@ const styles = StyleSheet.create({
   slideTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: COLORS.white,
     letterSpacing: -0.4,
     lineHeight: 26,
     marginBottom: 6,
@@ -640,15 +706,15 @@ const styles = StyleSheet.create({
   },
   slideCta: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F4B400',
+    backgroundColor: COLORS.amber,
     paddingHorizontal: 16,
     paddingVertical: 9,
-    borderRadius: 999,
+    borderRadius: 10,
   },
   slideCtaText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#1E1E1E',
+    color: COLORS.carbon,
     letterSpacing: 0.2,
   },
   dots: {
@@ -662,62 +728,13 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#CCCCCC',
+    backgroundColor: COLORS.disabledGray,
   },
   dotActive: {
     width: 18,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#F4B400',
-  },
-  locRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 14,
-  },
-  locText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.fg1,
-  },
-  // Search
-  searchRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
-    alignItems: 'center',
-  },
-  searchField: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    height: 48,
-    paddingHorizontal: 14,
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.carbon,
-  },
-  filterBtn: {
-    width: 48,
-    height: 48,
     backgroundColor: COLORS.amber,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
-    shadowColor: COLORS.amber,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
   },
   // Categories
   catScroll: {
@@ -730,12 +747,12 @@ const styles = StyleSheet.create({
   catItem: {
     alignItems: 'center',
     gap: 6,
-    minWidth: 52,
+    minWidth: 64,
   },
   catCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.softGray200,
@@ -801,7 +818,7 @@ const styles = StyleSheet.create({
     left: 8,
     height: 20,
     paddingHorizontal: 8,
-    borderRadius: 999,
+    borderRadius: 6,
     backgroundColor: COLORS.porcelain,
     alignItems: 'center',
     justifyContent: 'center',
@@ -850,6 +867,13 @@ const styles = StyleSheet.create({
   },
   prodPriceUnit: {
     fontSize: 10,
+  },
+  prodPriceUnavailable: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    fontStyle: 'italic',
+    marginBottom: 6,
   },
   prodRating: {
     flexDirection: 'row',
@@ -900,19 +924,19 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F4B400',
+    backgroundColor: COLORS.amber,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepBadgeText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: COLORS.white,
   },
   stepLine: {
     width: 2,
     flex: 1,
-    backgroundColor: '#F4B400',
+    backgroundColor: COLORS.amber,
     marginTop: 4,
     marginBottom: 4,
     minHeight: 24,
@@ -931,7 +955,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F4B400',
+    backgroundColor: COLORS.amber,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -947,7 +971,7 @@ const styles = StyleSheet.create({
   },
   durationBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFF8E1',
+    backgroundColor: COLORS.amberTint,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -955,7 +979,7 @@ const styles = StyleSheet.create({
   durationText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#F4B400',
+    color: COLORS.amber,
   },
   stepDesc: {
     fontSize: 13,
@@ -963,52 +987,47 @@ const styles = StyleSheet.create({
     color: COLORS.fg3,
     lineHeight: 19,
   },
-  // Explore by Project
-  projSection: {
-    marginBottom: 24,
+  sectionEmpty: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: COLORS.fg3,
+    textAlign: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 4,
   },
-  projHeader: {
+  premiumSectionTitle: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    gap: 5,
   },
-  projHeaderTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.4,
-  },
-  projStripOuter: {
-    marginHorizontal: -20,
-  },
-  projCard: {
-    width: 140,
-    height: 200,
-    borderRadius: 20,
-    marginRight: 12,
-    overflow: 'hidden',
-  },
-  projCardInner: {
-    flex: 1,
-  },
-  projCardContent: {
+  sectionBadge: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 14,
+    bottom: 7,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 18,
+    paddingHorizontal: 6,
+    borderRadius: 5,
   },
-  projCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
-    marginBottom: 2,
+  sectionBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
-  projCardCount: {
-    fontSize: 12,
+  loadError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 20,
+    paddingHorizontal: 4,
+  },
+  loadErrorText: {
+    fontSize: 13,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.danger,
+    flex: 1,
+    lineHeight: 18,
   },
 });

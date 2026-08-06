@@ -1,0 +1,698 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { Feather } from '@expo/vector-icons';
+import { COLORS } from '@/constants/Colors';
+import BackButton from '@/components/BackButton';
+import { auth } from '@/lib/auth';
+import { addReservation, getUserProfile, newOrderId, type UserProfile, type LoyaltyCoupon } from '@/lib/firestore';
+import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { sendNotif } from '@/lib/notifications';
+import { PaymentAtPickupBox } from '@/components/PaymentAtPickupBox';
+import { useAuth } from '@/contexts/AuthContext';
+import { useVatPercent } from '@/lib/exchangeRate';
+import { PriceLak } from '@/components/PriceLak';
+
+export default function BookingSummaryScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const vatPercent = useVatPercent();
+  const params = useLocalSearchParams<{
+    productId: string;
+    productName: string;
+    productImage: string;
+    pickupDateISO: string;
+    returnDateISO: string;
+    pickupDateLabel: string;
+    pickupTimeLabel: string;
+    returnDateLabel: string;
+    returnTimeLabel: string;
+    billableDays: string;
+    quantity: string;
+    pricePerDay: string;
+    subtotal: string;
+    deposit: string;
+    notes: string;
+  }>();
+
+  const billableDays = parseInt(params.billableDays ?? '1', 10);
+  const quantity     = parseInt(params.quantity ?? '1', 10);
+  const pricePerDay  = parseInt(params.pricePerDay ?? '0', 10);
+  const subtotal     = parseInt(params.subtotal ?? '0', 10);
+  const deposit      = parseInt(params.deposit ?? '0', 10);
+
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [cancelPolicyOpen, setCancelPolicyOpen] = useState(false);
+  const [agreed,      setAgreed]      = useState(false);
+  const [confirming,  setConfirming]  = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+
+  // ── Loyalty coupon ───────────────────────────────────────────────────────────
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserProfile(user.uid).then(setProfile).catch(() => {});
+  }, [user]);
+
+  // Business accounts are excluded from the loyalty program — never show or let them
+  // apply a coupon, even one issued before the account became a business account.
+  const unusedCoupons: LoyaltyCoupon[] = profile?.customerType === 'business'
+    ? []
+    : (profile?.coupons ?? []).filter(c => !c.used);
+  const selectedCoupon = unusedCoupons.find(c => c.id === selectedCouponId) ?? null;
+  const discountAmount = selectedCoupon ? Math.round((subtotal * selectedCoupon.percent) / 100) : 0;
+  const finalTotal = subtotal - discountAmount;
+
+  const handleConfirm = async () => {
+    if (!agreed || confirming) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setError('Please sign in to confirm your booking.');
+      return;
+    }
+    setConfirming(true);
+    setError(null);
+    try {
+      const profileAtSubmit = await getUserProfile(currentUser.uid);
+      if (!profileAtSubmit?.phoneNumber && !profileAtSubmit?.phone) {
+        setError('A phone number is required to book. Go to Account → Personal info to add one.');
+        setConfirming(false);
+        return;
+      }
+
+      const pickupLabel = `${params.pickupDateLabel} · ${params.pickupTimeLabel}`;
+      const returnLabel = `${params.returnDateLabel} · ${params.returnTimeLabel}`;
+      const orderId     = await newOrderId();
+
+      const reservationId = await addReservation({
+        productId:    params.productId ?? '',
+        productName:  params.productName ?? '',
+        productImage: params.productImage || null,
+        renterId:     currentUser.uid,
+        renterName:   currentUser.displayName || currentUser.email || null,
+        pickupAt:     new Date(params.pickupDateISO ?? ''),
+        returnAt:     new Date(params.returnDateISO ?? ''),
+        pickupLabel,
+        returnLabel,
+        durationDays: billableDays,
+        quantity,
+        pricePerDay,
+        subtotal,
+        total:        finalTotal,
+        deposit,
+        currency:     'LAK',
+        notes:        params.notes ?? '',
+        status:       'pending_payment',
+        orderId,
+        ...(selectedCoupon
+          ? { couponApplied: { id: selectedCoupon.id, percent: selectedCoupon.percent, discountAmount } }
+          : {}),
+      });
+
+      // Mark the coupon used at creation time — permanent even if this booking is
+      // later cancelled.
+      if (selectedCoupon) {
+        const updatedCoupons = (profileAtSubmit.coupons ?? []).map(c =>
+          c.id === selectedCoupon.id
+            ? { ...c, used: true, usedAt: Timestamp.now(), usedOnReservationId: reservationId }
+            : c,
+        );
+        updateDoc(doc(db, 'users', currentUser.uid), { coupons: updatedCoupons }).catch(() => {});
+      }
+
+      sendNotif(currentUser.uid, {
+        type:      'rental',
+        icon:      'clock',
+        iconColor: '#F4B400',
+        title:     'Reservation request sent',
+        body:      `Your booking for ${params.productName ?? 'this item'} is pending confirmation.`,
+        deepLink:  `/rentals/${reservationId}`,
+      });
+
+      router.replace({
+        pathname: '/booking/confirmation',
+        params: { orderId },
+      });
+    } catch {
+      setError('Could not confirm your booking. Please try again.');
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <View style={[s.root, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+
+      {/* ── Header ── */}
+      <View style={s.header}>
+        <BackButton onPress={() => router.back()} />
+        <Text style={s.headerTitle}>Summary</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[s.content, { paddingBottom: 24 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Booking card ── */}
+        <View style={s.card}>
+          <Text style={s.productName}>{params.productName}</Text>
+
+          <View style={s.divider} />
+
+          <Row label="Pick-up"  value={`${params.pickupDateLabel} · ${params.pickupTimeLabel}`} />
+          <Row label="Return"   value={`${params.returnDateLabel} · ${params.returnTimeLabel}`} />
+          <Row
+            label="Duration"
+            value={billableDays === 1 ? '1 day (24h)' : `${billableDays} days`}
+          />
+          <Row label="Quantity" value={`${quantity} unit${quantity !== 1 ? 's' : ''}`} />
+          <Row label="Rate"     value={`${pricePerDay.toLocaleString('en-US')} LAK / day`} />
+
+          <View style={s.divider} />
+
+          <View style={r.row}>
+            <Text style={r.label}>Subtotal</Text>
+            <PriceLak lak={subtotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={r.value} style={{ alignItems: 'flex-end' }} />
+          </View>
+          <View style={r.row}>
+            <Text style={r.label}>Deposit (refundable)</Text>
+            <PriceLak lak={deposit} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={[r.value, r.valueMuted]} style={{ alignItems: 'flex-end' }} />
+          </View>
+
+          <TouchableOpacity
+            style={s.depositAccordionRow}
+            onPress={() => setDepositOpen(o => !o)}
+            activeOpacity={0.7}
+          >
+            <Feather name="info" size={13} color="#854F0B" />
+            <Text style={s.depositAccordionLabel}>How does the deposit work?</Text>
+            <Feather
+              name="chevron-right"
+              size={14}
+              color="#854F0B"
+              style={{ transform: [{ rotate: depositOpen ? '90deg' : '0deg' }] }}
+            />
+          </TouchableOpacity>
+
+          {depositOpen && (
+            <View style={s.depositExplain}>
+              {[
+                'The deposit is a refundable security amount, separate from your rental fee.',
+                'Your rental fee is also collected in-store at pick-up.',
+                'The deposit is collected in store when you pick up the item.',
+                'It is refunded within 48h after return, once the item is checked.',
+                'Part of it may be kept only if the item is returned damaged, incomplete, or late.',
+              ].map((line, i) => (
+                <View key={i} style={s.depositExplainRow}>
+                  <Text style={s.depositExplainBullet}>·</Text>
+                  <Text style={s.depositExplainText}>{line}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={s.depositAccordionRow}
+            onPress={() => setCancelPolicyOpen(o => !o)}
+            activeOpacity={0.7}
+          >
+            <Feather name="info" size={13} color="#854F0B" />
+            <Text style={s.depositAccordionLabel}>Cancellation policy</Text>
+            <Feather
+              name="chevron-right"
+              size={14}
+              color="#854F0B"
+              style={{ transform: [{ rotate: cancelPolicyOpen ? '90deg' : '0deg' }] }}
+            />
+          </TouchableOpacity>
+
+          {cancelPolicyOpen && (
+            <View style={s.depositExplain}>
+              {[
+                'More than 48 hours before pickup: full refund of your advance.',
+                'Between 24 and 48 hours before pickup: your advance becomes a non-transferable credit for a future rental.',
+                'Less than 24 hours before pickup, or no-show: the advance is not refunded.',
+                'Premium items may be non-refundable regardless of cancellation date.',
+              ].map((line, i) => (
+                <View key={i} style={s.depositExplainRow}>
+                  <Text style={s.depositExplainBullet}>·</Text>
+                  <Text style={s.depositExplainText}>{line}</Text>
+                </View>
+              ))}
+              <TouchableOpacity onPress={() => router.push('/legal/cancellation')} activeOpacity={0.7}>
+                <Text style={s.cancelPolicyFullLink}>Read full cancellation policy</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {unusedCoupons.length > 0 && (
+            <>
+              <View style={s.divider} />
+              <View style={s.couponSection}>
+                <Text style={s.couponSectionLabel}>Apply a coupon</Text>
+                {unusedCoupons.map(c => {
+                  const selected = c.id === selectedCouponId;
+                  const savings = Math.round((subtotal * c.percent) / 100);
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[s.couponCard, selected && s.couponCardSelected]}
+                      onPress={() => setSelectedCouponId(selected ? null : c.id)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={s.couponPercentBox}>
+                        <Text style={s.couponPercentText}>{c.percent}%</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.couponCardTitle}>{c.percent}% off</Text>
+                        <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {selectedCoupon && (
+            <View style={s.couponAppliedRow}>
+              <Feather name="tag" size={13} color="#854F0B" />
+              <Text style={s.couponAppliedText}>
+                Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
+              </Text>
+            </View>
+          )}
+
+          <View style={s.divider} />
+
+          {/* Total */}
+          <View style={s.totalRow}>
+            <Text style={s.totalLabel}>Total to pay</Text>
+            <PriceLak lak={finalTotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.totalValue} style={{ alignItems: 'flex-end' }} />
+          </View>
+          <Text style={s.totalNote}>+ {deposit.toLocaleString('en-US')} LAK deposit, refunded within 48h after return</Text>
+        </View>
+
+        {params.notes ? (
+          <View style={s.notesBox}>
+            <Text style={s.notesLabel}>Notes</Text>
+            <Text style={s.notesText}>{params.notes}</Text>
+          </View>
+        ) : null}
+
+        {/* ── Payment info (text-only — amounts shown above) ── */}
+        <PaymentAtPickupBox />
+
+        {/* ── Terms checkbox ── */}
+        <TouchableOpacity
+          style={s.termsRow}
+          onPress={() => setAgreed(v => !v)}
+          activeOpacity={0.75}
+        >
+          <View style={[s.checkbox, agreed && s.checkboxChecked]}>
+            {agreed && <Feather name="check" size={12} color={COLORS.carbon} />}
+          </View>
+          <Text style={s.termsText}>
+            I agree to the{' '}
+            <Text
+              style={s.termsLink}
+              onPress={() => router.push('/legal/terms')}
+            >
+              rental terms and conditions
+            </Text>
+          </Text>
+        </TouchableOpacity>
+
+        {/* ── Error ── */}
+        {error ? (
+          <View style={s.errorBox}>
+            <Feather name="alert-circle" size={14} color={COLORS.danger} />
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* ── Confirm button ── */}
+      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity
+          style={[s.confirmBtn, (!agreed || confirming) && s.confirmBtnOff]}
+          onPress={handleConfirm}
+          disabled={!agreed || confirming}
+          activeOpacity={0.85}
+        >
+          {confirming ? (
+            <>
+              <ActivityIndicator size="small" color={COLORS.carbon} />
+              <Text style={s.confirmBtnText}>Confirming…</Text>
+            </>
+          ) : (
+            <Text style={[s.confirmBtnText, !agreed && s.confirmBtnTextOff]}>
+              Confirm booking
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <View style={r.row}>
+      <Text style={r.label}>{label}</Text>
+      <Text style={[r.value, muted && r.valueMuted]}>{value}</Text>
+    </View>
+  );
+}
+
+const r = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.fg3,
+  },
+  value: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.carbon,
+    textAlign: 'right',
+    flexShrink: 1,
+    marginLeft: 12,
+  },
+  valueMuted: {
+    color: COLORS.fg3,
+    fontWeight: '500',
+  },
+});
+
+const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: COLORS.porcelain,
+  },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.softGray200,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.3,
+  },
+
+  // Content
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    gap: 16,
+  },
+
+  // Card
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: 16,
+  },
+  productName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.3,
+    paddingBottom: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.softGray200,
+    marginVertical: 4,
+  },
+
+  // Deposit disclosure
+  depositAccordionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    marginBottom: 4,
+  },
+  depositAccordionLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#854F0B',
+  },
+  depositExplain: {
+    backgroundColor: COLORS.porcelain,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    marginBottom: 6,
+  },
+  depositExplainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  depositExplainBullet: {
+    fontSize: 14,
+    color: COLORS.fg3,
+    lineHeight: 20,
+  },
+  depositExplainText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '400',
+    color: COLORS.carbon,
+    lineHeight: 18,
+  },
+  cancelPolicyFullLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.fg3,
+    textDecorationLine: 'underline',
+    marginTop: 4,
+  },
+
+  // Total
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  totalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.carbon,
+  },
+  totalValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.4,
+  },
+  totalNote: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    paddingBottom: 4,
+  },
+
+  // Coupon selector — compact version of profile/loyalty.tsx's coupon cards
+  couponSection: {
+    paddingVertical: 10,
+  },
+  couponSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.carbon,
+    marginBottom: 8,
+  },
+  couponCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.softGray200,
+    padding: 10,
+    marginBottom: 8,
+  },
+  couponCardSelected: {
+    backgroundColor: COLORS.amberTint,
+    borderColor: COLORS.amber,
+  },
+  couponPercentBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: COLORS.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  couponPercentText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.carbon,
+  },
+  couponCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.carbon,
+  },
+  couponCardSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    marginTop: 1,
+  },
+  couponAppliedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 9,
+  },
+  couponAppliedText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#854F0B',
+  },
+
+  // Notes box
+  notesBox: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: 14,
+  },
+  notesLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: COLORS.fg3,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  notesText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: COLORS.carbon,
+    lineHeight: 20,
+  },
+
+  // Terms
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: COLORS.softGray,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: COLORS.amber,
+    borderColor: COLORS.amber,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.fg2,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: COLORS.carbon,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+
+  // Error
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    padding: 12,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.danger,
+    lineHeight: 18,
+  },
+
+  // Footer
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    backgroundColor: COLORS.porcelain,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.softGray200,
+  },
+  confirmBtn: {
+    height: 52,
+    backgroundColor: COLORS.amber,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  confirmBtnOff: {
+    backgroundColor: COLORS.warmBeige,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+  },
+  confirmBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.carbon,
+    letterSpacing: -0.2,
+  },
+  confirmBtnTextOff: {
+    color: COLORS.fg3,
+  },
+});

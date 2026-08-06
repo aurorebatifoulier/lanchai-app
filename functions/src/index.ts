@@ -134,6 +134,12 @@ export const applyLoyaltyPoints = onDocumentUpdated(
 
     const pointsEarned = Math.floor((after.subtotal ?? 0) / 10_000);
     const renterId: string = after.renterId;
+    const userRef = db.collection('users').doc(renterId);
+
+    // Business accounts are excluded entirely from the loyalty program — no points,
+    // no tier progression, no coupons, ever.
+    const preSnap = await userRef.get();
+    if (preSnap.data()?.customerType === 'business') return;
 
     const configSnap = await db.collection('config').doc('loyalty').get();
     const cfg = configSnap.data() as {
@@ -149,8 +155,6 @@ export const applyLoyaltyPoints = onDocumentUpdated(
             { tier: 'platinum', threshold: cfg.thresholds.platinum },
           ]
         : [];
-
-    const userRef = db.collection('users').doc(renterId);
 
     await db.runTransaction(async tx => {
       const userSnap = await tx.get(userRef);
@@ -277,16 +281,44 @@ async function sendRenterNotif(
 
 async function sendAdminNotifs(
   adminUids: string[],
-  payload: { title: string; body: string; icon: string; iconColor: string; deepLink: string },
+  payload: { type?: string; title: string; body: string; icon: string; iconColor: string; deepLink: string },
 ): Promise<void> {
+  const { type = 'rental', ...rest } = payload;
   await Promise.all(
     adminUids.map(uid =>
       db.collection('notifications').doc(uid).collection('items').add({
-        type: 'rental',
-        ...payload,
+        type,
+        ...rest,
         createdAt: FieldValue.serverTimestamp(),
         readAt: null,
       }),
     ),
   );
 }
+
+// Notifies every admin when a new BtoB (business account) signup comes in — fires only
+// on the transition into accountType: 'btob' (idempotent: an update that leaves
+// accountType already 'btob' — e.g. an admin's own approve/reject write — never re-fires).
+export const notifyBtobSignup = onDocumentWritten(
+  { document: 'users/{uid}', region: 'asia-southeast1' },
+  async event => {
+    if (!event.data?.after.exists) return; // skip deletes
+    const before = event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data.after.data()!;
+    if (before?.accountType === 'btob') return; // already notified on the original signup
+    if (after.accountType !== 'btob') return;    // not a BtoB signup
+
+    const adminSnap = await db.collection('admins').get();
+    const adminUids = adminSnap.docs.map(d => d.id);
+    if (adminUids.length === 0) return;
+
+    await sendAdminNotifs(adminUids, {
+      type: 'account',
+      title: 'New business account',
+      body: `${after.btobCompanyName ?? 'A company'} submitted a business account application.`,
+      icon: 'briefcase',
+      iconColor: 'amber',
+      deepLink: `/admin/business-accounts/${event.params.uid}`,
+    });
+  },
+);
