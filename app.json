@@ -13,6 +13,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.lanchai.app",
       "adaptiveIcon": {
         "backgroundColor": "#F4B400",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
