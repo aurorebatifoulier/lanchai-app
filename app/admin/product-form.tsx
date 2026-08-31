@@ -22,6 +22,7 @@ import {
   doc,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   serverTimestamp,
   Timestamp,
@@ -30,16 +31,18 @@ import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebas
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { db, storage } from '@/lib/firebase';
+import { auth } from '@/lib/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import type { ProductCategory } from '@/lib/mockData';
-import type { LoyaltyTier } from '@/lib/firestore';
+import { adjustProductStockCondition, type LoyaltyTier } from '@/lib/firestore';
 import { CATEGORY_LABELS } from './products';
 import CropScreen from '@/components/CropScreen';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { formatLak } from '@/utils/currency';
 import { TIER_ORDER, TIER_LABELS } from '@/lib/loyalty';
 import AdminDateTimePicker from '@/components/AdminDateTimePicker';
+import { ConfirmBox } from '@/components/ConfirmBox';
 
 type ProductAccessMode = 'public' | 'earlyAccess' | 'exclusive';
 
@@ -167,6 +170,17 @@ export default function AdminProductFormScreen() {
   const [minTierRequired,  setMinTierRequired]  = useState<LoyaltyTier | ''>('');
   const [earlyAccessUntil, setEarlyAccessUntil] = useState<Date | null>(null);
 
+  // ── Stock condition (edit mode only — adjusted directly via adjustProductStockCondition,
+  // not part of the main Save payload, so each change is individually audit-logged) ──
+  const [inRepairUnits, setInRepairUnits] = useState(0);
+  const [lostUnits,     setLostUnits]     = useState(0);
+  const [stockConfirmField, setStockConfirmField] = useState<'inRepairUnits' | 'lostUnits' | null>(null);
+  const [stockDeltaInput,   setStockDeltaInput]   = useState('');
+  const [stockReason,       setStockReason]       = useState('');
+  const [stockStaffName,    setStockStaffName]    = useState('');
+  const [stockAdjusting,    setStockAdjusting]    = useState(false);
+  const [stockAdjustError,  setStockAdjustError]  = useState<string | null>(null);
+
   // ── Optional content sections ──────────────────────────────────────────────
   const [perfectFor,    setPerfectFor]    = useState<string[]>([]);
   const [keyFeatures,   setKeyFeatures]   = useState<{ icon: string; text: string }[]>([]);
@@ -211,6 +225,8 @@ export default function AdminProductFormScreen() {
         setRetailPrice(d.retailPrice != null ? String(d.retailPrice) : '');
         setDeposit(d.deposit    != null ? String(d.deposit)    : '');
         setQuantity(String(d.quantity ?? d.stockLeft ?? 1));
+        setInRepairUnits(d.inRepairUnits ?? 0);
+        setLostUnits(d.lostUnits ?? 0);
         setStatus(d.status      ?? 'draft');
         setAvailable(d.available ?? true);
         setIsPremium(d.isPremium ?? false);
@@ -326,6 +342,27 @@ export default function AdminProductFormScreen() {
     });
   }, []);
 
+  // ── Stock condition adjustment (own write, independent of the main Save button) ──
+  const handleApplyStockAdjustment = useCallback(async () => {
+    if (!id || !stockConfirmField || stockAdjusting) return;
+    const delta = parseInt(stockDeltaInput, 10);
+    if (!delta || stockReason.trim().length === 0 || stockStaffName.trim().length === 0) return;
+    setStockAdjusting(true);
+    setStockAdjustError(null);
+    try {
+      await adjustProductStockCondition(id, stockConfirmField, delta, stockReason.trim(), stockStaffName.trim());
+      if (stockConfirmField === 'inRepairUnits') setInRepairUnits(v => Math.max(0, v + delta));
+      else setLostUnits(v => Math.max(0, v + delta));
+      setStockConfirmField(null);
+      setStockDeltaInput('');
+      setStockReason('');
+    } catch {
+      setStockAdjustError('Failed to update. Please try again.');
+    } finally {
+      setStockAdjusting(false);
+    }
+  }, [id, stockConfirmField, stockDeltaInput, stockReason, stockStaffName, stockAdjusting]);
+
   // ── Save ───────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     setSubmitted(true);
@@ -378,7 +415,25 @@ export default function AdminProductFormScreen() {
       return urls;
     }
 
+    // Defense-in-depth against the "first Storage write of the session" race: Storage's
+    // isAdmin() rule cross-checks Firestore, and that first write occasionally fails
+    // with storage/unauthorized even with a fresh token, self-resolving on retry.
+    // One retry after a short delay absorbs that without surfacing it to the admin.
+    async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+      try {
+        return await fn();
+      } catch (err) {
+        console.warn('[AdminProductForm] upload failed, retrying once in 1s:', err);
+        await new Promise(res => setTimeout(res, 1000));
+        return await fn();
+      }
+    }
+
     try {
+      // Force a fresh ID token before any Storage call — the very first Storage write
+      // of a session can otherwise race ahead of the SDK picking up the current token.
+      await auth.currentUser?.getIdToken(true);
+
       const qty = parseQty(quantity) || 1;
       const basePayload: Record<string, unknown> = {
         name:        name.trim(),
@@ -419,18 +474,21 @@ export default function AdminProductFormScreen() {
       };
 
       if (isEdit && id) {
-        const imageUrls = await uploadAll(id);
+        const imageUrls = await withRetry(() => uploadAll(id));
         await updateDoc(doc(db, 'products', id), { ...basePayload, images: imageUrls });
       } else {
+        // Generate the doc ID client-side (no network call — same mechanism addDoc uses
+        // internally) so images can upload to their final products/{id}/... path BEFORE
+        // any Firestore write happens. This matches the edit path's upload-then-write
+        // order: if the upload fails, nothing has been written and there's no imageless
+        // doc left behind, and retrying doesn't create a duplicate since no doc exists yet.
+        const newRef = doc(collection(db, 'products'));
         basePayload.createdAt = serverTimestamp();
         basePayload.reviewCount   = 0;
         basePayload.rentalCount   = 0;
         basePayload.bookingsCount = 0;
-        const docRef = await addDoc(collection(db, 'products'), { ...basePayload, images: [] });
-        const imageUrls = await uploadAll(docRef.id);
-        if (imageUrls.length > 0) {
-          await updateDoc(docRef, { images: imageUrls, updatedAt: serverTimestamp() });
-        }
+        const imageUrls = await withRetry(() => uploadAll(newRef.id));
+        await setDoc(newRef, { ...basePayload, images: imageUrls });
       }
 
       setSaveMsg({ ok: true, text: 'Product saved.' });
@@ -1194,6 +1252,98 @@ export default function AdminProductFormScreen() {
             </View>
           </View>
 
+          {/* ── STOCK CONDITION (edit mode only — a new product has nothing
+              to adjust yet) ──────────────────────────────────────────── */}
+          {isEdit && (
+            <>
+              <SectionLabel title="STOCK CONDITION" />
+
+              <View style={f.fieldWrap}>
+                <View style={f.toggleRow}>
+                  <View style={f.toggleLabelCol}>
+                    <Text style={f.label}>In repair</Text>
+                    <Text style={f.hint}>
+                      {inRepairUnits} unit{inRepairUnits !== 1 ? 's' : ''} currently out for repair
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={f.adjustBtn}
+                    onPress={() => {
+                      setStockConfirmField('inRepairUnits');
+                      setStockDeltaInput('');
+                      setStockReason('');
+                      setStockAdjustError(null);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={f.adjustBtnText}>Adjust</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={f.fieldWrap}>
+                <View style={f.toggleRow}>
+                  <View style={f.toggleLabelCol}>
+                    <Text style={f.label}>Lost / stolen</Text>
+                    <Text style={f.hint}>
+                      {lostUnits} unit{lostUnits !== 1 ? 's' : ''} permanently lost
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={f.adjustBtn}
+                    onPress={() => {
+                      setStockConfirmField('lostUnits');
+                      setStockDeltaInput('');
+                      setStockReason('');
+                      setStockAdjustError(null);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={f.adjustBtnText}>Adjust</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {stockConfirmField && (
+                <ConfirmBox
+                  text={`Adjust "${stockConfirmField === 'inRepairUnits' ? 'In repair' : 'Lost / stolen'}" by how many units? Positive adds, negative restores (e.g. a repaired unit returning to service).`}
+                  confirmLabel="Apply"
+                  confirmDisabled={
+                    !parseInt(stockDeltaInput, 10) ||
+                    stockReason.trim().length === 0 ||
+                    stockStaffName.trim().length === 0
+                  }
+                  onCancel={() => setStockConfirmField(null)}
+                  onConfirm={handleApplyStockAdjustment}
+                >
+                  <TextInput
+                    style={f.input}
+                    keyboardType="numbers-and-punctuation"
+                    value={stockDeltaInput}
+                    onChangeText={setStockDeltaInput}
+                    placeholder="e.g. 1 or -1"
+                    placeholderTextColor={COLORS.fg3}
+                  />
+                  <TextInput
+                    style={f.input}
+                    value={stockReason}
+                    onChangeText={setStockReason}
+                    placeholder="Reason (e.g. cracked frame found on inspection)"
+                    placeholderTextColor={COLORS.fg3}
+                  />
+                  <TextInput
+                    style={f.input}
+                    value={stockStaffName}
+                    onChangeText={setStockStaffName}
+                    placeholder="Staff member name"
+                    placeholderTextColor={COLORS.fg3}
+                  />
+                  {stockAdjustError && <Text style={f.errorText}>{stockAdjustError}</Text>}
+                </ConfirmBox>
+              )}
+            </>
+          )}
+
           {/* ── Save button ───────────────────────────────────────────── */}
           <TouchableOpacity
             style={[f.saveBtn, (!canSave || saving) && f.saveBtnDisabled]}
@@ -1500,6 +1650,14 @@ const f = StyleSheet.create({
   // Available toggle row
   toggleRow:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toggleLabelCol: { flex: 1, marginRight: 16 },
+
+  // Stock condition "Adjust" trigger
+  adjustBtn: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 8,
+    borderWidth: 1, borderColor: COLORS.softGray200,
+    backgroundColor: COLORS.warmBeige,
+  },
+  adjustBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.carbon },
 
   // Checkbox rows (Home visibility + Premium)
   hintBlock: {

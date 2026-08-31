@@ -31,11 +31,11 @@ import { sendNotif } from '@/lib/notifications';
 import { PaymentAtPickupBox } from '@/components/PaymentAtPickupBox';
 import { Product } from '@/lib/mockData';
 import { getEffectiveRate, billableDaysFromDates, fmtReservationLabel } from '@/utils/pricing';
-import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
-import { toLak } from '@/utils/currency';
+import { useExchangeRate, useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
+import { toLak, splitHtVat, formatLakAmount } from '@/utils/currency';
 import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
-import { PriceLak } from '@/components/PriceLak';
 import { getProductAccessState } from '@/utils/productAccess';
+import { BillingSummary } from '@/components/BillingSummary';
 import { needsBtobDocument } from '@/utils/btob';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
@@ -166,6 +166,8 @@ export default function BagSummaryScreen() {
   const totalDeposit = items.reduce((sum, i) => sum + i.deposit, 0);
   const discountAmount = selectedCoupon ? Math.round((totalRental * selectedCoupon.percent) / 100) : 0;
   const finalTotal = totalRental - discountAmount;
+  const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
+  const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
   const perItemDiscount = selectedCoupon ? prorateDiscount(items, discountAmount) : items.map(() => 0);
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
@@ -311,22 +313,66 @@ export default function BagSummaryScreen() {
         </Text>
 
         {items.map(item => (
-          <ItemCard key={item.bagItemId} item={item} customerType={profile?.customerType} vatPercent={vatPercent} />
+          <ItemCard key={item.bagItemId} item={item} />
         ))}
 
         {/* ── Cost breakdown ── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Cost breakdown</Text>
 
-          <View style={s.row}>
-            <Text style={s.rowLabel}>Rental fees</Text>
-            <PriceLak lak={totalRental} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.rowValue} style={{ alignItems: 'flex-end' }} />
-          </View>
-          <View style={s.row}>
-            <Text style={[s.rowLabel, s.rowLabelMuted]}>Deposits (refundable)</Text>
-            <PriceLak lak={totalDeposit} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={[s.rowValue, s.rowValueMuted]} style={{ alignItems: 'flex-end' }} />
-          </View>
+          {unusedCoupons.length > 0 && (
+            <View style={s.couponSection}>
+              <Text style={s.couponSectionLabel}>Apply a coupon</Text>
+              {unusedCoupons.map(c => {
+                const selected = c.id === selectedCouponId;
+                const savings = Math.round((totalRental * c.percent) / 100);
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[s.couponCard, selected && s.couponCardSelected]}
+                    onPress={() => setSelectedCouponId(selected ? null : c.id)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={s.couponPercentBox}>
+                      <Text style={s.couponPercentText}>{c.percent}%</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.couponCardTitle}>{c.percent}% off</Text>
+                      <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
+          {selectedCoupon && (
+            <View style={s.couponAppliedRow}>
+              <Feather name="tag" size={13} color="#854F0B" />
+              <Text style={s.couponAppliedText}>
+                Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
+              </Text>
+            </View>
+          )}
+
+          <View style={s.divider} />
+          <BillingSummary
+            subtotalHt={vatHt}
+            vatAmount={vatAmount}
+            vatPct={vatPct}
+            total={finalTotal}
+            totalLabel="Total to pay"
+            deposit={totalDeposit}
+            depositLabel="Deposits (refundable)"
+            style={{ paddingHorizontal: 14 }}
+          />
+        </View>
+
+        {/* ── Payment info ── */}
+        <PaymentAtPickupBox />
+
+        {/* ── Deposit / cancellation info ── */}
+        <View style={s.card}>
           <TouchableOpacity
             style={s.depositAccordionRow}
             onPress={() => setDepositOpen(o => !o)}
@@ -345,7 +391,7 @@ export default function BagSummaryScreen() {
             <View style={s.depositExplain}>
               {[
                 'Collected in cash at pick-up, alongside the rental fee.',
-                'Fully refunded within 48h after the item is returned in good condition.',
+                'Fully refunded on the spot when the item is returned in good condition, once inspected (about 10 minutes).',
                 'Part or all of the deposit may be kept if the item is returned late, damaged, or with missing accessories.',
               ].map((line, i) => (
                 <View key={i} style={s.depositExplainRow}>
@@ -389,57 +435,7 @@ export default function BagSummaryScreen() {
               </TouchableOpacity>
             </View>
           )}
-
-          {unusedCoupons.length > 0 && (
-            <>
-              <View style={s.divider} />
-              <View style={s.couponSection}>
-                <Text style={s.couponSectionLabel}>Apply a coupon</Text>
-                {unusedCoupons.map(c => {
-                  const selected = c.id === selectedCouponId;
-                  const savings = Math.round((totalRental * c.percent) / 100);
-                  return (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={[s.couponCard, selected && s.couponCardSelected]}
-                      onPress={() => setSelectedCouponId(selected ? null : c.id)}
-                      activeOpacity={0.75}
-                    >
-                      <View style={s.couponPercentBox}>
-                        <Text style={s.couponPercentText}>{c.percent}%</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.couponCardTitle}>{c.percent}% off</Text>
-                        <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </>
-          )}
-
-          {selectedCoupon && (
-            <View style={s.couponAppliedRow}>
-              <Feather name="tag" size={13} color="#854F0B" />
-              <Text style={s.couponAppliedText}>
-                Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
-              </Text>
-            </View>
-          )}
-
-          <View style={s.divider} />
-          <View style={s.row}>
-            <Text style={[s.rowLabel, s.rowLabelBold]}>Total to pay</Text>
-            <PriceLak lak={finalTotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={[s.rowValue, s.rowValueBold]} style={{ alignItems: 'flex-end' }} />
-          </View>
-          <Text style={s.totalNote}>
-            + {totalDeposit.toLocaleString('en-US')} LAK deposit, refunded within 48h after return
-          </Text>
         </View>
-
-        {/* ── Payment info ── */}
-        <PaymentAtPickupBox />
 
         {/* ── Terms checkbox ── */}
         <TouchableOpacity
@@ -516,7 +512,7 @@ export default function BagSummaryScreen() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function ItemCard({ item, customerType, vatPercent }: { item: CheckoutItem; customerType?: string | null; vatPercent: number | null }) {
+function ItemCard({ item }: { item: CheckoutItem }) {
   return (
     <View style={s.card}>
       {/* Top row */}
@@ -550,7 +546,7 @@ function ItemCard({ item, customerType, vatPercent }: { item: CheckoutItem; cust
         <PricingRow label="Rate"                 value={`${item.pricePerDay.toLocaleString('en-US')} LAK / day`} />
         <View style={s.pricingRow}>
           <Text style={[s.rowLabel, s.rowLabelMuted]}>Deposit (refundable)</Text>
-          <PriceLak lak={item.deposit} customerType={customerType} vatPercent={vatPercent} textStyle={[s.rowValue, s.rowValueMuted]} style={{ alignItems: 'flex-end' }} />
+          <Text style={[s.rowValue, s.rowValueMuted]}>{formatLakAmount(item.deposit)}</Text>
         </View>
       </View>
     </View>
@@ -718,25 +714,13 @@ const s = StyleSheet.create({
   },
 
   // Rows (used inside cards)
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
   rowLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg2,
+    color: COLORS.fg3,
   },
   rowLabelMuted: {
     color: COLORS.fg3,
-  },
-  rowLabelBold: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
   },
   rowNote: {
     fontSize: 11,
@@ -747,10 +731,6 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.carbon,
-  },
-  rowValueBold: {
-    fontSize: 15,
-    fontWeight: '800',
   },
   rowValueMuted: {
     color: COLORS.fg3,
@@ -803,14 +783,6 @@ const s = StyleSheet.create({
     color: COLORS.fg3,
     textDecorationLine: 'underline',
     marginTop: 4,
-  },
-  totalNote: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    paddingHorizontal: 14,
-    paddingBottom: 10,
-    marginTop: -4,
   },
 
   // Coupon selector — compact version of profile/loyalty.tsx's coupon cards

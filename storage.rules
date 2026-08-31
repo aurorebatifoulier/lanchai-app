@@ -8,6 +8,8 @@ rules_version = '2';
 //   chat-images/{uid}/{fileName}                — renter↔admin chat photo attachments
 //   chat-videos/{uid}/{fileName}                — renter↔admin chat video attachments
 //   reservations/{reservationId}/{type}/{file}  — handover/return checklist photos
+//   claim-photos/{uid}/{fileName}                — renter-submitted claim evidence photos
+//   claim-videos/{uid}/{fileName}                — renter-submitted claim evidence videos
 //
 // Admin detection mirrors firestore.rules exactly:
 //   firestore.rules uses:  exists(/databases/$(database)/documents/admins/$(uid))
@@ -82,6 +84,39 @@ service firebase.storage {
       allow write: if isAdmin()
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Claim photos ──────────────────────────────────────────────────────────
+    // Path: claim-photos/{uid}/{fileName}  (uid = the renter filing the claim;
+    //   fileName = Date.now()_index.jpg — see lib/claims.ts's uploadClaimPhoto)
+    //
+    // Read: any authenticated user (matches products/chat-images precedent — the
+    //   download URL is stored behind Firestore claim access control anyway, and
+    //   admins need to view submitted evidence).
+    // Write: the renter whose UID matches the path segment only — unlike chat,
+    //   there's no admin-uploads-on-a-renter's-behalf case here, so no isAdmin()
+    //   branch is needed.
+    match /claim-photos/{uid}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Claim videos ──────────────────────────────────────────────────────────
+    // Path: claim-videos/{uid}/{fileName}  (uid = the renter filing the claim;
+    //   fileName = Date.now()_index.mp4 — see lib/claims.ts's uploadClaimVideo)
+    // Same read/write rationale as claim-photos above — sibling path, not a unified
+    // claim-media path, matching this file's existing chat-images/chat-videos
+    // sibling precedent. 50MB cap matches lib/claims.ts's CLAIM_VIDEO_MAX_BYTES
+    // exactly (a deliberately independent limit from chat-videos' 60MB).
+    match /claim-videos/{uid}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.auth.uid == uid
+                   && request.resource.size < 50 * 1024 * 1024
+                   && request.resource.contentType.matches('video/.*');
     }
 
     // ── Profile photos ────────────────────────────────────────────────────────

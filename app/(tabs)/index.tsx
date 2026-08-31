@@ -459,9 +459,9 @@ function ProductCard({ product, onPress, tagBgOverride, exchangeRate, userTier, 
         )}
       </View>
       <View style={styles.prodBody}>
-        <Text style={styles.prodName} numberOfLines={1}>{product.name}</Text>
+        <Text style={styles.prodName} numberOfLines={2}>{product.name}</Text>
         {minPrice != null && exchangeRate != null
-          ? <Text style={styles.prodPrice}>From {toLak(minPrice, exchangeRate).toLocaleString('en-US')} <Text style={styles.prodPriceUnit}>LAK / day</Text></Text>
+          ? <Text style={styles.prodPrice}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} <Text style={styles.prodPriceUnit}>LAK / day</Text></Text>
           : <Text style={styles.prodPriceUnavailable}>Price not set</Text>}
         {product.averageRating != null && (
           <View style={styles.prodRating}>
@@ -800,6 +800,7 @@ const styles = StyleSheet.create({
   },
   prodCard: {
     width: 138,
+    height: 212,
     backgroundColor: COLORS.white,
     borderRadius: 16,
     borderWidth: 1,
@@ -856,6 +857,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.carbon,
+    lineHeight: 16,
+    height: 32,
     marginBottom: 3,
     letterSpacing: -0.1,
   },

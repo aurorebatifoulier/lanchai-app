@@ -26,7 +26,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'shield',
     q: 'How does the deposit work?',
-    a: "A refundable security deposit is required for every rental. The amount depends on the item's value and is shown at checkout. It's separate from your rental fee, collected in store when you pick up the item, and refunded within 48h after you return it, once we've checked its condition.",
+    a: "A refundable security deposit is required for every rental. The amount depends on the item's value and is shown at checkout. It's separate from your rental fee, collected in store when you pick up the item, and refunded on the spot when you return it, right after a quick inspection (about 10 minutes).",
   },
   {
     icon: 'credit-card',

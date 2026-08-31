@@ -31,10 +31,36 @@ export interface ProductDoc {
 
   // Inventory
   quantity: number;       // stock count — exposed as stockLeft on the client Product
-  available: boolean;     // shown as availability chip on the product detail screen
+  available: boolean;     // shown as availability chip on the product detail screen; a
+                           // manual, cosmetic listing toggle — unrelated to the computed
+                           // "available" bucket on the admin inventory dashboard, and
+                           // never consulted by availability math (see effectiveStock).
+
+  // Units currently out of the bookable pool for a physical-condition reason — always
+  // subtracted from quantity/stockLeft via utils/availability.ts's effectiveStock(),
+  // never read directly. No per-unit identity exists in this app (a "5 chairs" product
+  // is just the integer 5, not five tracked units), so these are aggregate counts, not
+  // references to specific units. See products/{id}/stockAdjustments for the audit
+  // trail of how these counts changed over time.
+  inRepairUnits?: number; // default 0
+  lostUnits?: number;     // default 0 — incremented automatically when a reservation is
+                           // reported lost/stolen (app/admin/reservations/[id].tsx), or
+                           // manually from this product's own edit screen, or when a
+                           // return checklist itself rates the item 'unusable'
+  pendingSettlementUnits?: number; // default 0 — incremented by `quantity` the moment a
+                           // reservation's return checklist is submitted (so the unit
+                           // stops counting as available the instant it's marked
+                           // returned), decremented only by the scheduled
+                           // releaseSettledStock Cloud Function once BOTH the
+                           // reservation's deposit/charges are closed out
+                           // (returnFinalizedAt is set) AND the 12h HANDOFF_BUFFER_MS
+                           // has elapsed since returnAt — see functions/src/index.ts.
+                           // Never decremented by client code directly.
 
   // Admin lifecycle
-  status: ProductStatus;  // 'draft' = not visible to renters; 'published' = live
+  status: ProductStatus;  // 'draft' = not visible to renters; 'published' = live;
+                           // 'archived' = removed from catalogue (the admin inventory
+                           // dashboard's "removed" bucket sums stockLeft for these)
 
   // Display (mirrors the client Product interface exactly)
   iconName: string;

@@ -127,6 +127,18 @@ jamais calculé. Les 5 pièces manquantes à construire en une seule session :
 - **Firebase region** is `asia-southeast1` — don't introduce config that assumes a
   different region.
 - **Blaze plan** gates push notifications and photo uploads.
+- **`Timestamp.now()` vs `serverTimestamp()`:** default to `serverTimestamp()`
+  everywhere, including inside `writeBatch`es on plain top-level fields — this
+  codebase's own `submitChecklistBatch`, `cancelReservations`, and the
+  `extraBatchWork` pattern (`app/admin/reservations/[id].tsx`'s `runAction`) all
+  already do this without issue. `Timestamp.now()` has exactly two, unrelated,
+  non-batched call sites in the whole codebase (`addFavorite`, `submitRequest`) —
+  there is no precedent for it inside a batch. The only place `serverTimestamp()`
+  is actually unsafe is as a sentinel value **inside an array element** (a Firestore
+  SDK limitation, not a batching one) — e.g. a coupon pushed into an array field
+  uses `Timestamp.now()` for exactly that reason. Don't generalize that one
+  array-element case into "avoid `serverTimestamp()` in batches" — plain top-level
+  fields in a batch are fine.
 - **Choix délibéré — lecture publique des photos produits :** `storage.rules` a `allow read: if true` sur `match /products/{productId}/{imageId}`. C'est voulu — nécessaire pour que le catalogue s'affiche pour les visiteurs non connectés. Conséquence acceptée : les URLs d'images produits peuvent être hotlinkées/scrapées. Aucun impact à l'échelle actuelle. Ne pas restreindre cette règle.
 - **Convention de routing à préserver :** `app/admin/reservations.tsx` (la liste) et
   `app/admin/reservations/[id].tsx` (le détail) coexistent volontairement. Cela
@@ -184,6 +196,178 @@ jamais calculé. Les 5 pièces manquantes à construire en une seule session :
   `collection(db, 'reviews', productId, 'reviews')` — no `collectionGroup`.
   **If `collectionGroup` is ever needed for another collection, test it in isolation
   early** before building a feature around it.
+
+- **`UserProfile.address` vs. `UserProfile.addresses`:** `address?: string` (singular)
+  is the real, active field — a simple free-text field edited in
+  `app/profile/personal-info.tsx`, matching the `whatsapp` single-field pattern.
+  `addresses?: UserAddress[]` (plural, a labeled multi-entry address-book stub —
+  `{id, label, line1, city, note}`) is dead code left over from an earlier commit:
+  never read, never written, no UI anywhere. Don't assume the plural field is the
+  active one, and don't merge/conflate the two without a deliberate decision to
+  actually build the multi-address-book feature.
+- **`PICKUP_DELAY_MS`** (`utils/availability.ts`, next to `HANDOFF_BUFFER_MS`) is a
+  **display-only** constant (2 hours) — shown as informational copy on the product
+  detail screen and the booking confirmation screen, but not consumed by
+  `computeAvailableUnits` or any availability computation in that file. If the real
+  prep-delay value ever changes, update it there; both display sites derive their
+  copy from it rather than hardcoding "2".
+- **Product stock condition — no per-unit identity, counts only.** Products have no
+  concept of individual tracked units anywhere in this codebase — a "5 chairs"
+  product is one Firestore document with `stockLeft: 5`, a plain integer. So
+  `inRepairUnits`/`lostUnits` (`lib/mockData.ts`'s `Product`, `lib/types.ts`'s
+  `ProductDoc`) are aggregate counts, not references to specific units — there is
+  deliberately **no** single `status: 'available'|'in_repair'|'lost'|'removed'` enum
+  on products (that shape was considered and rejected: it would take an entire
+  multi-unit product off the market for one broken unit, and would also collide with
+  the pre-existing `ProductDoc.status: 'draft'|'published'|'archived'` listing-
+  lifecycle field). "Removed from catalogue" maps onto that existing `archived`
+  value instead of a new one.
+  - **`effectiveStock()`** (`utils/availability.ts`) is the required source of truth
+    for bookable stock everywhere — `Math.max(0, stockLeft - inRepairUnits - lostUnits
+    - pendingSettlementUnits)`. Never read `product.stockLeft` directly for an
+    availability check or "X available" copy; every renter-facing call site
+    (`app/bag.tsx`, `app/booking/new.tsx`, `app/category/[id].tsx`,
+    `<DateRangeCalendar>`/`<DateRangePicker>`'s `totalStock` prop) already goes
+    through it. See "Return closeout" below for `pendingSettlementUnits`.
+  - Every change to `inRepairUnits`/`lostUnits` goes through
+    `adjustProductStockCondition`/`addStockAdjustmentToBatch` (`lib/firestore.ts`),
+    which atomically pairs the count change with an append-only audit doc at
+    `products/{id}/stockAdjustments/{adjustmentId}` (admin-only, no update/delete
+    ever — see `firestore.rules`). There is no path that changes the counts without
+    also logging why.
+  - **Reporting a reservation lost/stolen** (`app/admin/reservations/[id].tsx`'s
+    "Report lost/stolen" action) now atomically increments the product's
+    `lostUnits` by that reservation's quantity in the SAME batch as the reservation's
+    own status/charge update, via `runAction`'s optional `extraBatchWork` param —
+    this closes a real gap: that action used to write only to the reservation,
+    leaving admins to remember a separate, easily-forgotten manual product edit.
+  - Admin inventory dashboard: `/admin/inventory` (live overview by status/unit
+    count) and `/admin/inventory/{id}` (per-product calendar + release action) —
+    same `[id].tsx`-file-plus-list-file routing convention as
+    `app/admin/reservations.tsx`.
+  - **`releaseReservation`** (`lib/firestore.ts`) force-clears a stuck-blocked
+    reservation by setting its status to `'cancelled'` — a single, non-batched write
+    on the reservation itself. It deliberately does NOT write to
+    `reservationOccupancy` directly (that collection's rule denies all client writes
+    unconditionally, admin included); `functions/src/index.ts`'s
+    `syncReservationOccupancy` auto-deletes the mirror as a side effect of the
+    reservation reaching a terminal status. If a "release" ever needs to avoid
+    touching the reservation doc itself, that's a different problem requiring a new
+    Cloud Function — this function doesn't solve that case.
+- **Return closeout — deposit settlement gates stock release.** Returning the deposit
+  is part of validating a return: a unit does not go back into available stock until
+  the deposit/charges are closed out, on top of the existing 12h `HANDOFF_BUFFER_MS`.
+  - The instant a return checklist is submitted (`app/admin/reservations/[id]/checklist.tsx`,
+    `submitChecklistBatch` in `lib/firestore.ts`, and the defensive "Mark as returned"
+    fallback in `app/admin/reservations/[id].tsx`), the product's `pendingSettlementUnits`
+    is incremented by the reservation's `quantity` in the SAME batch as the reservation
+    write, via `addStockAdjustmentToBatch` — exactly the same pattern as `lostUnits`. A
+    checklist rated `'unusable'` (a true write-off) increments `lostUnits` instead,
+    mirroring "Report lost/stolen" — closes a real pre-existing gap where a checklist-
+    rated write-off silently stayed bookable.
+  - `returnFinalizedAt` (`RentalDoc`) is the single canonical "financial side of this
+    return is closed" signal — written by **all three** closing actions (deposit
+    returned, outstanding balance settled, outstanding balance written off), never
+    derived from any one of those fields alone (any single one can legitimately never
+    apply to a given reservation — gating on just one leaked stock on every reservation
+    closed via the other two).
+  - **Release is deliberately NOT synchronous with settlement.** `reservationOccupancy`
+    is only date-range-scoped (see `syncReservationOccupancy` above) — it structurally
+    cannot express "keep this unit out of the pool indefinitely until an admin acts," so
+    `pendingSettlementUnits` (a plain aggregate count, like `inRepairUnits`/`lostUnits`)
+    is the mechanism, and `OCCUPYING_STATUSES`/the occupancy Cloud Function are untouched
+    by this feature. A new scheduled Cloud Function, `releaseSettledStock`
+    (`functions/src/index.ts`, every 15 min, same shape as `lateReturnAlerts`), decrements
+    `pendingSettlementUnits` only once **both** `returnFinalizedAt` is set **and**
+    `now >= returnAt + HANDOFF_BUFFER_MS` — releasing synchronously at settlement would
+    give a unit zero handoff buffer, since settlement now happens ~10 minutes after
+    return. For a damaged-but-returnable item, the admin's `stockReleaseHandling`
+    choice (`'release' | 'repair'`, entered on the "Mark deposit as returned" dialog,
+    only shown when `chargeSeverity === 'damaged'`) tells the cron to transfer into
+    `inRepairUnits` instead of releasing. `stockReleasedAt` is the cron's own
+    idempotency marker (`null` until processed) — never set client-side.
+  - This is backend timing logic only — no renter/admin-facing color or escalation.
+    Do NOT reintroduce time-based urgency UI here; the admin inventory dashboard's
+    "Needs attention" section surfaces stuck items (`pendingSettlementUnits > 0`) in
+    the same neutral, informational style as its existing `overdue`/`soldOutPublished`
+    entries, matching the earlier, deliberate removal of the old 48h deposit-urgency
+    chip system.
+  - `components/RentalReceipt.tsx` — the end-of-service settlement receipt, pure
+    aggregation of already-persisted figures (no new financial math): rental fee via
+    `<BillingSummary>` (now supports omitting its `deposit`/`depositLabel` props to
+    avoid duplicating the deposit line shown separately below it), deposit/charges via
+    `<SettlementSummary>` unchanged, and a Net total — `total + depositAppliedToCharge
+    + outstandingBalance`, shown as one LAK figure only when `chargeCurrency` is LAK
+    (the rental fee is always LAK but the deposit/charge currency is a staff choice at
+    handover and can be USD/THB; forcing those into one blended LAK figure would need a
+    new current-rate conversion that could make a closed receipt's numbers drift later,
+    so a currency mismatch is shown as two separate figures instead). Rendered inline
+    on the admin reservation detail screen and at the customer route
+    `app/rentals/[id]/receipt.tsx` (first use of the `[id].tsx`+`[id]/child.tsx`
+    coexistence pattern outside `app/admin/reservations/` — see the gotcha above), both
+    gated on `status === 'returned' && returnFinalizedAt` being set.
+  - **`utils/receiptData.ts`'s `deriveReceiptData(rental, vatPercent)`** is the single
+    source of every derived receipt figure (VAT split, deposit held/applied, net) —
+    `RentalReceipt.tsx` calls it for the on-screen render, and `lib/receiptPdf.ts`
+    calls the exact same function to build the downloadable PDF (`expo-print` +
+    `expo-sharing`, both Expo Go–compatible on SDK 54; the "Download / share receipt"
+    button lives inside `RentalReceipt.tsx` itself, so both the customer and admin
+    receipt views get it automatically with no separate wiring). Any future receipt
+    figure — on-screen or exported — must go through `deriveReceiptData`, not
+    re-derive `splitHtVat`/deposit math a third time. The one deliberate exception:
+    `lib/receiptPdf.ts` re-expresses `SettlementSummary.tsx`'s tiny internal
+    owed/resolution derivation itself (documented inline as intentionally mirroring
+    it), since a plain HTML string can't invoke a React component — that component
+    itself was left untouched rather than refactored, since it's already reused in 3
+    other places. The PDF branding is a text "LANCHAI" wordmark in the brand colors,
+    not the raster `assets/images/lanchai-logo.png` — embedding it would need a new
+    `expo-asset` dependency plus base64 asset-loading, a deliberate scope cut, not an
+    oversight.
+- **New shared utilities from this feature, reuse rather than re-defining:**
+  `utils/calendarGrid.ts` (`buildCalendarDays`/`chunkIntoWeeks`/`sameDay`/
+  `startOfDay` — pure month-grid math, extracted from `DateRangeCalendar.tsx`, no
+  selection/interaction logic) and `components/ConfirmBox.tsx` (the inline
+  Alert.alert-replacement pattern, extracted from `app/admin/reservations/[id].tsx`/
+  `app/admin/business-accounts/[uid].tsx` — takes an optional `cancelLabel` prop,
+  default `'Keep'`).
+- **VAT is 10%, VAT-inclusive (TTC), and already baked into every displayed price** —
+  never add it on top of a total. Single source of truth for the rate:
+  `DEFAULT_VAT_PERCENT` + `useVatPercent()` (`lib/exchangeRate.ts`), a Firestore-backed
+  hook reading `config/pricing.vatPercent` (admin-editable at
+  `app/admin/exchange-rate.tsx`) that returns `null` while loading/unconfigured —
+  callers must always fall back with `vatPercent ?? DEFAULT_VAT_PERCENT`. To extract
+  the VAT amount from a tax-inclusive total, always reuse `splitHtVat(amountLak,
+  vatPercent)` (`utils/currency.ts`) — it returns `{ ht, vat, ttc }` with `ht` rounded
+  and `vat = amountLak - ht`, guaranteeing `ht + vat === ttc` exactly. Never hand-roll
+  `total * 0.10` (wrong — treats VAT as additive) or `total / 11` (right for 10% but
+  bypasses the shared rounding convention) elsewhere. `formatLakAmount(amountLak)`
+  (`utils/currency.ts`) formats an already-LAK figure as `"12,345 LAK"` for note lines —
+  distinct from `formatLak`, which converts from USD first.
+  `components/PriceLak.tsx` shows a full inline HT/VAT/TTC breakdown, but only for
+  `customerType === 'business'`, independently on every price it renders — this
+  remains true everywhere EXCEPT the 3 screens below. The 3 Summary/confirmation
+  screens (`app/booking/summary.tsx`, `app/bag/checkout.tsx`,
+  `app/booking/confirmation.tsx`) don't use `PriceLak` at all — every price row on
+  these 3 screens is a plain `<Text>{formatLakAmount(amount)}</Text>`, identical for
+  every customer type, and the rental amount is shown as a proper invoice build-up:
+  **Subtotal (excl. VAT) → VAT (X%) → Total to pay**, always via
+  `splitHtVat(amountLak, vatPercent)` (never hand-rolled), immediately above the
+  existing deposit-refund note. On `summary.tsx`/`checkout.tsx` — both of which have
+  a coupon feature — the build-up is derived from the actual post-discount amount
+  charged (`finalTotal`), NOT the pre-discount rental line item, so
+  `Subtotal (excl. VAT) + VAT` always reconciles exactly to `Total to pay` even when
+  a coupon is applied; `summary.tsx`'s separate pre-discount line is labeled
+  "Rental fee" (not "Subtotal") specifically to avoid two differently-valued rows
+  both saying "Subtotal" on screen. **The refundable deposit is never run through
+  `splitHtVat`/shown with a VAT breakdown anywhere on these 3 screens** — it's a
+  security deposit, not a taxable sale, so it renders as a plain amount only; this
+  was a small correctness fix, since `PriceLak` previously showed a business-only
+  HT/VAT/TTC split on deposit rows, which was never actually correct. Follow this
+  same build-up pattern (Subtotal excl. VAT → VAT → Total, plain `<Text>`, deposit
+  excluded from VAT math, no `PriceLak`) for any future screen that shows a final
+  payable total; `PriceLak`'s business-only breakdown is otherwise still the
+  convention used everywhere else pricing is shown (`app/bag.tsx`,
+  `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
 
 ## Working with Aurore
 

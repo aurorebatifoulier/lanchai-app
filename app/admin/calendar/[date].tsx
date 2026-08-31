@@ -48,16 +48,6 @@ function fmtLak(n: number): string {
   return `${n.toLocaleString('en-US')} LAK`;
 }
 
-type DepositUrgency = 'normal' | 'urgent' | 'overdue';
-
-function depositUrgency(returnedAt: Timestamp | undefined): DepositUrgency {
-  if (!returnedAt) return 'normal';
-  const hoursElapsed = (Date.now() - returnedAt.toMillis()) / 3_600_000;
-  if (hoursElapsed >= 48) return 'overdue';
-  if (hoursElapsed >= 42) return 'urgent'; // last 6h of the 48h refund window
-  return 'normal';
-}
-
 // ── sub-components ────────────────────────────────────────────────────────────
 
 function SectionHeader({ icon, label, color }: {
@@ -92,19 +82,9 @@ function ReservationRow({ item, type, profile, onPress }: {
     ? { sev: overdueSeverity(item.returnAt), label: overdueLabel(item.returnAt) }
     : null;
 
-  const urgency: DepositUrgency = (type === 'return' || type === 'overdue') && showDeposit
-    ? depositUrgency(item.returnedAt)
-    : 'normal';
-
   const depositLabel = type === 'pickup'
     ? `Collect deposit: ${fmtLak(item.deposit)}`
-    : urgency === 'overdue'
-    ? `Deposit overdue: ${fmtLak(item.deposit)}`
     : `Return deposit: ${fmtLak(item.deposit)}`;
-
-  const chipBg   = urgency === 'overdue' ? COLORS.danger : urgency === 'urgent' ? '#FEE2E2' : COLORS.amberTint;
-  const chipBdr  = urgency === 'overdue' ? COLORS.danger : urgency === 'urgent' ? '#FCA5A5' : COLORS.amberTintBorder;
-  const chipText = urgency === 'overdue' ? '#FFFFFF'     : urgency === 'urgent' ? COLORS.danger : COLORS.amberTintText;
 
   return (
     <TouchableOpacity
@@ -144,8 +124,8 @@ function ReservationRow({ item, type, profile, onPress }: {
           ) : null}
         </View>
         {showDeposit && (
-          <View style={[rr.depositChip, { backgroundColor: chipBg, borderColor: chipBdr }]}>
-            <Text style={[rr.depositChipText, { color: chipText }]}>{depositLabel}</Text>
+          <View style={rr.depositChip}>
+            <Text style={rr.depositChipText}>{depositLabel}</Text>
           </View>
         )}
       </View>

@@ -21,12 +21,13 @@ import { Product } from '@/lib/mockData';
 import { useAuth } from '@/contexts/AuthContext';
 import { addToBag, listenBagItems } from '@/lib/bag';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
-import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
+import { useExchangeRate, useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
 import { formatLak, toLak } from '@/utils/currency';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import { needsBtobDocument } from '@/utils/btob';
 import { formatReviewerName } from '@/utils/reviewerName';
+import { PICKUP_DELAY_MS } from '@/utils/availability';
 import { PriceLak } from '@/components/PriceLak';
 const HERO_H = 340;
 
@@ -47,6 +48,7 @@ export default function ProductDetailScreen() {
   const insets = useSafeAreaInsets();
   const exchangeRate = useExchangeRate();
   const vatPercent = useVatPercent();
+  const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
   const { user } = useAuth();
   const userTier = useLoyaltyTier();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -314,7 +316,9 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>{product.name}</Text>
+        <Text style={styles.title} numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {product.name}
+        </Text>
 
         {/* Rating row */}
         {product.averageRating != null && (
@@ -398,6 +402,7 @@ export default function ProductDetailScreen() {
                 </TouchableOpacity>
               );
             })}
+            <Text style={styles.vatNote}>Prices include VAT ({vatPct}%)</Text>
           </View>
         ) : (
           <View style={styles.noPricingBanner}>
@@ -471,7 +476,7 @@ export default function ProductDetailScreen() {
           </View>
           <View style={styles.infoText}>
             <Text style={styles.infoTitle}>{formatLak(product.deposit, exchangeRate)} refundable deposit</Text>
-            <Text style={styles.infoSub}>Held, not charged. Refunded within 48h after return.</Text>
+            <Text style={styles.infoSub}>Held, not charged. Refunded at return, after a quick inspection (~10 min).</Text>
             <TouchableOpacity onPress={() => router.push('/profile/faq')} activeOpacity={0.7}>
               <Text style={styles.infoLink}>How it works →</Text>
             </TouchableOpacity>
@@ -488,7 +493,7 @@ export default function ProductDetailScreen() {
             <Text style={styles.infoTitle}>{shop.name}</Text>
             <Text style={styles.infoSub}>{shop.addressLine}, {shop.city}</Text>
             <Text style={styles.infoSub}>{shop.hours}</Text>
-            <Text style={styles.infoSub}>Ready in 90 sec. Bring your booking QR.</Text>
+            <Text style={styles.infoSub}>Ready within {PICKUP_DELAY_MS / 3_600_000}h of booking confirmation. Bring your booking QR.</Text>
             <TouchableOpacity onPress={() => Linking.openURL(buildMapsUrl(shop))} activeOpacity={0.7}>
               <Text style={styles.infoLink}>Get directions →</Text>
             </TouchableOpacity>
@@ -902,7 +907,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.6,
     color: COLORS.carbon,
-    lineHeight: 30,
+    lineHeight: 34,
     marginBottom: 8,
   },
   ratingRow: {
@@ -1031,6 +1036,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.fg3,
     lineHeight: 18,
+  },
+  vatNote: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.fg3,
   },
 
   // ── Perfect for chips ─────────────────────────────────────────────────────

@@ -58,7 +58,14 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "LANCHAI needs access to your photos to save claim media to your device.",
+          "savePhotosPermission": "LANCHAI needs permission to save photos and videos to your device."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false,

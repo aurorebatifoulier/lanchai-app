@@ -20,8 +20,9 @@ import { db } from '@/lib/firebase';
 import { sendNotif } from '@/lib/notifications';
 import { PaymentAtPickupBox } from '@/components/PaymentAtPickupBox';
 import { useAuth } from '@/contexts/AuthContext';
-import { useVatPercent } from '@/lib/exchangeRate';
-import { PriceLak } from '@/components/PriceLak';
+import { useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
+import { splitHtVat, formatLakAmount } from '@/utils/currency';
+import { BillingSummary } from '@/components/BillingSummary';
 
 export default function BookingSummaryScreen() {
   const router = useRouter();
@@ -75,6 +76,8 @@ export default function BookingSummaryScreen() {
   const selectedCoupon = unusedCoupons.find(c => c.id === selectedCouponId) ?? null;
   const discountAmount = selectedCoupon ? Math.round((subtotal * selectedCoupon.percent) / 100) : 0;
   const finalTotal = subtotal - discountAmount;
+  const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
+  const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
 
   const handleConfirm = async () => {
     if (!agreed || confirming) return;
@@ -184,17 +187,66 @@ export default function BookingSummaryScreen() {
           <Row label="Quantity" value={`${quantity} unit${quantity !== 1 ? 's' : ''}`} />
           <Row label="Rate"     value={`${pricePerDay.toLocaleString('en-US')} LAK / day`} />
 
+          {unusedCoupons.length > 0 && (
+            <View style={s.couponSection}>
+              <Text style={s.couponSectionLabel}>Apply a coupon</Text>
+              {unusedCoupons.map(c => {
+                const selected = c.id === selectedCouponId;
+                const savings = Math.round((subtotal * c.percent) / 100);
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[s.couponCard, selected && s.couponCardSelected]}
+                    onPress={() => setSelectedCouponId(selected ? null : c.id)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={s.couponPercentBox}>
+                      <Text style={s.couponPercentText}>{c.percent}%</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.couponCardTitle}>{c.percent}% off</Text>
+                      <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {selectedCoupon && (
+            <View style={s.couponAppliedRow}>
+              <Feather name="tag" size={13} color="#854F0B" />
+              <Text style={s.couponAppliedText}>
+                Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
+              </Text>
+            </View>
+          )}
+
           <View style={s.divider} />
 
-          <View style={r.row}>
-            <Text style={r.label}>Subtotal</Text>
-            <PriceLak lak={subtotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={r.value} style={{ alignItems: 'flex-end' }} />
-          </View>
-          <View style={r.row}>
-            <Text style={r.label}>Deposit (refundable)</Text>
-            <PriceLak lak={deposit} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={[r.value, r.valueMuted]} style={{ alignItems: 'flex-end' }} />
-          </View>
+          <BillingSummary
+            subtotalHt={vatHt}
+            vatAmount={vatAmount}
+            vatPct={vatPct}
+            total={finalTotal}
+            totalLabel="Total to pay"
+            deposit={deposit}
+            depositLabel="Deposit (refundable)"
+          />
+        </View>
 
+        {params.notes ? (
+          <View style={s.notesBox}>
+            <Text style={s.notesLabel}>Notes</Text>
+            <Text style={s.notesText}>{params.notes}</Text>
+          </View>
+        ) : null}
+
+        {/* ── Payment info (text-only — amounts shown above) ── */}
+        <PaymentAtPickupBox />
+
+        {/* ── Deposit / cancellation info ── */}
+        <View style={s.card}>
           <TouchableOpacity
             style={s.depositAccordionRow}
             onPress={() => setDepositOpen(o => !o)}
@@ -216,7 +268,7 @@ export default function BookingSummaryScreen() {
                 'The deposit is a refundable security amount, separate from your rental fee.',
                 'Your rental fee is also collected in-store at pick-up.',
                 'The deposit is collected in store when you pick up the item.',
-                'It is refunded within 48h after return, once the item is checked.',
+                'It is refunded on the spot once you return the item and it\'s inspected (about 10 minutes).',
                 'Part of it may be kept only if the item is returned damaged, incomplete, or late.',
               ].map((line, i) => (
                 <View key={i} style={s.depositExplainRow}>
@@ -260,64 +312,7 @@ export default function BookingSummaryScreen() {
               </TouchableOpacity>
             </View>
           )}
-
-          {unusedCoupons.length > 0 && (
-            <>
-              <View style={s.divider} />
-              <View style={s.couponSection}>
-                <Text style={s.couponSectionLabel}>Apply a coupon</Text>
-                {unusedCoupons.map(c => {
-                  const selected = c.id === selectedCouponId;
-                  const savings = Math.round((subtotal * c.percent) / 100);
-                  return (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={[s.couponCard, selected && s.couponCardSelected]}
-                      onPress={() => setSelectedCouponId(selected ? null : c.id)}
-                      activeOpacity={0.75}
-                    >
-                      <View style={s.couponPercentBox}>
-                        <Text style={s.couponPercentText}>{c.percent}%</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.couponCardTitle}>{c.percent}% off</Text>
-                        <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </>
-          )}
-
-          {selectedCoupon && (
-            <View style={s.couponAppliedRow}>
-              <Feather name="tag" size={13} color="#854F0B" />
-              <Text style={s.couponAppliedText}>
-                Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
-              </Text>
-            </View>
-          )}
-
-          <View style={s.divider} />
-
-          {/* Total */}
-          <View style={s.totalRow}>
-            <Text style={s.totalLabel}>Total to pay</Text>
-            <PriceLak lak={finalTotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.totalValue} style={{ alignItems: 'flex-end' }} />
-          </View>
-          <Text style={s.totalNote}>+ {deposit.toLocaleString('en-US')} LAK deposit, refunded within 48h after return</Text>
         </View>
-
-        {params.notes ? (
-          <View style={s.notesBox}>
-            <Text style={s.notesLabel}>Notes</Text>
-            <Text style={s.notesText}>{params.notes}</Text>
-          </View>
-        ) : null}
-
-        {/* ── Payment info (text-only — amounts shown above) ── */}
-        <PaymentAtPickupBox />
 
         {/* ── Terms checkbox ── */}
         <TouchableOpacity
@@ -386,7 +381,7 @@ const r = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   label: {
     fontSize: 14,
@@ -502,31 +497,6 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
 
-  // Total
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  totalLabel: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  totalValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.4,
-  },
-  totalNote: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    paddingBottom: 4,
-  },
 
   // Coupon selector — compact version of profile/loyalty.tsx's coupon cards
   couponSection: {

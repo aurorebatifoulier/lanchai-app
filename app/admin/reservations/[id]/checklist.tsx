@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
@@ -23,11 +23,13 @@ import {
   getReservationById,
   getUserProfile,
   getProduct,
+  addStockAdjustmentToBatch,
   CHECKLIST_CATEGORIES,
   type RentalDoc,
   type ChecklistCategoryId,
   type ChecklistRating,
   type ChecklistData,
+  type StockConditionField,
 } from '@/lib/firestore';
 import type { Product } from '@/lib/mockData';
 import { sendNotif } from '@/lib/notifications';
@@ -39,6 +41,7 @@ import { useLoyaltyConfig } from '@/lib/loyalty';
 import { worstRating, chargePercentFor, convertUsdTo } from '@/utils/damageCharge';
 import { setChainItemDraft } from '@/lib/checklistChainDraft';
 import { SettlementSummary } from '@/components/SettlementSummary';
+import { SettlementActions, type SettlementConfirmAction } from '@/components/SettlementActions';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -98,6 +101,12 @@ export default function ChecklistScreen() {
   const [submitting,       setSubmitting]       = useState(false);
   const [submitError,      setSubmitError]      = useState<string | null>(null);
   const [submitted,        setSubmitted]        = useState(false);
+
+  // ── Inline settlement (post-checklist return-confirmation screen) ────────────
+  const [settled,             setSettled]             = useState(false);
+  const [settleConfirmAction, setSettleConfirmAction]  = useState<SettlementConfirmAction | null>(null);
+  const [settleActioning,     setSettleActioning]      = useState(false);
+  const [settleActionError,   setSettleActionError]    = useState<string | null>(null);
 
   const title = type === 'handover' ? 'Handover checklist' : 'Return checklist';
 
@@ -336,13 +345,42 @@ export default function ChecklistScreen() {
       };
 
       const isHandover = type === 'handover';
-      await updateDoc(doc(db, 'reservations', id), {
-        [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
-        status: isHandover ? 'active' : 'returned',
-        ...(isHandover ? {} : { returnedAt: serverTimestamp() }),
-        ...(chargeFields ?? {}),
-        updatedAt: serverTimestamp(),
-      });
+      if (isHandover) {
+        await updateDoc(doc(db, 'reservations', id), {
+          handoverChecklist: checklistData,
+          status: 'active',
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // Batched with the product's stock-condition adjustment so the two can never
+        // partially succeed — the item is excluded from available stock the instant
+        // it's marked returned, released only by releaseSettledStock once the deposit/
+        // charges are closed out and the 12h handoff buffer has elapsed. A checklist
+        // rated 'unusable' is a true write-off, so it goes straight to lostUnits
+        // instead, mirroring "Report lost/stolen".
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'reservations', id), {
+          returnChecklist: checklistData,
+          status: 'returned',
+          returnedAt: serverTimestamp(),
+          stockReleasedAt: null,
+          ...(chargeFields ?? {}),
+          updatedAt: serverTimestamp(),
+        });
+        const field: StockConditionField = chargeFields?.chargeSeverity === 'unusable' ? 'lostUnits' : 'pendingSettlementUnits';
+        const reason = chargeFields?.chargeSeverity === 'unusable'
+          ? 'Return checklist rated item unusable'
+          : 'Returned — pending deposit settlement';
+        addStockAdjustmentToBatch(batch, reservation.productId, field, reservation.quantity, reason, confirmedByName.trim(), id);
+        await batch.commit();
+        // Mirrors the runAction pattern used everywhere else in this app — without this,
+        // local `reservation` state stays stale (still 'active', no charge fields) right
+        // after submit, which would make the inline settlement UI below gate on the wrong
+        // case. `returnChecklist`/`returnedAt` are deliberately left out of this merge —
+        // nothing downstream reads them, and their FieldValue sentinels don't match
+        // RentalDoc's real Timestamp type until Firestore actually resolves the write.
+        setReservation(prev => prev ? { ...prev, status: 'returned', ...(chargeFields ?? {}) } : prev);
+      }
 
       if (isHandover) {
         sendNotif(reservation.renterId, {
@@ -481,7 +519,8 @@ export default function ChecklistScreen() {
   // cached in the in-memory draft until the consolidated summary screen submits.
 
   if (submitted) {
-    const showSettlement = !inChain && type === 'return' && (chargeAmount != null || lateChargeAmount != null);
+    const isReturn = !inChain && type === 'return';
+    const showSettlement = isReturn;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScrollView
@@ -497,8 +536,11 @@ export default function ChecklistScreen() {
             <Text style={styles.stateTitle}>
               {inChain
                 ? 'Item condition saved'
-                : type === 'handover' ? 'Checklist validated — pickup confirmed' : 'Checklist validated — return confirmed'}
+                : type === 'handover' ? 'Checklist validated — pickup confirmed' : 'Return complete'}
             </Text>
+            {isReturn && (
+              <Text style={styles.stateSubtitle}>The item has been checked in and inspected.</Text>
+            )}
           </View>
 
           {showSettlement && (
@@ -516,8 +558,49 @@ export default function ChecklistScreen() {
             </View>
           )}
 
+          {showSettlement && !settled && reservation && (
+            <View style={{ marginBottom: 20, gap: 8 }}>
+              {settleActionError && (
+                <View style={styles.errorBanner}>
+                  <Feather name="alert-circle" size={14} color={COLORS.danger} />
+                  <Text style={styles.errorText}>{settleActionError}</Text>
+                </View>
+              )}
+              {settleActioning ? (
+                <ActivityIndicator color={COLORS.amber} />
+              ) : (
+                <SettlementActions
+                  reservation={reservation}
+                  confirmAction={settleConfirmAction}
+                  setConfirmAction={setSettleConfirmAction}
+                  actioning={settleActioning}
+                  setActioning={setSettleActioning}
+                  setActionError={setSettleActionError}
+                  onSettled={u => {
+                    setReservation(prev => prev ? { ...prev, ...u } : prev);
+                    setSettled(true);
+                  }}
+                />
+              )}
+            </View>
+          )}
+
+          {settled && (
+            <TouchableOpacity
+              style={[styles.submitBtn, { paddingHorizontal: 28, alignSelf: 'center', marginBottom: 10 }]}
+              onPress={() => router.push(`/rentals/${id}/receipt`)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.submitBtnText}>View receipt</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={[styles.submitBtn, { paddingHorizontal: 28, alignSelf: 'center' }]}
+            style={[
+              styles.submitBtn,
+              { paddingHorizontal: 28, alignSelf: 'center' },
+              showSettlement && styles.submitBtnSecondary,
+            ]}
             onPress={() => {
               if (inChain && remainingQueue.length > 0) {
                 const [nextId, ...restIds] = remainingQueue;
@@ -530,7 +613,7 @@ export default function ChecklistScreen() {
             }}
             activeOpacity={0.85}
           >
-            <Text style={styles.submitBtnText}>
+            <Text style={[styles.submitBtnText, showSettlement && styles.submitBtnSecondaryText]}>
               {inChain && remainingQueue.length > 0
                 ? `Continue to next item (${remainingQueue.length} left)`
                 : inChain
@@ -564,6 +647,12 @@ export default function ChecklistScreen() {
         {CHECKLIST_CATEGORIES.map(cat => {
           const entry = categories[cat.id];
           const showNote = openNotes[cat.id] || entry.note.trim().length > 0;
+          // Read-only reference to what was recorded at pickup — never affects
+          // selection, submission, or charge computation, purely a comparison aid so
+          // staff can tell pre-existing wear from new damage. Return checklists only;
+          // gracefully absent when there's no handover checklist (older rental, or
+          // pickup was skipped) or this category wasn't rated at pickup.
+          const pickupEntry = type === 'return' ? reservation.handoverChecklist?.categories[cat.id] : undefined;
           return (
             <View key={cat.id} style={styles.accordion}>
               <View style={styles.accordionHeader}>
@@ -574,6 +663,12 @@ export default function ChecklistScreen() {
                   )}
                 </View>
               </View>
+              {pickupEntry && (
+                <Text style={styles.pickupReference}>
+                  At pickup: {RATING_LABELS[pickupEntry.rating]}
+                  {pickupEntry.note ? ` — ${pickupEntry.note}` : ''}
+                </Text>
+              )}
               <View style={styles.accordionBody}>
                 <View style={styles.optionRow}>
                   {RATING_OPTIONS.map(opt => {
@@ -875,6 +970,14 @@ const styles = StyleSheet.create({
     color: COLORS.carbon,
     letterSpacing: -0.1,
   },
+  pickupReference: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    marginTop: -4,
+  },
   accordionBody: {
     borderTopWidth: 1,
     borderTopColor: COLORS.softGray200,
@@ -1084,10 +1187,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.carbon,
   },
+  // Secondary/muted variant — used for "Back to reservation" once the inline
+  // settlement actions (or the post-settlement "View receipt" button) are the
+  // primary call to action on screen, so it doesn't visually compete with them.
+  submitBtnSecondary: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+  },
+  submitBtnSecondaryText: {
+    color: COLORS.fg2,
+  },
   stateTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.carbon,
+    textAlign: 'center',
+  },
+  stateSubtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: COLORS.fg3,
+    lineHeight: 20,
     textAlign: 'center',
   },
 });

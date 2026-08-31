@@ -15,9 +15,10 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import DateRangeCalendar from '@/components/DateRangeCalendar';
 import { getProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
-import { getAvailableStock } from '@/utils/availability';
+import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate } from '@/utils/pricing';
 import { useShopInfo } from '@/lib/shop';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
@@ -33,35 +34,6 @@ const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ];
-const DOW = ['M','T','W','T','F','S','S'];
-
-// ── Calendar helpers ──────────────────────────────────────────────────────────
-type CalDay = { d: number; date: Date; muted?: boolean };
-
-function buildCalendarDays(year: number, month: number): CalDay[] {
-  const firstDay = new Date(year, month, 1).getDay();
-  const offset = firstDay === 0 ? 6 : firstDay - 1;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevDays = new Date(year, month, 0).getDate();
-  const days: CalDay[] = [];
-  for (let i = offset - 1; i >= 0; i--)
-    days.push({ d: prevDays - i, date: new Date(year, month - 1, prevDays - i), muted: true });
-  for (let d = 1; d <= daysInMonth; d++)
-    days.push({ d, date: new Date(year, month, d) });
-  const trailing = (7 - (days.length % 7)) % 7;
-  for (let d = 1; d <= trailing; d++)
-    days.push({ d, date: new Date(year, month + 1, d), muted: true });
-  return days;
-}
-
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 function fmtDate(d: Date) {
   const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return `${dow[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
@@ -80,9 +52,6 @@ export default function BookingNewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   const shop = useShopInfo();
   const exchangeRate = useExchangeRate();
   const vatPercent = useVatPercent();
@@ -98,8 +67,6 @@ export default function BookingNewScreen() {
 
   const [product, setProduct]               = useState<Product | null>(null);
   const [loading, setLoading]               = useState(true);
-  const [calYear, setCalYear]               = useState(today.getFullYear());
-  const [calMonth, setCalMonth]             = useState(today.getMonth());
   const [startDate, setStartDate]           = useState<Date | null>(null);
   const [endDate, setEndDate]               = useState<Date | null>(null);
   const [pickupTime, setPickupTime]         = useState<string | null>(null);
@@ -108,8 +75,7 @@ export default function BookingNewScreen() {
   const [notes, setNotes]                   = useState('');
   const [availableStock, setAvailableStock] = useState(1);
 
-  const [showPickupDateModal,  setShowPickupDateModal]  = useState(false);
-  const [showReturnDateModal,  setShowReturnDateModal]  = useState(false);
+  const [showDateModal,        setShowDateModal]        = useState(false);
   const [showPickupTimeModal,  setShowPickupTimeModal]  = useState(false);
   const [showReturnTimeModal,  setShowReturnTimeModal]  = useState(false);
 
@@ -117,14 +83,14 @@ export default function BookingNewScreen() {
     if (!productId) return;
     getProduct(productId).then(p => {
       setProduct(p);
-      if (p) setAvailableStock(p.stockLeft);
+      if (p) setAvailableStock(effectiveStock(p));
       setLoading(false);
     });
   }, [productId]);
 
   useEffect(() => {
     if (!product || !startDate || !endDate) return;
-    getAvailableStock(product.id, startDate, endDate, product.stockLeft).then(s => {
+    getAvailableStock(product.id, startDate, endDate, effectiveStock(product)).then(s => {
       setAvailableStock(s);
       if (quantity > s) setQuantity(Math.max(1, s));
     });
@@ -158,42 +124,11 @@ export default function BookingNewScreen() {
     isReturnValid && quantity >= 1 && availableStock > 0 && dayRateLak !== null;
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  const handlePickupDayPress = (day: CalDay) => {
-    if (day.muted || day.date < today) return;
-    if (sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0) return;
-    setStartDate(new Date(day.date));
-    if (endDate && endDate < day.date) setEndDate(null);
-    setShowPickupDateModal(false);
-  };
+  const openDateModal = () => setShowDateModal(true);
 
-  const handleReturnDayPress = (day: CalDay) => {
-    if (day.muted || day.date < today) return;
-    if (startDate && day.date < startDate) return;
-    if (sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0) return;
-    setEndDate(new Date(day.date));
-    setShowReturnDateModal(false);
-  };
-
-  const prevMonth = () => {
-    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
-    else setCalMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
-    else setCalMonth(m => m + 1);
-  };
-
-  const openPickupDateModal = () => {
-    setCalYear(today.getFullYear());
-    setCalMonth(today.getMonth());
-    setShowPickupDateModal(true);
-  };
-
-  const openReturnDateModal = () => {
-    const ref = startDate ?? today;
-    setCalYear(ref.getFullYear());
-    setCalMonth(ref.getMonth());
-    setShowReturnDateModal(true);
+  const handleChangeRange = (start: Date | null, end: Date | null) => {
+    setStartDate(start);
+    setEndDate(end);
   };
 
   // Selecting pick-up time defaults the return time to the same slot
@@ -276,53 +211,6 @@ export default function BookingNewScreen() {
     ? 'Select return time'
     : 'Confirm booking';
 
-  // ── Shared calendar grid renderer ─────────────────────────────────────────
-  const renderCalGrid = (
-    onDayPress: (day: CalDay) => void,
-    selectedDate: Date | null,
-    isReturnModal: boolean,
-  ) => {
-    const days = buildCalendarDays(calYear, calMonth);
-    return (
-      <View style={s.calGrid}>
-        {DOW.map((d, i) => (
-          <View key={i} style={s.calDow}>
-            <Text style={s.calDowText}>{d}</Text>
-          </View>
-        ))}
-        {days.map((day, i) => {
-          const isPast        = !day.muted && day.date < today;
-          const isBeforeStart = isReturnModal && startDate && !day.muted && day.date < startDate;
-          // Today is unselectable once its remaining time slots (now + 1h prep buffer)
-          // are exhausted — no point letting the user pick a date with an empty time list.
-          const isTodayNoSlots = !day.muted && sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0;
-          const isSelected    = !!(selectedDate && !day.muted && sameDay(day.date, selectedDate));
-          const disabled      = !!day.muted || isPast || !!isBeforeStart || isTodayNoSlots;
-          return (
-            <TouchableOpacity
-              key={i}
-              style={[
-                s.calCell,
-                disabled && s.calCellDisabled,
-                isSelected && s.calCellEndpoint,
-              ]}
-              onPress={() => onDayPress(day)}
-              activeOpacity={disabled ? 1 : 0.7}
-            >
-              <Text style={[
-                s.calCellText,
-                disabled && s.calCellTextDisabled,
-                isSelected && s.calCellTextEndpoint,
-              ]}>
-                {day.d}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
-  };
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
@@ -348,15 +236,19 @@ export default function BookingNewScreen() {
         <Text style={s.sectionLabel}>DATES & TIMES</Text>
 
         <View style={s.fieldGrid}>
-          {/* Row 1: Pick-up date | Pick-up time */}
+          {/* Single unified field — opens the range calendar for both pick-up & return */}
           <TouchableOpacity
-            style={[s.fieldBtn, startDate && s.fieldBtnFilled]}
-            onPress={openPickupDateModal}
+            style={[s.fieldBtn, s.fieldBtnFull, (startDate || endDate) && s.fieldBtnFilled]}
+            onPress={openDateModal}
             activeOpacity={0.75}
           >
-            <Text style={[s.fieldBtnEye, startDate && s.fieldBtnEyeFilled]}>PICK-UP DATE</Text>
-            <Text style={[s.fieldBtnVal, startDate && s.fieldBtnValFilled]}>
-              {startDate ? fmtDate(startDate) : 'Select'}
+            <Text style={[s.fieldBtnEye, (startDate || endDate) && s.fieldBtnEyeFilled]}>DATES</Text>
+            <Text style={[s.fieldBtnVal, (startDate || endDate) && s.fieldBtnValFilled]}>
+              {startDate && endDate
+                ? `${fmtDate(startDate)} → ${fmtDate(endDate)}`
+                : startDate
+                ? `${fmtDate(startDate)} → Select return`
+                : 'Select dates'}
             </Text>
           </TouchableOpacity>
 
@@ -368,18 +260,6 @@ export default function BookingNewScreen() {
             <Text style={[s.fieldBtnEye, pickupTime && s.fieldBtnEyeFilled]}>PICK-UP TIME</Text>
             <Text style={[s.fieldBtnVal, pickupTime && s.fieldBtnValFilled]}>
               {pickupTime ?? 'Select'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Row 2: Return date | Return time */}
-          <TouchableOpacity
-            style={[s.fieldBtn, endDate && s.fieldBtnFilled]}
-            onPress={openReturnDateModal}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.fieldBtnEye, endDate && s.fieldBtnEyeFilled]}>RETURN DATE</Text>
-            <Text style={[s.fieldBtnVal, endDate && s.fieldBtnValFilled]}>
-              {endDate ? fmtDate(endDate) : 'Select'}
             </Text>
           </TouchableOpacity>
 
@@ -431,7 +311,11 @@ export default function BookingNewScreen() {
         <View style={s.stockBadge}>
           <View style={[s.stockDot, { backgroundColor: availableStock > 0 ? COLORS.success : COLORS.danger }]} />
           <Text style={[s.stockText, { color: availableStock > 0 ? COLORS.success : COLORS.danger }]}>
-            {availableStock > 0 ? `${availableStock} in stock` : 'Out of stock'}
+            {availableStock === 0
+              ? 'Out of stock'
+              : effectiveStock(product) > 1
+              ? `${availableStock} of ${effectiveStock(product)} available`
+              : 'In stock'}
           </Text>
         </View>
 
@@ -478,70 +362,33 @@ export default function BookingNewScreen() {
         <View style={{ height: 100 + insets.bottom }} />
       </ScrollView>
 
-      {/* ── Pick-up date modal ── */}
+      {/* ── Dates modal (unified range calendar) ── */}
       <Modal
-        visible={showPickupDateModal}
+        visible={showDateModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowPickupDateModal(false)}
+        onRequestClose={() => setShowDateModal(false)}
         statusBarTranslucent
       >
         <TouchableOpacity
           style={s.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowPickupDateModal(false)}
+          onPress={() => setShowDateModal(false)}
         >
           <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Pick-up date</Text>
-              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowPickupDateModal(false)}>
+              <Text style={s.modalTitle}>Select dates</Text>
+              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowDateModal(false)}>
                 <Text style={s.modalDoneText}>Done</Text>
               </TouchableOpacity>
             </View>
-            <View style={s.calNav}>
-              <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
-                <Feather name="chevron-left" size={18} color={COLORS.carbon} />
-              </TouchableOpacity>
-              <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-              <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
-                <Feather name="chevron-right" size={18} color={COLORS.carbon} />
-              </TouchableOpacity>
-            </View>
-            {renderCalGrid(handlePickupDayPress, startDate, false)}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ── Return date modal ── */}
-      <Modal
-        visible={showReturnDateModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowReturnDateModal(false)}
-        statusBarTranslucent
-      >
-        <TouchableOpacity
-          style={s.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowReturnDateModal(false)}
-        >
-          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Return date</Text>
-              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowReturnDateModal(false)}>
-                <Text style={s.modalDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={s.calNav}>
-              <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
-                <Feather name="chevron-left" size={18} color={COLORS.carbon} />
-              </TouchableOpacity>
-              <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-              <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
-                <Feather name="chevron-right" size={18} color={COLORS.carbon} />
-              </TouchableOpacity>
-            </View>
-            {renderCalGrid(handleReturnDayPress, endDate, true)}
+            <DateRangeCalendar
+              productId={product.id}
+              totalStock={effectiveStock(product)}
+              startDate={startDate}
+              endDate={endDate}
+              onChangeRange={handleChangeRange}
+            />
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -719,6 +566,9 @@ const s = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
+  fieldBtnFull: {
+    width: '100%',
+  },
   fieldBtnFilled: {
     backgroundColor: COLORS.amber,
     borderColor: COLORS.amber,
@@ -741,72 +591,6 @@ const s = StyleSheet.create({
   },
   fieldBtnValFilled: {
     color: COLORS.carbon,
-  },
-
-  // Calendar (reused inside modals)
-  calNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  calNavBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calMonthTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  calGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calDow: {
-    width: `${100 / 7}%`,
-    alignItems: 'center',
-    paddingBottom: 6,
-  },
-  calDowText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.softGray,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  calCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-  },
-  calCellDisabled: {
-    opacity: 0.2,
-  },
-  calCellEndpoint: {
-    backgroundColor: COLORS.amber,
-    borderRadius: 10,
-  },
-  calCellText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  calCellTextDisabled: {
-    color: COLORS.softGray,
-  },
-  calCellTextEndpoint: {
-    color: COLORS.carbon,
-    fontWeight: '800',
   },
 
   // Modals (shared)

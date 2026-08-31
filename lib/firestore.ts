@@ -13,6 +13,8 @@ import {
   Timestamp,
   serverTimestamp,
   writeBatch,
+  increment,
+  type WriteBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Product, ProductCategory } from './mockData';
@@ -62,6 +64,63 @@ export async function removeFavorite(userId: string, productId: string): Promise
   try {
     await deleteDoc(doc(db, 'users', userId, 'favorites', productId));
   } catch {}
+}
+
+// ── Product stock condition ──────────────────────────────────────────────────
+// inRepairUnits/lostUnits (see lib/mockData.ts's Product / lib/types.ts's ProductDoc)
+// are the counts utils/availability.ts's effectiveStock() subtracts from stockLeft —
+// the required source of truth for bookable stock everywhere. Every change to either
+// count goes through here so it's always paired with an append-only audit doc at
+// products/{id}/stockAdjustments — there is no path that increments/decrements the
+// count fields directly without also logging why.
+//
+// adminName is free-text (matches this admin app's existing convention for
+// "who did this" fields — outstandingSettledBy, outstandingWrittenOffBy, the staff-name
+// inputs on the reservation lost/stolen action — none of which pair with a real Firebase
+// Auth uid anywhere in this codebase), not a stricter identity check.
+export type StockConditionField = 'inRepairUnits' | 'lostUnits' | 'pendingSettlementUnits';
+
+// Adds a stock-condition adjustment to an EXISTING batch without committing it — lets a
+// caller fold this into a larger atomic write. Used directly by
+// adjustProductStockCondition below (its own single-purpose batch) and by the
+// "Report lost/stolen" reservation action (app/admin/reservations/[id].tsx), which
+// batches this alongside the reservation's own status/charge update so the two can
+// never partially succeed — the actual gap this whole feature exists to close, since
+// today reporting a reservation lost never touches the product at all.
+export function addStockAdjustmentToBatch(
+  batch: WriteBatch,
+  productId: string,
+  field: StockConditionField,
+  delta: number,
+  reason: string,
+  adminName: string,
+  reservationId?: string,
+): void {
+  batch.update(doc(db, 'products', productId), { [field]: increment(delta) });
+  const adjustmentRef = doc(collection(db, 'products', productId, 'stockAdjustments'));
+  batch.set(adjustmentRef, {
+    field,
+    delta,
+    reason,
+    ...(reservationId ? { reservationId } : {}),
+    adminName,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// Standalone adjustment with no linked reservation — e.g. the product-form manual
+// stepper, or a warehouse audit finding a broken unit with no associated booking.
+// Throws on Firestore error — caller must handle.
+export async function adjustProductStockCondition(
+  productId: string,
+  field: StockConditionField,
+  delta: number,
+  reason: string,
+  adminName: string,
+): Promise<void> {
+  const batch = writeBatch(db);
+  addStockAdjustmentToBatch(batch, productId, field, delta, reason, adminName);
+  await batch.commit();
 }
 
 // ── ReservationStatus ─────────────────────────────────────────────────────────
@@ -161,6 +220,28 @@ export interface RentalDoc {
   outstandingWrittenOffAt?: Timestamp;
   outstandingWrittenOffBy?: string;   // free-text staff name
   outstandingWrittenOffNotes?: string;
+
+  // ── Return closeout — deposit settlement gates stock release ────────────────
+  // returnFinalizedAt is the single canonical "financial side of this return is
+  // closed" signal, written by whichever of the 3 closing actions actually fires
+  // (deposit returned in full, outstanding balance settled, or outstanding balance
+  // written off) — never derive "is this closed?" from any one of those fields
+  // alone, since any single one can legitimately never apply to a given reservation.
+  // This is what the releaseSettledStock Cloud Function (functions/src/index.ts)
+  // watches, alongside the 12h HANDOFF_BUFFER_MS since returnAt, before it decrements
+  // the product's pendingSettlementUnits (see lib/types.ts). Never set client-side to
+  // anything other than serverTimestamp() — see CLAUDE.md's Timestamp.now() gotcha.
+  returnFinalizedAt?: Timestamp;
+  depositReturnedBy?: string;         // free-text staff name, set when depositReturned is confirmed
+  // Admin's choice, at settlement, for a damaged-but-returnable item — only meaningful
+  // when chargeSeverity === 'damaged'. Absent/undefined for a clean return means
+  // 'release'. Read by releaseSettledStock to decide whether to release the unit back
+  // to available stock or transfer it into inRepairUnits instead.
+  stockReleaseHandling?: 'release' | 'repair';
+  // Idempotency marker for releaseSettledStock — null once the return checklist is
+  // submitted (so the cron's query can find it), set to serverTimestamp() once that
+  // cron has actually processed the stock adjustment, so it's never double-applied.
+  stockReleasedAt?: Timestamp | null;
 }
 
 // Returns all reservations sharing an orderId — used by the confirmation screen to load
@@ -313,6 +394,26 @@ export async function cancelReservations(ids: string[]): Promise<void> {
 
 // ── Admin bulk actions ────────────────────────────────────────────────────────
 
+// Force-clears a reservation that's stuck showing as blocked (early return, a
+// cancellation that didn't go through the normal flow, or similar data drift) — a
+// data-correction action, not a fresh cancellation event. A single, non-batched write
+// on the reservation itself; functions/src/index.ts's syncReservationOccupancy then
+// deletes the reservationOccupancy mirror automatically, since 'cancelled' is already
+// one of its terminal-status delete triggers — no direct write to reservationOccupancy
+// is attempted (its rule denies all client writes unconditionally, admin included).
+// This does NOT resolve any deposit/charge — the caller's UI must make that clear.
+// Throws on Firestore error — caller must handle.
+export async function releaseReservation(id: string, adminName: string): Promise<void> {
+  await updateDoc(doc(db, 'reservations', id), {
+    status:      'cancelled',
+    cancelledAt: serverTimestamp(),
+    cancelledBy: 'admin_release',
+    releasedBy:  adminName,
+    releasedAt:  serverTimestamp(),
+    updatedAt:   serverTimestamp(),
+  });
+}
+
 // Confirms payment for multiple reservations sharing an order in one batch — used by
 // the admin grouped bulk action. Throws on Firestore error — caller must handle.
 export async function confirmReservationsPayment(ids: string[]): Promise<void> {
@@ -353,19 +454,33 @@ export async function submitChecklistBatch(
     type: 'handover' | 'return';
     checklistData: ChecklistData;
     charge?: ChecklistBatchChargeFields;
+    productId: string;
+    quantity: number;
+    adminName: string;
   }>,
 ): Promise<void> {
   if (items.length === 0) return;
   const batch = writeBatch(db);
-  items.forEach(({ id, type, checklistData, charge }) => {
+  items.forEach(({ id, type, checklistData, charge, productId, quantity, adminName }) => {
     const isHandover = type === 'handover';
     batch.update(doc(db, 'reservations', id), {
       [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
       status: isHandover ? 'active' : 'returned',
-      ...(isHandover ? {} : { returnedAt: serverTimestamp() }),
+      ...(isHandover ? {} : { returnedAt: serverTimestamp(), stockReleasedAt: null }),
       ...(charge ?? {}),
       updatedAt: serverTimestamp(),
     });
+    // Excluded from available stock the instant it's marked returned — released only by
+    // releaseSettledStock, once the deposit/charges are closed out AND the 12h handoff
+    // buffer has elapsed. A checklist-rated 'unusable' item is a true write-off, so it
+    // goes straight to lostUnits instead, mirroring "Report lost/stolen".
+    if (!isHandover) {
+      const field: StockConditionField = charge?.chargeSeverity === 'unusable' ? 'lostUnits' : 'pendingSettlementUnits';
+      const reason = charge?.chargeSeverity === 'unusable'
+        ? 'Return checklist rated item unusable'
+        : 'Returned — pending deposit settlement';
+      addStockAdjustmentToBatch(batch, productId, field, quantity, reason, adminName, id);
+    }
   });
   await batch.commit();
 }
@@ -405,6 +520,10 @@ export interface UserProfile {
   phone?: string;
   whatsapp?: string;
   whatsappSameAsPhone?: boolean;
+  // address: the single free-text field editable in personal-info. Unrelated to
+  // addresses/UserAddress below, a separate multi-entry labeled-address-book model
+  // that was stubbed in but never wired to any UI — don't conflate the two.
+  address?: string;
   addresses?: UserAddress[];
   customerType?: 'tourist' | 'resident' | 'business';
   // loyaltyPoints/loyaltyTier are server-computed only (see functions/src/index.ts

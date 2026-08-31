@@ -5,7 +5,7 @@ import { COLORS } from '@/constants/Colors';
 
 const POINTS = [
   'Collected in cash at pick-up, alongside the rental fee.',
-  'Fully refunded within 48h after the item is returned in good condition.',
+  'Fully refunded on the spot when the item is returned in good condition, once inspected (about 10 minutes).',
   'Part or all of the deposit may be kept if the item is returned late, damaged, or with missing accessories.',
 ];
 

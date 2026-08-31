@@ -14,11 +14,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, type WriteBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   getUserProfile,
   getProduct,
+  addStockAdjustmentToBatch,
   type RentalDoc,
   type ReservationStatus,
   type UserProfile,
@@ -28,25 +29,18 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { overdueSeverity, overdueLabel } from '@/utils/overdue';
 import { STATUS_CONFIG } from '../reservations';
-import { useExchangeRate, useThbRate } from '@/lib/exchangeRate';
+import { useExchangeRate, useThbRate, useVatPercent } from '@/lib/exchangeRate';
 import { convertUsdTo } from '@/utils/damageCharge';
 import { convertLakTo } from '@/utils/currency';
 import { SettlementSummary } from '@/components/SettlementSummary';
+import { RentalReceipt } from '@/components/RentalReceipt';
+import { SettlementActions } from '@/components/SettlementActions';
+import { ConfirmBox } from '@/components/ConfirmBox';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtLak(n: number): string {
   return `${n.toLocaleString('en-US')} LAK`;
-}
-
-type DepositUrgency = 'normal' | 'urgent' | 'overdue';
-
-function depositUrgency(returnedAt: Timestamp | undefined): DepositUrgency {
-  if (!returnedAt) return 'normal';
-  const hoursElapsed = (Date.now() - returnedAt.toMillis()) / 3_600_000;
-  if (hoursElapsed >= 48) return 'overdue';
-  if (hoursElapsed >= 42) return 'urgent'; // last 6h of the 48h refund window
-  return 'normal';
 }
 
 function fmtTimestamp(ts: any): string {
@@ -86,63 +80,6 @@ async function sendNotif(
   }
 }
 
-// ── ConfirmBox ────────────────────────────────────────────────────────────────
-// Inline replacement for Alert.alert — never fails silently on Android.
-
-function ConfirmBox({
-  text,
-  confirmLabel,
-  onCancel,
-  onConfirm,
-  destructive = false,
-  muted = false,
-  confirmDisabled = false,
-  children,
-}: {
-  text: string;
-  confirmLabel: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  destructive?: boolean;
-  // Secondary/resigned styling — for actions that resolve something without it being a
-  // success (e.g. writing off an outstanding balance as uncollectible). Distinct from
-  // destructive, which is for actions with irreversible/alarming consequences.
-  muted?: boolean;
-  confirmDisabled?: boolean;
-  children?: React.ReactNode;
-}) {
-  return (
-    <View style={[cb.box, destructive && cb.boxDestructive]}>
-      <Text style={cb.text}>{text}</Text>
-      {children}
-      <View style={cb.btnRow}>
-        <TouchableOpacity style={cb.keepBtn} onPress={onCancel} activeOpacity={0.8}>
-          <Text style={cb.keepText}>Keep</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            cb.confirmBtn,
-            destructive && cb.confirmBtnDestructive,
-            muted && cb.confirmBtnMuted,
-            confirmDisabled && cb.confirmBtnDisabled,
-          ]}
-          onPress={onConfirm}
-          activeOpacity={0.8}
-          disabled={confirmDisabled}
-        >
-          <Text style={[
-            cb.confirmText,
-            destructive && cb.confirmTextDestructive,
-            muted && cb.confirmTextMuted,
-          ]}>
-            {confirmLabel}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function AdminReservationDetailScreen() {
@@ -157,6 +94,7 @@ export default function AdminReservationDetailScreen() {
   const [loading,       setLoading]       = useState(true);
   const exchangeRate = useExchangeRate();
   const thbRate       = useThbRate();
+  const vatPercent    = useVatPercent();
 
   // ── Action state ──────────────────────────────────────────────────────────
   const [actioning,     setActioning]     = useState(false);
@@ -165,9 +103,6 @@ export default function AdminReservationDetailScreen() {
   const [confirmAction, setConfirmAction] = useState<
     'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost' | null
   >(null);
-  const [settleStaffName,        setSettleStaffName]        = useState('');
-  const [writeOffStaffName,      setWriteOffStaffName]      = useState('');
-  const [writeOffNotes,          setWriteOffNotes]          = useState('');
   const [lostStaffName,          setLostStaffName]          = useState('');
   const [lostNotes,              setLostNotes]              = useState('');
   const [lostChargeAmountInput,  setLostChargeAmountInput]  = useState('');
@@ -202,16 +137,28 @@ export default function AdminReservationDetailScreen() {
     firestoreUpdates: Record<string, unknown>,
     localUpdates: Partial<Omit<RentalDoc, 'id'>>,
     onSuccess?: () => void,
+    // Optional — lets a caller fold ADDITIONAL writes into the SAME atomic batch as the
+    // reservation update, instead of a separate non-atomic write after this one
+    // resolves. Used by the "Report lost/stolen" action to also increment the product's
+    // lostUnits count + write its audit log, so the two can never partially succeed.
+    extraBatchWork?: (batch: WriteBatch) => void,
   ) => {
     if (!id || actioning) return;
     setActioning(true);
     setActionError(null);
     setConfirmAction(null);
     try {
-      await updateDoc(doc(db, 'reservations', id), {
-        ...firestoreUpdates,
-        updatedAt: serverTimestamp(),
-      });
+      if (extraBatchWork) {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'reservations', id), { ...firestoreUpdates, updatedAt: serverTimestamp() });
+        extraBatchWork(batch);
+        await batch.commit();
+      } else {
+        await updateDoc(doc(db, 'reservations', id), {
+          ...firestoreUpdates,
+          updatedAt: serverTimestamp(),
+        });
+      }
       setReservation(prev => prev ? { ...prev, ...localUpdates } : prev);
       onSuccess?.();
     } catch (err: any) {
@@ -334,9 +281,6 @@ export default function AdminReservationDetailScreen() {
   const status          = reservation.status as ReservationStatus;
   const depositReturned = reservation.depositReturned ?? false;
   const badge           = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending_payment;
-  const depUrgency: DepositUrgency = (status === 'returned' && !depositReturned)
-    ? depositUrgency(reservation.returnedAt)
-    : 'normal';
   const isReturnOverdue = status === 'active' && reservation.returnAt.toMillis() < Date.now();
 
   // Once a handover checklist has been submitted, the deposit was actually received in
@@ -353,19 +297,7 @@ export default function AdminReservationDetailScreen() {
   const hasCharge = (reservation.chargeAmount != null || reservation.lateChargeAmount != null)
     && reservation.chargeCurrency != null;
   const outstandingBalance = reservation.outstandingBalance ?? 0;
-  const outstandingSettled = reservation.outstandingSettled ?? false;
-  const outstandingWrittenOff = reservation.outstandingWrittenOff ?? false;
   const depositHeldAmount = handoverDeposit?.depositAmount ?? reservation.deposit;
-  // What's actually left to hand back to the renter once the combined charge has
-  // consumed part (or all) of the deposit — only meaningful when there's no outstanding
-  // balance (i.e. the charges, if any, were fully covered by the deposit with money left over).
-  const totalReservationCharge = (reservation.chargeAmount ?? 0) + (reservation.lateChargeAmount ?? 0);
-  const netDepositReturnAmount = hasCharge
-    ? Math.max(0, depositHeldAmount - totalReservationCharge)
-    : depositHeldAmount;
-  const netDepositDisplay = hasCharge
-    ? `${netDepositReturnAmount.toLocaleString('en-US')} ${reservation.chargeCurrency}`
-    : depositDisplay;
 
   const identityPhone  = renterProfile?.phoneNumber ?? renterProfile?.phone ?? null;
   const renterPhotoURL = renterProfile?.photoURL ?? null;
@@ -414,21 +346,9 @@ export default function AdminReservationDetailScreen() {
               <Text style={d.depositReturnedText}>Deposit returned</Text>
             </View>
           ) : (
-            <View style={[
-              d.depositPending,
-              depUrgency === 'overdue' && { backgroundColor: COLORS.danger, borderColor: COLORS.danger },
-              depUrgency === 'urgent'  && { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-            ]}>
-              <Text style={[
-                d.depositPendingText,
-                depUrgency === 'overdue' && { color: '#FFFFFF' },
-                depUrgency === 'urgent'  && { color: COLORS.danger },
-              ]}>
-                {status === 'returned' && depUrgency === 'overdue'
-                  ? `Deposit overdue: ${depositDisplay}`
-                  : status === 'returned'
-                  ? `Return deposit: ${depositDisplay}`
-                  : `Deposit: ${depositDisplay}`}
+            <View style={d.depositPending}>
+              <Text style={d.depositPendingText}>
+                {status === 'returned' ? `Return deposit: ${depositDisplay}` : `Deposit: ${depositDisplay}`}
               </Text>
             </View>
           )}
@@ -635,6 +555,14 @@ export default function AdminReservationDetailScreen() {
           />
         )}
 
+        {/* ── SETTLEMENT RECEIPT ───────────────────────────────────────── */}
+        {status === 'returned' && reservation.returnFinalizedAt && (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={d.cardLabel}>Receipt</Text>
+            <RentalReceipt rental={reservation} vatPercent={vatPercent} />
+          </View>
+        )}
+
         {/* ── NOTES ─────────────────────────────────────────────────────── */}
         {!!reservation.notes && (
           <View style={d.card}>
@@ -750,7 +678,7 @@ export default function AdminReservationDetailScreen() {
               confirmLabel="Mark as returned"
               onCancel={() => setConfirmAction(null)}
               onConfirm={() => runAction(
-                { status: 'returned', returnedAt: serverTimestamp() },
+                { status: 'returned', returnedAt: serverTimestamp(), stockReleasedAt: null },
                 { status: 'returned' },
                 () => {
                   sendNotif(reservation.renterId, {
@@ -772,88 +700,33 @@ export default function AdminReservationDetailScreen() {
                     });
                   }, 3000);
                 },
+                // Defensive fallback path — a checklist wasn't the trigger here, so decide
+                // the stock bucket from whatever chargeSeverity already sits on the doc (if
+                // any), exactly like the checklist submit paths.
+                batch => addStockAdjustmentToBatch(
+                  batch,
+                  reservation.productId,
+                  reservation.chargeSeverity === 'unusable' ? 'lostUnits' : 'pendingSettlementUnits',
+                  reservation.quantity,
+                  reservation.chargeSeverity === 'unusable'
+                    ? 'Return checklist rated item unusable'
+                    : 'Returned — pending deposit settlement',
+                  'Admin (fallback return action)',
+                  id,
+                ),
               )}
             />
           )}
-          {!actioning && confirmAction === 'deposit' && (
-            <ConfirmBox
-              text={`Confirm the ${netDepositDisplay} deposit has been returned to the renter?`}
-              confirmLabel="Confirm"
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                { depositReturned: true },
-                { depositReturned: true },
-                () => sendNotif(reservation.renterId, {
-                  type: 'rental',
-                  icon: 'check',
-                  iconColor: 'green',
-                  title: 'Deposit returned',
-                  body: `Your ${netDepositDisplay} deposit for ${reservation.productName} has been returned.`,
-                  deepLink: `/rentals/${id}`,
-                }),
-              )}
+          {!actioning && (confirmAction === 'deposit' || confirmAction === 'settle_outstanding' || confirmAction === 'write_off_outstanding') && (
+            <SettlementActions
+              reservation={reservation}
+              confirmAction={confirmAction}
+              setConfirmAction={setConfirmAction}
+              actioning={actioning}
+              setActioning={setActioning}
+              setActionError={setActionError}
+              onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
             />
-          )}
-          {!actioning && confirmAction === 'settle_outstanding' && (
-            <ConfirmBox
-              text={`Confirm the ${outstandingBalance.toLocaleString('en-US')} ${reservation.chargeCurrency} outstanding balance has been collected from the renter?`}
-              confirmLabel="Mark as settled"
-              confirmDisabled={settleStaffName.trim().length === 0}
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                {
-                  outstandingSettled: true,
-                  outstandingSettledAt: serverTimestamp(),
-                  outstandingSettledBy: settleStaffName.trim(),
-                },
-                { outstandingSettled: true, outstandingSettledBy: settleStaffName.trim() },
-              )}
-            >
-              <TextInput
-                style={d.nameInput}
-                placeholder="Staff member name"
-                placeholderTextColor={COLORS.fg3}
-                value={settleStaffName}
-                onChangeText={setSettleStaffName}
-              />
-            </ConfirmBox>
-          )}
-          {!actioning && confirmAction === 'write_off_outstanding' && (
-            <ConfirmBox
-              text={`Confirm the ${outstandingBalance.toLocaleString('en-US')} ${reservation.chargeCurrency} outstanding balance cannot be collected and should be written off? This does not record it as paid.`}
-              confirmLabel="Write off balance"
-              confirmDisabled={writeOffStaffName.trim().length === 0}
-              muted
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                {
-                  outstandingWrittenOff: true,
-                  outstandingWrittenOffAt: serverTimestamp(),
-                  outstandingWrittenOffBy: writeOffStaffName.trim(),
-                  ...(writeOffNotes.trim() ? { outstandingWrittenOffNotes: writeOffNotes.trim() } : {}),
-                },
-                {
-                  outstandingWrittenOff: true,
-                  outstandingWrittenOffBy: writeOffStaffName.trim(),
-                  ...(writeOffNotes.trim() ? { outstandingWrittenOffNotes: writeOffNotes.trim() } : {}),
-                },
-              )}
-            >
-              <TextInput
-                style={d.nameInput}
-                placeholder="Staff member name"
-                placeholderTextColor={COLORS.fg3}
-                value={writeOffStaffName}
-                onChangeText={setWriteOffStaffName}
-              />
-              <TextInput
-                style={d.nameInput}
-                placeholder="Notes (optional) — e.g. unreachable, police report filed"
-                placeholderTextColor={COLORS.fg3}
-                value={writeOffNotes}
-                onChangeText={setWriteOffNotes}
-              />
-            </ConfirmBox>
           )}
           {!actioning && confirmAction === 'lost' && (
             <ConfirmBox
@@ -907,6 +780,19 @@ export default function AdminReservationDetailScreen() {
                     body: `Your ${reservation.productName} rental has been closed as lost/stolen. Contact us for details.`,
                     deepLink: `/rentals/${id}`,
                   }),
+                  // Closes the gap this feature exists to fix: reporting a reservation
+                  // lost now atomically increments the product's own lostUnits count
+                  // (by this reservation's quantity) instead of leaving it to a
+                  // separate, easily-forgotten manual edit on the product's own screen.
+                  batch => addStockAdjustmentToBatch(
+                    batch,
+                    reservation.productId,
+                    'lostUnits',
+                    reservation.quantity,
+                    lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
+                    lostStaffName.trim(),
+                    id,
+                  ),
                 );
               }}
               destructive
@@ -1013,43 +899,18 @@ export default function AdminReservationDetailScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Outstanding balance — takes priority over the deposit-return action,
-                  since a charge that meets/exceeds the deposit leaves nothing to give
-                  back; the renter now owes the shop instead. Two parallel, mutually
-                  exclusive resolution paths: actually collected ("settled") or
-                  confirmed uncollectible ("written off") — never both. */}
-              {outstandingBalance > 0 && !outstandingSettled && !outstandingWrittenOff && (
-                <>
-                  <TouchableOpacity
-                    style={d.primaryBtn}
-                    onPress={() => setConfirmAction('settle_outstanding')}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={d.primaryBtnText}>Mark outstanding as settled</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={d.secondaryBtn}
-                    onPress={() => setConfirmAction('write_off_outstanding')}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={d.secondaryBtnText}>Write off / uncollectible</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-
-              {/* Deposit (independent of status, only after return, and only when
-                  there's actually something left to hand back — outstandingBalance > 0
-                  means the charges already consumed the full deposit, permanently, so
-                  this stays hidden even after the outstanding balance is settled). */}
-              {status === 'returned' && !depositReturned && outstandingBalance === 0 && (
-                <TouchableOpacity
-                  style={d.primaryBtn}
-                  onPress={() => setConfirmAction('deposit')}
-                  activeOpacity={0.85}
-                >
-                  <Text style={d.primaryBtnText}>Mark deposit as returned</Text>
-                </TouchableOpacity>
-              )}
+              {/* Settlement — deposit refund / outstanding-balance collect / write-off,
+                  shared with the post-checklist return-confirmation screen so the two
+                  entry points can never diverge. See components/SettlementActions.tsx. */}
+              <SettlementActions
+                reservation={reservation}
+                confirmAction={confirmAction}
+                setConfirmAction={setConfirmAction}
+                actioning={actioning}
+                setActioning={setActioning}
+                setActionError={setActionError}
+                onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
+              />
 
               {/* Cancel — only before pickup */}
               {(status === 'pending_payment' || status === 'confirmed') && (
@@ -1229,17 +1090,6 @@ const d = StyleSheet.create({
   },
   primaryBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.1 },
 
-  // Secondary/muted action button — for a resolution path that isn't a positive
-  // outcome (e.g. writing off a balance as uncollectible), visually distinct from the
-  // primary amber button used for the actual collection action.
-  secondaryBtn: {
-    height: 52, borderRadius: 10,
-    backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  secondaryBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.fg2, letterSpacing: -0.1 },
-
   cancelLink: { alignItems: 'center', paddingVertical: 8 },
   cancelLinkText: { fontSize: 13, fontWeight: '600', color: COLORS.danger },
 
@@ -1333,40 +1183,4 @@ const d = StyleSheet.create({
   renterIdSmall: {
     fontSize: 10, fontWeight: '400', color: COLORS.fg3, marginTop: 2,
   },
-});
-
-// ── ConfirmBox styles ─────────────────────────────────────────────────────────
-
-const cb = StyleSheet.create({
-  box: {
-    backgroundColor: COLORS.warmBeige,
-    borderRadius: 10, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-  },
-  boxDestructive: {
-    backgroundColor: '#FEF2F2', borderColor: '#FCA5A5',
-  },
-  text: { fontSize: 13, fontWeight: '500', color: COLORS.carbon, lineHeight: 18 },
-  btnRow: { flexDirection: 'row', gap: 10 },
-  keepBtn: {
-    flex: 1, height: 42, borderRadius: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  keepText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
-  confirmBtn: {
-    flex: 1, height: 42, borderRadius: 8,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  confirmBtnDestructive: { backgroundColor: COLORS.danger },
-  confirmBtnMuted: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-  },
-  confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
-  confirmTextDestructive: { color: COLORS.white },
-  confirmTextMuted: { color: COLORS.fg2 },
 });

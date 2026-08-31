@@ -11,12 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
-import { getReservationsByOrderId, getUserProfile, RentalDoc, type UserProfile } from '@/lib/firestore';
+import { getReservationsByOrderId, RentalDoc } from '@/lib/firestore';
 import { QRThumb } from '@/components/QRThumb';
 import { QRLightbox } from '@/components/QRLightbox';
-import { useAuth } from '@/contexts/AuthContext';
-import { useVatPercent } from '@/lib/exchangeRate';
-import { PriceLak } from '@/components/PriceLak';
+import { useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
+import { splitHtVat } from '@/utils/currency';
+import { PICKUP_DELAY_MS } from '@/utils/availability';
+import { BillingSummary } from '@/components/BillingSummary';
 
 // ── QR code string formats (documented here for the admin scanner) ─────────────
 // Order-level QR (shown when there are 2+ items in an order):
@@ -35,14 +36,12 @@ export default function BookingConfirmationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const { user } = useAuth();
   const vatPercent = useVatPercent();
 
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(false);
   const [lightbox,     setLightbox]     = useState<Lightbox | null>(null);
-  const [profile,      setProfile]      = useState<UserProfile | null>(null);
 
   const closeLightbox = () => setLightbox(null);
 
@@ -57,14 +56,11 @@ export default function BookingConfirmationScreen() {
       .finally(() => setLoading(false));
   }, [orderId]);
 
-  useEffect(() => {
-    if (!user) return;
-    getUserProfile(user.uid).then(setProfile).catch(() => {});
-  }, [user]);
-
   const totalRental  = reservations.reduce((s, r) => s + (r.subtotal ?? 0), 0);
   const totalDeposit = reservations.reduce((s, r) => s + (r.deposit  ?? 0), 0);
   const isSingle     = reservations.length === 1;
+  const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
+  const { ht: vatHt, vat: vatAmount } = splitHtVat(totalRental, vatPct);
 
   if (loading) {
     return (
@@ -114,6 +110,9 @@ export default function BookingConfirmationScreen() {
               <Text style={s.heroPeriodLabel}>Pick-up</Text>
               <Text style={s.heroPickupText}>{reservations[0].pickupLabel}</Text>
             </View>
+            <Text style={s.pickupDelayNote}>
+              Ready within {PICKUP_DELAY_MS / 3_600_000}h of this confirmation
+            </Text>
             <View style={s.heroPeriodRow}>
               <Text style={s.heroPeriodLabel}>Return</Text>
               <Text style={s.heroPickupText}>{reservations[0].returnLabel}</Text>
@@ -152,6 +151,9 @@ export default function BookingConfirmationScreen() {
                 <Text style={s.itemDateLabel}>Pick-up</Text>
                 <Text style={s.itemPickupText}>{res.pickupLabel}</Text>
               </View>
+              <Text style={s.pickupDelayNote}>
+                Ready within {PICKUP_DELAY_MS / 3_600_000}h of this confirmation
+              </Text>
               <View style={s.itemDateRow}>
                 <Text style={s.itemDateLabel}>Return</Text>
                 <Text style={s.itemPickupText}>{res.returnLabel}</Text>
@@ -168,13 +170,15 @@ export default function BookingConfirmationScreen() {
 
         {/* ── Totals reminder ── */}
         <View style={s.totalsCard}>
-          <View style={s.totalsRow}>
-            <Text style={s.totalsLabel}>Total to pay at pick-up</Text>
-            <PriceLak lak={totalRental} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.totalsValue} style={{ alignItems: 'flex-end' }} />
-          </View>
-          <Text style={s.totalsDeposit}>
-            + {totalDeposit.toLocaleString('en-US')} LAK deposit, refunded within 48h after return
-          </Text>
+          <BillingSummary
+            subtotalHt={vatHt}
+            vatAmount={vatAmount}
+            vatPct={vatPct}
+            total={totalRental}
+            totalLabel="Total to pay at pick-up"
+            deposit={totalDeposit}
+            depositLabel="Deposit (refundable)"
+          />
         </View>
 
         {/* ── Actions ── */}
@@ -273,6 +277,11 @@ const s = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.fg3,
   },
+  pickupDelayNote: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.fg3,
+  },
 
   // ── Headline ─────────────────────────────────────────────────────────────
   title: {
@@ -364,30 +373,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.softGray200,
     padding: 16,
-    gap: 6,
   },
-  totalsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalsLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  totalsValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
-  totalsDeposit: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
-  },
-
   // ── Buttons ───────────────────────────────────────────────────────────────
   primaryBtn: {
     alignSelf: 'stretch',

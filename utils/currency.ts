@@ -11,6 +11,13 @@ export function formatLak(usdAmount: number, exchangeRate: number | null): strin
   return `${toLak(usdAmount, exchangeRate).toLocaleString('en-US')} LAK`;
 }
 
+// Formats an already-LAK amount (no conversion) as "12,345 LAK" — for note lines
+// (deposit reminders, the VAT-included note). Distinct from formatLak above, which
+// converts a USD amount first; use this one whenever the figure is already in LAK.
+export function formatLakAmount(amountLak: number): string {
+  return `${amountLak.toLocaleString('en-US')} LAK`;
+}
+
 // Inverse of toLak — converts an already-LAK amount (e.g. a frozen reservation deposit)
 // to USD/THB for display. Rounds UP to the nearest whole unit, no decimals — deliberately
 // different from toLak/toUsd's precision elsewhere in the app.

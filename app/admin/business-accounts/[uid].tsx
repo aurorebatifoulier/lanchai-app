@@ -19,6 +19,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { sendNotif } from '@/lib/notifications';
 import { BTOB_STATUS_CONFIG } from '../business-accounts';
+import { ConfirmBox } from '@/components/ConfirmBox';
 
 type BtobStatus = 'pending_approval' | 'approved' | 'rejected';
 
@@ -43,47 +44,6 @@ function fmtDateTime(ts: Timestamp | undefined): string {
   return ts.toDate().toLocaleString('en-US', {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   });
-}
-
-// ── ConfirmBox — inline replacement for Alert.alert, same pattern used across the
-// admin back-office (e.g. app/admin/reservations/[id].tsx). ─────────────────────────
-
-function ConfirmBox({
-  text,
-  confirmLabel,
-  onCancel,
-  onConfirm,
-  destructive = false,
-  confirmDisabled = false,
-  children,
-}: {
-  text: string;
-  confirmLabel: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  destructive?: boolean;
-  confirmDisabled?: boolean;
-  children?: React.ReactNode;
-}) {
-  return (
-    <View style={[cb.box, destructive && cb.boxDestructive]}>
-      <Text style={cb.text}>{text}</Text>
-      {children}
-      <View style={cb.btnRow}>
-        <TouchableOpacity style={cb.keepBtn} onPress={onCancel} activeOpacity={0.8}>
-          <Text style={cb.keepText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[cb.confirmBtn, destructive && cb.confirmBtnDestructive, confirmDisabled && cb.confirmBtnDisabled]}
-          onPress={onConfirm}
-          activeOpacity={0.8}
-          disabled={confirmDisabled}
-        >
-          <Text style={[cb.confirmText, destructive && cb.confirmTextDestructive]}>{confirmLabel}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -276,6 +236,7 @@ export default function AdminBusinessAccountDetailScreen() {
             <ConfirmBox
               text={`Approve this business account? This sets their account type to Business (0% deposit applies) and lets them use the app immediately.`}
               confirmLabel="Approve"
+              cancelLabel="Cancel"
               confirmDisabled={staffName.trim().length === 0}
               onCancel={() => setConfirmAction(null)}
               onConfirm={handleApprove}
@@ -294,6 +255,7 @@ export default function AdminBusinessAccountDetailScreen() {
             <ConfirmBox
               text="Reject this business account application? The applicant will see the reason below."
               confirmLabel="Reject"
+              cancelLabel="Cancel"
               confirmDisabled={staffName.trim().length === 0 || rejectReason.trim().length === 0}
               onCancel={() => setConfirmAction(null)}
               onConfirm={handleReject}
@@ -418,31 +380,4 @@ const d = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
     fontSize: 14, color: COLORS.carbon, marginBottom: 8,
   },
-});
-
-const cb = StyleSheet.create({
-  box: {
-    backgroundColor: COLORS.warmBeige,
-    borderRadius: 10, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-  },
-  boxDestructive: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
-  text: { fontSize: 13, fontWeight: '500', color: COLORS.carbon, lineHeight: 18 },
-  btnRow: { flexDirection: 'row', gap: 10 },
-  keepBtn: {
-    flex: 1, height: 42, borderRadius: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  keepText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
-  confirmBtn: {
-    flex: 1, height: 42, borderRadius: 8,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  confirmBtnDestructive: { backgroundColor: COLORS.danger },
-  confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
-  confirmTextDestructive: { color: COLORS.white },
 });

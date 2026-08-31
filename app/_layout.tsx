@@ -117,6 +117,7 @@ function RootLayoutNav() {
       <Stack.Screen name="legal/terms"              options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="legal/privacy"            options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="review/[productId]" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+      <Stack.Screen name="claim/[reservationId]" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
       <Stack.Screen name="liked" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="chat" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="admin-chat/[conversationId]" options={{ animation: 'slide_from_right' }} />

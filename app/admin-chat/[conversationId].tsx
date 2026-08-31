@@ -18,6 +18,7 @@ import { InitialAvatar, MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
 import { DateSeparator, buildDaySeparatedList } from '@/components/chat/DateSeparator';
+import { MediaViewer } from '@/components/MediaViewer';
 import {
   ChatMessage,
   getConversation,
@@ -179,6 +180,24 @@ export default function AdminChatScreen() {
 
   const listEntries = useMemo(() => buildDaySeparatedList(messages), [messages]);
 
+  // ── Fullscreen media viewer ──────────────────────────────────────────────────
+  // Lives at screen level, not inside MessageBubble — prev/next navigation needs
+  // the whole conversation's media, which a single bubble has no visibility into.
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const media = useMemo(
+    () => messages
+      .filter(m => m.imageUrl || m.videoUrl)
+      .map(m => ({
+        url: (m.imageUrl ?? m.videoUrl)!,
+        type: m.imageUrl ? ('image' as const) : ('video' as const),
+      })),
+    [messages],
+  );
+  const handleMediaPress = useCallback((url: string) => {
+    const idx = media.findIndex(m => m.url === url);
+    if (idx !== -1) setViewerIndex(idx);
+  }, [media]);
+
   // Defensive guard — renters can never reach this route (the Inbox tab is
   // unlinked for them, and firestore.rules block reading/writing any
   // conversation that isn't their own), but block direct navigation too.
@@ -225,6 +244,7 @@ export default function AdminChatScreen() {
                 message={entry.message}
                 viewerRole="business"
                 otherPartyInitial={(renterName || '?').charAt(0).toUpperCase()}
+                onMediaPress={handleMediaPress}
               />
             )
           )}
@@ -249,6 +269,8 @@ export default function AdminChatScreen() {
           bottomPadding={keyboardShown ? 8 : insets.bottom + 8}
         />
       </KeyboardAvoidingView>
+
+      <MediaViewer media={media} openIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
     </View>
   );
 }

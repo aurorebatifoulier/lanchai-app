@@ -799,7 +799,8 @@ const styles = StyleSheet.create({
 
   // ── Product card ──────────────────────────────────────────────────────────
   card: {
-    flex: 1,
+    width: CARD_WIDTH,
+    height: 234,
     backgroundColor: COLORS.white,
     borderRadius: 12,
     overflow: 'hidden',
@@ -859,6 +860,7 @@ const styles = StyleSheet.create({
     color: COLORS.carbon,
     letterSpacing: -0.1,
     lineHeight: 17,
+    height: 34,
     marginBottom: 4,
   },
   cardPrice: {

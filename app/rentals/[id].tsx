@@ -26,6 +26,21 @@ import { QRLightbox } from '@/components/QRLightbox';
 import { ChecklistSummary } from '@/components/ChecklistSummary';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { PriceLak } from '@/components/PriceLak';
+import { getClaimsForReservation, type ClaimDoc, type ClaimType, type ClaimStatus } from '@/lib/claims';
+
+const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
+  damage_not_caused: "Damage I didn't cause",
+  missing_accessory: 'Missing accessory',
+  not_as_described:  'Item not as described',
+  other:             'Other issue',
+};
+
+const CLAIM_STATUS_STYLE: Record<ClaimStatus, { label: string; color: string; bg: string }> = {
+  open:       { label: 'Open',       color: '#854F0B',      bg: '#FBE8C4' },
+  in_review:  { label: 'In review',  color: COLORS.pending,  bg: 'rgba(37,115,181,0.1)' },
+  resolved:   { label: 'Resolved',   color: COLORS.success,  bg: 'rgba(46,139,87,0.1)' },
+  rejected:   { label: 'Rejected',   color: COLORS.fg3,      bg: COLORS.softGray200 },
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,6 +105,7 @@ export default function RentalDetailScreen() {
   const [cancelling,   setCancelling]   = useState(false);
   const [cancelError,  setCancelError]  = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ value: string; label: string } | null>(null);
+  const [claims, setClaims] = useState<ClaimDoc[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -107,6 +123,11 @@ export default function RentalDetailScreen() {
     if (!user) return;
     getUserProfile(user.uid).then(setProfile).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !id) return;
+    getClaimsForReservation(user.uid, id).then(setClaims).catch(() => {});
+  }, [user, id]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -158,6 +179,11 @@ export default function RentalDetailScreen() {
   const settlementVisible = hasCharge && rental.chargeCurrency != null
     && (rental.status === 'returned' || rental.status === 'lost')
     && ((rental.outstandingBalance ?? 0) === 0 || rental.outstandingSettled === true || rental.outstandingWrittenOff === true);
+
+  // Separate from hasCharge above (which also ORs in lateChargeAmount) — a late-return
+  // penalty has no matching claim type, so it must never trigger "Dispute this charge".
+  const hasDamageCharge = rental.chargeAmount != null;
+  const hasOpenClaim = claims.some(c => c.status === 'open' || c.status === 'in_review');
 
   const handleCancel = async () => {
     if (cancelling || !rental) return;
@@ -272,7 +298,7 @@ export default function RentalDetailScreen() {
 
         {/* ── Deposit note ── */}
         <Text style={s.depositNote}>
-          Deposit is collected in store at pick-up and refunded within 48h after return, once the item is checked.
+          Deposit is collected in store at pick-up and refunded on the spot when you return the item, once it's inspected (about 10 minutes).
         </Text>
 
         {/* ── Ref ID ── */}
@@ -339,6 +365,19 @@ export default function RentalDetailScreen() {
               outstandingWrittenOffBy={rental.outstandingWrittenOffBy}
             />
           </View>
+        )}
+
+        {/* ── Receipt link ── */}
+        {rental.status === 'returned' && rental.returnFinalizedAt && (
+          <TouchableOpacity
+            style={s.receiptLink}
+            onPress={() => router.push(`/rentals/${rental.id}/receipt`)}
+            activeOpacity={0.75}
+          >
+            <Feather name="file-text" size={15} color={COLORS.carbon} />
+            <Text style={s.receiptLinkText}>View receipt</Text>
+            <Feather name="chevron-right" size={15} color={COLORS.fg3} />
+          </TouchableOpacity>
         )}
 
         {/* ── Cancel section ── */}
@@ -485,6 +524,65 @@ export default function RentalDetailScreen() {
           <View style={s.cancelledBanner}>
             <Feather name="x-circle" size={14} color={COLORS.fg3} />
             <Text style={s.cancelledBannerText}>This rental has been cancelled.</Text>
+          </View>
+        )}
+
+        {/* ── Claim status ── */}
+        {claims.length > 0 && (
+          <View style={{ marginTop: 20 }}>
+            <Text style={s.sectionLabel}>YOUR REPORTS</Text>
+            {claims.map(claim => {
+              const st = CLAIM_STATUS_STYLE[claim.status];
+              return (
+                <View key={claim.id} style={s.claimCard}>
+                  <View style={s.claimCardHeader}>
+                    <Text style={s.claimCardType}>{CLAIM_TYPE_LABELS[claim.type]}</Text>
+                    <View style={[s.claimStatusBadge, { backgroundColor: st.bg }]}>
+                      <Text style={[s.claimStatusBadgeText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                  </View>
+                  <Text style={s.claimCardDescription}>{claim.description}</Text>
+                  {!!claim.adminResponse && (
+                    <View style={s.claimResponseBox}>
+                      <Text style={s.claimResponseLabel}>Response from LANCHAI</Text>
+                      <Text style={s.claimResponseText}>{claim.adminResponse}</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── Issues — report a problem or dispute a damage/loss charge ── */}
+        {!hasOpenClaim && (
+          <View style={s.cancelSection}>
+            {hasDamageCharge && (rental.status === 'returned' || rental.status === 'lost') && (
+              <TouchableOpacity
+                style={s.issueLink}
+                onPress={() => router.push(`/claim/${rental.id}?type=damage_not_caused`)}
+                activeOpacity={0.7}
+              >
+                <Feather name="alert-triangle" size={14} color={COLORS.fg2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.issueLinkText}>Dispute this charge</Text>
+                  {!!rental.chargeReason && (
+                    <Text style={s.issueLinkSub}>Charged for: {rental.chargeReason}</Text>
+                  )}
+                </View>
+                <Feather name="chevron-right" size={14} color={COLORS.fg3} />
+              </TouchableOpacity>
+            )}
+            {(rental.status === 'active' || rental.status === 'returned' || rental.status === 'lost') && (
+              <TouchableOpacity
+                style={s.cancelLink}
+                onPress={() => router.push(`/claim/${rental.id}`)}
+                activeOpacity={0.7}
+              >
+                <Feather name="flag" size={14} color={COLORS.fg3} />
+                <Text style={[s.cancelLinkText, { color: COLORS.fg3 }]}>Report an issue</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -656,6 +754,19 @@ const s = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  receiptLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 12,
+  },
+  receiptLinkText: { flex: 1, fontSize: 14, fontWeight: '700', color: COLORS.carbon },
   divider: {
     height: 1,
     backgroundColor: COLORS.softGray200,
@@ -767,6 +878,85 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: COLORS.fg3,
+  },
+
+  // Claim status cards
+  claimCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    padding: 14,
+    marginBottom: 10,
+    gap: 8,
+  },
+  claimCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  claimCardType: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.carbon,
+  },
+  claimStatusBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  claimStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  claimCardDescription: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: COLORS.fg2,
+    lineHeight: 18,
+  },
+  claimResponseBox: {
+    backgroundColor: COLORS.porcelain,
+    borderRadius: 8,
+    padding: 10,
+    gap: 3,
+  },
+  claimResponseLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    color: COLORS.fg3,
+    textTransform: 'uppercase',
+  },
+  claimResponseText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: COLORS.carbon,
+    lineHeight: 18,
+  },
+
+  // Issues section (report an issue / dispute a charge)
+  issueLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    padding: 12,
+    marginBottom: 8,
+  },
+  issueLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.carbon,
+  },
+  issueLinkSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    marginTop: 1,
   },
 
   // Cancel section

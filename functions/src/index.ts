@@ -92,6 +92,81 @@ export const lateReturnAlerts = onSchedule(
   },
 );
 
+// Mirrors utils/availability.ts's HANDOFF_BUFFER_MS — Cloud Functions don't share code
+// with the app (see OCCUPYING_STATUSES's own duplication below), so keep these two
+// constants in sync manually if the buffer duration ever changes.
+const HANDOFF_BUFFER_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// Releases a returned reservation's unit(s) back into the bookable pool — decrementing
+// the product's pendingSettlementUnits (see lib/types.ts) — but only once BOTH the
+// deposit/charges are closed out (returnFinalizedAt is set, by whichever of the 3
+// closing actions in app/admin/reservations/[id].tsx fired) AND the 12h handoff buffer
+// has elapsed since returnAt. Release is deliberately NOT synchronous with settlement:
+// under the immediate-refund policy settlement happens ~10 minutes after return, and
+// releasing that fast would give the unit zero handoff buffer at all. This is timing
+// logic only — no renter/admin-facing color or urgency treatment, matching the explicit
+// decision not to reintroduce the removed deposit-urgency system.
+export const releaseSettledStock = onSchedule(
+  { schedule: 'every 15 minutes', region: 'asia-southeast1' },
+  async () => {
+    const now = Date.now();
+    const snap = await db
+      .collection('reservations')
+      .where('status', '==', 'returned')
+      .where('stockReleasedAt', '==', null)
+      .get();
+
+    for (const reservationDoc of snap.docs) {
+      const data = reservationDoc.data();
+
+      const returnFinalizedAt: admin.firestore.Timestamp | undefined = data.returnFinalizedAt;
+      if (!returnFinalizedAt) continue; // deposit/charges not closed out yet
+
+      const returnAt: admin.firestore.Timestamp | undefined = data.returnAt;
+      if (!returnAt || now < returnAt.toMillis() + HANDOFF_BUFFER_MS) continue; // buffer not elapsed yet
+
+      const productId: string = data.productId;
+      const quantity: number = data.quantity ?? 0;
+      if (!productId || quantity <= 0) continue;
+
+      const toRepair = data.stockReleaseHandling === 'repair';
+      const batch = db.batch();
+      const productRef = db.collection('products').doc(productId);
+
+      batch.update(reservationDoc.ref, { stockReleasedAt: FieldValue.serverTimestamp() });
+      batch.update(productRef, toRepair
+        ? { pendingSettlementUnits: FieldValue.increment(-quantity), inRepairUnits: FieldValue.increment(quantity) }
+        : { pendingSettlementUnits: FieldValue.increment(-quantity) },
+      );
+
+      const releaseAdjustmentRef = productRef.collection('stockAdjustments').doc();
+      batch.set(releaseAdjustmentRef, {
+        field: 'pendingSettlementUnits',
+        delta: -quantity,
+        reason: toRepair
+          ? 'Released from pending settlement — sent to repair'
+          : 'Released from pending settlement — back in stock',
+        reservationId: reservationDoc.id,
+        adminName: 'system (releaseSettledStock)',
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      if (toRepair) {
+        const repairAdjustmentRef = productRef.collection('stockAdjustments').doc();
+        batch.set(repairAdjustmentRef, {
+          field: 'inRepairUnits',
+          delta: quantity,
+          reason: 'Released from pending settlement — sent to repair',
+          reservationId: reservationDoc.id,
+          adminName: 'system (releaseSettledStock)',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+    }
+  },
+);
+
 export const applyRentalCount = onDocumentUpdated(
   { document: 'reservations/{reservationId}', region: 'asia-southeast1' },
   async event => {
@@ -319,6 +394,80 @@ export const notifyBtobSignup = onDocumentWritten(
       icon: 'briefcase',
       iconColor: 'amber',
       deepLink: `/admin/business-accounts/${event.params.uid}`,
+    });
+  },
+);
+
+// Notifies every admin when a renter files a new claim. Renters can't write directly
+// into an admin's own notifications subcollection (firestore.rules only allows
+// isAdmin() || isOwner(userId) there), so this Cloud Function is the only channel for
+// this direction — the reverse (admin -> renter, on response) is a plain client-side
+// sendNotif call from app/admin/claims/[id].tsx, no function needed.
+export const notifyClaimFiled = onDocumentWritten(
+  { document: 'claims/{claimId}', region: 'asia-southeast1' },
+  async event => {
+    if (!event.data?.after.exists || event.data.before.exists) return; // creation only
+
+    const adminSnap = await db.collection('admins').get();
+    const adminUids = adminSnap.docs.map(d => d.id);
+    if (adminUids.length === 0) return;
+
+    await sendAdminNotifs(adminUids, {
+      type: 'rental',
+      title: 'New claim filed',
+      body: 'A renter reported an issue and needs review.',
+      icon: 'alert',
+      iconColor: 'amber',
+      deepLink: `/admin/claims/${event.params.claimId}`,
+    });
+  },
+);
+
+// ── Reservation occupancy mirror ─────────────────────────────────────────────
+//
+// The `reservations` collection holds real renter PII (name, pricing, notes) and is
+// locked to owner-or-admin reads in firestore.rules. But any renter needs to check
+// product availability across ALL renters' bookings before booking — checking "is
+// productX free on these dates" inherently requires knowing about other people's
+// reservations. Rather than widen reservations' read rule (which would leak that PII
+// to any signed-in user), this mirrors each reservation into a minimal, PII-free
+// companion doc at reservationOccupancy/{reservationId} — just
+// { productId, pickupAt, returnAt, quantity, status } — which utils/availability.ts's
+// getAvailableStock queries instead. firestore.rules allows any authenticated user to
+// read this collection and denies client writes entirely (only this function, via the
+// Admin SDK, ever writes to it).
+//
+// Fires on every reservation create/update/delete — not just the specific status
+// transitions the app's client code currently makes — so it stays correct even as new
+// status-changing code paths get added later, instead of requiring every call site to
+// remember to keep a second write in sync.
+//
+// Terminal statuses (returned/cancelled/lost) delete the mirror rather than keep it
+// around with a stale status: getAvailableStock's own status filter is then pure
+// defense-in-depth, not the primary correctness mechanism.
+export const syncReservationOccupancy = onDocumentWritten(
+  { document: 'reservations/{reservationId}', region: 'asia-southeast1' },
+  async event => {
+    const occupancyRef = db.collection('reservationOccupancy').doc(event.params.reservationId);
+
+    if (!event.data?.after.exists) {
+      await occupancyRef.delete().catch(() => {});
+      return;
+    }
+
+    const after = event.data.after.data()!;
+
+    if (['returned', 'cancelled', 'lost'].includes(after.status)) {
+      await occupancyRef.delete().catch(() => {});
+      return;
+    }
+
+    await occupancyRef.set({
+      productId: after.productId,
+      pickupAt:  after.pickupAt,
+      returnAt:  after.returnAt,
+      quantity:  after.quantity,
+      status:    after.status,
     });
   },
 );

@@ -269,7 +269,7 @@ export default function AccountScreen() {
           </View>
         </TouchableOpacity>
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{headerName}</Text>
+          <Text style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit>{headerName}</Text>
 
           {/* Account type badge — BtoB shows verification status instead */}
           {btobBadge ? (
@@ -305,42 +305,47 @@ export default function AccountScreen() {
       >
 
         {/* ── Stats ── */}
-        <View style={styles.statsRow}>
-          {/* RENTALS — real count */}
-          <View style={[styles.statCard, { flex: 0.8 }]}>
-            <Text style={styles.statEye}>RENTALS</Text>
-            <Text style={styles.statVal}>
-              {rentalCount === null ? '—' : String(rentalCount)}
-            </Text>
-            <Text style={styles.statSub}>
-              no clutter added
-            </Text>
-          </View>
-
-          {/* SAVED — computed from rentals vs. retail price */}
-          <View style={[styles.statCard, styles.statCardAmber, { flex: 1.4 }]}>
-            <Text style={[styles.statEye, { color: 'rgba(30,30,30,0.55)' }]}>SAVED</Text>
-            <Text style={[styles.statVal, { color: COLORS.carbon }]}>
-              {savedAmount ? formatLAK(savedAmount) : '—'}
-            </Text>
-            <Text style={[styles.statSub, { color: 'rgba(30,30,30,0.55)' }]}>
-              {savedAmount ? 'not collecting dust' : 'Rent to start saving'}
-            </Text>
-          </View>
-
-          {/* TIER — loyalty status; BtoB accounts don't participate, regardless of
-              approval status (isBusinessAccount only becomes true once approved) */}
-          {!isBtob && (
+        <View style={styles.statsWrap}>
+          <View style={styles.statsRow}>
+            {/* RENTALS — real count */}
             <View style={[styles.statCard, { flex: 1 }]}>
-              <Text style={styles.statEye}>TIER</Text>
-              <Text style={styles.statVal}>
-                {TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
+              <Text style={styles.statEye}>RENTALS</Text>
+              <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>
+                {rentalCount === null ? '—' : String(rentalCount)}
               </Text>
               <Text style={styles.statSub}>
-                {profile?.loyaltyPoints ? `${profile.loyaltyPoints} pts` : 'Rent to earn points'}
+                no clutter added
               </Text>
             </View>
-          )}
+
+            {/* TIER — loyalty status; BtoB accounts don't participate, regardless of
+                approval status (isBusinessAccount only becomes true once approved) */}
+            {!isBtob && (
+              <View style={[styles.statCard, { flex: 1 }]}>
+                <Text style={styles.statEye}>TIER</Text>
+                <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>
+                  {TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
+                </Text>
+                <Text style={styles.statSub}>
+                  {profile?.loyaltyPoints ? `${profile.loyaltyPoints} pts` : 'Rent to earn points'}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* SAVED — computed from rentals vs. retail price; full-width row of its own
+              since it can display large LAK figures (e.g. "171,367,040 LAK") */}
+          <View style={styles.statsRow}>
+            <View style={[styles.statCard, styles.statCardAmber, { flex: 1 }]}>
+              <Text style={[styles.statEye, { color: 'rgba(30,30,30,0.55)' }]}>SAVED</Text>
+              <Text style={[styles.statVal, { color: COLORS.carbon }]} numberOfLines={1} adjustsFontSizeToFit>
+                {savedAmount ? formatLAK(savedAmount) : '—'}
+              </Text>
+              <Text style={[styles.statSub, { color: 'rgba(30,30,30,0.55)' }]}>
+                {savedAmount ? 'not collecting dust' : 'Rent to start saving'}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* ── Loyalty section — hidden entirely for BtoB accounts ── */}
@@ -654,10 +659,13 @@ const styles = StyleSheet.create({
   },
 
   // Stats
+  statsWrap: {
+    gap: 10,
+    marginBottom: 4,
+  },
   statsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 4,
   },
   statCard: {
     flex: 1,
@@ -683,9 +691,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   statVal: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     color: COLORS.carbon,
     marginTop: 6,
     marginBottom: 2,

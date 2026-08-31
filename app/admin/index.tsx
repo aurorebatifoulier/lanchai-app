@@ -5,6 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import type { ClaimStatus } from '@/lib/claims';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
@@ -14,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/business-accounts';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/business-accounts' | '/admin/claims' | '/admin/inventory';
 }
 
 const CARDS: HubCard[] = [
@@ -74,6 +75,20 @@ const CARDS: HubCard[] = [
     sub: 'Review and approve BtoB signups',
     route: '/admin/business-accounts',
   },
+  {
+    icon: 'flag',
+    iconBg: COLORS.warmBeige,
+    title: 'Claims',
+    sub: 'Review customer disputes and issues',
+    route: '/admin/claims',
+  },
+  {
+    icon: 'bar-chart-2',
+    iconBg: COLORS.warmBeige,
+    title: 'Inventory',
+    sub: 'Live stock overview by status, per product',
+    route: '/admin/inventory',
+  },
 ];
 
 export default function AdminHomeScreen() {
@@ -81,6 +96,7 @@ export default function AdminHomeScreen() {
   const router = useRouter();
   const [overdueCount, setOverdueCount] = useState(0);
   const [pendingBtobCount, setPendingBtobCount] = useState(0);
+  const [openClaimsCount, setOpenClaimsCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -97,6 +113,12 @@ export default function AdminHomeScreen() {
 
       getDocs(query(collection(db, 'users'), where('btobStatus', '==', 'pending_approval')))
         .then(snap => setPendingBtobCount(snap.size))
+        .catch(() => {});
+
+      // Single equality-adjacent filter — where('status','in',[...]) needs no composite
+      // index on its own.
+      getDocs(query(collection(db, 'claims'), where('status', 'in', ['open', 'in_review'] as ClaimStatus[])))
+        .then(snap => setOpenClaimsCount(snap.size))
         .catch(() => {});
     }, []),
   );
@@ -137,6 +159,11 @@ export default function AdminHomeScreen() {
             {card.route === '/admin/business-accounts' && pendingBtobCount > 0 && (
               <View style={s.overdueBadge}>
                 <Text style={s.overdueBadgeText}>{pendingBtobCount > 9 ? '9+' : pendingBtobCount}</Text>
+              </View>
+            )}
+            {card.route === '/admin/claims' && openClaimsCount > 0 && (
+              <View style={s.overdueBadge}>
+                <Text style={s.overdueBadgeText}>{openClaimsCount > 9 ? '9+' : openClaimsCount}</Text>
               </View>
             )}
             <Feather name="chevron-right" size={18} color={COLORS.fg3} />

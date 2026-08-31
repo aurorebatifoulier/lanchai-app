@@ -36,6 +36,7 @@ export default function PersonalInfoScreen() {
   const [phone,       setPhone]       = useState('');
   const [whatsapp,    setWhatsapp]    = useState('');
   const [sameAsPhone, setSameAsPhone] = useState(false);
+  const [address,     setAddress]     = useState('');
   const [touched,     setTouched]     = useState({
     firstName: false, lastName: false, phone: false, whatsapp: false,
   });
@@ -47,6 +48,7 @@ export default function PersonalInfoScreen() {
   const lastNameRef  = useRef<TextInput>(null);
   const phoneRef     = useRef<TextInput>(null);
   const whatsappRef  = useRef<TextInput>(null);
+  const addressRef   = useRef<TextInput>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load ─────────────────────────────────────────────────────────────────────
@@ -68,6 +70,7 @@ export default function PersonalInfoScreen() {
         setPhone(profile?.phoneNumber ?? profile?.phone ?? '');
         setWhatsapp(profile?.whatsapp ?? '');
         setSameAsPhone(profile?.whatsappSameAsPhone ?? false);
+        setAddress(profile?.address ?? '');
         setCustomerType(profile?.customerType ?? 'tourist');
       })
       .catch(() => {
@@ -142,6 +145,7 @@ export default function PersonalInfoScreen() {
         phone:               phone.trim(),
         whatsapp:            waValue,
         whatsappSameAsPhone: sameAsPhone,
+        address:             address.trim(),
       });
       await updateProfile(cu, { displayName });
 
@@ -283,12 +287,12 @@ export default function PersonalInfoScreen() {
           value={whatsappDisplayed}
           onChangeText={v => { if (!sameAsPhone) setWhatsapp(v); }}
           onBlur={() => { if (!sameAsPhone) touch('whatsapp'); }}
-          onSubmitEditing={handleSave}
+          onSubmitEditing={() => addressRef.current?.focus()}
           editable={!sameAsPhone}
           placeholder="+856 20 ..."
           placeholderTextColor={COLORS.fg3}
           keyboardType="phone-pad"
-          returnKeyType="done"
+          returnKeyType="next"
         />
         <Text style={s.errorText}>
           {!sameAsPhone && touched.whatsapp ? errors.whatsapp : ''}
@@ -305,6 +309,24 @@ export default function PersonalInfoScreen() {
           </View>
           <Text style={s.checkboxLabel}>Same as phone number</Text>
         </TouchableOpacity>
+
+        {/* Address */}
+        <View style={s.fieldLabelRow}>
+          <Text style={s.fieldLabel}>Address</Text>
+          <Text style={s.fieldLabelOptional}>Optional</Text>
+        </View>
+        <TextInput
+          ref={addressRef}
+          style={s.input}
+          value={address}
+          onChangeText={setAddress}
+          onSubmitEditing={handleSave}
+          placeholder="Street, city…"
+          placeholderTextColor={COLORS.fg3}
+          returnKeyType="done"
+          maxLength={200}
+        />
+        <Text style={s.errorText} />
 
         {/* Status banner — shown directly above the Save button */}
         {saveStatus === 'success' && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,40 +12,14 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { useShopInfo } from '@/lib/shop';
 import { pad, getAvailableTimeSlots } from '@/utils/timeSlots';
+import DateRangeCalendar from '@/components/DateRangeCalendar';
 
-// ── Calendar helpers (same as booking/new.tsx) ────────────────────────────────
 const MONTHS = [
   'January','February','March','April','May','June',
   'July','August','September','October','November','December',
 ];
-const DOW = ['M','T','W','T','F','S','S'];
 
-type CalDay = { d: number; date: Date; muted?: boolean };
-type Page = 'main' | 'pickup-date' | 'return-date' | 'pickup-time' | 'return-time';
-
-function buildCalendarDays(year: number, month: number): CalDay[] {
-  const firstDay = new Date(year, month, 1).getDay();
-  const offset = firstDay === 0 ? 6 : firstDay - 1;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevDays = new Date(year, month, 0).getDate();
-  const days: CalDay[] = [];
-  for (let i = offset - 1; i >= 0; i--)
-    days.push({ d: prevDays - i, date: new Date(year, month - 1, prevDays - i), muted: true });
-  for (let d = 1; d <= daysInMonth; d++)
-    days.push({ d, date: new Date(year, month, d) });
-  const trailing = (7 - (days.length % 7)) % 7;
-  for (let d = 1; d <= trailing; d++)
-    days.push({ d, date: new Date(year, month + 1, d), muted: true });
-  return days;
-}
-
-function sameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
+type Page = 'main' | 'dates' | 'pickup-time' | 'return-time';
 
 function buildDateTime(date: Date, timeStr: string): Date {
   const dt = new Date(date);
@@ -62,6 +36,8 @@ function fmtFieldDate(d: Date): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 export interface DateRangePickerProps {
   visible: boolean;
+  productId: string;
+  totalStock: number;
   initialPickupAt?: Date | null;
   initialReturnAt?: Date | null;
   onClose: () => void;
@@ -70,6 +46,8 @@ export interface DateRangePickerProps {
 
 export default function DateRangePicker({
   visible,
+  productId,
+  totalStock,
   initialPickupAt = null,
   initialReturnAt = null,
   onClose,
@@ -83,25 +61,15 @@ export default function DateRangePicker({
   const [endDate,    setEndDate]    = useState<Date | null>(null);
   const [pickupTime, setPickupTime] = useState<string | null>(null);
   const [returnTime, setReturnTime] = useState<string | null>(null);
-  const [calYear,    setCalYear]    = useState(() => new Date().getFullYear());
-  const [calMonth,   setCalMonth]   = useState(() => new Date().getMonth());
-
-  const today = useMemo(() => {
-    const d = new Date(); d.setHours(0, 0, 0, 0); return d;
-  }, []);
 
   // Re-initialise from props each time the picker opens
   useEffect(() => {
     if (!visible) { setPage('main'); return; }
-    const now = new Date();
     if (initialPickupAt) {
       setStartDate(new Date(initialPickupAt.getFullYear(), initialPickupAt.getMonth(), initialPickupAt.getDate()));
       setPickupTime(`${pad(initialPickupAt.getHours())}:${pad(initialPickupAt.getMinutes())}`);
-      setCalYear(initialPickupAt.getFullYear());
-      setCalMonth(initialPickupAt.getMonth());
     } else {
       setStartDate(null); setPickupTime(null);
-      setCalYear(now.getFullYear()); setCalMonth(now.getMonth());
     }
     if (initialReturnAt) {
       setEndDate(new Date(initialReturnAt.getFullYear(), initialReturnAt.getMonth(), initialReturnAt.getDate()));
@@ -121,44 +89,17 @@ export default function DateRangePicker({
     : 0;
   const canConfirm = !!startDate && !!endDate && !!pickupTime && !!returnTime && isReturnValid;
 
-  // ── Calendar navigation ───────────────────────────────────────────────────
-  const prevMonth = () => {
-    if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); }
-    else setCalMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); }
-    else setCalMonth(m => m + 1);
-  };
+  // ── Page opener ───────────────────────────────────────────────────────────
+  const openDates = () => setPage('dates');
 
-  // ── Page openers ──────────────────────────────────────────────────────────
-  const openPickupDate = () => {
-    const ref = startDate ?? new Date();
-    setCalYear(ref.getFullYear()); setCalMonth(ref.getMonth());
-    setPage('pickup-date');
+  // ── Range selection ──────────────────────────────────────────────────────
+  const handleChangeRange = (start: Date | null, end: Date | null) => {
+    setStartDate(start);
+    setEndDate(end);
+    // Auto-return to the main page once a full range is picked — matches the old
+    // per-field behavior of closing the sub-page as soon as a day was selected.
+    if (start && end) setPage('main');
   };
-  const openReturnDate = () => {
-    const ref = endDate ?? startDate ?? new Date();
-    setCalYear(ref.getFullYear()); setCalMonth(ref.getMonth());
-    setPage('return-date');
-  };
-
-  // ── Day press handlers ───────────────────────────────────────────────────
-  const handlePickupDayPress = useCallback((day: CalDay) => {
-    if (day.muted || day.date < today) return;
-    if (sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0) return;
-    setStartDate(new Date(day.date));
-    if (endDate && endDate < day.date) setEndDate(null);
-    setPage('main');
-  }, [today, endDate]);
-
-  const handleReturnDayPress = useCallback((day: CalDay) => {
-    if (day.muted || day.date < today) return;
-    if (startDate && day.date < startDate) return;
-    if (sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0) return;
-    setEndDate(new Date(day.date));
-    setPage('main');
-  }, [today, startDate]);
 
   // ── Confirm ────────────────────────────────────────────────────────────────
   const handleConfirm = () => {
@@ -166,76 +107,25 @@ export default function DateRangePicker({
     onConfirm(pickupDateTime, returnDateTime);
   };
 
-  // ── Calendar grid ──────────────────────────────────────────────────────────
-  const renderCalGrid = (
-    onDayPress: (day: CalDay) => void,
-    selectedDate: Date | null,
-    isReturn: boolean,
-  ) => {
-    const days = buildCalendarDays(calYear, calMonth);
-    return (
-      <View style={s.calGrid}>
-        {DOW.map((d, i) => (
-          <View key={i} style={s.calDow}>
-            <Text style={s.calDowText}>{d}</Text>
-          </View>
-        ))}
-        {days.map((day, i) => {
-          const isPast        = !day.muted && day.date < today;
-          const isBeforeStart = isReturn && !!startDate && !day.muted && day.date < startDate;
-          // Today is unselectable once its remaining time slots (now + 1h prep buffer)
-          // are exhausted — no point letting the user pick a date with an empty time list.
-          const isTodayNoSlots = !day.muted && sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0;
-          const isSelected    = !!(selectedDate && !day.muted && sameDay(day.date, selectedDate));
-          const disabled      = !!day.muted || isPast || isBeforeStart || isTodayNoSlots;
-          return (
-            <TouchableOpacity
-              key={i}
-              style={[s.calCell, disabled && s.calCellDisabled, isSelected && s.calCellSelected]}
-              onPress={() => onDayPress(day)}
-              activeOpacity={disabled ? 1 : 0.7}
-            >
-              <Text style={[
-                s.calCellText,
-                disabled && s.calCellTextDisabled,
-                isSelected && s.calCellTextSelected,
-              ]}>
-                {day.d}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+  // ── Sub-page: dates ────────────────────────────────────────────────────────
+  const renderDatesPage = () => (
+    <>
+      <View style={s.subHeader}>
+        <TouchableOpacity style={s.subBackBtn} onPress={() => setPage('main')}>
+          <Feather name="arrow-left" size={16} color={COLORS.carbon} />
+        </TouchableOpacity>
+        <Text style={s.subTitle}>Select dates</Text>
+        <View style={{ width: 34 }} />
       </View>
-    );
-  };
-
-  // ── Sub-page: calendar ─────────────────────────────────────────────────────
-  const renderCalendarPage = (mode: 'pickup' | 'return') => {
-    const title = mode === 'pickup' ? 'Pick-up date' : 'Return date';
-    const sel   = mode === 'pickup' ? startDate : endDate;
-    const onDay = mode === 'pickup' ? handlePickupDayPress : handleReturnDayPress;
-    return (
-      <>
-        <View style={s.subHeader}>
-          <TouchableOpacity style={s.subBackBtn} onPress={() => setPage('main')}>
-            <Feather name="arrow-left" size={16} color={COLORS.carbon} />
-          </TouchableOpacity>
-          <Text style={s.subTitle}>{title}</Text>
-          <View style={{ width: 34 }} />
-        </View>
-        <View style={s.calNav}>
-          <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
-            <Feather name="chevron-left" size={18} color={COLORS.carbon} />
-          </TouchableOpacity>
-          <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-          <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
-            <Feather name="chevron-right" size={18} color={COLORS.carbon} />
-          </TouchableOpacity>
-        </View>
-        {renderCalGrid(onDay, sel, mode === 'return')}
-      </>
-    );
-  };
+      <DateRangeCalendar
+        productId={productId}
+        totalStock={totalStock}
+        startDate={startDate}
+        endDate={endDate}
+        onChangeRange={handleChangeRange}
+      />
+    </>
+  );
 
   // ── Sub-page: time list ────────────────────────────────────────────────────
   const renderTimePage = (mode: 'pickup' | 'return') => {
@@ -304,13 +194,17 @@ export default function DateRangePicker({
 
       <View style={s.fieldGrid}>
         <TouchableOpacity
-          style={[s.fieldBtn, !!startDate && s.fieldBtnFilled]}
-          onPress={openPickupDate}
+          style={[s.fieldBtn, s.fieldBtnFull, !!(startDate || endDate) && s.fieldBtnFilled]}
+          onPress={openDates}
           activeOpacity={0.75}
         >
-          <Text style={[s.fieldEye, !!startDate && s.fieldEyeFilled]}>PICK-UP DATE</Text>
-          <Text style={[s.fieldVal, !!startDate && s.fieldValFilled]}>
-            {startDate ? fmtFieldDate(startDate) : 'Select'}
+          <Text style={[s.fieldEye, !!(startDate || endDate) && s.fieldEyeFilled]}>DATES</Text>
+          <Text style={[s.fieldVal, !!(startDate || endDate) && s.fieldValFilled]}>
+            {startDate && endDate
+              ? `${fmtFieldDate(startDate)} → ${fmtFieldDate(endDate)}`
+              : startDate
+              ? `${fmtFieldDate(startDate)} → Select return`
+              : 'Select'}
           </Text>
         </TouchableOpacity>
 
@@ -322,17 +216,6 @@ export default function DateRangePicker({
           <Text style={[s.fieldEye, !!pickupTime && s.fieldEyeFilled]}>PICK-UP TIME</Text>
           <Text style={[s.fieldVal, !!pickupTime && s.fieldValFilled]}>
             {pickupTime ?? 'Select'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[s.fieldBtn, !!endDate && s.fieldBtnFilled]}
-          onPress={openReturnDate}
-          activeOpacity={0.75}
-        >
-          <Text style={[s.fieldEye, !!endDate && s.fieldEyeFilled]}>RETURN DATE</Text>
-          <Text style={[s.fieldVal, !!endDate && s.fieldValFilled]}>
-            {endDate ? fmtFieldDate(endDate) : 'Select'}
           </Text>
         </TouchableOpacity>
 
@@ -390,8 +273,7 @@ export default function DateRangePicker({
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
           {page === 'main'        && renderMain()}
-          {page === 'pickup-date' && renderCalendarPage('pickup')}
-          {page === 'return-date' && renderCalendarPage('return')}
+          {page === 'dates'       && renderDatesPage()}
           {page === 'pickup-time' && renderTimePage('pickup')}
           {page === 'return-time' && renderTimePage('return')}
         </View>
@@ -470,7 +352,7 @@ const s = StyleSheet.create({
     marginTop: -8,
   },
 
-  // 2×2 field grid
+  // Field grid: full-width dates field + a 2-col time row
   fieldGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -485,6 +367,9 @@ const s = StyleSheet.create({
     borderColor: COLORS.softGray200,
     padding: 14,
     gap: 4,
+  },
+  fieldBtnFull: {
+    width: '100%',
   },
   fieldBtnFilled: {
     backgroundColor: COLORS.amber,
@@ -560,63 +445,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.2,
   },
   confirmBtnTextOff: { color: COLORS.fg3 },
-
-  // Calendar nav
-  calNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  calNavBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calMonthTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  calGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  calDow: {
-    width: `${100 / 7}%` as `${number}%`,
-    alignItems: 'center',
-    paddingBottom: 6,
-  },
-  calDowText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.softGray,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  calCell: {
-    width: `${100 / 7}%` as `${number}%`,
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-  },
-  calCellDisabled: { opacity: 0.2 },
-  calCellSelected: { backgroundColor: COLORS.amber },
-  calCellText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  calCellTextDisabled: { color: COLORS.softGray },
-  calCellTextSelected: { fontWeight: '800', color: COLORS.carbon },
 
   // Time list
   timeScroll:        { maxHeight: 300 },

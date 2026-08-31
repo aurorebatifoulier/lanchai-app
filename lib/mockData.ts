@@ -27,6 +27,11 @@ export interface Product {
   averageRating?: number;
   available: boolean;
   stockLeft: number;
+  // Units currently out of the bookable pool (repair/lost/pending settlement) — see
+  // utils/availability.ts's effectiveStock(), the required way to read adjusted stock.
+  inRepairUnits?: number;
+  lostUnits?: number;
+  pendingSettlementUnits?: number;
   perfectFor?:    string[];
   keyFeatures?:   { icon: string; text: string }[];
   whatsIncluded?: string[];

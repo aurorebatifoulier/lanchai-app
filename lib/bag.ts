@@ -8,6 +8,7 @@ import {
   serverTimestamp,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -76,6 +77,28 @@ export async function updateBagItemDates(
     pickupAt: Timestamp.fromDate(pickupAt),
     returnAt: Timestamp.fromDate(returnAt),
   });
+}
+
+// Applies the same pickup/return dates to several bag items at once — batched so
+// they update atomically (all-or-nothing), matching the bulk-write convention used
+// elsewhere for multi-document single-user-action writes (see
+// cancelReservations/confirmReservationsPayment in lib/firestore.ts).
+// Throws on Firestore error — caller must handle.
+export async function updateAllBagItemDates(
+  uid: string,
+  itemIds: string[],
+  pickupAt: Date,
+  returnAt: Date,
+): Promise<void> {
+  if (itemIds.length === 0) return;
+  const batch = writeBatch(db);
+  itemIds.forEach(id => {
+    batch.update(doc(db, 'users', uid, 'bag', id), {
+      pickupAt: Timestamp.fromDate(pickupAt),
+      returnAt: Timestamp.fromDate(returnAt),
+    });
+  });
+  await batch.commit();
 }
 
 // Throws on Firestore error — caller must handle.

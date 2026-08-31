@@ -7,7 +7,16 @@ rules_version = '2';
 //   admins                                — internal admin registry (self-read only,
 //                                            used by the client to derive isAdmin)
 //   products                              — rental catalogue
+//   products/{id}/stockAdjustments        — append-only audit log of inRepairUnits/
+//                                            lostUnits changes on that product (admin-only,
+//                                            no update/delete ever)
 //   reservations                          — bookings (Reservation.userId)
+//   reservationOccupancy                  — PII-free mirror of reservations (productId,
+//                                            pickupAt, returnAt, quantity, status only),
+//                                            server-written by functions/src/index.ts's
+//                                            syncReservationOccupancy — lets any renter
+//                                            check availability against every other
+//                                            renter's bookings without reading their PII
 //   users/{uid}                           — user profile
 //   users/{uid}/favorites                 — per-user favourites
 //   requests                              — renter "request an item" submissions
@@ -19,6 +28,8 @@ rules_version = '2';
 //   reviews                               — not yet written by app code; rules included
 //                                            defensively so the collection is safe the
 //                                            moment it's wired up
+//   claims                                — renter-filed disputes, one per reservation
+//                                            (Claim.userId, Claim.reservationId)
 //
 // Principle: default deny everywhere. All access is explicit and additive.
 // Every rule requires request.auth != null — no anonymous access anywhere.
@@ -65,6 +76,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── stockAdjustments ─────────────────────────────────────────────────
+    // Append-only audit log of inRepairUnits/lostUnits changes on the parent
+    // product (utils/availability.ts's effectiveStock reads those two count
+    // fields directly off the product doc — this subcollection is history only,
+    // not itself consulted by any availability computation). Admin-only in both
+    // directions; no update/delete at all, including for admins, so the log can
+    // never be edited after the fact.
+    match /products/{productId}/stockAdjustments/{adjustmentId} {
+      allow read:           if isAdmin();
+      allow create:         if isAdmin();
+      allow update, delete: if false;
+    }
+
     // ── reservations ─────────────────────────────────────────────────────
     // App usage: addDoc('reservations', { renterId, status: 'pending_payment',
     //   pickupAt, returnAt, ... createdAt: serverTimestamp() }) — create;
@@ -73,7 +97,19 @@ service cloud.firestore {
     // Client may only create with status 'pending_payment'; status transitions
     // (e.g. to 'confirmed' after payment) are admin-only writes.
     match /reservations/{reservationId} {
-      allow read:   if isOwner(resource.data.renterId) || isAdmin();
+      // resource == null must be checked FIRST: when the document doesn't exist,
+      // resource is null, so resource.data.renterId errors while evaluating
+      // isOwner() below. Firestore's rules language only absorbs that error when
+      // the || short-circuits to true on another operand (i.e. only for admins) —
+      // for everyone else it surfaces as permission-denied instead of "not found".
+      // Allowing the null case unconditionally is safe: there's no document data
+      // to leak when nothing exists at the path, so this doesn't weaken access to
+      // any real reservation — isOwner()/isAdmin() still fully gate every
+      // document that actually exists. Hit by lib/firestore.ts's newOrderId()
+      // (probes a random candidate ID for a collision) and getReservationById()
+      // (a stale/invalid reservation link would otherwise throw instead of
+      // resolving to "not found").
+      allow read:   if resource == null || isOwner(resource.data.renterId) || isAdmin();
       allow create: if isAuthed() &&
                         request.resource.data.renterId == request.auth.uid &&
                         request.resource.data.status == 'pending_payment';
@@ -90,6 +126,20 @@ service cloud.firestore {
          resource.data.status == 'confirmed')
       );
       allow delete: if isAdmin();
+    }
+
+    // ── reservationOccupancy ─────────────────────────────────────────────
+    // PII-free mirror of reservations — { productId, pickupAt, returnAt, quantity,
+    // status }, no renterId/renterName/pricing/notes. Written only by
+    // syncReservationOccupancy (functions/src/index.ts) via the Admin SDK, which is
+    // not subject to these rules — clients (including admins) never write here
+    // directly. Any authenticated user may read/list it: this is what lets a renter
+    // check a product's availability against every OTHER renter's bookings
+    // (utils/availability.ts's getAvailableStock) without the reservations collection's
+    // owner-or-admin read restriction blocking that.
+    match /reservationOccupancy/{reservationId} {
+      allow read:  if isAuthed();
+      allow write: if false;
     }
 
     // ── users/{userId} + favorites subcollection ────────────────────────
@@ -291,6 +341,32 @@ service cloud.firestore {
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.renterId == request.auth.uid
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.productId == productId
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.status == 'returned';
+
+      allow update: if isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // ── claims ──────────────────────────────────────────────────────────────
+    // Top-level collection (unlike reviews, reservationId/productId are plain
+    // fields here, not path segments) — a renter-filed dispute linked to one
+    // reservation. Shape: { userId, reservationId, productId, type, description,
+    //   photos, status, adminResponse, adminRespondedAt, adminRespondedBy,
+    //   createdAt, updatedAt }
+    // status/adminResponse are locked on create so a client can't submit a
+    // pre-resolved claim with a spoofed admin reply; only isAdmin() may ever
+    // change them afterward.
+    match /claims/{claimId} {
+      allow read:   if resource == null || isOwner(resource.data.userId) || isAdmin();
+
+      allow create: if isAuthed()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'open'
+                    && request.resource.data.adminResponse == null
+                    && request.resource.data.type in
+                         ['damage_not_caused', 'missing_accessory', 'not_as_described', 'other']
+                    && get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.renterId == request.auth.uid
+                    && get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.productId == request.resource.data.productId;
 
       allow update: if isAdmin();
 

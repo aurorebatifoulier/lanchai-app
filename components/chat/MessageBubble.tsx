@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { Timestamp } from 'firebase/firestore';
 import { COLORS } from '@/constants/Colors';
 import { ChatMessage } from '@/lib/chat';
-import { VideoLightbox } from './VideoLightbox';
 
 const BUBBLE_RADIUS = 16;
 
@@ -29,11 +28,14 @@ interface MessageBubbleProps {
   viewerRole: 'renter' | 'business';
   /** Initial shown in the avatar for the other party's messages. */
   otherPartyInitial: string;
+  /** Called with the tapped image/video URL — the parent screen owns the fullscreen
+   * viewer (MediaViewer) since it needs the full conversation's media list for
+   * prev/next navigation, which a single bubble has no visibility into. */
+  onMediaPress: (url: string) => void;
 }
 
-export function MessageBubble({ message, viewerRole, otherPartyInitial }: MessageBubbleProps) {
+export function MessageBubble({ message, viewerRole, otherPartyInitial, onMediaPress }: MessageBubbleProps) {
   const isOwn = message.senderType === viewerRole;
-  const [videoOpen, setVideoOpen] = useState(false);
 
   return (
     <View style={[styles.msgRow, isOwn && styles.msgRowOwn]}>
@@ -44,7 +46,7 @@ export function MessageBubble({ message, viewerRole, otherPartyInitial }: Messag
           <>
             <TouchableOpacity
               style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther, styles.bubbleImage]}
-              onPress={() => setVideoOpen(true)}
+              onPress={() => onMediaPress(message.videoUrl!)}
               activeOpacity={0.85}
             >
               <View style={[styles.msgImage, styles.msgVideoPlaceholder]}>
@@ -56,18 +58,21 @@ export function MessageBubble({ message, viewerRole, otherPartyInitial }: Messag
             <Text style={[styles.msgTime, isOwn && styles.msgTimeOwn]}>
               {formatTime(message.createdAt)}
             </Text>
-            <VideoLightbox uri={videoOpen ? message.videoUrl : null} onClose={() => setVideoOpen(false)} />
           </>
         ) : message.imageUrl ? (
           <>
-            <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther, styles.bubbleImage]}>
+            <TouchableOpacity
+              style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther, styles.bubbleImage]}
+              onPress={() => onMediaPress(message.imageUrl!)}
+              activeOpacity={0.85}
+            >
               <Image
                 source={{ uri: message.imageUrl }}
                 style={styles.msgImage}
                 contentFit="cover"
                 transition={200}
               />
-            </View>
+            </TouchableOpacity>
             <Text style={[styles.msgTime, isOwn && styles.msgTimeOwn]}>
               {formatTime(message.createdAt)}
             </Text>

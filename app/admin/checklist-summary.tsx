@@ -166,7 +166,15 @@ export default function ChecklistSummaryScreen() {
               outstandingBalance: draft.outstandingBalance,
             }
           : undefined;
-        return { id: r.id, type, checklistData, charge };
+        return {
+          id: r.id,
+          type,
+          checklistData,
+          charge,
+          productId: r.productId,
+          quantity: r.quantity,
+          adminName: confirmedByName.trim(),
+        };
       });
 
       await submitChecklistBatch(items);

@@ -24,12 +24,13 @@ import {
   listenBagItems,
   removeFromBag,
   updateBagItemDates,
+  updateAllBagItemDates,
   updateBagItemQuantity,
   BagItem,
 } from '@/lib/bag';
 import { getProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
-import { getAvailableStock } from '@/utils/availability';
+import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate, billableDaysFromDates } from '@/utils/pricing';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
@@ -117,7 +118,7 @@ export default function BagScreen() {
 
       const pickup = item.pickupAt.toDate();
       const ret    = item.returnAt.toDate();
-      getAvailableStock(item.productId, pickup, ret, product.stockLeft).then(avail => {
+      getAvailableStock(item.productId, pickup, ret, effectiveStock(product)).then(avail => {
         setStockMap(prev => ({ ...prev, [item.id]: avail }));
       });
     });
@@ -181,6 +182,14 @@ export default function BagScreen() {
     [datePickerItemId, items],
   );
 
+  // Source item for "use same dates for all" — the first item that actually HAS
+  // dates set, not strictly items[0]: listenBagItems has no orderBy, so array order
+  // isn't guaranteed to reflect "first added."
+  const dateSourceItem = useMemo(
+    () => items.find(i => i.pickupAt && i.returnAt) ?? null,
+    [items],
+  );
+
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleRemove = useCallback((itemId: string) => {
     if (!user) return;
@@ -191,7 +200,7 @@ export default function BagScreen() {
     if (!user) return;
     const product  = productMap[item.productId];
     const avail    = stockMap[item.id];
-    const maxQty   = avail !== undefined ? avail : (product?.stockLeft ?? 99);
+    const maxQty   = avail !== undefined ? avail : (product ? effectiveStock(product) : 99);
     const next     = Math.max(1, Math.min(maxQty, item.quantity + delta));
     if (next === item.quantity) return;
     try { await updateBagItemQuantity(user.uid, item.id, next); } catch {}
@@ -208,11 +217,26 @@ export default function BagScreen() {
     router.push('/bag/checkout');
   }, [router]);
 
+  // No pre-flight availability check needed — writing the copied dates triggers
+  // listenBagItems' live onSnapshot, which cache-misses the existing stockMap/
+  // conflictMap effect and re-fetches per item automatically, surfacing the
+  // existing per-item conflictBanner wherever the copied dates don't work.
+  const handleUseSameDates = useCallback(() => {
+    if (!user || !dateSourceItem?.pickupAt || !dateSourceItem?.returnAt) return;
+    const otherIds = items.filter(i => i.id !== dateSourceItem.id).map(i => i.id);
+    updateAllBagItemDates(
+      user.uid,
+      otherIds,
+      dateSourceItem.pickupAt.toDate(),
+      dateSourceItem.returnAt.toDate(),
+    ).catch(() => {});
+  }, [user, items, dateSourceItem]);
+
   // ── Item card ─────────────────────────────────────────────────────────────
   const renderItem = useCallback(({ item }: { item: BagItem }) => {
     const product     = productMap[item.productId];
     const avail       = stockMap[item.id];
-    const maxQty      = avail !== undefined ? avail : (product?.stockLeft ?? 99);
+    const maxQty      = avail !== undefined ? avail : (product ? effectiveStock(product) : 99);
     const hasConflict = conflictMap[item.id] ?? false;
     const hasDates    = !!(item.pickupAt && item.returnAt);
     const accessState = product ? getProductAccessState(product, profile?.loyaltyTier ?? null) : null;
@@ -332,7 +356,11 @@ export default function BagScreen() {
           </View>
           {avail !== undefined && (
             <Text style={[s.stockText, avail === 0 && s.stockTextOut]}>
-              {avail > 0 ? `${avail} in stock` : 'Out of stock'}
+              {avail === 0
+                ? 'Out of stock'
+                : product && effectiveStock(product) > 1
+                ? `${avail} of ${effectiveStock(product)} available`
+                : 'In stock'}
             </Text>
           )}
         </View>
@@ -425,6 +453,18 @@ export default function BagScreen() {
             contentContainerStyle={s.listContent}
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            ListHeaderComponent={
+              items.length > 1 && dateSourceItem ? (
+                <TouchableOpacity
+                  style={s.sameDatesBtn}
+                  onPress={handleUseSameDates}
+                  activeOpacity={0.75}
+                >
+                  <Feather name="copy" size={12} color={COLORS.carbon} />
+                  <Text style={s.sameDatesBtnText}>Use same dates for all items</Text>
+                </TouchableOpacity>
+              ) : null
+            }
           />
 
           {/* Sticky summary + CTA */}
@@ -481,6 +521,11 @@ export default function BagScreen() {
       {/* Date picker — rendered at root level to float above everything */}
       <DateRangePicker
         visible={datePickerItemId !== null}
+        productId={activeBagItem?.productId ?? ''}
+        totalStock={(() => {
+          const p = activeBagItem ? productMap[activeBagItem.productId] : undefined;
+          return p ? effectiveStock(p) : 1;
+        })()}
         initialPickupAt={activeBagItem?.pickupAt?.toDate() ?? null}
         initialReturnAt={activeBagItem?.returnAt?.toDate() ?? null}
         onClose={() => setDatePickerItemId(null)}
@@ -569,6 +614,24 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
+  },
+  sameDatesBtn: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    backgroundColor: COLORS.warmBeige,
+    marginBottom: 12,
+  },
+  sameDatesBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.carbon,
   },
 
   // Item card

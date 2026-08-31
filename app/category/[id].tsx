@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getProductsByCategory, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
 import { Product, CATEGORIES, CATEGORY_DETAILS, ProductCategory } from '@/lib/mockData';
 import { getMinPrice } from '@/utils/pricing';
+import { effectiveStock } from '@/utils/availability';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
 import { useLoyaltyTier } from '@/lib/loyalty';
@@ -223,7 +224,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
               {product.tag}
             </Text>
           </View>
-        ) : product.stockLeft <= 1 ? (
+        ) : effectiveStock(product) <= 1 ? (
           <View style={[styles.prodTag, { backgroundColor: '#C8412C' }]}>
             <Text style={[styles.prodTagText, { color: '#FAFAF7' }]}>1 LEFT</Text>
           </View>
@@ -475,6 +476,7 @@ const styles = StyleSheet.create({
   },
   prodMeta: {
     padding: 12,
+    height: 80,
   },
   prodName: {
     fontSize: 13,
