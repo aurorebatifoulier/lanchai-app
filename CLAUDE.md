@@ -20,6 +20,13 @@ and young professionals.
 - Language: **TypeScript**.
 - Backend: **Firebase** — Firestore + Authentication. **Region: `asia-southeast1`**
   (keep all Firebase config consistent with this region).
+- Cloud Functions (`functions/`): **Node.js 22** runtime (`functions/package.json`'s
+  `engines.node` — the sole place the runtime is pinned; `firebase.json` has no
+  separate runtime override, confirmed via search). Migrated from Node 20 in
+  2026-08 ahead of its 2026-10-30 deprecation. `firebase-admin@12.7.0`/
+  `firebase-functions@7.3.2` both only declare a lower-bound `engines.node` (no
+  upper cap), so future dependency bumps here are unlikely to block a future
+  runtime bump either — still worth a quick `engines` check before the next one.
 - Linting: ESLint (`eslint.config.js`).
 - Tested on a physical Android device (Samsung S25 Ultra) via **Expo Go**.
 - Repo: `aurorebatifoulier/lanchai-app`, default branch `master`.
