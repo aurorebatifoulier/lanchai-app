@@ -61,63 +61,46 @@ Follow these strictly for any UI work.
 
 ## What's already built
 
-- **Home:** carousel, categories, content sections.
-- **Explore / Catalogue:** product grid, filters, sort, active-filter chips,
-  favorites, "New" badges, shared SearchBar, empty state with a "Request this item"
-  action that writes to the Firestore `requests` collection.
-- **Chat:** real-time messaging via Firestore; admin inbox with an unread badge.
-- **Authentication:** real Firebase Auth.
-- Firestore security rules + an `admins` collection.
-- **Product Detail screen:** five per-day pricing tiers, availability chip, badge
-  types, multi-photo carousel, Google Maps directions link.
+Renter and admin surfaces are both essentially feature-complete — see
+`docs/STATUS_REPORT_2026-10.md` for the full file-by-file inventory (a point-in-time
+audit; re-verify anything load-bearing against the actual code rather than trusting
+a snapshot indefinitely).
+
+- **Renter:** Home, Explore/Catalogue (filters, sort, search, favorites), product
+  detail, booking flow (single-item + multi-item Bag), My Rentals (cancellation, QR
+  codes, downloadable PDF receipt), reviews (submission screen + `averageRating`
+  recompute — fully built, see below), favorites, chat (text/image/video), in-app
+  notifications, loyalty (points/tiers/coupons + tier-gated early access/exclusive
+  access), BtoB accounts, claims/disputes, onboarding, account management (incl.
+  deletion, password change, email verification).
+- **Admin:** products, reservations, inventory/stock dashboard, admin calendar,
+  handover/return checklists (single-item + chained multi-item), damage/loss/late
+  assessment, return closeout + settlement + PDF receipt, multi-currency deposits,
+  exchange-rate/VAT settings, reviews moderation, broadcasts, BtoB validation, claims
+  handling.
+- **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
+  cross-checked against every collection/subcollection actually used in code with no
+  gaps found), 9 Cloud Functions (scheduled + Firestore-triggered, Node 22). The
+  project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
+  claim evidence, product photos, profile photos, business documents) and Cloud
+  Functions are live in production, not just configured. Do not reintroduce a
+  "treat Storage/Functions as unavailable" assumption anywhere in this codebase.
+- **Reviews → `averageRating`** (previously tracked here as a future roadmap item —
+  it's done): submission screen at `app/review/[productId].tsx`, `submitReview()`
+  (`lib/firestore.ts`) writes to `reviews/{productId}/reviews/{reservationId}` and
+  recomputes `averageRating`/`reviewCount` client-side (no Cloud Function — fine,
+  since Blaze doesn't require one here, it's just how it was built), the "How was
+  your rental?" notification already deep-links to `/review/{productId}`, Firestore
+  rules already cover the collection, and all 4 rating-display sites already read
+  `product.averageRating`. Admin moderation (`app/admin/reviews.tsx`) uses the
+  documented per-product-loop workaround, not `collectionGroup` (see Gotchas below).
 
 ## Not built yet (roadmap)
 
-- Booking / reservation flow.
-- Admin back-office for entering real products.
-- Push notifications and photo uploads — **require the Firebase Blaze (paid) plan**,
-  so treat them as unavailable on the current plan unless told otherwise.
-
-## Fonctionnalités à construire (sessions futures)
-
-> Ces éléments ont été identifiés et partiellement préparés mais **ne sont pas encore implémentés**.
-> Chaque entrée est un chantier distinct, à traiter en session dédiée avec Plan mode.
-
----
-
-### 🔲 Système de reviews → averageRating (boucle complète)
-
-**Contexte :** L'infrastructure de base est en place — le filtre rating dans l'Explore
-utilise `averageRating` et les affichages UI sont conditionnels (`product.rating != null`).
-Mais aucun write path n'existe : les avis ne sont jamais enregistrés, `averageRating` n'est
-jamais calculé. Les 5 pièces manquantes à construire en une seule session :
-
-1. **Écran de soumission d'avis** — formulaire étoiles + commentaire, écrit dans
-   `reviews/{productId}/items/{reviewId}` (sous-collection Firestore). Accessible
-   depuis l'historique de locations (`/rentals/{id}`) une fois le statut `returned`.
-
-2. **Recalcul de `averageRating` + `reviewCount`** — après chaque écriture de review,
-   lire tous les ratings de la sous-collection pour ce produit, recalculer la moyenne,
-   et mettre à jour le doc produit avec `updateDoc(productRef, { averageRating, reviewCount })`.
-   Côté client (pas de Cloud Function) tant qu'on est sur le plan Spark.
-
-3. **Règles Firestore pour la collection `reviews`** — utilisateur authentifié peut créer
-   (`allow create: if request.auth != null`), propriétaire de l'avis peut supprimer,
-   personne ne peut modifier (pas de `allow update`). À ajouter dans `firestore.rules`
-   **et** à copier-coller manuellement dans la console Firebase.
-
-4. **Rewirer la notification "How was your rental?"** — le `deepLink` actuel dans
-   `app/admin/reservations/[id].tsx` (trigger `returned`) pointe vers `/rentals/{id}`.
-   Le remplacer par `/review/{productId}?reservationId={id}` une fois l'écran créé.
-
-5. **Migrer les 4 affichages de rating** — une fois `averageRating` effectivement écrit
-   en base, remplacer `product.rating` par `product.averageRating` dans :
-   - `app/(tabs)/index.tsx:319`
-   - `app/category/[id].tsx:178`
-   - `app/product/[id].tsx:202` (header)
-   - `app/product/[id].tsx:302` (section Reviews)
-
----
+- **Device push notifications** (FCM / `expo-notifications`) — not implemented.
+  This is distinct from the in-app, Firestore-backed notification inbox
+  (`notifications/{uid}/items`, `app/notifications.tsx`), which is already built and
+  working — this item is specifically about OS-level push when the app isn't open.
 
 ## Key product decisions
 
@@ -133,7 +116,10 @@ jamais calculé. Les 5 pièces manquantes à construire en une seule session :
   this whenever rules change.
 - **Firebase region** is `asia-southeast1` — don't introduce config that assumes a
   different region.
-- **Blaze plan** gates push notifications and photo uploads.
+- **Firebase plan is Blaze (paid), not Spark.** Storage uploads and Cloud Functions
+  are live in production. Device push notifications (FCM) are still genuinely
+  unbuilt, but that's a missing-feature gap, not a plan restriction — see "Not built
+  yet" above.
 - **`Timestamp.now()` vs `serverTimestamp()`:** default to `serverTimestamp()`
   everywhere, including inside `writeBatch`es on plain top-level fields — this
   codebase's own `submitChecklistBatch`, `cancelReservations`, and the
