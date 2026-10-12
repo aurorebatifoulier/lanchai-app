@@ -21,6 +21,8 @@ import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
+import { DEFAULT_FILTERS, type Filters } from '@/lib/filterConfig';
+import { filterProducts, sortProducts, sortProductsByRating } from '@/utils/productFilters';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -86,6 +88,19 @@ export default function CategoryScreen() {
 
   const subFilters = ['All', 'Available now', 'Best rated', 'Lowest price'];
 
+  // Reuses the exact same filtering/sorting rules as app/(tabs)/explore.tsx (see
+  // utils/productFilters.ts) — no second, divergent implementation. Category is
+  // already server-scoped via getProductsByCategory, so only `availableOnly` and a
+  // sort are needed here; "All" is the neutral/reset state and leaves the
+  // Firestore-returned order untouched, matching this chip row's original intent.
+  const displayedProducts = (() => {
+    const filters: Filters = { ...DEFAULT_FILTERS, availableOnly: activeFilter === 'Available now' };
+    const matched = filterProducts(products, filters);
+    if (activeFilter === 'Best rated') return sortProductsByRating(matched);
+    if (activeFilter === 'Lowest price') return sortProducts(matched, 'price-asc');
+    return matched;
+  })();
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Hero */}
@@ -141,7 +156,7 @@ export default function CategoryScreen() {
 
       {/* Toolbar */}
       <View style={styles.toolbar}>
-        <Text style={styles.toolbarCount}>{products.length} items</Text>
+        <Text style={styles.toolbarCount}>{displayedProducts.length} items</Text>
         <View style={styles.toolbarRight}>
           <TouchableOpacity style={styles.toolbarBtn}>
             <Feather name="sliders" size={14} color={COLORS.fg2} />
@@ -169,10 +184,16 @@ export default function CategoryScreen() {
           <Text style={styles.emptyStateTitle}>No items yet</Text>
           <Text style={styles.emptyStateSub}>Check back soon — we're adding more.</Text>
         </View>
+      ) : displayedProducts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Feather name="filter" size={28} color={COLORS.fg3} />
+          <Text style={styles.emptyStateTitle}>No items match this filter</Text>
+          <Text style={styles.emptyStateSub}>Try "All" to see everything in this category.</Text>
+        </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.gridContent}>
           <View style={styles.grid}>
-            {products.map(p => (
+            {displayedProducts.map(p => (
               <CategoryProductCard
                 key={p.id}
                 product={p}

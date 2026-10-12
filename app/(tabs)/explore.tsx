@@ -36,6 +36,7 @@ import {
   SORT_LABELS,
   DEFAULT_FILTERS,
 } from '@/lib/filterConfig';
+import { filterProducts, sortProducts } from '@/utils/productFilters';
 import { getMinPrice } from '@/utils/pricing';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { useLoyaltyTier } from '@/lib/loyalty';
@@ -238,53 +239,13 @@ export default function ExploreScreen() {
   }, [activeCategory, filters, searchQuery]);
 
   const filteredProducts = useMemo(() => {
-    let list = [...allProducts];
-
-    if (activeCategory !== 'all') list = list.filter(p => p.category === activeCategory);
-    if (filters.availableOnly)    list = list.filter(p => p.available);
-
-    // Price range (always on pricePerDay = 1–2 day base rate). PRICE_CONFIG /
-    // filters.priceMin/Max are LAK-denominated (the filter UI), while pricePerDay is
-    // USD — convert before comparing. Skipped while the rate hasn't loaded yet.
-    if (exchangeRate != null) {
-      if (filters.priceMin > PRICE_CONFIG.min) {
-        list = list.filter(p => toLak(p.pricePerDay, exchangeRate) >= filters.priceMin);
-      }
-      if (filters.priceMax < PRICE_CONFIG.max) {
-        list = list.filter(p => toLak(p.pricePerDay, exchangeRate) <= filters.priceMax);
-      }
-    }
-
-    // Rating
-    if (filters.minRating > 0) {
-      list = list.filter(p => p.averageRating != null && p.averageRating >= filters.minRating);
-    }
-
-    // Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(p => {
-        const catName = EXPLORE_CATEGORIES.find(c => c.id === p.category)?.name ?? '';
-        return p.name.toLowerCase().includes(q) || catName.toLowerCase().includes(q);
-      });
-    }
-
-    // Sort (price sorts use pricePerDay)
-    switch (filters.sort) {
-      case 'popular':
-        list.sort((a, b) => (b.bookingsCount ?? b.rentalCount ?? 0) - (a.bookingsCount ?? a.rentalCount ?? 0));
-        break;
-      case 'price-asc':
-        list.sort((a, b) => a.pricePerDay - b.pricePerDay);
-        break;
-      case 'price-desc':
-        list.sort((a, b) => b.pricePerDay - a.pricePerDay);
-        break;
-      case 'newest':
-        list.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-        break;
-    }
-    return list;
+    const matched = filterProducts(allProducts, filters, {
+      category: activeCategory,
+      searchQuery,
+      exchangeRate,
+      categories: EXPLORE_CATEGORIES,
+    });
+    return sortProducts(matched, filters.sort);
   }, [allProducts, activeCategory, filters, searchQuery, exchangeRate]);
 
   // ── Render ────────────────────────────────────────────────────────────────
