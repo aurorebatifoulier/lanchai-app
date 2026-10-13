@@ -14,6 +14,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import BookingHoldNotice from '@/components/BookingHoldNotice';
+import { useBookingHold, BookingHoldError } from '@/lib/bookingHold';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
 import {
@@ -82,6 +84,7 @@ export default function BagSummaryScreen() {
   const [cancelPolicyOpen, setCancelPolicyOpen] = useState(false);
   const [agreed,      setAgreed]      = useState(false);
   const [submitting,  setSubmitting]  = useState(false);
+  const bookingHold = useBookingHold();
   const [error,       setError]       = useState<string | null>(null);
   const [docRequired, setDocRequired] = useState(false);
 
@@ -256,8 +259,10 @@ export default function BagSummaryScreen() {
         pathname: '/booking/confirmation',
         params: { orderId },
       });
-    } catch {
-      setError('Could not submit your reservation. Please try again.');
+    } catch (err) {
+      setError(err instanceof BookingHoldError
+        ? 'New bookings are paused for your account — see the message above.'
+        : 'Could not submit your reservation. Please try again.');
       setSubmitting(false);
     }
   };
@@ -307,6 +312,8 @@ export default function BagSummaryScreen() {
         contentContainerStyle={[s.content, { paddingBottom: 120 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
+        {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 16 }} />}
+
         {/* ── Item cards ── */}
         <Text style={s.sectionLabel}>
           {items.length} item{items.length !== 1 ? 's' : ''} in your order
@@ -489,9 +496,9 @@ export default function BagSummaryScreen() {
       {/* ── Footer CTA ── */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
-          style={[s.cta, (!agreed || submitting) && s.ctaOff]}
+          style={[s.cta, (!agreed || submitting || !!bookingHold) && s.ctaOff]}
           onPress={handleConfirm}
-          disabled={!agreed || submitting}
+          disabled={!agreed || submitting || !!bookingHold}
           activeOpacity={0.85}
         >
           {submitting ? (

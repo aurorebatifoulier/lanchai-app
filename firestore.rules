@@ -110,9 +110,14 @@ service cloud.firestore {
       // (a stale/invalid reservation link would otherwise throw instead of
       // resolving to "not found").
       allow read:   if resource == null || isOwner(resource.data.renterId) || isAdmin();
+      // bookingHolds/{uid} (server-written by syncBookingHold) blocks new bookings while
+      // the renter has an overdue return or an unpaid balance — enforced HERE, not only
+      // in the app. Admins are never blocked.
       allow create: if isAuthed() &&
                         request.resource.data.renterId == request.auth.uid &&
-                        request.resource.data.status == 'pending_payment';
+                        request.resource.data.status == 'pending_payment' &&
+                        (isAdmin() ||
+                         !exists(/databases/$(database)/documents/bookingHolds/$(request.auth.uid)));
 
       // Admins may update anything. Renters may only cancel their own
       // reservation (status → 'cancelled') — no other field may change.
@@ -275,11 +280,20 @@ service cloud.firestore {
     }
 
     // ── config ───────────────────────────────────────────────────────────
-    // Read-only for all authenticated users (e.g. config/shop).
-    // Only admins may create or update config documents.
+    // Read-only for all authenticated users (e.g. config/shop) — EXCEPT
+    // config/latePolicy (internal late-return grace period), which renters must never
+    // be able to read. Only admins may create or update config documents.
     match /config/{docId} {
-      allow read:  if isAuthed();
+      allow read:  if (isAuthed() && docId != 'latePolicy') || isAdmin();
       allow write: if isAdmin();
+    }
+
+    // ── bookingHolds/{uid} ───────────────────────────────────────────────
+    // Written only by the syncBookingHold Cloud Function (Admin SDK, bypasses rules).
+    // The renter reads their own to explain why booking is paused; never client-writable.
+    match /bookingHolds/{uid} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow write: if false;
     }
 
     // ── notifications/{userId}/items ─────────────────────────────────────

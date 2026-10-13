@@ -19,6 +19,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { db, storage } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { useGraceHours } from '@/lib/latePolicy';
+import { computeLatePenalty, formatPenaltyDays } from '@/functions/src/shared/latePenalty';
 import {
   getReservationById,
   getUserProfile,
@@ -79,6 +81,7 @@ export default function ChecklistScreen() {
   const insets = useSafeAreaInsets();
   const exchangeRate = useExchangeRate();
   const thbRate = useThbRate();
+  const graceHours = useGraceHours();
 
   const [reservation,    setReservation]    = useState<RentalDoc | null>(null);
   const [product,        setProduct]        = useState<Product | null>(null);
@@ -192,14 +195,27 @@ export default function ChecklistScreen() {
   // missing exchange rate, or no valid override entered) — blocks submit.
   const chargeUnresolved = chargePercent != null && chargeAmount === null;
 
-  // ── Late-return penalty — fully independent line item, driven by the Cloud
-  // Function-owned `latePenaltyAmount` (always LAK, indicative-only). Staff confirms
-  // (or overrides) it here, on return, freezing it into its own separate field —
-  // never merged with the damage charge above.
-  const hasLatePenalty = type === 'return' && (reservation?.latePenaltyAmount ?? 0) > 0;
+  // ── Late-return penalty — fully independent line item. The suggestion is computed
+  // live here with the shared computeLatePenalty (same function as the Cloud Function),
+  // so it's exact at the moment of return rather than up to 15 min stale. Staff confirm,
+  // lower, or waive it (0) here, freezing it into its own separate field — never merged
+  // with the damage charge above, never applied without this confirmation.
+  const latePenalty = type === 'return' && reservation
+    ? computeLatePenalty({
+        returnAtMs:  reservation.returnAt.toMillis(),
+        nowMs:       Date.now(),
+        pricePerDay: reservation.pricePerDay,
+        quantity:    reservation.quantity,
+        graceHours,
+      })
+    : null;
+  const hasLatePenalty = latePenalty != null && latePenalty.stage !== 'onTime';
+  const withinGrace    = latePenalty?.stage === 'grace';
   const defaultLateChargeAmount: number | null =
     hasLatePenalty && depositCurrency != null
-      ? convertLakTo(reservation!.latePenaltyAmount!, depositCurrency, exchangeRate, thbRate)
+      ? (latePenalty!.amountLak > 0
+          ? convertLakTo(latePenalty!.amountLak, depositCurrency, exchangeRate, thbRate)
+          : 0)
       : null;
 
   useEffect(() => {
@@ -208,11 +224,14 @@ export default function ChecklistScreen() {
     }
   }, [defaultLateChargeAmount, lateChargeAmountTouched]);
 
-  const parsedLateChargeAmount = parseFloat(lateChargeAmountInput);
-  const lateChargeAmount = hasLatePenalty && !isNaN(parsedLateChargeAmount) && parsedLateChargeAmount > 0
+  // 0 is a valid, explicit waiver (no lateCharge* fields written); only an empty or
+  // non-numeric input blocks submit.
+  const parsedLateChargeAmount = lateChargeAmountInput.trim() === '' ? NaN : parseFloat(lateChargeAmountInput);
+  const lateChargeValid = hasLatePenalty && !isNaN(parsedLateChargeAmount) && parsedLateChargeAmount >= 0;
+  const lateChargeAmount = lateChargeValid && parsedLateChargeAmount > 0
     ? Math.ceil(parsedLateChargeAmount)
     : null;
-  const lateChargeUnresolved = hasLatePenalty && lateChargeAmount === null;
+  const lateChargeUnresolved = hasLatePenalty && !lateChargeValid;
 
   // Reason text + combined totals — derived once here so both the Firestore write
   // (handleSubmit) and the post-submit confirmation screen read the exact same values,
@@ -222,7 +241,7 @@ export default function ChecklistScreen() {
     : null;
   const lateChargeReason = (lateChargeAmount != null && reservation)
     ? (() => {
-        const hoursLate = Math.floor((Date.now() - reservation.returnAt.toMillis()) / 3_600_000);
+        const hoursLate = Math.floor(latePenalty?.hoursLate ?? 0);
         return hoursLate > 0 ? `Returned ${hoursLate}h late` : 'Late return penalty';
       })()
     : null;
@@ -777,7 +796,11 @@ export default function ChecklistScreen() {
                 </Text>
               ) : (
                 <>
-                  <Text style={styles.chargeHintText}>Late return penalty — indicative, confirm below</Text>
+                  <Text style={styles.chargeHintText}>
+                    {withinGrace
+                      ? `Late return — ${Math.floor(latePenalty!.hoursLate * 60)} min late, within grace period · no penalty suggested`
+                      : `Late return penalty — ${Math.floor(latePenalty!.hoursLate)}h late · ${formatPenaltyDays(latePenalty!.days)} × ${reservation!.pricePerDay.toLocaleString('en-US')} LAK × ${reservation!.quantity} = ${latePenalty!.amountLak.toLocaleString('en-US')} LAK suggested. Lower it, or enter 0 to waive.`}
+                  </Text>
                   <View style={styles.numRow}>
                     <TextInput
                       style={[styles.nameInput, { flex: 1, marginBottom: 0 }]}

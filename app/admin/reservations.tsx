@@ -17,7 +17,7 @@ import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { confirmReservationsPayment, type ReservationStatus } from '@/lib/firestore';
-import { overdueSeverity } from '@/utils/overdue';
+import { overdueSeverity, overdueChipColors } from '@/utils/overdue';
 import DateFilterSheet from '@/components/DateFilterSheet';
 import {
   DateFilterState,
@@ -422,8 +422,8 @@ export default function AdminReservationsScreen() {
                           const sev = overdueSeverity(row.returnAt!);
                           return {
                             label: 'Overdue',
-                            bg: sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FEE2E2'     : COLORS.amberTint,
-                            fg: sev === 'severe' ? '#FFFFFF'     : sev === 'moderate' ? COLORS.danger : COLORS.amberTintText,
+                            bg: overdueChipColors(sev).bg,
+                            fg: overdueChipColors(sev).fg,
                           };
                         })()
                       : STATUS_CONFIG[row.status] ?? STATUS_CONFIG.pending_payment;
@@ -470,8 +470,8 @@ export default function AdminReservationsScreen() {
                   const sev = overdueSeverity(entry.row.returnAt!);
                   return {
                     label: 'Overdue',
-                    bg: sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FEE2E2'     : COLORS.amberTint,
-                    fg: sev === 'severe' ? '#FFFFFF'     : sev === 'moderate' ? COLORS.danger : COLORS.amberTintText,
+                    bg: overdueChipColors(sev).bg,
+                    fg: overdueChipColors(sev).fg,
                   };
                 })()
               : STATUS_CONFIG[entry.row.status] ?? STATUS_CONFIG.pending_payment;

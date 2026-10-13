@@ -15,6 +15,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import BookingHoldNotice from '@/components/BookingHoldNotice';
+import { useBookingHold } from '@/lib/bookingHold';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
 import { getProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
@@ -53,6 +55,7 @@ export default function BookingNewScreen() {
   const insets = useSafeAreaInsets();
 
   const shop = useShopInfo();
+  const bookingHold = useBookingHold();
   const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
   const exchangeRate = useExchangeRate();
   const vatPercent = useVatPercent();
@@ -122,7 +125,8 @@ export default function BookingNewScreen() {
 
   const ready =
     !!startDate && !!endDate && !!pickupTime && !!returnTime &&
-    isReturnValid && quantity >= 1 && availableStock > 0 && dayRateLak !== null;
+    isReturnValid && quantity >= 1 && availableStock > 0 && dayRateLak !== null &&
+    !bookingHold;
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const openDateModal = () => setShowDateModal(true);
@@ -232,6 +236,7 @@ export default function BookingNewScreen() {
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
       >
+        {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 16 }} />}
 
         {/* ══ DATES & TIMES ═══════════════════════════════════════════════════ */}
         <Text style={s.sectionLabel}>DATES & TIMES</Text>

@@ -18,7 +18,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { overdueSeverity, overdueLabel } from '@/utils/overdue';
+import { overdueSeverity, overdueLabel, overdueChipColors } from '@/utils/overdue';
 import {
   RentalDoc,
   AdminTask,
@@ -101,9 +101,7 @@ function ReservationRow({ item, type, profile, onPress }: {
         <Text style={rr.product} numberOfLines={1}>{item.productName}</Text>
         {timeLabel ? <Text style={rr.timeLabel} numberOfLines={1}>{timeLabel}</Text> : null}
         {overdueChip ? (() => {
-          const bg  = overdueChip.sev === 'severe' ? COLORS.danger : overdueChip.sev === 'moderate' ? '#FEE2E2'     : COLORS.amberTint;
-          const bdr = overdueChip.sev === 'severe' ? COLORS.danger : overdueChip.sev === 'moderate' ? '#FCA5A5'     : COLORS.amberTintBorder;
-          const txt = overdueChip.sev === 'severe' ? '#FFFFFF'     : overdueChip.sev === 'moderate' ? COLORS.danger : COLORS.amberTintText;
+          const { bg, border: bdr, fg: txt } = overdueChipColors(overdueChip.sev);
           return (
             <View style={[rr.depositChip, { backgroundColor: bg, borderColor: bdr, marginBottom: 4 }]}>
               <Text style={[rr.depositChipText, { color: txt }]}>{overdueChip.label}</Text>

@@ -13,6 +13,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import BookingHoldNotice from '@/components/BookingHoldNotice';
+import { useBookingHold, BookingHoldError } from '@/lib/bookingHold';
 import { auth } from '@/lib/auth';
 import { addReservation, getUserProfile, newOrderId, type UserProfile, type LoyaltyCoupon } from '@/lib/firestore';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
@@ -57,6 +59,7 @@ export default function BookingSummaryScreen() {
   const [cancelPolicyOpen, setCancelPolicyOpen] = useState(false);
   const [agreed,      setAgreed]      = useState(false);
   const [confirming,  setConfirming]  = useState(false);
+  const bookingHold = useBookingHold();
   const [error,       setError]       = useState<string | null>(null);
 
   // ── Loyalty coupon ───────────────────────────────────────────────────────────
@@ -149,8 +152,10 @@ export default function BookingSummaryScreen() {
         pathname: '/booking/confirmation',
         params: { orderId },
       });
-    } catch {
-      setError('Could not confirm your booking. Please try again.');
+    } catch (err) {
+      setError(err instanceof BookingHoldError
+        ? 'New bookings are paused for your account — see the message above.'
+        : 'Could not confirm your booking. Please try again.');
       setConfirming(false);
     }
   };
@@ -172,6 +177,8 @@ export default function BookingSummaryScreen() {
         contentContainerStyle={[s.content, { paddingBottom: 24 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
       >
+        {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 16 }} />}
+
         {/* ── Booking card ── */}
         <View style={s.card}>
           <Text style={s.productName}>{params.productName}</Text>
@@ -346,9 +353,9 @@ export default function BookingSummaryScreen() {
       {/* ── Confirm button ── */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
-          style={[s.confirmBtn, (!agreed || confirming) && s.confirmBtnOff]}
+          style={[s.confirmBtn, (!agreed || confirming || !!bookingHold) && s.confirmBtnOff]}
           onPress={handleConfirm}
-          disabled={!agreed || confirming}
+          disabled={!agreed || confirming || !!bookingHold}
           activeOpacity={0.85}
         >
           {confirming ? (

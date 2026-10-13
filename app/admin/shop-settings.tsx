@@ -24,7 +24,9 @@ import {
   isValidWhatsappNumber,
   type ShopInfo,
 } from '@/lib/shop';
+import { DEFAULT_LATE_GRACE_HOURS } from '@/functions/src/shared/latePenalty';
 import { parseHHMM, buildTimeSlots } from '@/utils/timeSlots';
+import { getGraceHours, saveGraceHours } from '@/lib/latePolicy';
 
 interface Form {
   name: string;
@@ -35,9 +37,10 @@ interface Form {
   closeTime: string;
   lastPickupOffsetMin: string;
   whatsappNumber: string;
+  graceHours: string;
 }
 
-const toForm = (shop: ShopInfo): Form => ({
+const toForm = (shop: ShopInfo, graceHours: number): Form => ({
   name:                shop.name,
   addressLine:         shop.addressLine,
   city:                shop.city,
@@ -46,6 +49,7 @@ const toForm = (shop: ShopInfo): Form => ({
   closeTime:           shop.closeTime,
   lastPickupOffsetMin: String(shop.lastPickupOffsetMin),
   whatsappNumber:      shop.whatsappNumber,
+  graceHours:          String(graceHours),
 });
 
 // Returns the first validation error, or null if the form can be saved.
@@ -63,6 +67,10 @@ function validate(f: Form): string | null {
   const wa = normalizeWhatsappNumber(f.whatsappNumber);
   if (wa && !isValidWhatsappNumber(wa)) {
     return 'WhatsApp number must be in international format with the country code, e.g. 8562012345678.';
+  }
+  const grace = Number(f.graceHours);
+  if (f.graceHours.trim() === '' || !Number.isFinite(grace) || grace < 0 || grace >= 24) {
+    return 'Grace period must be a number of hours from 0 to less than 24 (e.g. 2).';
   }
   return null;
 }
@@ -108,18 +116,19 @@ export default function AdminShopSettingsScreen() {
 
   const [loading,    setLoading]    = useState(true);
   const [configured, setConfigured] = useState(false);
-  const [form,       setForm]       = useState<Form>(toForm(SHOP_FALLBACK));
+  const [form,       setForm]       = useState<Form>(toForm(SHOP_FALLBACK, DEFAULT_LATE_GRACE_HOURS));
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [saved,      setSaved]      = useState(false);
 
   useEffect(() => {
-    getDoc(doc(db, 'config', 'shop'))
-      .then(snap => {
-        if (snap.exists()) {
-          setConfigured(true);
-          setForm(toForm({ ...SHOP_FALLBACK, ...(snap.data() as Partial<ShopInfo>) }));
-        }
+    Promise.all([getDoc(doc(db, 'config', 'shop')), getGraceHours()])
+      .then(([snap, graceHours]) => {
+        if (snap.exists()) setConfigured(true);
+        setForm(toForm(
+          snap.exists() ? { ...SHOP_FALLBACK, ...(snap.data() as Partial<ShopInfo>) } : SHOP_FALLBACK,
+          graceHours,
+        ));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -150,6 +159,7 @@ export default function AdminShopSettingsScreen() {
         lastPickupOffsetMin: Number(form.lastPickupOffsetMin),
         whatsappNumber:      normalizeWhatsappNumber(form.whatsappNumber),
       });
+      await saveGraceHours(Number(form.graceHours));
       setForm(prev => ({ ...prev, whatsappNumber: normalizeWhatsappNumber(prev.whatsappNumber) }));
       setConfigured(true);
       setSaved(true);
@@ -250,6 +260,19 @@ export default function AdminShopSettingsScreen() {
                 value={form.whatsappNumber}
                 onChangeText={set('whatsappNumber')}
                 keyboardType="phone-pad"
+                editable={!saving}
+              />
+            </View>
+
+            <View style={s.section}>
+              <Text style={s.sectionLabel}>Late returns</Text>
+              <Field
+                label="Grace period (hours)"
+                hint="Internal only — never shown to renters. Within this delay after the scheduled return time, no late penalty is suggested. Tiers (1 / 1.5 / 2 days) are still counted from the scheduled return time."
+                placeholder="2"
+                value={form.graceHours}
+                onChangeText={set('graceHours')}
+                keyboardType="decimal-pad"
                 editable={!saving}
               />
             </View>

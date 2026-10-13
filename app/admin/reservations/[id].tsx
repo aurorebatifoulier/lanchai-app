@@ -27,7 +27,9 @@ import {
 import type { Product } from '@/lib/mockData';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { overdueSeverity, overdueLabel } from '@/utils/overdue';
+import { useGraceHours } from '@/lib/latePolicy';
+import { computeLatePenalty, formatPenaltyDays } from '@/functions/src/shared/latePenalty';
+import { overdueSeverity, overdueLabel, overdueChipColors } from '@/utils/overdue';
 import { STATUS_CONFIG } from '../reservations';
 import { useExchangeRate, useThbRate, useVatPercent } from '@/lib/exchangeRate';
 import { convertUsdTo } from '@/utils/damageCharge';
@@ -94,6 +96,7 @@ export default function AdminReservationDetailScreen() {
   const [loading,       setLoading]       = useState(true);
   const exchangeRate = useExchangeRate();
   const thbRate       = useThbRate();
+  const graceHours    = useGraceHours();
   const vatPercent    = useVatPercent();
 
   // ── Action state ──────────────────────────────────────────────────────────
@@ -188,12 +191,23 @@ export default function AdminReservationDetailScreen() {
   const parsedLostCharge = parseFloat(lostChargeAmountInput);
   const lostChargeAmount = !isNaN(parsedLostCharge) && parsedLostCharge > 0 ? Math.ceil(parsedLostCharge) : null;
 
-  // Late-return penalty, read-only here (no override — unlike the checklist flow, this
-  // one stays simple) — an item can be both overdue and then reported lost, so it needs
-  // to fold into the combined outstanding balance even though it's never editable in
-  // this particular flow.
-  const lostLateChargeAmount: number | null = (reservation?.latePenaltyAmount ?? 0) > 0
-    ? convertLakTo(reservation!.latePenaltyAmount!, lostChargeCurrency, exchangeRate, thbRate)
+  // Late-return penalty suggestion, computed live with the shared computeLatePenalty
+  // (same function as the Cloud Function). Only meaningful while the item is still out.
+  const latePenalty = reservation && reservation.status === 'active'
+    ? computeLatePenalty({
+        returnAtMs:  reservation.returnAt.toMillis(),
+        nowMs:       Date.now(),
+        pricePerDay: reservation.pricePerDay,
+        quantity:    reservation.quantity,
+        graceHours,
+      })
+    : null;
+
+  // Read-only here (no override — unlike the checklist flow, this one stays simple) —
+  // an item can be both overdue and then reported lost, so it needs to fold into the
+  // combined outstanding balance even though it's never editable in this flow.
+  const lostLateChargeAmount: number | null = (latePenalty?.amountLak ?? 0) > 0
+    ? convertLakTo(latePenalty!.amountLak, lostChargeCurrency, exchangeRate, thbRate)
     : null;
 
   // ── Phone handlers ────────────────────────────────────────────────────────
@@ -328,8 +342,7 @@ export default function AdminReservationDetailScreen() {
         <View style={[d.statusRow, isReturnOverdue && { backgroundColor: '#FFF1F2', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 }]}>
           {isReturnOverdue ? (() => {
             const sev = overdueSeverity(reservation.returnAt);
-            const bg  = sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FEE2E2'     : COLORS.amberTint;
-            const fg  = sev === 'severe' ? '#FFFFFF'     : sev === 'moderate' ? COLORS.danger : COLORS.amberTintText;
+            const { bg, fg } = overdueChipColors(sev);
             return (
               <View style={[d.statusBadge, { backgroundColor: bg }]}>
                 <Text style={[d.statusBadgeText, { color: fg }]}>{overdueLabel(reservation.returnAt)}</Text>
@@ -353,6 +366,27 @@ export default function AdminReservationDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* Late-return state — admin-only, so the internal grace period may be named here. */}
+        {isReturnOverdue && latePenalty && (
+          <View style={d.lateInfo}>
+            {!!reservation.nonReturnAt && (
+              <View style={d.nonReturnBadge}>
+                <Text style={d.nonReturnBadgeText}>Non-return (72h+)</Text>
+              </View>
+            )}
+            <Text style={d.lateInfoText}>
+              {latePenalty.stage === 'grace'
+                ? 'Within grace period — no penalty suggested yet.'
+                : `Suggested late penalty: ${latePenalty.amountLak.toLocaleString('en-US')} LAK (${formatPenaltyDays(latePenalty.days)} × ${reservation.pricePerDay.toLocaleString('en-US')} LAK × ${reservation.quantity}). Confirmed at return — never applied automatically.`}
+            </Text>
+            {!!reservation.nonReturnAt && (
+              <Text style={d.lateInfoText}>
+                {'If the item comes back, use the normal return checklist. If not, use "Report lost/stolen".'}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* ── BOOKING INFO ──────────────────────────────────────────────── */}
         <View style={d.card}>
@@ -1041,6 +1075,10 @@ const d = StyleSheet.create({
   },
   numRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   currencyUnit: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
+  lateInfo:          { gap: 6, marginTop: 8, marginBottom: 4 },
+  lateInfoText:      { fontSize: 12, fontWeight: '500', color: COLORS.fg2, lineHeight: 17 },
+  nonReturnBadge:    { alignSelf: 'flex-start', backgroundColor: COLORS.danger, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  nonReturnBadgeText:{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   readOnlyLateChargeText: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginBottom: 8 },
 
   // Renter contact

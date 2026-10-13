@@ -15,10 +15,11 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { getReservationById, getProduct, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
-import { overdueSeverity, overdueLabel } from '@/utils/overdue';
+import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
 import { Product } from '@/lib/mockData';
 import { sendNotif } from '@/lib/notifications';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
+import WhatsAppButton from '@/components/WhatsAppButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVatPercent } from '@/lib/exchangeRate';
 import { QRThumb } from '@/components/QRThumb';
@@ -225,9 +226,7 @@ export default function RentalDetailScreen() {
 
         {isOverdue ? (() => {
           const sev = overdueSeverity(rental.returnAt);
-          const bg  = sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FEE2E2' : COLORS.amberTint;
-          const bdr = sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FCA5A5' : COLORS.amberTintBorder;
-          const txt = sev === 'severe' ? '#FFFFFF'     : sev === 'moderate' ? COLORS.danger : COLORS.amberTintText;
+          const { bg, border: bdr, fg: txt } = overdueChipColors(sev);
           return (
             <View style={s.overdueBannerWrap}>
               <View style={[s.badge, { backgroundColor: bg, borderColor: bdr, borderWidth: 1, marginBottom: 0 }]}>
@@ -235,8 +234,18 @@ export default function RentalDetailScreen() {
               </View>
               {(rental.latePenaltyAmount ?? 0) > 0 && (
                 <Text style={s.penaltyNote}>
-                  A penalty of {rental.latePenaltyAmount!.toLocaleString('en-US')} LAK may apply, pending confirmation from our team
+                  {renterLateFeeText(rental.latePenaltyAmount!, rental.latePenaltyDays)}
                 </Text>
+              )}
+              {!!rental.nonReturnAt && (
+                <>
+                  <Text style={s.penaltyNote}>
+                    This rental is now more than 72 hours overdue and is treated as a non-return. Your deposit may be kept and our contract procedure applies. Please contact us right away.
+                  </Text>
+                  <WhatsAppButton
+                    message={`Hi LANCHAI, I'm contacting you about my overdue rental (reservation ID: ${rental.id}).`}
+                  />
+                </>
               )}
             </View>
           );

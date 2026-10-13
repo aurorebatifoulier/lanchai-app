@@ -17,6 +17,7 @@ import {
   type WriteBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { getBookingHold, BookingHoldError } from './bookingHold';
 import { Product, ProductCategory } from './mockData';
 
 // Throws on Firestore error — callers must handle.
@@ -179,10 +180,21 @@ export interface RentalDoc {
   deposit: number;
   depositReturned?: boolean;
   returnedAt?: Timestamp;
+  // Late-return escalation — all written by the lateReturnAlerts Cloud Function only.
   lateAlert0h?: boolean;
   lateAlert1h?: boolean;
-  lateAlert2h?: boolean;
+  lateAlertGrace?: boolean;
+  lateAlert24h?: boolean;
+  lateAlert48h?: boolean;
+  lateAlert72h?: boolean;
+  // Suggested penalty (LAK) / rental days, recalculated by the function at each tier via
+  // functions/src/shared/latePenalty.ts. 0 within the internal grace period — renter
+  // screens must only render it when > 0. Never deducted automatically.
   latePenaltyAmount?: number;
+  latePenaltyDays?: number;
+  // Set once the return is > 72h late: flag only — status stays 'active', no automatic
+  // lost/stolen or deduction. Admin decides (normal return, or "Report lost/stolen").
+  nonReturnAt?: Timestamp;
   currency: string;
   notes: string;
   status: ReservationStatus;
@@ -297,6 +309,9 @@ export async function addReservation(data: NewReservationData): Promise<string> 
   if (!data.pricePerDay || data.pricePerDay <= 0 || !data.subtotal || data.subtotal <= 0) {
     throw new Error('Reservation rejected: pricePerDay or subtotal is 0 or unset.');
   }
+  // Client-side mirror of the firestore.rules bookingHolds check (the real enforcement) —
+  // here only to surface a clear BookingHoldError instead of a raw permission-denied.
+  if (await getBookingHold(data.renterId)) throw new BookingHoldError();
   const { pickupAt, returnAt, ...rest } = data;
   const id = `${data.orderId}_1`;
   await setDoc(doc(db, 'reservations', id), {
@@ -349,6 +364,8 @@ export async function addReservationBatch(
       throw new Error(`Reservation rejected: item "${item.productName}" has pricePerDay or subtotal of 0.`);
     }
   }
+  // Same client-side mirror of the rules' bookingHolds check as addReservation.
+  if (items.length > 0 && await getBookingHold(items[0].renterId)) throw new BookingHoldError();
   const batch = writeBatch(db);
   items.forEach((item, i) => {
     const ref = doc(db, 'reservations', `${orderId}_${i + 1}`);

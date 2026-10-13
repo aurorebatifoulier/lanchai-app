@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 9 Cloud Functions (scheduled + Firestore-triggered, Node 22). The
+  gaps found), 10 Cloud Functions (scheduled + Firestore-triggered, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -204,6 +204,37 @@ a snapshot indefinitely).
   `computeAvailableUnits` or any availability computation in that file. If the real
   prep-delay value ever changes, update it there; both display sites derive their
   copy from it rather than hardcoding "2".
+- **Late-return penalty — progressive, single shared calculation.** Rule (FAQ / Terms §9
+  are the source of truth): measured from the scheduled `returnAt`, not cumulative —
+  ]grace;24h] = 1 day, ]24;48h] = 1.5 days, ]48;72h] = 2 days (upper bounds inclusive),
+  capped at 2 days beyond 72h. Base = `reservation.pricePerDay` (booked tier rate,
+  pre-coupon) × `quantity`, rounded UP to the nearest 1,000 LAK. Always a suggestion:
+  staff confirm, lower, or waive (enter 0) it on the return checklist — never deducted
+  automatically.
+  - **`functions/src/shared/latePenalty.ts`** (`computeLatePenalty`) is the ONLY place
+    this is computed. It lives under `functions/` because `firebase deploy` only uploads
+    that folder; the app imports it as `@/functions/src/shared/latePenalty`. Keep it
+    dependency-free. Put any future app↔functions shared logic in `functions/src/shared/`.
+  - **Internal grace period** (default 2h, `config/latePolicy.graceHours`, edited in
+    Admin → Shop settings): within it the suggestion is 0. It must NEVER be visible to
+    renters — no "0 LAK"/"free"/grace wording in any renter screen, notification, FAQ or
+    terms. `config/latePolicy` is admin-read-only in `firestore.rules` (excluded from the
+    renter-readable `config/*` rule); only admin screens use `lib/latePolicy.ts`.
+  - `lateReturnAlerts` recalculates `latePenaltyAmount`/`latePenaltyDays` every run and
+    notifies at 0h/+1h (warnings), end of grace, 24h, 48h, and >72h (sets `nonReturnAt`
+    — a flag only: status stays `active`, no automatic lost/stolen). On catch-up it sends
+    only the highest due alert. Renter screens render the stored amount only when > 0;
+    admin screens (checklist, reservation detail, lost/stolen) compute it live.
+  - `utils/overdue.ts` severities follow the tiers (light ≤24h, moderate ≤48h, high
+    ≤72h, severe >72h); every overdue chip uses `overdueChipColors()`.
+- **Booking hold — new bookings paused on overdue return / unpaid balance.**
+  `bookingHolds/{uid}` is written only by the `syncBookingHold` Cloud Function (on every
+  reservation write): present while the renter has an `active` reservation past the
+  grace period, or `outstandingBalance > 0` not settled/written off. Admins are never
+  held. Enforced server-side by the `reservations` create rule (`!exists(bookingHolds)`),
+  mirrored client-side in `addReservation`/`addReservationBatch` (`BookingHoldError`) and
+  surfaced via `useBookingHold()` + `<BookingHoldNotice>` on `app/booking/new.tsx`,
+  `app/booking/summary.tsx`, `app/bag.tsx` and `app/bag/checkout.tsx`.
 - **Shop config (`config/shop`, `lib/shop.ts`) drives pickup/return slots and WhatsApp.**
   Slots are never hardcoded: every booking flow (single-item `app/booking/new.tsx`, bag
   `components/DateRangePicker.tsx`, and `<DateRangeCalendar>`'s required `timeSlots`

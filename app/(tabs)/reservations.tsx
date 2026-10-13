@@ -16,7 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyReservations, cancelReservations, RentalDoc } from '@/lib/firestore';
-import { overdueSeverity, overdueLabel } from '@/utils/overdue';
+import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
 import { sendNotif } from '@/lib/notifications';
 import DateFilterSheet from '@/components/DateFilterSheet';
 import {
@@ -674,9 +674,7 @@ function RentalCard({
 
       {/* Overdue chip + penalty hint */}
       {isOverdue && sev && (() => {
-        const bg  = sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FEE2E2' : COLORS.amberTint;
-        const bdr = sev === 'severe' ? COLORS.danger : sev === 'moderate' ? '#FCA5A5' : COLORS.amberTintBorder;
-        const txt = sev === 'severe' ? '#FFFFFF'     : sev === 'moderate' ? COLORS.danger : COLORS.amberTintText;
+        const { bg, border: bdr, fg: txt } = overdueChipColors(sev);
         return (
           <View style={s.overdueRow}>
             <View style={[s.overdueChip, { backgroundColor: bg, borderColor: bdr }]}>
@@ -684,7 +682,7 @@ function RentalCard({
             </View>
             {(rental.latePenaltyAmount ?? 0) > 0 && (
               <Text style={s.penaltyHint}>
-                A penalty of {rental.latePenaltyAmount!.toLocaleString('en-US')} LAK may apply
+                {renterLateFeeText(rental.latePenaltyAmount!, rental.latePenaltyDays)}
               </Text>
             )}
           </View>

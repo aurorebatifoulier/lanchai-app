@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import BookingHoldNotice from '@/components/BookingHoldNotice';
+import { useBookingHold } from '@/lib/bookingHold';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   listenBagItems,
@@ -212,6 +214,8 @@ export default function BagScreen() {
     setDatePickerItemId(null);
     try { await updateBagItemDates(user.uid, itemId, pickup, ret); } catch {}
   }, [user, datePickerItemId]);
+
+  const bookingHold = useBookingHold();
 
   const handleCheckout = useCallback(() => {
     router.push('/bag/checkout');
@@ -502,13 +506,14 @@ export default function BagScreen() {
               </>
             )}
 
+            {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 12 }} />}
             <TouchableOpacity
-              style={[s.cta, readyItems.length === 0 && s.ctaOff]}
+              style={[s.cta, (readyItems.length === 0 || !!bookingHold) && s.ctaOff]}
               onPress={handleCheckout}
-              disabled={readyItems.length === 0}
+              disabled={readyItems.length === 0 || !!bookingHold}
               activeOpacity={0.85}
             >
-              <Text style={[s.ctaText, readyItems.length === 0 && s.ctaTextOff]}>
+              <Text style={[s.ctaText, (readyItems.length === 0 || !!bookingHold) && s.ctaTextOff]}>
                 {readyItems.length > 0
                   ? `Reserve ${readyItems.length} item${readyItems.length !== 1 ? 's' : ''}`
                   : 'Set dates to continue'}

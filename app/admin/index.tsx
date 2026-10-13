@@ -65,7 +65,7 @@ const CARDS: HubCard[] = [
     icon: 'shopping-bag',
     iconBg: COLORS.warmBeige,
     title: 'Shop settings',
-    sub: 'Address, hours, pick-up slots, WhatsApp',
+    sub: 'Address, hours, pick-up slots, WhatsApp, late returns',
     route: '/admin/shop-settings',
   },
   {
