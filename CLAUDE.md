@@ -204,6 +204,16 @@ a snapshot indefinitely).
   `computeAvailableUnits` or any availability computation in that file. If the real
   prep-delay value ever changes, update it there; both display sites derive their
   copy from it rather than hardcoding "2".
+- **Shop config (`config/shop`, `lib/shop.ts`) drives pickup/return slots and WhatsApp.**
+  Slots are never hardcoded: every booking flow (single-item `app/booking/new.tsx`, bag
+  `components/DateRangePicker.tsx`, and `<DateRangeCalendar>`'s required `timeSlots`
+  prop) builds them via `getShopTimeSlots(shop)` → `buildTimeSlots(openTime, closeTime,
+  lastPickupOffsetMin)` (`utils/timeSlots.ts`), 30-min steps, falling back to
+  09:00–19:30 when the doc is missing/invalid. `hours` stays free display text only.
+  `whatsappNumber` (digits, international format) feeds the shared
+  `components/WhatsAppButton.tsx`, which renders nothing when it's empty. All of it is
+  edited at `app/admin/shop-settings.tsx`. `components/AdminDateTimePicker.tsx` keeps its
+  own full-day slot list on purpose (staff can log off-hours handovers).
 - **Product stock condition — no per-unit identity, counts only.** Products have no
   concept of individual tracked units anywhere in this codebase — a "5 chairs"
   product is one Firestore document with `stockLeft: 5`, a plain integer. So

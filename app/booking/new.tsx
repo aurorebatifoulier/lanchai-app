@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import { getProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate } from '@/utils/pricing';
-import { useShopInfo } from '@/lib/shop';
+import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
 import { toLak, formatLak } from '@/utils/currency';
 import { PriceLak } from '@/components/PriceLak';
@@ -53,6 +53,7 @@ export default function BookingNewScreen() {
   const insets = useSafeAreaInsets();
 
   const shop = useShopInfo();
+  const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
   const exchangeRate = useExchangeRate();
   const vatPercent = useVatPercent();
   const { user } = useAuth();
@@ -388,6 +389,7 @@ export default function BookingNewScreen() {
               startDate={startDate}
               endDate={endDate}
               onChangeRange={handleChangeRange}
+              timeSlots={timeSlots}
             />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -415,7 +417,7 @@ export default function BookingNewScreen() {
             </View>
             <Text style={s.modalSubtitle}>{shop.name} · {shop.hours}</Text>
             <ScrollView showsVerticalScrollIndicator={false} style={s.timeModalScroll} contentContainerStyle={s.timeModalList}>
-              {getAvailableTimeSlots(startDate).map(slot => {
+              {getAvailableTimeSlots(startDate, timeSlots).map(slot => {
                 const active = pickupTime === slot;
                 return (
                   <TouchableOpacity
@@ -456,7 +458,7 @@ export default function BookingNewScreen() {
             </View>
             <Text style={s.modalSubtitle}>Same shop hours apply · {shop.hours}</Text>
             <ScrollView showsVerticalScrollIndicator={false} style={s.timeModalScroll} contentContainerStyle={s.timeModalList}>
-              {getAvailableTimeSlots(endDate).map(slot => {
+              {getAvailableTimeSlots(endDate, timeSlots).map(slot => {
                 const active = returnTime === slot;
                 return (
                   <TouchableOpacity

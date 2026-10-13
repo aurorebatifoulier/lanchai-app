@@ -18,6 +18,7 @@ import { useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
 import { splitHtVat } from '@/utils/currency';
 import { PICKUP_DELAY_MS } from '@/utils/availability';
 import { BillingSummary } from '@/components/BillingSummary';
+import WhatsAppButton from '@/components/WhatsAppButton';
 
 // ── QR code string formats (documented here for the admin scanner) ─────────────
 // Order-level QR (shown when there are 2+ items in an order):
@@ -182,6 +183,13 @@ export default function BookingConfirmationScreen() {
         </View>
 
         {/* ── Actions ── */}
+        <WhatsAppButton
+          title="Questions about your booking?"
+          message={isSingle
+            ? `Hi LANCHAI, I have a question about my booking (reservation ID: ${reservations[0].id}).`
+            : `Hi LANCHAI, I have a question about my booking (order ID: ${orderId}; reservation IDs: ${reservations.map(r => r.id).join(', ')}).`}
+        />
+
         <TouchableOpacity
           style={s.primaryBtn}
           onPress={() => router.replace('/(tabs)/reservations')}

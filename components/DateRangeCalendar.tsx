@@ -35,6 +35,8 @@ export interface DateRangeCalendarProps {
   onChangeRange: (start: Date | null, end: Date | null) => void;
   /** Defaults to today at local midnight. */
   minDate?: Date;
+  /** Shop pickup/return slots (getShopTimeSlots) — used to dim today once no slot is left. */
+  timeSlots: string[];
 }
 
 export default function DateRangeCalendar({
@@ -44,6 +46,7 @@ export default function DateRangeCalendar({
   endDate,
   onChangeRange,
   minDate,
+  timeSlots,
 }: DateRangeCalendarProps) {
   const today = useMemo(() => startOfDay(minDate ?? new Date()), [minDate]);
 
@@ -130,7 +133,7 @@ export default function DateRangeCalendar({
               const dateKey    = !day.muted ? localDateKey(day.date.getFullYear(), day.date.getMonth(), day.date.getDate()) : null;
               const availToday = dateKey ? monthAvailability[dateKey] : undefined;
               const isPast          = !day.muted && day.date < today;
-              const isTodayNoSlots  = !day.muted && sameDay(day.date, today) && getAvailableTimeSlots(day.date).length === 0;
+              const isTodayNoSlots  = !day.muted && sameDay(day.date, today) && getAvailableTimeSlots(day.date, timeSlots).length === 0;
               // Fully booked only applies to today/future — a past day that also happens to
               // be fully booked still reads as "past" (dimmed), not "taken" (grey fill), since
               // the reason it's unselectable is that it's out of scope, not that it's occupied.

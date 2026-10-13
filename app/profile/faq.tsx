@@ -13,6 +13,7 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useShopInfo } from '@/lib/shop';
+import WhatsAppButton from '@/components/WhatsAppButton';
 
 // ── FAQ content ───────────────────────────────────────────────────────────────
 
@@ -152,6 +153,12 @@ export default function FaqScreen() {
             </View>
           );
         })}
+
+        <WhatsAppButton
+          title="Didn't find your answer?"
+          message="Hi LANCHAI, I couldn't find the answer to my question in the FAQ."
+          style={s.whatsapp}
+        />
       </ScrollView>
     </View>
   );
@@ -248,6 +255,9 @@ const s = StyleSheet.create({
     marginBottom: 12,
     marginTop: 0,
     padding: 13,
+  },
+  whatsapp: {
+    marginTop: 14,
   },
   answerText: {
     fontSize: 13.5,

@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/business-accounts' | '/admin/claims' | '/admin/inventory';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/business-accounts' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings';
 }
 
 const CARDS: HubCard[] = [
@@ -60,6 +60,13 @@ const CARDS: HubCard[] = [
     title: 'Exchange rate',
     sub: 'USD → LAK conversion rate',
     route: '/admin/exchange-rate',
+  },
+  {
+    icon: 'shopping-bag',
+    iconBg: COLORS.warmBeige,
+    title: 'Shop settings',
+    sub: 'Address, hours, pick-up slots, WhatsApp',
+    route: '/admin/shop-settings',
   },
   {
     icon: 'award',

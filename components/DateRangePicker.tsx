@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
-import { useShopInfo } from '@/lib/shop';
+import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { pad, getAvailableTimeSlots } from '@/utils/timeSlots';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
 
@@ -55,6 +55,7 @@ export default function DateRangePicker({
 }: DateRangePickerProps) {
   const insets = useSafeAreaInsets();
   const shop   = useShopInfo();
+  const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
 
   const [page,       setPage]       = useState<Page>('main');
   const [startDate,  setStartDate]  = useState<Date | null>(null);
@@ -123,6 +124,7 @@ export default function DateRangePicker({
         startDate={startDate}
         endDate={endDate}
         onChangeRange={handleChangeRange}
+        timeSlots={timeSlots}
       />
     </>
   );
@@ -134,7 +136,7 @@ export default function DateRangePicker({
       ? `${shop.name} · ${shop.hours}`
       : `Same shop hours · ${shop.hours}`;
     const activeTime = mode === 'pickup' ? pickupTime : returnTime;
-    const availableSlots = getAvailableTimeSlots(mode === 'pickup' ? startDate : endDate);
+    const availableSlots = getAvailableTimeSlots(mode === 'pickup' ? startDate : endDate, timeSlots);
     const onSelect   = (slot: string) => {
       if (mode === 'pickup') {
         setPickupTime(slot);

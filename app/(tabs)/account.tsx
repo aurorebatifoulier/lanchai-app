@@ -19,6 +19,7 @@ import { auth } from '@/lib/auth';
 import { getUserProfile, getMyReservations, getProducts, saveUserProfile, UserProfile } from '@/lib/firestore';
 import { getCustomerTypeConfig } from '@/utils/customerType';
 import { useShopInfo } from '@/lib/shop';
+import WhatsAppButton from '@/components/WhatsAppButton';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
@@ -427,10 +428,14 @@ export default function AccountScreen() {
           <ProfileRow
             icon="message-circle"
             title="Chat with us"
-            sub="Replies in < 5 min"
+            sub="We usually reply within a few hours"
             iconBg={COLORS.amber}
             iconColor={COLORS.carbon}
             onPress={() => router.push('/chat')}
+          />
+          <WhatsAppButton
+            message="Hi LANCHAI, I have a question."
+            style={styles.whatsappInset}
           />
           <ProfileRow
             icon="help-circle"
@@ -771,6 +776,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.fg3,
+  },
+  whatsappInset: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.softGray200,
   },
   soonBadge: {
     backgroundColor: COLORS.softGray200,
