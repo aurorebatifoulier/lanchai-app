@@ -310,7 +310,7 @@ export default function AccountScreen() {
           <View style={styles.statsRow}>
             {/* RENTALS — real count */}
             <View style={[styles.statCard, { flex: 1 }]}>
-              <Text style={styles.statEye}>RENTALS</Text>
+              <Text style={styles.statEye}>Rentals</Text>
               <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>
                 {rentalCount === null ? '—' : String(rentalCount)}
               </Text>
@@ -323,7 +323,7 @@ export default function AccountScreen() {
                 approval status (isBusinessAccount only becomes true once approved) */}
             {!isBtob && (
               <View style={[styles.statCard, { flex: 1 }]}>
-                <Text style={styles.statEye}>TIER</Text>
+                <Text style={styles.statEye}>Tier</Text>
                 <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>
                   {TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
                 </Text>
@@ -338,7 +338,7 @@ export default function AccountScreen() {
               since it can display large LAK figures (e.g. "171,367,040 LAK") */}
           <View style={styles.statsRow}>
             <View style={[styles.statCard, styles.statCardAmber, { flex: 1 }]}>
-              <Text style={[styles.statEye, { color: 'rgba(30,30,30,0.55)' }]}>SAVED</Text>
+              <Text style={[styles.statEye, { color: 'rgba(30,30,30,0.55)' }]}>Saved</Text>
               <Text style={[styles.statVal, { color: COLORS.carbon }]} numberOfLines={1} adjustsFontSizeToFit>
                 {savedAmount ? formatLAK(savedAmount) : '—'}
               </Text>

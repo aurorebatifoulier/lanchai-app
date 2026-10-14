@@ -154,7 +154,7 @@ export default function ClaimScreen() {
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
-          <Text style={styles.stateTitle}>Couldn't load this rental</Text>
+          <Text style={styles.stateTitle}>Couldn&apos;t load this rental</Text>
           <Text style={styles.stateSub}>The reservation may no longer be available.</Text>
         </View>
       </SafeAreaView>
@@ -171,7 +171,7 @@ export default function ClaimScreen() {
           <Feather name="clock" size={36} color={COLORS.amber} />
           <Text style={styles.stateTitle}>You already have an open claim</Text>
           <Text style={styles.stateSub}>
-            We're already looking into an issue you reported for this rental — check the rental
+            We&apos;re already looking into an issue you reported for this rental — check the rental
             details screen for its status.
           </Text>
           <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace(`/rentals/${rental.id}`)}>
@@ -191,7 +191,7 @@ export default function ClaimScreen() {
           <Feather name="check-circle" size={40} color={COLORS.success} />
           <Text style={styles.stateTitle}>Claim submitted</Text>
           <Text style={styles.stateSub}>
-            We've received your report and will get back to you soon.
+            We&apos;ve received your report and will get back to you soon.
           </Text>
           <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/reservations')}>
             <Text style={styles.doneBtnText}>Back to my rentals</Text>
@@ -225,7 +225,7 @@ export default function ClaimScreen() {
           <Text style={styles.productName}>{rental.productName}</Text>
 
           {/* Claim type */}
-          <Text style={styles.fieldLabel}>What's the issue?</Text>
+          <Text style={styles.fieldLabel}>What&apos;s the issue?</Text>
           <View style={styles.typeList}>
             {CLAIM_TYPES.map(opt => {
               const active = type === opt.id;

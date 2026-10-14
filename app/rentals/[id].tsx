@@ -307,14 +307,14 @@ export default function RentalDetailScreen() {
 
         {/* ── Deposit note ── */}
         <Text style={s.depositNote}>
-          Deposit is collected in store at pick-up and refunded on the spot when you return the item, once it's inspected (about 10 minutes).
+          Deposit is collected in store at pick-up and refunded on the spot when you return the item, once it&apos;s inspected (about 10 minutes).
         </Text>
 
         {/* ── Ref ID ── */}
         <Text style={s.refId}>Ref: {rental.id}</Text>
 
         {/* ── Pick-up location ── */}
-        <Text style={s.sectionLabel}>PICK-UP LOCATION</Text>
+        <Text style={s.sectionLabel}>Pick-up location</Text>
         <View style={s.locationCard}>
           <View style={s.locationIcon}>
             <Feather name="map-pin" size={18} color={COLORS.carbon} />
@@ -337,7 +337,7 @@ export default function RentalDetailScreen() {
         {/* ── Notes ── */}
         {!!rental.notes && (
           <>
-            <Text style={s.sectionLabel}>NOTES</Text>
+            <Text style={s.sectionLabel}>Notes</Text>
             <View style={s.notesCard}>
               <Text style={s.notesText}>{rental.notes}</Text>
             </View>
@@ -539,7 +539,7 @@ export default function RentalDetailScreen() {
         {/* ── Claim status ── */}
         {claims.length > 0 && (
           <View style={{ marginTop: 20 }}>
-            <Text style={s.sectionLabel}>YOUR REPORTS</Text>
+            <Text style={s.sectionLabel}>Your reports</Text>
             {claims.map(claim => {
               const st = CLAIM_STATUS_STYLE[claim.status];
               return (

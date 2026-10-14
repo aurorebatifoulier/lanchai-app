@@ -343,7 +343,7 @@ export default function ExploreScreen() {
       ) : loadError ? (
         <View style={styles.loadError}>
           <Feather name="alert-circle" size={28} color={COLORS.fg3} />
-          <Text style={styles.loadErrorTitle}>Couldn't load items</Text>
+          <Text style={styles.loadErrorTitle}>Couldn&apos;t load items</Text>
           <Text style={styles.loadErrorBody}>Check your connection and try again.</Text>
         </View>
       ) : (
@@ -399,7 +399,7 @@ export default function ExploreScreen() {
                 </View>
                 <Text style={styles.requestConfirmTitle}>Request sent!</Text>
                 <Text style={styles.requestConfirmSub}>
-                  We'll look into it and let you know as soon as we can.
+                  We&apos;ll look into it and let you know as soon as we can.
                 </Text>
                 <TouchableOpacity style={[styles.applyBtn, { marginTop: 24 }]} onPress={closeRequest}>
                   <Text style={styles.applyText}>Close</Text>
@@ -408,9 +408,9 @@ export default function ExploreScreen() {
             ) : (
               <>
                 <Text style={styles.requestTitle}>Request an item</Text>
-                <Text style={styles.requestSub}>Can't find what you need? Tell us.</Text>
+                <Text style={styles.requestSub}>Can&apos;t find what you need? Tell us.</Text>
 
-                <Text style={styles.sectionLabel}>WHAT ARE YOU LOOKING FOR?</Text>
+                <Text style={styles.sectionLabel}>What are you looking for?</Text>
                 <TextInput
                   style={styles.requestInput}
                   value={requestText}
@@ -422,7 +422,7 @@ export default function ExploreScreen() {
                   textAlignVertical="top"
                 />
 
-                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>CONTACT (OPTIONAL)</Text>
+                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Contact (optional)</Text>
                 <TextInput
                   style={[styles.requestInput, styles.requestInputSingle]}
                   value={requestContact}
@@ -557,7 +557,7 @@ function SmartEmptyState({
         </View>
         <Text style={styles.emptyTitle}>No items yet</Text>
         <Text style={styles.emptySub}>
-          We're adding new items soon — check back later.
+          We&apos;re adding new items soon — check back later.
         </Text>
         <TouchableOpacity style={styles.requestItemBtn} onPress={onRequestItem}>
           <Text style={styles.requestItemBtnText}>Request this item</Text>

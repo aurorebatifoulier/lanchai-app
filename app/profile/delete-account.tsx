@@ -179,7 +179,7 @@ export default function DeleteAccountScreen() {
           <>
             <View style={s.blockBox}>
               <Feather name="alert-triangle" size={22} color={COLORS.danger} style={s.boxIcon} />
-              <Text style={s.blockTitle}>Couldn't verify your rentals</Text>
+              <Text style={s.blockTitle}>Couldn&apos;t verify your rentals</Text>
               <Text style={s.blockMsg}>
                 Unable to verify your active rentals. Please try again or contact us.
               </Text>
@@ -220,14 +220,14 @@ export default function DeleteAccountScreen() {
           <>
             <View style={s.warnBox}>
               <Feather name="alert-triangle" size={20} color="#7A5F00" style={s.boxIcon} />
-              <Text style={s.warnTitle}>This can't be undone</Text>
+              <Text style={s.warnTitle}>This can&apos;t be undone</Text>
               <Text style={s.warnMsg}>
                 Deleting your account permanently removes your personal information and login. Your
                 rental history is retained as a business record and will not be deleted.
               </Text>
             </View>
 
-            <Text style={s.fieldLabel}>CONFIRM WITH YOUR PASSWORD</Text>
+            <Text style={s.fieldLabel}>Confirm with your password</Text>
             <View style={s.passwordRow}>
               <TextInput
                 style={[s.input, { flex: 1 }]}

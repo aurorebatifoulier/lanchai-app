@@ -245,7 +245,7 @@ export default function ChecklistSummaryScreen() {
         <BackButton onPress={() => router.replace('/admin/reservations')} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
-          <Text style={styles.stateTitle}>Couldn't load this checklist chain</Text>
+          <Text style={styles.stateTitle}>Couldn&apos;t load this checklist chain</Text>
         </View>
       </SafeAreaView>
     );
@@ -348,7 +348,7 @@ export default function ChecklistSummaryScreen() {
           </View>
         ) : currencyMismatch ? (
           <Text style={styles.depositWarningText}>
-            Items in this group don't share the same deposit currency — process them individually.
+            Items in this group don&apos;t share the same deposit currency — process them individually.
           </Text>
         ) : depositCurrency ? (
           <Text style={styles.depositLockedText}>
@@ -356,7 +356,7 @@ export default function ChecklistSummaryScreen() {
           </Text>
         ) : (
           <Text style={styles.depositWarningText}>
-            No handover checklist found — can't determine the deposit currency.
+            No handover checklist found — can&apos;t determine the deposit currency.
           </Text>
         )}
         {depositCurrency && !currencyMismatch && (

@@ -632,7 +632,7 @@ export default function AdminProductFormScreen() {
           )}
 
           {/* ── BASIC INFO ────────────────────────────────────────────── */}
-          <SectionLabel title="BASIC INFO" top />
+          <SectionLabel title="Basic info" top />
 
           <Field label="Name" required error={errors.name}>
             <TextInput
@@ -687,7 +687,7 @@ export default function AdminProductFormScreen() {
           </Field>
 
           {/* ── PRICING ───────────────────────────────────────────────── */}
-          <SectionLabel title="PRICING (USD)" />
+          <SectionLabel title="Pricing (USD)" />
 
           <Field label="Base price / day — 1–2 days" required error={errors.pricePerDay}>
             <View style={f.numRow}>
@@ -758,7 +758,7 @@ export default function AdminProductFormScreen() {
           </Field>
 
           {/* ── INVENTORY ─────────────────────────────────────────────── */}
-          <SectionLabel title="INVENTORY" />
+          <SectionLabel title="Inventory" />
 
           <Field label="Security deposit" required error={errors.deposit}>
             <View style={f.numRow}>
@@ -794,7 +794,7 @@ export default function AdminProductFormScreen() {
           </Field>
 
           {/* ── PHOTOS ────────────────────────────────────────────────── */}
-          <SectionLabel title="PHOTOS" />
+          <SectionLabel title="Photos" />
 
           <TouchableOpacity
             style={[f.addPhotoBtn, uploadItems.length >= 10 && f.addPhotoBtnDisabled]}
@@ -892,10 +892,10 @@ export default function AdminProductFormScreen() {
           </Text>
 
           {/* ── HOME VISIBILITY ───────────────────────────────────── */}
-          <SectionLabel title="HOME VISIBILITY" />
+          <SectionLabel title="Home visibility" />
           <Text style={f.hintBlock}>
             Controls which Home sections this item appears in.{'\n'}
-            "Most rented" is automatic and cannot be set here.
+            &quot;Most rented&quot; is automatic and cannot be set here.
           </Text>
           <CheckboxRow
             label="Popular near you"
@@ -911,7 +911,7 @@ export default function AdminProductFormScreen() {
           />
 
           {/* ── PREMIUM ────────────────────────────────────────────── */}
-          <SectionLabel title="PREMIUM" />
+          <SectionLabel title="Premium" />
           <CheckboxRow
             label="Premium equipment"
             hint='Marks this item as premium: shows a Premium badge on the card and detail page, adds it to the Home Premium section, and applies the non-refundable advance cancellation policy.'
@@ -920,7 +920,7 @@ export default function AdminProductFormScreen() {
           />
 
           {/* ── ACCESS (Loyalty Phase 2) ──────────────────────────── */}
-          <SectionLabel title="ACCESS" />
+          <SectionLabel title="Access" />
           <Text style={f.hintBlock}>
             Products are never hidden — a non-public mode only badges the item and
             disables booking for renters below the minimum tier.
@@ -1066,7 +1066,7 @@ export default function AdminProductFormScreen() {
                     )}
 
                     {/* What's included */}
-                    <Text style={[f.detailsSub, { marginTop: 18 }]}>What's included</Text>
+                    <Text style={[f.detailsSub, { marginTop: 18 }]}>What&apos;s included</Text>
                     {whatsIncluded.map((item, i) => (
                       <View key={i} style={f.listRow}>
                         <TextInput
@@ -1205,7 +1205,7 @@ export default function AdminProductFormScreen() {
           })()}
 
           {/* ── STATUS ────────────────────────────────────────────────── */}
-          <SectionLabel title="STATUS" />
+          <SectionLabel title="Status" />
 
           <View style={f.fieldWrap}>
             <Text style={f.label}>Listing status</Text>
@@ -1256,7 +1256,7 @@ export default function AdminProductFormScreen() {
               to adjust yet) ──────────────────────────────────────────── */}
           {isEdit && (
             <>
-              <SectionLabel title="STOCK CONDITION" />
+              <SectionLabel title="Stock condition" />
 
               <View style={f.fieldWrap}>
                 <View style={f.toggleRow}>

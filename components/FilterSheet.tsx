@@ -114,7 +114,7 @@ export default function FilterSheet({
             contentContainerStyle={styles.sheetBody}
           >
             {/* Price range */}
-            <Text style={styles.sectionLabel}>PRICE RANGE / DAY</Text>
+            <Text style={styles.sectionLabel}>Price range / day</Text>
             <Text style={styles.sliderRangeText}>
               {formatKip(pendingFilters.priceMin)} – {formatKip(pendingFilters.priceMax)} / day
             </Text>
@@ -129,7 +129,7 @@ export default function FilterSheet({
             />
 
             {/* Sort by */}
-            <Text style={styles.sectionLabel}>SORT BY</Text>
+            <Text style={styles.sectionLabel}>Sort by</Text>
             <View style={styles.optionRow}>
               {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([id, label]) => (
                 <TouchableOpacity
@@ -147,7 +147,7 @@ export default function FilterSheet({
             {/* Rating — only when rating data exists */}
             {hasRatingData && (
               <>
-                <Text style={styles.sectionLabel}>RATING</Text>
+                <Text style={styles.sectionLabel}>Rating</Text>
                 <View style={styles.optionRow}>
                   {([
                     { id: 0 as MinRating, label: 'All' },
@@ -170,7 +170,7 @@ export default function FilterSheet({
             )}
 
             {/* Availability */}
-            <Text style={styles.sectionLabel}>AVAILABILITY</Text>
+            <Text style={styles.sectionLabel}>Availability</Text>
             <View style={styles.toggleRow}>
               <Text style={styles.toggleLabel}>Available only</Text>
               <TouchableOpacity

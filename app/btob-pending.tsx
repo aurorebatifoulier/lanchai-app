@@ -33,8 +33,8 @@ export default function BtobPendingScreen() {
         <Text style={s.title}>Your account is pending approval</Text>
         <Text style={s.msg}>
           Thanks for signing up as a business account. Our team is reviewing your
-          application — this usually takes 1–2 business days. You'll be able to use
-          the app as soon as it's approved.
+          application — this usually takes 1–2 business days. You&apos;ll be able to use
+          the app as soon as it&apos;s approved.
         </Text>
 
         {!loading && profile && !profile.btobDocumentUrl && (
@@ -42,7 +42,7 @@ export default function BtobPendingScreen() {
             <Feather name="alert-circle" size={14} color="#854F0B" />
             <View style={{ flex: 1 }}>
               <Text style={s.docReminderText}>
-                Don't forget to upload your business registration document to speed
+                Don&apos;t forget to upload your business registration document to speed
                 up your approval.
               </Text>
               <TouchableOpacity
@@ -60,7 +60,7 @@ export default function BtobPendingScreen() {
           <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />
         ) : profile ? (
           <View style={s.infoBox}>
-            <Text style={s.infoBoxLabel}>SUBMITTED INFORMATION</Text>
+            <Text style={s.infoBoxLabel}>Submitted information</Text>
             <InfoRow label="Company" value={profile.btobCompanyName} />
             <InfoRow label="License / registration number" value={profile.btobLicenseNumber} />
             <InfoRow label="Responsible person" value={profile.btobResponsibleName} />

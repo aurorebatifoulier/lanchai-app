@@ -200,7 +200,7 @@ export default function DateRangePicker({
           onPress={openDates}
           activeOpacity={0.75}
         >
-          <Text style={[s.fieldEye, !!(startDate || endDate) && s.fieldEyeFilled]}>DATES</Text>
+          <Text style={[s.fieldEye, !!(startDate || endDate) && s.fieldEyeFilled]}>Dates</Text>
           <Text style={[s.fieldVal, !!(startDate || endDate) && s.fieldValFilled]}>
             {startDate && endDate
               ? `${fmtFieldDate(startDate)} → ${fmtFieldDate(endDate)}`
@@ -215,7 +215,7 @@ export default function DateRangePicker({
           onPress={() => setPage('pickup-time')}
           activeOpacity={0.75}
         >
-          <Text style={[s.fieldEye, !!pickupTime && s.fieldEyeFilled]}>PICK-UP TIME</Text>
+          <Text style={[s.fieldEye, !!pickupTime && s.fieldEyeFilled]}>Pick-up time</Text>
           <Text style={[s.fieldVal, !!pickupTime && s.fieldValFilled]}>
             {pickupTime ?? 'Select'}
           </Text>
@@ -226,7 +226,7 @@ export default function DateRangePicker({
           onPress={() => setPage('return-time')}
           activeOpacity={0.75}
         >
-          <Text style={[s.fieldEye, !!returnTime && s.fieldEyeFilled]}>RETURN TIME</Text>
+          <Text style={[s.fieldEye, !!returnTime && s.fieldEyeFilled]}>Return time</Text>
           <Text style={[s.fieldVal, !!returnTime && s.fieldValFilled]}>
             {returnTime ?? 'Select'}
           </Text>

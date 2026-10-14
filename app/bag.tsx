@@ -399,7 +399,7 @@ export default function BagScreen() {
               <View style={s.divider} />
               <View style={s.unpricedNotice}>
                 <Feather name="alert-circle" size={13} color={COLORS.fg3} />
-                <Text style={s.unpricedNoticeText}>Pricing not set — this item can't be checked out.</Text>
+                <Text style={s.unpricedNoticeText}>Pricing not set — this item can&apos;t be checked out.</Text>
               </View>
             </>
           )

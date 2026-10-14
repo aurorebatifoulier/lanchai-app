@@ -147,7 +147,7 @@ export default function AdminClaimDetailScreen() {
         </View>
 
         {/* ── Description ── */}
-        <Text style={s.sectionLabel}>DESCRIPTION</Text>
+        <Text style={s.sectionLabel}>Description</Text>
         <View style={s.card}>
           <Text style={s.description}>{claim.description}</Text>
         </View>
@@ -155,7 +155,7 @@ export default function AdminClaimDetailScreen() {
         {/* ── Media ── */}
         {media.length > 0 && (
           <>
-            <Text style={s.sectionLabel}>MEDIA</Text>
+            <Text style={s.sectionLabel}>Media</Text>
             <View style={s.photoGrid}>
               {media.map((item, i) => (
                 <TouchableOpacity key={item.url} onPress={() => setViewerIndex(i)} activeOpacity={0.85}>
@@ -177,7 +177,7 @@ export default function AdminClaimDetailScreen() {
         {/* ── Existing response ── */}
         {claim.adminResponse && (
           <>
-            <Text style={s.sectionLabel}>CURRENT RESPONSE</Text>
+            <Text style={s.sectionLabel}>Current response</Text>
             <View style={s.card}>
               <Text style={s.description}>{claim.adminResponse}</Text>
             </View>
@@ -185,7 +185,7 @@ export default function AdminClaimDetailScreen() {
         )}
 
         {/* ── Respond ── */}
-        <Text style={[s.sectionLabel, { marginTop: 12 }]}>RESPOND</Text>
+        <Text style={[s.sectionLabel, { marginTop: 12 }]}>Respond</Text>
         <View style={s.statusRow}>
           {RESPONSE_STATUS_OPTIONS.map(opt => {
             const active = responseStatus === opt;

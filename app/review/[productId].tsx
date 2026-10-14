@@ -96,7 +96,7 @@ export default function ReviewScreen() {
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
-          <Text style={styles.stateTitle}>Couldn't load this review</Text>
+          <Text style={styles.stateTitle}>Couldn&apos;t load this review</Text>
           <Text style={styles.stateSub}>The product or reservation may no longer be available.</Text>
         </View>
       </SafeAreaView>
@@ -112,7 +112,7 @@ export default function ReviewScreen() {
         <View style={styles.center}>
           <Feather name="check-circle" size={36} color={COLORS.success} />
           <Text style={styles.stateTitle}>Already reviewed</Text>
-          <Text style={styles.stateSub}>You've already left a review for this rental.</Text>
+          <Text style={styles.stateSub}>You&apos;ve already left a review for this rental.</Text>
           <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/reservations')}>
             <Text style={styles.doneBtnText}>Back to my rentals</Text>
           </TouchableOpacity>

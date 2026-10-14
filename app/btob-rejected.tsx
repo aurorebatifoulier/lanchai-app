@@ -32,7 +32,7 @@ export default function BtobRejectedScreen() {
         </View>
         <Text style={s.title}>Your application was not approved</Text>
         <Text style={s.msg}>
-          We couldn't approve your business account. If you think this is a mistake or
+          We couldn&apos;t approve your business account. If you think this is a mistake or
           you can provide more information, please contact us.
         </Text>
 
@@ -41,7 +41,7 @@ export default function BtobRejectedScreen() {
         ) : (
           profile?.btobRejectionReason && (
             <View style={s.reasonBox}>
-              <Text style={s.reasonBoxLabel}>REASON</Text>
+              <Text style={s.reasonBoxLabel}>Reason</Text>
               <Text style={s.reasonText}>{profile.btobRejectionReason}</Text>
             </View>
           )

@@ -56,7 +56,7 @@ export default function LoyaltyScreen() {
       ) : isBusinessAccount ? (
         <View style={[s.emptyBox, { marginHorizontal: 20, marginTop: 20 }]}>
           <Feather name="award" size={20} color={COLORS.fg3} />
-          <Text style={s.emptyText}>Business accounts aren't part of the loyalty program.</Text>
+          <Text style={s.emptyText}>Business accounts aren&apos;t part of the loyalty program.</Text>
         </View>
       ) : (
         <ScrollView
@@ -74,12 +74,12 @@ export default function LoyaltyScreen() {
             {toNext != null && nextTier ? (
               <Text style={s.tierNext}>{toNext} points to {TIER_LABELS[nextTier]}</Text>
             ) : config ? (
-              <Text style={s.tierNext}>You've reached the top tier</Text>
+              <Text style={s.tierNext}>You&apos;ve reached the top tier</Text>
             ) : null}
           </View>
 
           {/* ── Coupons ── */}
-          <Text style={s.sectionLabel}>YOUR COUPONS</Text>
+          <Text style={s.sectionLabel}>Your coupons</Text>
           {unusedCoupons.length === 0 ? (
             <View style={s.emptyBox}>
               <Feather name="tag" size={20} color={COLORS.fg3} />
@@ -100,7 +100,7 @@ export default function LoyaltyScreen() {
           )}
 
           {/* ── How it works ── */}
-          <Text style={s.sectionLabel}>HOW TIERS WORK</Text>
+          <Text style={s.sectionLabel}>How tiers work</Text>
           <View style={s.explainCard}>
             {[
               'Earn 1 point for every 10,000 LAK of rental fees, credited when a rental is completed.',

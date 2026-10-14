@@ -330,7 +330,7 @@ export default function HomeScreen() {
             ) : loadError ? (
               <View style={styles.loadError}>
                 <Feather name="alert-circle" size={14} color={COLORS.danger} />
-                <Text style={styles.loadErrorText}>Couldn't load products. Check your connection and try again.</Text>
+                <Text style={styles.loadErrorText}>Couldn&apos;t load products. Check your connection and try again.</Text>
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>

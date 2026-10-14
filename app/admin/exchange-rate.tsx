@@ -359,7 +359,7 @@ export default function AdminExchangeRateScreen() {
               <Feather name="info" size={13} color={COLORS.amber} />
               <Text style={s.infoText}>
                 Product prices are currently stored in LAK. Setting up USD pricing will
-                convert every product's prices to USD using the rate you enter below, and
+                convert every product&apos;s prices to USD using the rate you enter below, and
                 LAK will be computed live everywhere renters see a price from then on.
               </Text>
             </View>
@@ -464,7 +464,7 @@ export default function AdminExchangeRateScreen() {
 
         {!loading && (
           <View style={s.thbSection}>
-            <Text style={s.sectionLabel}>VAT (BUSINESS ACCOUNTS)</Text>
+            <Text style={s.sectionLabel}>VAT (business accounts)</Text>
             <RateEditor
               displayLabel="VAT rate"
               placeholder="e.g. 10"

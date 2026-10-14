@@ -50,7 +50,7 @@ export default function RentalReceiptScreen() {
       ) : notReady ? (
         <View style={s.errorBox}>
           <Feather name="clock" size={28} color={COLORS.fg3} />
-          <Text style={s.errorText}>The receipt isn't ready yet — it's available once the return is complete and the deposit settled.</Text>
+          <Text style={s.errorText}>The receipt isn&apos;t ready yet — it&apos;s available once the return is complete and the deposit settled.</Text>
         </View>
       ) : (
         <ScrollView

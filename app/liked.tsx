@@ -386,7 +386,7 @@ export default function LikedScreen() {
       {unlikeError && (
         <View style={s.errorBanner}>
           <Feather name="alert-circle" size={14} color={COLORS.danger} />
-          <Text style={s.errorBannerText}>Couldn't remove item — please try again.</Text>
+          <Text style={s.errorBannerText}>Couldn&apos;t remove item — please try again.</Text>
           <TouchableOpacity onPress={() => setUnlikeError(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Feather name="x" size={14} color={COLORS.danger} />
           </TouchableOpacity>
@@ -401,7 +401,7 @@ export default function LikedScreen() {
       ) : loadError ? (
         <View style={s.centered}>
           <Feather name="alert-circle" size={28} color={COLORS.fg3} style={{ marginBottom: 10 }} />
-          <Text style={s.errorText}>Couldn't load your liked items.</Text>
+          <Text style={s.errorText}>Couldn&apos;t load your liked items.</Text>
           <Text style={s.errorSub}>Check your connection and try again.</Text>
         </View>
       ) : (

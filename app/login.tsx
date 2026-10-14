@@ -272,7 +272,7 @@ export default function LoginScreen() {
   // defined once here so both spots share identical markup/behavior.
   const phoneField = (
     <View style={styles.field}>
-      <Text style={styles.label}>PHONE NUMBER</Text>
+      <Text style={styles.label}>Phone number</Text>
       <TextInput
         style={[
           styles.input,
@@ -353,7 +353,7 @@ export default function LoginScreen() {
           {isSignUp && !isBtob && (
             <View style={styles.nameRow}>
               <View style={[styles.field, styles.nameField]}>
-                <Text style={styles.label}>FIRST NAME</Text>
+                <Text style={styles.label}>First name</Text>
                 <TextInput
                   style={styles.input}
                   value={firstName}
@@ -367,7 +367,7 @@ export default function LoginScreen() {
                 />
               </View>
               <View style={[styles.field, styles.nameField]}>
-                <Text style={styles.label}>LAST NAME</Text>
+                <Text style={styles.label}>Last name</Text>
                 <TextInput
                   style={styles.input}
                   value={lastName}
@@ -391,7 +391,7 @@ export default function LoginScreen() {
           {isSignUp && isBtob && (
             <>
               <View style={styles.field}>
-                <Text style={styles.label}>COMPANY NAME</Text>
+                <Text style={styles.label}>Company name</Text>
                 <TextInput
                   style={styles.input}
                   value={companyName}
@@ -403,7 +403,7 @@ export default function LoginScreen() {
                 />
               </View>
               <View style={styles.field}>
-                <Text style={styles.label}>RESPONSIBLE PERSON</Text>
+                <Text style={styles.label}>Responsible person</Text>
                 <TextInput
                   style={styles.input}
                   value={responsibleName}
@@ -415,7 +415,7 @@ export default function LoginScreen() {
                 />
               </View>
               <View style={styles.field}>
-                <Text style={styles.label}>LICENSE / REGISTRATION NUMBER</Text>
+                <Text style={styles.label}>License / registration number</Text>
                 <TextInput
                   style={styles.input}
                   value={licenseNumber}
@@ -428,7 +428,7 @@ export default function LoginScreen() {
               </View>
               <View style={styles.field}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={styles.label}>BUSINESS REGISTRATION DOCUMENT</Text>
+                  <Text style={styles.label}>Business registration document</Text>
                   <Text style={styles.labelOptional}>Optional</Text>
                 </View>
                 <TouchableOpacity style={styles.docPicker} onPress={handlePickDocument} activeOpacity={0.8}>
@@ -448,7 +448,7 @@ export default function LoginScreen() {
                   )}
                 </TouchableOpacity>
                 <Text style={styles.inputHint}>
-                  You can also add this later from your account settings — but it's
+                  You can also add this later from your account settings — but it&apos;s
                   required before you can book.
                 </Text>
               </View>
@@ -457,7 +457,7 @@ export default function LoginScreen() {
           )}
 
           <View style={styles.field}>
-            <Text style={styles.label}>EMAIL</Text>
+            <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
               value={email}
@@ -473,7 +473,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.field}>
-            <Text style={styles.label}>PASSWORD</Text>
+            <Text style={styles.label}>Password</Text>
             <TextInput
               style={styles.input}
               value={password}
@@ -491,7 +491,7 @@ export default function LoginScreen() {
           {/* Confirm password — sign-up only, both paths */}
           {isSignUp && (
             <View style={styles.field}>
-              <Text style={styles.label}>CONFIRM PASSWORD</Text>
+              <Text style={styles.label}>Confirm password</Text>
               <TextInput
                 ref={confirmPasswordRef}
                 style={[

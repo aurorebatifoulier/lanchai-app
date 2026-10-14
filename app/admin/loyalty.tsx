@@ -154,14 +154,14 @@ export default function AdminLoyaltyScreen() {
               <View style={s.infoBox}>
                 <Feather name="info" size={13} color={COLORS.amber} />
                 <Text style={s.infoText}>
-                  Loyalty isn't set up yet. Renters earn 1 point per 10,000 LAK of rental
+                  Loyalty isn&apos;t set up yet. Renters earn 1 point per 10,000 LAK of rental
                   subtotal on every completed (returned) rental. Set tier thresholds and
                   coupon rewards below to activate it.
                 </Text>
               </View>
             )}
 
-            <Text style={s.sectionLabel}>TIER THRESHOLDS (POINTS)</Text>
+            <Text style={s.sectionLabel}>Tier thresholds (points)</Text>
             <Text style={s.fieldLabel}>Silver</Text>
             <TextInput
               style={s.input} value={silverThreshold} onChangeText={t => { setSilverThreshold(t); setSaveError(null); }}
@@ -217,8 +217,8 @@ export default function AdminLoyaltyScreen() {
               placeholder="e.g. 100" placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
             />
 
-            <Text style={s.sectionLabel}>DAMAGE ASSESSMENT</Text>
-            <Text style={s.fieldLabel}>Default "Damaged" charge (% of replacement value)</Text>
+            <Text style={s.sectionLabel}>Damage assessment</Text>
+            <Text style={s.fieldLabel}>Default &quot;Damaged&quot; charge (% of replacement value)</Text>
             <TextInput
               style={s.input} value={damagedChargePercent} onChangeText={t => { setDamagedChargePercent(t); setSaveError(null); }}
               placeholder="e.g. 60" placeholderTextColor={COLORS.fg3} keyboardType="number-pad"

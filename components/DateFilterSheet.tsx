@@ -90,7 +90,7 @@ export default function DateFilterSheet({
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.sheetBody}
           >
-            <Text style={styles.sectionLabel}>DATE FIELD</Text>
+            <Text style={styles.sectionLabel}>Date field</Text>
             <View style={styles.optionRow}>
               {fieldOptions.map(opt => (
                 <TouchableOpacity
@@ -105,7 +105,7 @@ export default function DateFilterSheet({
               ))}
             </View>
 
-            <Text style={styles.sectionLabel}>SORT BY</Text>
+            <Text style={styles.sectionLabel}>Sort by</Text>
             <View style={styles.optionRow}>
               {([
                 { id: 'desc' as const, label: 'Newest first' },

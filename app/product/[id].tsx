@@ -160,7 +160,7 @@ export default function ProductDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>Couldn't load this item</Text>
+          <Text style={styles.notFoundText}>Couldn&apos;t load this item</Text>
           <Text style={styles.notFoundSub}>Check your connection and try again.</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backBtnText}>Go back</Text>
@@ -337,7 +337,7 @@ export default function ProductDetailScreen() {
         {/* ── Perfect for ── */}
         {(product.perfectFor ?? []).length > 0 && (
           <>
-            <Text style={styles.sectionLabel}>PERFECT FOR</Text>
+            <Text style={styles.sectionLabel}>Perfect for</Text>
             <View style={styles.chipRow}>
               {product.perfectFor!.map((item, i) => (
                 <View key={i} style={styles.perfectChip}>
@@ -351,7 +351,7 @@ export default function ProductDetailScreen() {
         {/* ── Key features ── */}
         {(product.keyFeatures ?? []).length > 0 && (
           <>
-            <Text style={styles.sectionLabel}>KEY FEATURES</Text>
+            <Text style={styles.sectionLabel}>Key features</Text>
             <View style={styles.featuresGrid}>
               {product.keyFeatures!.reduce<{ icon: string; text: string }[][]>((rows, feat, i) => {
                 if (i % 2 === 0) rows.push([feat]);
@@ -373,7 +373,7 @@ export default function ProductDetailScreen() {
         )}
 
         {/* ── Pricing tiers ── */}
-        <Text style={styles.sectionLabel}>DAILY RATE — AUTO-DISCOUNT</Text>
+        <Text style={styles.sectionLabel}>Daily rate — auto-discount</Text>
         {hasValidPricing ? (
           <View style={styles.tierList}>
             {validTierKeys.map(key => {
@@ -407,7 +407,7 @@ export default function ProductDetailScreen() {
         ) : (
           <View style={styles.noPricingBanner}>
             <Feather name="clock" size={16} color={COLORS.fg3} />
-            <Text style={styles.noPricingText}>Pricing for this item hasn't been set yet. Check back soon.</Text>
+            <Text style={styles.noPricingText}>Pricing for this item hasn&apos;t been set yet. Check back soon.</Text>
           </View>
         )}
 
@@ -469,7 +469,7 @@ export default function ProductDetailScreen() {
         )}
 
         {/* ── Deposit & Trust ── */}
-        <Text style={styles.sectionLabel}>DEPOSIT & TRUST</Text>
+        <Text style={styles.sectionLabel}>Deposit & trust</Text>
         <View style={styles.infoCard}>
           <View style={[styles.infoIcon, { backgroundColor: COLORS.carbon }]}>
             <Feather name="shield" size={18} color={COLORS.amber} />
@@ -484,7 +484,7 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* ── Pick-up & Return ── */}
-        <Text style={styles.sectionLabel}>PICK-UP & RETURN</Text>
+        <Text style={styles.sectionLabel}>Pick-up & return</Text>
         <View style={styles.infoCard}>
           <View style={styles.infoIcon}>
             <Feather name="map-pin" size={18} color={COLORS.carbon} />
@@ -503,7 +503,7 @@ export default function ProductDetailScreen() {
         {/* ── Reviews ── */}
         {product.averageRating != null && (
           <>
-            <Text style={styles.sectionLabel}>REVIEWS</Text>
+            <Text style={styles.sectionLabel}>Reviews</Text>
 
             {/* Rating breakdown — computed from loaded reviews */}
             {reviews.length > 0 && (
@@ -550,7 +550,7 @@ export default function ProductDetailScreen() {
       )}
       {addBagError && (
         <View style={styles.bagBannerError}>
-          <Text style={styles.bagBannerErrorText}>Couldn't add to bag. Try again.</Text>
+          <Text style={styles.bagBannerErrorText}>Couldn&apos;t add to bag. Try again.</Text>
           <TouchableOpacity onPress={() => setAddBagError(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Feather name="x" size={14} color={COLORS.danger} />
           </TouchableOpacity>

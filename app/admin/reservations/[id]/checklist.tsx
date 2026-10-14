@@ -468,7 +468,7 @@ export default function ChecklistScreen() {
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
-          <Text style={styles.stateTitle}>Couldn't load this reservation</Text>
+          <Text style={styles.stateTitle}>Couldn&apos;t load this reservation</Text>
         </View>
       </SafeAreaView>
     );
@@ -484,7 +484,7 @@ export default function ChecklistScreen() {
           <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
           <View style={styles.center}>
             <Feather name="alert-circle" size={32} color={COLORS.fg3} />
-            <Text style={styles.stateTitle}>Couldn't load this checklist</Text>
+            <Text style={styles.stateTitle}>Couldn&apos;t load this checklist</Text>
           </View>
         </SafeAreaView>
       );
@@ -754,8 +754,8 @@ export default function ChecklistScreen() {
             {chargePercent != null && (
               product?.retailPrice == null ? (
                 <Text style={styles.depositWarningText}>
-                  Replacement value not set for this product — damage charge can't be calculated.
-                  Set it on the product's admin page first.
+                  Replacement value not set for this product — damage charge can&apos;t be calculated.
+                  Set it on the product&apos;s admin page first.
                 </Text>
               ) : depositCurrency == null ? (
                 <Text style={styles.depositWarningText}>
@@ -853,7 +853,7 @@ export default function ChecklistScreen() {
               </Text>
             ) : (
               <Text style={styles.depositWarningText}>
-                No handover checklist found — can't determine the deposit currency.
+                No handover checklist found — can&apos;t determine the deposit currency.
               </Text>
             )}
             {depositCurrency && (

@@ -212,7 +212,7 @@ export default function AdminReviewsScreen() {
       ) : fetchError ? (
         <View style={s.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
-          <Text style={s.emptyTitle}>Couldn't load reviews</Text>
+          <Text style={s.emptyTitle}>Couldn&apos;t load reviews</Text>
           <Text style={s.emptySub}>Check your connection and pull to refresh.</Text>
         </View>
       ) : displayed.length === 0 ? (

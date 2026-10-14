@@ -310,7 +310,7 @@ export default function NotificationsScreen() {
               <Feather name="bell" size={32} color={COLORS.fg3} />
             </View>
             <Text style={s.emptyTitle}>No notifications yet</Text>
-            <Text style={s.emptyBody}>You're all caught up!</Text>
+            <Text style={s.emptyBody}>You&apos;re all caught up!</Text>
           </>
         ) : (
           grouped.map(section => (

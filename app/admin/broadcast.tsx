@@ -161,7 +161,7 @@ export default function AdminBroadcastScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Compose ────────────────────────────────────────────────────── */}
-        <Text style={s.sectionLabel}>NEW BROADCAST</Text>
+        <Text style={s.sectionLabel}>New broadcast</Text>
 
         {/* Type selector */}
         <View style={s.typeRow}>
@@ -237,7 +237,7 @@ export default function AdminBroadcastScreen() {
           <View style={s.successBox}>
             <Feather name="check-circle" size={13} color={COLORS.success} />
             <Text style={s.successText}>
-              Broadcast sent — it appears in all users' notifications immediately.
+              Broadcast sent — it appears in all users&apos; notifications immediately.
             </Text>
           </View>
         )}
@@ -255,7 +255,7 @@ export default function AdminBroadcastScreen() {
         </TouchableOpacity>
 
         {/* ── Sent broadcasts ──────────────────────────────────────────────── */}
-        <Text style={[s.sectionLabel, { marginTop: 36 }]}>SENT BROADCASTS</Text>
+        <Text style={[s.sectionLabel, { marginTop: 36 }]}>Sent broadcasts</Text>
 
         {listLoading ? (
           <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />

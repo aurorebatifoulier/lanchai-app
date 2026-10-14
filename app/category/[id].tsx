@@ -175,20 +175,20 @@ export default function CategoryScreen() {
       ) : loadError ? (
         <View style={styles.emptyState}>
           <Feather name="alert-circle" size={28} color={COLORS.fg3} />
-          <Text style={styles.emptyStateTitle}>Couldn't load items</Text>
+          <Text style={styles.emptyStateTitle}>Couldn&apos;t load items</Text>
           <Text style={styles.emptyStateSub}>Check your connection and try again.</Text>
         </View>
       ) : products.length === 0 ? (
         <View style={styles.emptyState}>
           <Feather name="package" size={28} color={COLORS.fg3} />
           <Text style={styles.emptyStateTitle}>No items yet</Text>
-          <Text style={styles.emptyStateSub}>Check back soon — we're adding more.</Text>
+          <Text style={styles.emptyStateSub}>Check back soon — we&apos;re adding more.</Text>
         </View>
       ) : displayedProducts.length === 0 ? (
         <View style={styles.emptyState}>
           <Feather name="filter" size={28} color={COLORS.fg3} />
           <Text style={styles.emptyStateTitle}>No items match this filter</Text>
-          <Text style={styles.emptyStateSub}>Try "All" to see everything in this category.</Text>
+          <Text style={styles.emptyStateSub}>Try &quot;All&quot; to see everything in this category.</Text>
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.gridContent}>
@@ -247,7 +247,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
           </View>
         ) : effectiveStock(product) <= 1 ? (
           <View style={[styles.prodTag, { backgroundColor: '#C8412C' }]}>
-            <Text style={[styles.prodTagText, { color: '#FAFAF7' }]}>1 LEFT</Text>
+            <Text style={[styles.prodTagText, { color: '#FAFAF7' }]}>1 left</Text>
           </View>
         ) : null}
         <TouchableOpacity

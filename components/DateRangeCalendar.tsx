@@ -191,7 +191,7 @@ export default function DateRangeCalendar({
         <View style={s.availErrorNote}>
           <Feather name="alert-circle" size={12} color={COLORS.fg3} />
           <Text style={s.availErrorNoteText}>
-            Couldn't load availability — dates will be verified when you continue.
+            Couldn&apos;t load availability — dates will be verified when you continue.
           </Text>
         </View>
       )}

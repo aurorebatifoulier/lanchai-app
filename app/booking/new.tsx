@@ -239,7 +239,7 @@ export default function BookingNewScreen() {
         {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 16 }} />}
 
         {/* ══ DATES & TIMES ═══════════════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>DATES & TIMES</Text>
+        <Text style={s.sectionLabel}>Dates & times</Text>
 
         <View style={s.fieldGrid}>
           {/* Single unified field — opens the range calendar for both pick-up & return */}
@@ -248,7 +248,7 @@ export default function BookingNewScreen() {
             onPress={openDateModal}
             activeOpacity={0.75}
           >
-            <Text style={[s.fieldBtnEye, (startDate || endDate) && s.fieldBtnEyeFilled]}>DATES</Text>
+            <Text style={[s.fieldBtnEye, (startDate || endDate) && s.fieldBtnEyeFilled]}>Dates</Text>
             <Text style={[s.fieldBtnVal, (startDate || endDate) && s.fieldBtnValFilled]}>
               {startDate && endDate
                 ? `${fmtDate(startDate)} → ${fmtDate(endDate)}`
@@ -263,7 +263,7 @@ export default function BookingNewScreen() {
             onPress={() => setShowPickupTimeModal(true)}
             activeOpacity={0.75}
           >
-            <Text style={[s.fieldBtnEye, pickupTime && s.fieldBtnEyeFilled]}>PICK-UP TIME</Text>
+            <Text style={[s.fieldBtnEye, pickupTime && s.fieldBtnEyeFilled]}>Pick-up time</Text>
             <Text style={[s.fieldBtnVal, pickupTime && s.fieldBtnValFilled]}>
               {pickupTime ?? 'Select'}
             </Text>
@@ -274,7 +274,7 @@ export default function BookingNewScreen() {
             onPress={() => setShowReturnTimeModal(true)}
             activeOpacity={0.75}
           >
-            <Text style={[s.fieldBtnEye, returnTime && s.fieldBtnEyeFilled]}>RETURN TIME</Text>
+            <Text style={[s.fieldBtnEye, returnTime && s.fieldBtnEyeFilled]}>Return time</Text>
             <Text style={[s.fieldBtnVal, returnTime && s.fieldBtnValFilled]}>
               {returnTime ?? 'Select'}
             </Text>
@@ -291,7 +291,7 @@ export default function BookingNewScreen() {
           ) : dayRateLak === null ? (
             <View style={s.returnError}>
               <Feather name="alert-circle" size={13} color={COLORS.danger} />
-              <Text style={s.returnErrorText}>Pricing for this item hasn't been set yet. Booking unavailable.</Text>
+              <Text style={s.returnErrorText}>Pricing for this item hasn&apos;t been set yet. Booking unavailable.</Text>
             </View>
           ) : (
             <View style={s.durationChip}>
@@ -312,7 +312,7 @@ export default function BookingNewScreen() {
         )}
 
         {/* ══ QUANTITY ═══════════════════════════════════════════════════════ */}
-        <Text style={[s.sectionLabel, { marginTop: 28 }]}>QUANTITY</Text>
+        <Text style={[s.sectionLabel, { marginTop: 28 }]}>Quantity</Text>
 
         <View style={s.stockBadge}>
           <View style={[s.stockDot, { backgroundColor: availableStock > 0 ? COLORS.success : COLORS.danger }]} />
@@ -346,7 +346,7 @@ export default function BookingNewScreen() {
 
         {/* ══ NOTES ══════════════════════════════════════════════════════════ */}
         <Text style={[s.sectionLabel, { marginTop: 24 }]}>
-          NOTES <Text style={s.sectionOptional}>(optional)</Text>
+          Notes <Text style={s.sectionOptional}>(optional)</Text>
         </Text>
         <TextInput
           style={s.notesInput}
