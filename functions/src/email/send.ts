@@ -76,7 +76,16 @@ export async function sendEmail(email: OutgoingEmail, mode?: EmailMode): Promise
 
       const body = await res.text().catch(() => '');
       if (res.status === 401 || res.status === 403) {
-        logger.error('[email] Brevo rejected the API key', { status: res.status, tag: email.tag });
+        // Only Brevo's own error `code` / `message` fields are logged — never the
+        // request headers, so the API key can't end up in the logs.
+        let brevoCode: string | undefined;
+        let brevoMessage: string | undefined;
+        try {
+          const parsed = JSON.parse(body);
+          brevoCode = typeof parsed?.code === 'string' ? parsed.code : undefined;
+          brevoMessage = typeof parsed?.message === 'string' ? parsed.message.slice(0, 300) : undefined;
+        } catch { /* non-JSON body — nothing to log */ }
+        logger.error('[email] Brevo rejected the API key', { status: res.status, tag: email.tag, brevoCode, brevoMessage });
         await alertAdminsAuthFailure();
         return 'failed_auth';
       }
