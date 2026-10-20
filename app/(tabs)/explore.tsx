@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Dimensions,
+  useWindowDimensions,
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -48,6 +49,30 @@ const H_PAD = 16;
 const COL_GAP = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - H_PAD * 2 - COL_GAP) / 2;
 
+// ── Product card layout ───────────────────────────────────────────────────────
+// Cards keep a fixed height so every row in the 2-column grid lines up, but that
+// height is DERIVED from its parts below — never hardcoded — so a font/size change
+// can't silently clip the availability badge again. Text-bearing heights scale with
+// the OS font size (fontScale), since Android scales fontSize AND lineHeight with it.
+const CARD_IMAGE_H     = 150;
+const CARD_PAD_TOP     = 10;
+const CARD_PAD_BOTTOM  = 12;
+const CARD_NAME_LH     = 17; // cardName lineHeight
+const CARD_NAME_LINES  = 2;  // title block always reserves exactly 2 lines
+const CARD_NAME_GAP    = 4;
+const CARD_PRICE_LH    = 16; // cardPrice / cardPriceUnavailable lineHeight
+const CARD_PRICE_GAP   = 8;
+const CARD_BADGE_H     = 22;
+
+function productCardLayout(fontScale: number) {
+  const scale  = Math.max(1, fontScale);
+  const name   = Math.ceil(CARD_NAME_LH * CARD_NAME_LINES * scale);
+  const price  = Math.ceil(CARD_PRICE_LH * scale);
+  const badge  = Math.ceil(CARD_BADGE_H * scale);
+  const card   = CARD_IMAGE_H + CARD_PAD_TOP + name + CARD_NAME_GAP + price + CARD_PRICE_GAP + badge + CARD_PAD_BOTTOM;
+  return { card, name, badge };
+}
+
 const EXPLORE_CATEGORIES = [
   { id: 'all',     name: 'All'     },
   { id: 'fun',     name: 'Fun'     },
@@ -67,6 +92,8 @@ function formatKip(value: number): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ExploreScreen() {
+  const { fontScale } = useWindowDimensions();
+  const cardLayout = productCardLayout(fontScale);
   const router = useRouter();
   const { user } = useAuth();
   const userTier = useLoyaltyTier();
@@ -338,7 +365,7 @@ export default function ExploreScreen() {
       {/* ── Product grid ─────────────────────────────────────────────────── */}
       {loading ? (
         <View style={styles.skeletonGrid}>
-          {[0, 1, 2, 3].map(i => <View key={i} style={styles.skeletonCard} />)}
+          {[0, 1, 2, 3].map(i => <View key={i} style={[styles.skeletonCard, { height: cardLayout.card }]} />)}
         </View>
       ) : loadError ? (
         <View style={styles.loadError}>
@@ -475,6 +502,8 @@ function ProductCard({
   exchangeRate: number | null;
   userTier: LoyaltyTier | null;
 }) {
+  const { fontScale } = useWindowDimensions();
+  const layout = productCardLayout(fontScale);
   const imageUri = product.images?.[0] ?? null;
   const minPrice = getMinPrice(product);
   const accessState = getProductAccessState(product, userTier);
@@ -490,7 +519,7 @@ function ProductCard({
     null;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity style={[styles.card, { height: layout.card }]} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.cardImageWrap}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.cardImage} contentFit="cover" transition={300} />
@@ -526,11 +555,11 @@ function ProductCard({
       </View>
 
       <View style={styles.cardBody}>
-        <Text style={styles.cardName} numberOfLines={2}>{product.name}</Text>
+        <Text style={[styles.cardName, { height: layout.name }]} numberOfLines={CARD_NAME_LINES}>{product.name}</Text>
         {minPrice != null && exchangeRate != null
-          ? <Text style={styles.cardPrice}>{formatKip(toLak(minPrice, exchangeRate))} / day</Text>
-          : <Text style={styles.cardPriceUnavailable}>Price not set</Text>}
-        <View style={[styles.badge, !product.available && styles.badgeRented]}>
+          ? <Text style={styles.cardPrice} numberOfLines={1}>{formatKip(toLak(minPrice, exchangeRate))} / day</Text>
+          : <Text style={styles.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
+        <View style={[styles.badge, { height: layout.badge }, !product.available && styles.badgeRented]}>
           <Text style={[styles.badgeText, !product.available && styles.badgeTextRented]}>
             {product.available ? 'Available' : 'Rented'}
           </Text>
@@ -738,7 +767,6 @@ const styles = StyleSheet.create({
   },
   skeletonCard: {
     width: CARD_WIDTH,
-    height: 234,
     borderRadius: 12,
     backgroundColor: COLORS.softGray200,
   },
@@ -760,7 +788,6 @@ const styles = StyleSheet.create({
   // ── Product card ──────────────────────────────────────────────────────────
   card: {
     width: CARD_WIDTH,
-    height: 234,
     backgroundColor: COLORS.white,
     borderRadius: 12,
     overflow: 'hidden',
@@ -772,8 +799,10 @@ const styles = StyleSheet.create({
   },
   cardImageWrap: {
     width: '100%',
-    height: 150,
+    height: CARD_IMAGE_H,
     position: 'relative',
+    overflow: 'hidden', // expo-image on Fabric/Android — keep it clipped to its box
+    flexShrink: 0,
   },
   cardImage: {
     width: '100%',
@@ -811,34 +840,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Sizes below are the CARD_* constants above — change them there, not here, so
+  // productCardLayout() keeps the card tall enough for everything.
   cardBody: {
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingTop: CARD_PAD_TOP,
+    paddingBottom: CARD_PAD_BOTTOM,
   },
   cardName: {
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.carbon,
     letterSpacing: -0.1,
-    lineHeight: 17,
-    height: 34,
-    marginBottom: 4,
+    lineHeight: CARD_NAME_LH,
+    marginBottom: CARD_NAME_GAP,
   },
   cardPrice: {
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.fg2,
-    marginBottom: 8,
+    lineHeight: CARD_PRICE_LH,
+    marginBottom: CARD_PRICE_GAP,
   },
   cardPriceUnavailable: {
     fontSize: 12,
     fontWeight: '500',
     color: COLORS.fg3,
     fontStyle: 'italic',
-    marginBottom: 8,
+    lineHeight: CARD_PRICE_LH,
+    marginBottom: CARD_PRICE_GAP,
   },
   badge: {
     alignSelf: 'flex-start',
-    height: 22,
+    flexShrink: 0,
     paddingHorizontal: 8,
     borderRadius: 6,
     backgroundColor: COLORS.amber,
