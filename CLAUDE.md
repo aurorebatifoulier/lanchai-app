@@ -269,16 +269,22 @@ a snapshot indefinitely).
     claimed in a transaction before sending (`claim.ts`). Late-return emails reuse the
     `lateAlert*` flags of `lateReturnAlerts` (end of grace, 24h, 48h, 72h only — the
     0h/+1h warnings stay in-app). Grace period never mentioned to renters.
-  - **Layout (validated mockup):** logo tile → hero card (amber pill, big title, amber
-    primary button, 2 outline buttons) → white cards → centered cancellation line →
-    footer with amber top line. Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
+  - **Layout (validated mockup v3):** hero card with the logo at its top (amber pill,
+    big title, amber primary button, 2 outline buttons with icons) → white cards
+    (14/16px padding, 10px gap) → centered cancellation line → footer with amber top
+    line. Icons are hosted PNGs (`hosting/email/icons/`, 32px shown at 16px, amber
+    `#BA7517`), via `iconUrl()` — icon fonts don't work in email; button icons use
+    `alt=""` so a blocked image never breaks the label. "Your items": shared dates
+    shown once under the title (clock icon) when every line has the same
+    pickupAt/returnAt, otherwise per item. Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
     subjects and preheaders in `templates.ts`. Dates via `functions/src/shared/dates.ts`
     (Vientiane time, from `pickupAt`/`returnAt`). Shared texts: `CANCELLATION_SUMMARY`
     (`shared/policy.ts`, keep in sync with `lib/legalContent.ts`), payment methods
     (`config/shop.paymentMethods`, default in `shared/shop.ts`, aligned with Terms §4),
     `openHoursText()` ("Open daily …").
   - **Public assets: Firebase Hosting** (`/hosting`, `firebase deploy --only hosting`):
-    `email/lanchai-logo@2x.png` (mark + wordmark, no tagline, white background) and
+    `email/lanchai-logo@2x.png` (mark + wordmark, no tagline, white background),
+    `email/icons/*@2x.png` and
     `open/index.html`, the https → `lanchaiapp://` redirect used by every email button
     (Gmail strips custom-scheme links; allow-listed paths only; works in the installed
     build, not Expo Go). `PUBLIC_BASE_URL` in `functions/src/email/config.ts` is the

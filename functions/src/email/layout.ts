@@ -1,6 +1,6 @@
 import type { EmailShop } from './context';
 import { CONTACT_EMAIL } from '../shared/shop';
-import { LOGO_URL } from './config';
+import { LOGO_URL, iconUrl, type EmailIcon } from './config';
 
 // ONE shared layout for every LANCHAI email (validated mockup): cream background, the
 // logo on its own white rounded tile, then white rounded cards, then a footer with an
@@ -18,15 +18,20 @@ const BORDER = '#ECECEA';
 const DANGER = '#C8412C';
 const FONT = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif";
 
-export interface Button { label: string; url: string }
+export interface Button { label: string; url: string; icon?: EmailIcon }
+
+/** Icon with descriptive alt text (shown when images are blocked). */
+export interface Icon { name: EmailIcon; alt: string }
 
 /** Content inside a white card. */
 export type Inner =
   | { type: 'text'; text: string; tone?: 'muted' | 'danger'; small?: boolean }
-  | { type: 'subtle'; text: string }                                  // small grey line (e.g. dates)
+  | { type: 'subtle'; text: string }                                  // small grey line
+  | { type: 'dates'; text: string }                                   // clock icon + shared dates line
+  | { type: 'stack'; lines: string[]; note?: string }                 // compact block (first line bold)
   | { type: 'line'; name: string; detail?: string; amount?: string }  // item row, amount right-aligned
-  | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger' }
-  | { type: 'bullet'; text: string }                                  // amber marker + text
+  | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger'; gapTop?: number }
+  | { type: 'bullet'; text: string; icon?: Icon }                     // icon (or amber marker) + text
   | { type: 'divider' };
 
 export type Block =
@@ -61,6 +66,10 @@ const e = escapeHtml;
 
 // ── HTML pieces ──────────────────────────────────────────────────────────────
 
+function iconImg(name: EmailIcon, alt: string, marginRight = 8): string {
+  return `<img src="${iconUrl(name)}" width="16" height="16" alt="${e(alt)}" style="display:inline-block;width:16px;height:16px;border:0;outline:none;vertical-align:-3px;margin-right:${marginRight}px;font-size:11px;color:${MUTED};"/>`;
+}
+
 function primaryButton(b: Button): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;">
     <tr><td align="center" bgcolor="${AMBER}" style="border-radius:10px;">
@@ -73,7 +82,7 @@ function outlineButtons(buttons: Button[]): string {
   const cells = buttons.map((b, i) => `<td width="${Math.floor(100 / buttons.length)}%" style="padding:${i === 0 ? '0 5px 0 0' : '0 0 0 5px'};">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td align="center" bgcolor="#FFFFFF" style="border:1px solid ${CARBON};border-radius:10px;">
-          <a href="${e(b.url)}" style="display:block;padding:11px 8px;font-family:${FONT};font-size:13px;font-weight:700;color:${CARBON};text-decoration:none;border-radius:10px;">${e(b.label)}</a>
+          <a href="${e(b.url)}" style="display:block;padding:11px 8px;font-family:${FONT};font-size:13px;font-weight:700;color:${CARBON};text-decoration:none;border-radius:10px;">${b.icon ? `<img src="${iconUrl(b.icon)}" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;outline:none;vertical-align:-3px;margin-right:6px;"/>` : ''}${e(b.label)}</a>
         </td>
       </tr></table>
     </td>`).join('');
@@ -81,9 +90,9 @@ function outlineButtons(buttons: Button[]): string {
 }
 
 function cardWrap(inner: string): string {
-  return `<tr><td style="padding:0 0 12px;">
+  return `<tr><td style="padding:0 0 10px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border:1px solid ${BORDER};border-radius:14px;">
-      <tr><td style="padding:20px 20px;font-family:${FONT};">${inner}</td></tr>
+      <tr><td style="padding:14px 16px;font-family:${FONT};">${inner}</td></tr>
     </table>
   </td></tr>`;
 }
@@ -95,7 +104,13 @@ function innerHtml(it: Inner): string {
       return `<p style="margin:0 0 10px;font-size:${it.small ? 12 : 14}px;line-height:${it.small ? 18 : 21}px;color:${color};">${e(it.text)}</p>`;
     }
     case 'subtle':
-      return `<p style="margin:0 0 12px;font-size:12px;line-height:18px;color:${MUTED};">${e(it.text)}</p>`;
+      return `<p style="margin:0 0 10px;font-size:12px;line-height:18px;color:${MUTED};">${e(it.text)}</p>`;
+    case 'dates':
+      return `<p style="margin:-4px 0 12px;font-size:13px;line-height:19px;color:${MUTED};">${iconImg('clock', 'Dates', 6)}${e(it.text)}</p>`;
+    case 'stack':
+      return `<p style="margin:0;font-size:14px;line-height:21px;color:${MUTED};">${it.lines.map((l, i) =>
+        i === 0 ? `<span style="color:${CARBON};font-weight:700;">${e(l)}</span>` : e(l)).join('<br/>')}</p>
+        ${it.note ? `<p style="margin:6px 0 0;font-size:12px;line-height:18px;color:${MUTED};">${e(it.note)}</p>` : ''}`;
     case 'line':
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
         <td style="vertical-align:top;font-size:14px;line-height:20px;color:${CARBON};font-weight:700;">${e(it.name)}
@@ -106,15 +121,19 @@ function innerHtml(it: Inner): string {
     case 'row': {
       const color = it.tone === 'danger' ? DANGER : it.tone === 'muted' ? MUTED : CARBON;
       const size = it.strong ? 15 : 13;
+      const lh = it.strong ? 22 : 18;          // compact totals block
+      const top = it.gapTop ?? 1;
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td style="padding:4px 0;font-size:${size}px;line-height:20px;color:${it.strong ? CARBON : MUTED};font-weight:${it.strong ? 800 : 500};">${e(it.label)}</td>
-        <td style="padding:4px 0 4px 12px;text-align:right;white-space:nowrap;font-size:${size}px;line-height:20px;color:${color};font-weight:${it.strong ? 800 : 600};">${e(it.value)}</td>
+        <td style="padding:${top}px 0 1px;font-size:${size}px;line-height:${lh}px;color:${it.strong ? CARBON : MUTED};font-weight:${it.strong ? 800 : 500};">${e(it.label)}</td>
+        <td style="padding:${top}px 0 1px 12px;text-align:right;white-space:nowrap;font-size:${size}px;line-height:${lh}px;color:${color};font-weight:${it.strong ? 800 : 600};">${e(it.value)}</td>
       </tr></table>`;
     }
     case 'bullet':
-      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 9px;"><tr>
-        <td width="22" style="vertical-align:top;padding-top:6px;">
-          <div style="width:10px;height:10px;border-radius:5px;background:${AMBER};font-size:0;line-height:0;">&nbsp;</div>
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 5px;"><tr>
+        <td width="24" style="vertical-align:top;padding-top:2px;">
+          ${it.icon
+            ? iconImg(it.icon.name, it.icon.alt, 0)
+            : `<div style="width:10px;height:10px;border-radius:5px;background:${AMBER};font-size:0;line-height:0;margin-top:4px;">&nbsp;</div>`}
         </td>
         <td style="font-size:14px;line-height:21px;color:${CARBON};">${e(it.text)}</td>
       </tr></table>`;
@@ -127,6 +146,7 @@ function blockHtml(b: Block): string {
   switch (b.type) {
     case 'hero':
       return cardWrap(`<div style="text-align:center;">
+        <img src="${LOGO_URL}" width="120" alt="LANCHAI" style="display:block;margin:4px auto 14px;width:120px;height:auto;border:0;outline:none;text-decoration:none;font-family:${FONT};font-size:20px;font-weight:800;color:${CARBON};"/>
         ${b.pill ? `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>` : ''}
         <h1 style="margin:${b.pill ? 14 : 0}px 0 6px;font-size:24px;line-height:30px;font-weight:800;color:${CARBON};">${e(b.title)}</h1>
         ${b.sub ? `<p style="margin:0;font-size:13px;line-height:19px;color:${MUTED};">${e(b.sub)}</p>` : ''}
@@ -158,6 +178,8 @@ function footerHtml(shop: EmailShop): string {
 function innerText(it: Inner): string[] {
   switch (it.type) {
     case 'text': case 'subtle': return [it.text];
+    case 'dates': return [`Dates: ${it.text}`];
+    case 'stack': return [...it.lines, ...(it.note ? ['', it.note] : [])];
     case 'line': return [`${it.name}${it.amount ? `  ${it.amount}` : ''}`, ...(it.detail ? [`  ${it.detail}`] : [])];
     case 'row': return [`${it.label}${it.value ? `: ${it.value}` : ''}`];
     case 'bullet': return [`- ${it.text}`];
@@ -192,13 +214,6 @@ export function renderEmail(content: EmailContent, shop: EmailShop): { html: str
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${CREAM}" style="background:${CREAM};">
   <tr><td align="center" style="padding:24px 12px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
-      <tr><td align="center" style="padding:0 0 16px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border:1px solid ${BORDER};border-radius:14px;">
-          <tr><td style="padding:14px 22px;">
-            <img src="${LOGO_URL}" width="140" alt="LANCHAI" style="display:block;width:140px;height:auto;border:0;outline:none;text-decoration:none;font-family:${FONT};font-size:20px;font-weight:800;color:${CARBON};"/>
-          </td></tr>
-        </table>
-      </td></tr>
       ${content.blocks.map(blockHtml).join('\n')}
       ${footerHtml(shop)}
     </table>

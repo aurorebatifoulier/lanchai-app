@@ -60,17 +60,18 @@ function bookingLink(items: ResData[]): Button {
   };
 }
 
-const directions = (shop: EmailShop): Button => ({ label: 'Get directions', url: mapsUrl(shop) });
+const directions = (shop: EmailShop): Button => ({ label: 'Get directions', url: mapsUrl(shop), icon: 'map-pin' });
 
-/** "Your items" card. With prices: rate × days × qty per line, then the totals. */
+/**
+ * "Your items" card. When ALL items share pickupAt + returnAt, the dates are shown ONCE
+ * right under the title (clock icon) and each item only shows its price detail;
+ * otherwise each item carries its own dates. With prices: rate × days × qty, totals.
+ */
 function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: number | null } = {}): Block {
   const same = sameDates(items);
   const inner: Inner[] = [];
   if (same) {
-    inner.push({
-      type: 'subtle',
-      text: `${range(items[0])} · ${plural(items[0].durationDays, 'day')}${items.length > 1 ? ' · same dates for all items' : ''}`,
-    });
+    inner.push({ type: 'dates', text: `${range(items[0])} · ${plural(items[0].durationDays, 'day')}` });
   }
   for (const r of items) {
     const priceDetail = `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}`;
@@ -90,8 +91,8 @@ function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: numb
     if (discount > 0) inner.push({ type: 'row', label: 'Coupon', value: `− ${fmtLak(discount)}`, tone: 'muted' });
     inner.push({ type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(ht), tone: 'muted' });
     inner.push({ type: 'row', label: `VAT (${vatPct}%)`, value: fmtLak(vat), tone: 'muted' });
-    inner.push({ type: 'row', label: 'Total to pay at pick-up', value: fmtLak(total), strong: true });
-    inner.push({ type: 'row', label: 'Refundable deposit', value: fmtLak(deposit) });
+    inner.push({ type: 'row', label: 'Total to pay at pick-up', value: fmtLak(total), strong: true, gapTop: 6 });
+    inner.push({ type: 'row', label: 'Refundable deposit', value: fmtLak(deposit), gapTop: 2 });
   }
   return { type: 'card', title: 'Your items', items: inner };
 }
@@ -101,21 +102,19 @@ function whatToBringCard(shop: EmailShop): Block {
     type: 'card',
     title: 'What to bring',
     items: [
-      { type: 'bullet', text: 'Your ID document' },
-      { type: 'bullet', text: 'Your booking QR code (app › My rentals)' },
-      { type: 'bullet', text: shop.paymentMethods },
+      { type: 'bullet', text: 'Your ID document', icon: { name: 'id-card', alt: 'ID card' } },
+      { type: 'bullet', text: 'Your booking QR code (app › My rentals)', icon: { name: 'qr-code', alt: 'QR code' } },
+      { type: 'bullet', text: shop.paymentMethods, icon: { name: 'cash', alt: 'Payment' } },
     ],
   };
 }
 
 function shopCard(shop: EmailShop, note?: string): Block {
-  const items: Inner[] = [
-    { type: 'text', text: shop.name },
-    { type: 'text', text: `${shop.addressLine}, ${shop.city}`, tone: 'muted' },
-    { type: 'text', text: openHoursText(shop.hours), tone: 'muted' },
-  ];
-  if (note) items.push({ type: 'text', text: note, tone: 'muted', small: true });
-  return { type: 'card', title: 'Pick-up and return', items };
+  return {
+    type: 'card',
+    title: 'Pick-up and return',
+    items: [{ type: 'stack', lines: [shop.name, `${shop.addressLine}, ${shop.city}`, openHoursText(shop.hours)], note }],
+  };
 }
 
 const DEPOSIT_NOTE = 'Your deposit is refunded at return, once the item has been checked — about 10 minutes.';
@@ -169,7 +168,7 @@ export function bookingConfirmationEmail(
         title: `See you ${vteDay(first.pickupAtMs)} at ${vteTime(first.pickupAtMs)}`,
         sub: `${plural(items.length, 'item')} · Order ${orderId}`,
         primary: bookingLink(items),
-        secondary: [directions(shop), { label: 'Add to calendar', url: googleCalendarUrl(events[0], shop) }],
+        secondary: [directions(shop), { label: 'Add to calendar', url: googleCalendarUrl(events[0], shop), icon: 'calendar-plus' }],
       },
       itemsCard(items, { prices: true, vatPercent }),
       whatToBringCard(shop),
@@ -299,7 +298,7 @@ export function receiptEmail(_name: string, r: ResData, vatPercent: number | nul
         primary: { label: 'View my receipt', url: appLink(`rentals/${r.id}`) },
       },
       { type: 'card', title: 'Rental fee', items: [
-        { type: 'subtle', text: `${range(r)} · ${plural(r.durationDays, 'day')}` },
+        { type: 'dates', text: `${range(r)} · ${plural(r.durationDays, 'day')}` },
         { type: 'line', name: r.productName, detail: `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}` },
         { type: 'divider' },
         { type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(data.vatHt), tone: 'muted' },
