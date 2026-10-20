@@ -422,12 +422,20 @@ const TIER_LABELS: Record<Tier, string> = {
 export const expireEarlyAccess = onSchedule(
   { schedule: 'every 15 minutes', region: 'asia-southeast1' },
   async () => {
+    // Equality-only query + in-memory date filter, on purpose: combining
+    // accessMode == … with earlyAccessUntil <= … needs a composite index this project
+    // doesn't have (the query failed with FAILED_PRECONDITION on every run). Only a
+    // handful of products are ever in early access, so filtering here costs nothing.
+    const now = Date.now();
     const snap = await db.collection('products')
       .where('accessMode', '==', 'earlyAccess')
-      .where('earlyAccessUntil', '<=', admin.firestore.Timestamp.now())
       .get();
+    const expired = snap.docs.filter(d => {
+      const until: admin.firestore.Timestamp | undefined = d.data().earlyAccessUntil;
+      return until != null && until.toMillis() <= now;
+    });
 
-    await Promise.all(snap.docs.map(d => d.ref.update({
+    await Promise.all(expired.map(d => d.ref.update({
       accessMode: 'public',
       updatedAt:  FieldValue.serverTimestamp(),
     })));
