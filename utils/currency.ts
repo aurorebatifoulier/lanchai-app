@@ -52,3 +52,8 @@ export function splitHtVat(amountLak: number, vatPercent: number): { ht: number;
   const ht = Math.round(amountLak / (1 + vatPercent / 100));
   return { ht, vat: amountLak - ht, ttc: amountLak };
 }
+
+/** Compact kip format for product cards and price chips, e.g. "₭120,000". */
+export function formatKip(value: number): string {
+  return `₭${value.toLocaleString('en-US')}`;
+}

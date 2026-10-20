@@ -9,114 +9,33 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import ProductGridCard from '@/components/ProductGridCard';
 import BackButton from '@/components/BackButton';
 import SearchBar from '@/components/SearchBar';
 import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProducts, getFavorites, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
+import { getProducts, getFavorites, removeFavorite } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { useLoyaltyTier } from '@/lib/loyalty';
-import { getProductAccessState } from '@/utils/productAccess';
 import {
   Filters,
   PRICE_CONFIG,
   SORT_LABELS,
   DEFAULT_FILTERS,
 } from '@/lib/filterConfig';
-import { getMinPrice } from '@/utils/pricing';
 import { useExchangeRate } from '@/lib/exchangeRate';
-import { toLak } from '@/utils/currency';
+import { toLak, formatKip } from '@/utils/currency';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD    = 16;
 const COL_GAP  = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - H_PAD * 2 - COL_GAP) / 2;
 
-function formatKip(value: number): string {
-  return `₭${value.toLocaleString('en-US')}`;
-}
-
-// ── ProductCard ───────────────────────────────────────────────────────────────
-
-function ProductCard({
-  product,
-  onPress,
-  onUnlike,
-  exchangeRate,
-  userTier,
-}: {
-  product: Product;
-  onPress: () => void;
-  onUnlike: () => void;
-  exchangeRate: number | null;
-  userTier: LoyaltyTier | null;
-}) {
-  const imageUri = product.images?.[0] ?? null;
-  const minPrice = getMinPrice(product);
-  const accessState = getProductAccessState(product, userTier);
-  const sectionBadge: { label: string; icon?: string; bg: string; text: string } | null =
-    accessState.badgeLabel ? {
-      label: accessState.badgeLabel,
-      bg:    accessState.badgeTone === 'unlocked' ? COLORS.amber : COLORS.carbon,
-      text:  accessState.badgeTone === 'unlocked' ? COLORS.carbon : COLORS.white,
-    } :
-    product.isPremium     ? { label: 'Premium', icon: 'award', bg: COLORS.amber,   text: COLORS.carbon } :
-    product.showInNew     ? { label: 'New',                    bg: COLORS.success, text: COLORS.white  } :
-    product.showInPopular ? { label: 'Popular',                bg: COLORS.carbon,  text: COLORS.white  } :
-    null;
-
-  return (
-    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.85}>
-      <View style={s.cardImageWrap}>
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={s.cardImage} contentFit="cover" transition={300} />
-        ) : (
-          <View style={[s.cardImage, s.cardImagePlaceholder]}>
-            <Feather name="image" size={28} color={COLORS.softGray} />
-          </View>
-        )}
-
-        {sectionBadge && (
-          <View style={[s.sectionBadge, { backgroundColor: sectionBadge.bg }]}>
-            {sectionBadge.icon && (
-              <Feather name={sectionBadge.icon as never} size={9} color={sectionBadge.text} />
-            )}
-            <Text style={[s.sectionBadgeText, { color: sectionBadge.text }]}>
-              {sectionBadge.label}
-            </Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={s.heartBtn}
-          onPress={e => { e.stopPropagation(); onUnlike(); }}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="heart" size={15} color={COLORS.danger} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={s.cardBody}>
-        <Text style={s.cardName} numberOfLines={2}>{product.name}</Text>
-        {minPrice != null && exchangeRate != null
-          ? <Text style={s.cardPrice}>{formatKip(toLak(minPrice, exchangeRate))} / day</Text>
-          : <Text style={s.cardPriceUnavailable}>Price not set</Text>}
-        <View style={[s.availBadge, !product.available && s.availBadgeRented]}>
-          <Text style={[s.availBadgeText, !product.available && s.availBadgeTextRented]}>
-            {product.available ? 'Available' : 'Rented'}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 // ── LikedEmptyState ───────────────────────────────────────────────────────────
 
@@ -314,10 +233,12 @@ export default function LikedScreen() {
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const renderItem = useCallback(({ item }: { item: Product }) => (
-    <ProductCard
+    <ProductGridCard
       product={item}
+      width={CARD_WIDTH}
       onPress={() => router.push(`/product/${item.id}`)}
-      onUnlike={() => handleUnlike(item.id)}
+      isFavorite
+      onToggleFavorite={() => handleUnlike(item.id)}
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
     />
@@ -551,102 +472,6 @@ const s = StyleSheet.create({
   },
   row: {
     gap: COL_GAP,
-  },
-
-  // Card
-  card: {
-    width: CARD_WIDTH,
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-  },
-  cardImageWrap: {
-    position: 'relative',
-    width: '100%',
-    aspectRatio: 1,
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardImagePlaceholder: {
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heartBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  sectionBadge: {
-    position: 'absolute',
-    bottom: 7,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    height: 18,
-    paddingHorizontal: 6,
-    borderRadius: 5,
-  },
-  sectionBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  cardBody: {
-    padding: 10,
-    gap: 4,
-  },
-  cardName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    lineHeight: 17,
-  },
-  cardPrice: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.fg2,
-  },
-  cardPriceUnavailable: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    fontStyle: 'italic',
-  },
-  availBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#D1FAE5',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 2,
-  },
-  availBadgeRented: {
-    backgroundColor: COLORS.softGray200,
-  },
-  availBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#065F46',
-  },
-  availBadgeTextRented: {
-    color: COLORS.fg3,
   },
 
   // Empty states
