@@ -159,7 +159,7 @@ const s = StyleSheet.create({
   },
 
   sectionLabel: {
-    fontSize: 11, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase',
+    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
     color: COLORS.fg3, marginBottom: 10,
   },
 

@@ -237,7 +237,6 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.softGray,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
 

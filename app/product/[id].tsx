@@ -933,8 +933,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
     color: COLORS.fg3,
     marginBottom: 10,
   },
@@ -1337,8 +1336,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.amber,
     marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
   },
   adminReplyText: {
     fontSize: 13,

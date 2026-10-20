@@ -119,11 +119,10 @@ export function RentalReceipt({ rental, vatPercent }: RentalReceiptProps) {
 const s = StyleSheet.create({
   wrap: { gap: 4 },
   sectionLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.4,
+    letterSpacing: 0.2,
     color: COLORS.fg3,
-    textTransform: 'uppercase',
     marginBottom: 8,
     marginTop: 12,
   },

@@ -396,7 +396,7 @@ const s = StyleSheet.create({
   calDow: { flex: 1, alignItems: 'center', paddingBottom: 6 },
   calDowText: {
     fontSize: 10, fontWeight: '700', color: COLORS.softGray,
-    textTransform: 'uppercase', letterSpacing: 0.5,
+ letterSpacing: 0.5,
   },
 
   calRow: { flexDirection: 'row' },

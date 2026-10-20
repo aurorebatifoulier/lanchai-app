@@ -689,11 +689,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.amber,
   },
   statEye: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1.4,
+    letterSpacing: 0.2,
     color: COLORS.fg3,
-    textTransform: 'uppercase',
   },
   statVal: {
     fontSize: 18,
@@ -716,8 +715,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
     color: COLORS.fg3,
     marginBottom: 10,
     marginLeft: 4,

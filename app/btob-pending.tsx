@@ -145,8 +145,8 @@ const s = StyleSheet.create({
     padding: 16, marginBottom: 24,
   },
   infoBoxLabel: {
-    fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
-    color: COLORS.fg3, textTransform: 'uppercase', marginBottom: 10,
+    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
+    color: COLORS.fg3, marginBottom: 10,
   },
   infoRow: { paddingVertical: 7, gap: 2 },
   infoRowLabel: { fontSize: 11, fontWeight: '600', color: COLORS.fg3 },

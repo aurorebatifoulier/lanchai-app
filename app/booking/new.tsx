@@ -542,11 +542,10 @@ const s = StyleSheet.create({
     paddingTop: 20,
   },
   sectionLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.4,
+    letterSpacing: 0.2,
     color: COLORS.fg3,
-    textTransform: 'uppercase',
     marginBottom: 10,
   },
   sectionOptional: {
@@ -584,8 +583,7 @@ const s = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: COLORS.fg3,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   fieldBtnEyeFilled: {
     color: 'rgba(30,30,30,0.55)',

@@ -381,8 +381,7 @@ const s = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: COLORS.fg3,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   fieldEyeFilled: { color: 'rgba(30,30,30,0.55)' },
   fieldVal: {

@@ -121,7 +121,7 @@ export default function CategoryScreen() {
         <View style={styles.heroContent}>
           <View style={styles.heroLeft}>
             <Text style={[styles.heroEyebrow, { color: isDark ? COLORS.amber : 'rgba(30,30,30,0.55)' }]}>
-              CATEGORY · {products.length} ITEMS
+              Category · {products.length} item{products.length !== 1 ? 's' : ''}
             </Text>
             <Text style={[styles.heroTitle, { color: heroTextColor }]}>
               {catDetails?.label ?? cat?.name ?? id}
@@ -328,10 +328,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   heroEyebrow: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   heroTitle: {
     fontSize: 28,

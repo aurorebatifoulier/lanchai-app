@@ -428,7 +428,7 @@ const s = StyleSheet.create({
 
   sectionLabel: {
     fontSize: 11, fontWeight: '700', color: COLORS.fg3,
-    letterSpacing: 0.8, textTransform: 'uppercase',
+    letterSpacing: 0.2,
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8,
   },
 

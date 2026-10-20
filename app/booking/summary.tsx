@@ -574,11 +574,10 @@ const s = StyleSheet.create({
     padding: 14,
   },
   notesLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 0.2,
     color: COLORS.fg3,
-    textTransform: 'uppercase',
     marginBottom: 6,
   },
   notesText: {

@@ -602,11 +602,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.porcelain,
   },
   eyebrow: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1.6,
+    letterSpacing: 0.2,
     color: COLORS.fg3,
-    textTransform: 'uppercase',
     marginBottom: 4,
   },
   title: {
@@ -959,10 +958,9 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   sectionLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
     color: COLORS.fg3,
     marginBottom: 10,
   },

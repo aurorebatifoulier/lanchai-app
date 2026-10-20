@@ -547,8 +547,7 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.amber,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
     marginBottom: 4,
   },
   replyExistingText: {

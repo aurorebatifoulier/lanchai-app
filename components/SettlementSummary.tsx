@@ -133,11 +133,10 @@ const s = StyleSheet.create({
     gap: 8,
   },
   title: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.4,
+    letterSpacing: 0.2,
     color: COLORS.fg3,
-    textTransform: 'uppercase',
     marginBottom: 4,
   },
   lineBlock: { gap: 2 },

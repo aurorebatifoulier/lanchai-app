@@ -233,7 +233,7 @@ const s = StyleSheet.create({
   calMonthTitle: { fontSize: 16, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.2 },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
   calDow: { width: `${100 / 7}%` as `${number}%`, alignItems: 'center', paddingBottom: 4 },
-  calDowText: { fontSize: 10, fontWeight: '700', color: COLORS.softGray, textTransform: 'uppercase', letterSpacing: 0.5 },
+  calDowText: { fontSize: 10, fontWeight: '700', color: COLORS.softGray, letterSpacing: 0.5 },
   // Fixed height instead of aspectRatio:1 — a square cell scales with row width and
   // eats far more vertical space than the grid actually needs.
   calCell: { width: `${100 / 7}%` as `${number}%`, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
@@ -243,7 +243,7 @@ const s = StyleSheet.create({
   calCellTextDisabled: { color: COLORS.softGray },
   calCellTextSelected: { fontWeight: '800', color: COLORS.carbon },
 
-  fieldLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: COLORS.fg3, textTransform: 'uppercase', marginBottom: 8 },
+  fieldLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2, color: COLORS.fg3, marginBottom: 8 },
   // flex:1 fills whatever the fixed block above leaves within the sheet's definite
   // height; minHeight is a floor so the time list is never squeezed to invisible.
   timeScroll: { flex: 1, minHeight: 140, marginBottom: 8 },

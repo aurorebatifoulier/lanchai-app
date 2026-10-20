@@ -1062,8 +1062,8 @@ const d = StyleSheet.create({
   // Info cards
   card: { backgroundColor: COLORS.white, borderRadius: 12, padding: 16 },
   cardLabel: {
-    fontSize: 10, fontWeight: '800', letterSpacing: 1.4,
-    color: COLORS.fg3, textTransform: 'uppercase', marginBottom: 4,
+    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
+    color: COLORS.fg3, marginBottom: 4,
   },
   divider: { height: 1, backgroundColor: COLORS.softGray200, marginVertical: 6 },
 

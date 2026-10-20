@@ -1908,8 +1908,7 @@ const f = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.fg3,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
     marginBottom: 8,
   },
   listRow: {

@@ -339,8 +339,8 @@ const s = StyleSheet.create({
     gap: 8,
   },
   attentionTitle: {
-    fontSize: 11, fontWeight: '800', letterSpacing: 0.8,
-    color: COLORS.fg3, textTransform: 'uppercase',
+    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
+    color: COLORS.fg3,
   },
   attentionRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

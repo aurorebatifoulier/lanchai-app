@@ -93,8 +93,8 @@ const s = StyleSheet.create({
     padding: 16, marginBottom: 24,
   },
   reasonBoxLabel: {
-    fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
-    color: '#991B1B', textTransform: 'uppercase', marginBottom: 8,
+    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
+    color: '#991B1B', marginBottom: 8,
   },
   reasonText: { fontSize: 14, fontWeight: '500', color: '#991B1B', lineHeight: 20 },
   browseBtn: {
