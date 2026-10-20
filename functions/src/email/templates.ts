@@ -466,6 +466,58 @@ export function cancellationEmail(_name: string, rawItems: ResData[], shop: Emai
   return build(`Your LANCHAI booking is cancelled · ${orderId}`, preheader, 'Booking cancelled', blocks, shop);
 }
 
+// ── 4b. Missed pick-up ("We missed you") — friendly, never accusatory ───────────
+export function noShowEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
+  const items = sortByPickup(rawItems);
+  const orderId = orderIdOf(items);
+  const day = vteDay(items[0].pickupAtMs);
+  const wa = whatsappUrl(shop, `Hi LANCHAI, I missed my pick-up for order ${orderId} and I'd like to book again.`);
+  const contact: Button = wa
+    ? { label: 'Message us', url: wa, icon: 'whatsapp' }
+    : { label: 'Email us', url: `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Missed pick-up · ${orderId}`)}` };
+  const same = sameDates(items);
+
+  const missedInner: Inner[] = [];
+  if (same) missedInner.push({ type: 'struckDates', text: `${range(items[0])} · ${plural(items[0].durationDays, 'day')}` });
+  for (const r of items) {
+    missedInner.push({
+      type: 'line',
+      name: r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName,
+      detail: same ? undefined : range(r),
+      strikeDetail: true,
+      muted: true,
+      compact: same,
+    });
+  }
+
+  return build(
+    `We missed you · ${orderId}`,
+    'Nothing to pay — just send us a message to book again',
+    'We missed you',
+    [
+      {
+        type: 'hero',
+        pill: 'Missed pick-up',
+        title: 'We missed you',
+        sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+        primary: contact,
+        secondary: [{ label: 'View my rentals', url: appLink('reservations') }],
+      },
+      {
+        type: 'card',
+        items: [
+          { type: 'text', text: `Your pick-up on ${day} didn’t happen, so we’ve released your items for other renters.` },
+          { type: 'outcome', title: 'Nothing to pay', text: 'Nothing is charged until you collect your items.' },
+          { type: 'divider' },
+          { type: 'text', text: 'To keep bookings fair for everyone, new bookings are paused on your account until we hear from you — just send us a quick message and we’ll sort it out.', tone: 'muted' },
+        ],
+      },
+      { type: 'card', title: 'Your booking', items: missedInner },
+    ],
+    shop,
+  );
+}
+
 // ── 5. End-of-rental receipt (figures via deriveReceiptData — single source) ─────
 export function receiptEmail(_name: string, r: ResData, vatPercent: number | null, shop: EmailShop): Rendered {
   const data = deriveReceiptData(r, vatPercent);

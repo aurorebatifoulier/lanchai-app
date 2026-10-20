@@ -10,6 +10,7 @@ import {
 } from './shared/latePenalty';
 import { BREVO_API_KEY } from './email/config';
 import { loyaltyPointsFor } from './shared/loyalty';
+import { isPickupMissed } from './shared/dates';
 import { sendLateReturnEmail } from './email/triggers';
 
 // Transactional emails (Brevo) — see functions/src/email/.
@@ -215,8 +216,11 @@ export const syncBookingHold = onDocumentWritten(
 
     const overdueIds: string[] = [];
     const outstandingIds: string[] = [];
+    const noShowIds: string[] = [];
     for (const d of snap.docs) {
       const r = d.data();
+      // Admin-marked missed pick-up, until an admin lifts the hold (status stays no_show).
+      if (r.status === 'no_show' && !r.noShowHoldLiftedAt) noShowIds.push(d.id);
       if (r.status === 'active' && r.returnAt) {
         const { stage } = computeLatePenalty({
           returnAtMs: r.returnAt.toMillis(), nowMs: now,
@@ -229,16 +233,17 @@ export const syncBookingHold = onDocumentWritten(
       }
     }
 
-    if (overdueIds.length === 0 && outstandingIds.length === 0) {
+    if (overdueIds.length === 0 && outstandingIds.length === 0 && noShowIds.length === 0) {
       await holdRef.delete().catch(() => {});
       return;
     }
     const reasons: string[] = [];
     if (overdueIds.length > 0) reasons.push('overdue');
     if (outstandingIds.length > 0) reasons.push('outstanding');
+    if (noShowIds.length > 0) reasons.push('noShow');
     await holdRef.set({
       reasons,
-      reservationIds: [...new Set([...overdueIds, ...outstandingIds])],
+      reservationIds: [...new Set([...overdueIds, ...outstandingIds, ...noShowIds])],
       updatedAt: FieldValue.serverTimestamp(),
     });
   },
@@ -395,6 +400,43 @@ export const restoreCancelledCoupon = onDocumentUpdated(
       });
     } catch (err) {
       console.error('[restoreCancelledCoupon] failed', err);
+    }
+  },
+);
+
+// "Not picked up" admin alert: once the pick-up day is over (Vientiane time) for a
+// pending_payment/confirmed booking, notify admins ONCE per order. Alert only — never
+// changes the reservation status (a late pick-up still goes through; the admin decides
+// whether to mark a no-show). Equality-only query + date filter in code (no index).
+export const missedPickupAlerts = onSchedule(
+  { schedule: 'every 60 minutes', region: 'asia-southeast1' },
+  async () => {
+    const now = Date.now();
+    const snap = await db.collection('reservations')
+      .where('status', 'in', ['pending_payment', 'confirmed'])
+      .get();
+    const due = snap.docs.filter(d => {
+      const p: admin.firestore.Timestamp | undefined = d.get('pickupAt');
+      return p && isPickupMissed(p.toMillis(), now) && !d.get('missedPickupAlertAt');
+    });
+    if (due.length === 0) return;
+
+    const groups = new Map<string, admin.firestore.QueryDocumentSnapshot[]>();
+    for (const d of due) {
+      const key = d.get('orderId') ?? d.id;
+      groups.set(key, [...(groups.get(key) ?? []), d]);
+    }
+    const adminUids = (await db.collection('admins').get()).docs.map(a => a.id);
+    for (const [orderId, docs] of groups) {
+      const first = docs[0];
+      const names = docs.map(d => d.get('productName') ?? 'item').join(', ');
+      await sendAdminNotifs(adminUids, {
+        title: 'Not picked up',
+        body: `${first.get('renterName') ?? 'A renter'} didn't pick up ${names} (order ${orderId}). Mark it as a no-show or continue the pick-up if they come.`,
+        icon: 'alert', iconColor: 'amber',
+        deepLink: `/admin/reservations/${first.id}`,
+      });
+      await Promise.all(docs.map(d => d.ref.update({ missedPickupAlertAt: FieldValue.serverTimestamp() })));
     }
   },
 );
@@ -653,7 +695,7 @@ export const notifyClaimFiled = onDocumentWritten(
 // status-changing code paths get added later, instead of requiring every call site to
 // remember to keep a second write in sync.
 //
-// Terminal statuses (returned/cancelled/lost) delete the mirror rather than keep it
+// Terminal statuses (returned/cancelled/lost/no_show) delete the mirror rather than keep it
 // around with a stale status: getAvailableStock's own status filter is then pure
 // defense-in-depth, not the primary correctness mechanism.
 export const syncReservationOccupancy = onDocumentWritten(
@@ -668,7 +710,7 @@ export const syncReservationOccupancy = onDocumentWritten(
 
     const after = event.data.after.data()!;
 
-    if (['returned', 'cancelled', 'lost'].includes(after.status)) {
+    if (['returned', 'cancelled', 'lost', 'no_show'].includes(after.status)) {
       await occupancyRef.delete().catch(() => {});
       return;
     }

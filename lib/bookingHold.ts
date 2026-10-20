@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 // (functions/src/index.ts); clients can read their own doc but never write it. While it
 // exists, new reservations are refused — by firestore.rules' reservations create rule
 // (the real enforcement) and by the client guard below (for a clear error message).
-export type BookingHoldReason = 'overdue' | 'outstanding';
+export type BookingHoldReason = 'overdue' | 'outstanding' | 'noShow';
 
 export interface BookingHold {
   reasons: BookingHoldReason[];

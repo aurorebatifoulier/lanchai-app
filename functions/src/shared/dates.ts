@@ -28,3 +28,18 @@ export function vteDayTime(ms: number): string {
 export function utcStamp(ms: number): string {
   return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
+
+/** End of the local (Vientiane) day containing `ms` — i.e. next local midnight. */
+export function vteEndOfDayMs(ms: number): number {
+  const d = local(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - VIENTIANE_OFFSET_MS;
+}
+
+/**
+ * A pickup is "missed" once its whole pick-up day (Vientiane time) is over. This is an
+ * ALERT only ("Not picked up"), never a lock: a late pick-up still goes through the
+ * normal flow until an admin explicitly marks the reservation as no_show.
+ */
+export function isPickupMissed(pickupAtMs: number, nowMs: number = Date.now()): boolean {
+  return pickupAtMs > 0 && nowMs >= vteEndOfDayMs(pickupAtMs);
+}

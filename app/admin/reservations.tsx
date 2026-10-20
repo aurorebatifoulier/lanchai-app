@@ -18,6 +18,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { confirmReservationsPayment, type ReservationStatus } from '@/lib/firestore';
 import { overdueSeverity, overdueChipColors } from '@/utils/overdue';
+import { isPickupMissed } from '@/functions/src/shared/dates';
 import DateFilterSheet from '@/components/DateFilterSheet';
 import {
   DateFilterState,
@@ -43,7 +44,12 @@ export const STATUS_CONFIG: Record<ReservationStatus, { label: string; bg: strin
   returned:        { label: 'Returned',        bg: COLORS.softGray200,  fg: COLORS.fg3 },
   cancelled:       { label: 'Cancelled',       bg: '#FEE2E2',           fg: '#B91C1C' },
   lost:            { label: 'Lost/stolen',     bg: COLORS.danger,       fg: '#FFFFFF' },
+  no_show:         { label: 'No-show',         bg: '#EDE7DB',           fg: '#6B5A3A' },
 };
+
+// Alert-only badge for pending/confirmed bookings whose pick-up day is over — never a
+// lock (a late pick-up still goes through), until an admin marks the no-show.
+const NOT_PICKED_UP_BADGE = { label: 'Not picked up', bg: '#FDF0C4', fg: '#7A5500' };
 
 const FILTER_OPTIONS: Array<{ key: 'all' | ReservationStatus; label: string }> = [
   { key: 'all',             label: 'All' },
@@ -53,6 +59,7 @@ const FILTER_OPTIONS: Array<{ key: 'all' | ReservationStatus; label: string }> =
   { key: 'returned',        label: 'Returned' },
   { key: 'cancelled',       label: 'Cancelled' },
   { key: 'lost',            label: 'Lost/stolen' },
+  { key: 'no_show',         label: 'No-show' },
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -417,7 +424,9 @@ export default function AdminReservationsScreen() {
                   {/* Expanded items */}
                   {expanded && entry.rows.map((row, ri) => {
                     const isOverdue = row.status === 'active' && row.returnAt != null && row.returnAt.toMillis() < Date.now();
-                    const badge = isOverdue
+                    const isMissed = (row.status === 'pending_payment' || row.status === 'confirmed')
+                      && row.pickupAt != null && isPickupMissed(row.pickupAt.toMillis());
+                    const badge = isMissed ? NOT_PICKED_UP_BADGE : isOverdue
                       ? (() => {
                           const sev = overdueSeverity(row.returnAt!);
                           return {
@@ -465,7 +474,9 @@ export default function AdminReservationsScreen() {
 
             // Single row
             const isOverdue = entry.row.status === 'active' && entry.row.returnAt != null && entry.row.returnAt.toMillis() < Date.now();
-            const badge = isOverdue
+            const isMissed = (entry.row.status === 'pending_payment' || entry.row.status === 'confirmed')
+              && entry.row.pickupAt != null && isPickupMissed(entry.row.pickupAt.toMillis());
+            const badge = isMissed ? NOT_PICKED_UP_BADGE : isOverdue
               ? (() => {
                   const sev = overdueSeverity(entry.row.returnAt!);
                   return {

@@ -10,7 +10,7 @@ import { cancellationEmailVariant } from '../shared/cancellation';
 import { getEmailShop, getRecipient, getVatPercent, getRates, type EmailShop, type Recipient } from './context';
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
-  receiptEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail,
+  receiptEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   type ResData, type Rendered, type LateEmailStage,
 } from './templates';
 
@@ -130,6 +130,21 @@ export const emailReservationUpdates = onDocumentUpdated(
             reasonText: after.cancelReasonText ?? null,
             stillReserved,
           }), `cancellation-${variant}`);
+        });
+      }
+
+      // Missed pick-up ("We missed you") — one email per admin batch (same noShowAt).
+      if (before.status !== 'no_show' && after.status === 'no_show') {
+        const siblings = after.orderId
+          ? (await db().collection('reservations').where('orderId', '==', after.orderId).get()).docs
+          : [afterSnap as admin.firestore.QueryDocumentSnapshot];
+        let group = siblings.filter(d =>
+          d.get('status') === 'no_show' && !!after.noShowAt && d.get('noShowAt')?.isEqual?.(after.noShowAt));
+        if (!group.some(d => d.id === afterSnap.id)) group = [...group, afterSnap as admin.firestore.QueryDocumentSnapshot];
+        await claimAndSend(group.map(d => d.ref), 'emailNoShow', async claimed => {
+          const ids = new Set(claimed.map(r => r.id));
+          const items = group.filter(d => ids.has(d.id)).map(asRes).sort((a, b) => a.id.localeCompare(b.id));
+          return deliver(renterId, after.renterName, (name, shop) => noShowEmail(name, items, shop), 'no-show');
         });
       }
 
@@ -323,6 +338,7 @@ export const sendTestEmails = onCall(
       ['cancellation-B-partial',           cancellationEmail(name, [{ ...base, productId: 'sample', categoryId: 'outdoor' }], shop, {
         variant: 'B', reason: 'item_unavailable', reasonText: null, stillReserved: [second],
       })],
+      ['no-show',                          noShowEmail(name, [base, second], shop)],
       ['receipt',                          receiptEmail(name, closed, vat, shop)],
       ['btob-approved',                    btobApprovedEmail(name, shop)],
       ['btob-rejected',                    btobRejectedEmail(name, 'The registration document is not readable.', shop)],

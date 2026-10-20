@@ -11,6 +11,7 @@ export type EmailField =
   | 'emailPickupReminder'
   | 'emailReturnReminder'
   | 'emailCancellation'
+  | 'emailNoShow'
   | 'emailReceipt'
   | 'emailBtobApproved'
   | 'emailBtobRejected';

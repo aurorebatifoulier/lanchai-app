@@ -54,7 +54,7 @@ type RenderEntry =
 
 function getCategory(r: RentalDoc, now: number): TabId {
   if (r.status === 'cancelled') return 'cancelled';
-  if (r.status === 'returned')  return 'history';
+  if (r.status === 'returned' || r.status === 'no_show') return 'history';
   if (r.status === 'active')    return 'active';
   const pickup = r.pickupAt.toDate().getTime();
   const ret    = r.returnAt.toDate().getTime();
@@ -68,6 +68,9 @@ interface Badge { label: string; color: string; bg: string }
 function getBadge(r: RentalDoc, cat: TabId): Badge {
   if (r.status === 'cancelled') {
     return { label: 'Cancelled', color: COLORS.fg3, bg: COLORS.softGray200 };
+  }
+  if (r.status === 'no_show') {
+    return { label: 'Missed pick-up', color: COLORS.fg3, bg: COLORS.softGray200 };
   }
   if (cat === 'history') {
     return { label: 'Returned', color: COLORS.fg3, bg: COLORS.warmBeige };

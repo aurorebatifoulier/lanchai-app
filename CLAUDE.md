@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 16 Cloud Functions (scheduled, Firestore-triggered and 1 callable, Node 22). The
+  gaps found), 17 Cloud Functions (scheduled, Firestore-triggered and 1 callable, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -332,6 +332,19 @@ a snapshot indefinitely).
   - Email variant (`cancellationEmailVariant`): A = renter, or admin + `customer_request`;
     B = any other admin cancellation ("We're sorry, we had to cancel" + preset sentence);
     none for `admin_release`. Partial cancellations show a green "Still reserved" banner.
+- **No-show = booking hold (never automatic).** `isPickupMissed()` (`functions/src/shared/dates.ts`)
+  flags a `pending_payment`/`confirmed` booking whose pick-up day (Vientiane) is over as
+  "Not picked up" — an ALERT only (admin list badge, calendar day section, detail banner,
+  hourly `missedPickupAlerts` admin notification once per order via
+  `missedPickupAlertAt`). It never locks anything: a late pick-up still goes through the
+  normal flow. Only an admin "Mark as no-show" (`adminMarkNoShow`, this item or the whole
+  order, one batch) sets status **`no_show`** — final, terminal (occupancy released like a
+  cancellation, coupon NOT restored), "We missed you" email (`emailReservationUpdates`).
+  `syncBookingHold` adds the `noShow` reason (enforced by the existing reservations create
+  rule) until an admin "Lift no-show hold" (`adminLiftNoShowHold`: stamps
+  `noShowHoldLiftedAt/By/ByName` on the renter's no_show lines — status stays no_show
+  for history). Legal texts (Terms §8/§10, cancellation policy, FAQ) don't mention this
+  rule yet — wording pending Aurore's validation.
 - **Shop config (`config/shop`, `lib/shop.ts`) drives pickup/return slots and WhatsApp.**
   Slots are never hardcoded: every booking flow (single-item `app/booking/new.tsx`, bag
   `components/DateRangePicker.tsx`, and `<DateRangeCalendar>`'s required `timeSlots`

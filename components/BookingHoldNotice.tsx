@@ -16,8 +16,12 @@ export default function BookingHoldNotice({
 }) {
   const overdue     = hold.reasons.includes('overdue');
   const outstanding = hold.reasons.includes('outstanding');
+  const noShow      = hold.reasons.includes('noShow');
 
   const lines: string[] = [];
+  if (noShow) {
+    lines.push('Your account is on hold after a missed pick-up. Contact us to book again.');
+  }
   if (overdue) {
     lines.push('You have a rental that is overdue. Please return it first — you can book again once it has been returned.');
   }
@@ -28,7 +32,9 @@ export default function BookingHoldNotice({
   const ids = hold.reservationIds.join(', ');
   const message = overdue
     ? `Hi LANCHAI, I'd like to arrange the return of my overdue rental (reservation ID: ${ids}).`
-    : `Hi LANCHAI, I'd like to settle the balance on my rental (reservation ID: ${ids}).`;
+    : outstanding
+    ? `Hi LANCHAI, I'd like to settle the balance on my rental (reservation ID: ${ids}).`
+    : `Hi LANCHAI, I missed my pick-up (reservation ID: ${ids}) and I'd like to book again.`;
 
   return (
     <View style={[s.card, style]}>

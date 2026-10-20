@@ -16,11 +16,16 @@ import { Feather } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, type WriteBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { auth } from '@/lib/auth';
+import { isPickupMissed } from '@/functions/src/shared/dates';
+import type { BookingHold } from '@/lib/bookingHold';
 import {
   getUserProfile,
   getProduct,
   addStockAdjustmentToBatch,
   adminCancelReservations,
+  adminMarkNoShow,
+  adminLiftNoShowHold,
   getReservationsByOrderId,
   type RentalDoc,
   type ReservationStatus,
@@ -112,13 +117,17 @@ export default function AdminReservationDetailScreen() {
   const [actionError,   setActionError]   = useState<string | null>(null);
   // One confirm dialog at a time; null = buttons visible
   const [confirmAction, setConfirmAction] = useState<
-    'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost' | null
+    'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
+    | 'no_show' | 'lift_hold' | null
   >(null);
   // Admin cancellation — reason + scope (this line or the whole order)
   const [cancelReason,     setCancelReason]     = useState<CancelReason | null>(null);
   const [cancelReasonText, setCancelReasonText] = useState('');
   const [cancelScope,      setCancelScope]      = useState<'item' | 'order'>('item');
   const [orderSiblings,    setOrderSiblings]    = useState<RentalDoc[]>([]);
+  // No-show (admin-marked) + the renter's booking hold (bookingHolds/{renterId})
+  const [noShowScope,      setNoShowScope]      = useState<'item' | 'order'>('item');
+  const [renterHold,       setRenterHold]       = useState<BookingHold | null>(null);
   const [lostStaffName,          setLostStaffName]          = useState('');
   const [lostNotes,              setLostNotes]              = useState('');
   const [lostChargeAmountInput,  setLostChargeAmountInput]  = useState('');
@@ -260,6 +269,76 @@ export default function AdminReservationDetailScreen() {
       setActioning(false);
     }
   }, [reservation, cancelReason, cancelReasonText, actioning]);
+
+  // ── No-show ───────────────────────────────────────────────────────────────
+  const adminIdentity = () => {
+    const u = auth.currentUser;
+    return { uid: u?.uid ?? 'unknown', name: u?.displayName || u?.email || 'Admin' };
+  };
+
+  // The renter's booking hold — admins can read bookingHolds/* (firestore.rules).
+  const loadRenterHold = useCallback(() => {
+    if (!reservation?.renterId) return;
+    getDoc(doc(db, 'bookingHolds', reservation.renterId))
+      .then(snap => setRenterHold(snap.exists() ? (snap.data() as BookingHold) : null))
+      .catch(() => setRenterHold(null));
+  }, [reservation?.renterId]);
+  useEffect(() => { loadRenterHold(); }, [loadRenterHold, reservation?.status]);
+
+  const openNoShow = useCallback(() => {
+    setNoShowScope('item');
+    setOrderSiblings([]);
+    setConfirmAction('no_show');
+    if (reservation?.orderId) {
+      getReservationsByOrderId(reservation.orderId).then(setOrderSiblings).catch(() => setOrderSiblings([]));
+    }
+  }, [reservation?.orderId]);
+
+  // One batch (same noShowAt) → one "We missed you" email. Final — mistakes are handled
+  // by lifting the hold, not by reverting the status.
+  const handleMarkNoShow = useCallback(async (ids: string[]) => {
+    if (!reservation || actioning) return;
+    setActioning(true);
+    setActionError(null);
+    setConfirmAction(null);
+    try {
+      const me = adminIdentity();
+      await adminMarkNoShow(ids, me.uid, me.name);
+      setReservation(prev => prev ? { ...prev, status: 'no_show', noShowByName: me.name } : prev);
+      await sendNotif(reservation.renterId, {
+        type: 'rental',
+        icon: 'calendar',
+        iconColor: 'amber',
+        title: 'We missed you',
+        body: 'Your pick-up didn’t happen, so we released the items. Nothing to pay — message us to book again.',
+        deepLink: ids.length > 1 ? '/reservations' : `/rentals/${reservation.id}`,
+      });
+    } catch (err: any) {
+      console.error('[AdminReservationDetail] no-show error:', err?.code, err?.message);
+      setActionError('Failed to mark as no-show. Please try again.');
+    } finally {
+      setActioning(false);
+    }
+  }, [reservation, actioning]);
+
+  const handleLiftHold = useCallback(async () => {
+    if (!reservation || actioning) return;
+    setActioning(true);
+    setActionError(null);
+    setConfirmAction(null);
+    try {
+      const me = adminIdentity();
+      await adminLiftNoShowHold(reservation.renterId, me.uid, me.name);
+      setReservation(prev => prev ? { ...prev, noShowHoldLiftedByName: me.name } : prev);
+      // syncBookingHold recomputes the hold server-side; refresh after a short delay.
+      setTimeout(loadRenterHold, 2500);
+    } catch (err: any) {
+      console.error('[AdminReservationDetail] lift hold error:', err?.code, err?.message);
+      setActionError('Failed to lift the hold. Please try again.');
+    } finally {
+      setActioning(false);
+    }
+  }, [reservation, actioning, loadRenterHold]);
 
   // ── Phone handlers ────────────────────────────────────────────────────────
   const handleEditPhone = useCallback(() => {
@@ -417,6 +496,26 @@ export default function AdminReservationDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* Not picked up — an ALERT only: the normal pick-up flow below still works. */}
+        {(status === 'pending_payment' || status === 'confirmed') && isPickupMissed(reservation.pickupAt.toMillis()) && (
+          <View style={d.missedBanner}>
+            <Feather name="alert-circle" size={14} color="#7A5500" />
+            <Text style={d.missedBannerText}>
+              Not picked up — the pick-up day is over. If the customer still comes, continue as usual; otherwise mark it as a no-show below.
+            </Text>
+          </View>
+        )}
+
+        {/* Renter's booking hold after a missed pick-up */}
+        {renterHold?.reasons.includes('noShow') && (
+          <View style={d.missedBanner}>
+            <Feather name="pause-circle" size={14} color="#7A5500" />
+            <Text style={d.missedBannerText}>
+              On hold — missed pick-up. This customer can’t make new bookings until the hold is lifted.
+            </Text>
+          </View>
+        )}
 
         {/* Late-return state — admin-only, so the internal grace period may be named here. */}
         {isReturnOverdue && latePenalty && (
@@ -916,6 +1015,51 @@ export default function AdminReservationDetailScreen() {
               />
             </ConfirmBox>
           )}
+          {!actioning && confirmAction === 'no_show' && (() => {
+            const otherMissed = orderSiblings.filter(r =>
+              r.id !== id && (r.status === 'pending_payment' || r.status === 'confirmed')
+              && isPickupMissed(r.pickupAt.toMillis()));
+            return (
+              <ConfirmBox
+                text={noShowScope === 'order'
+                  ? `Mark the whole order (${otherMissed.length + 1} items) as a no-show? The items are released and new bookings are paused for this customer until you lift the hold. This is final.`
+                  : 'Mark as a no-show? The item is released and new bookings are paused for this customer until you lift the hold. This is final.'}
+                confirmLabel="Mark as no-show"
+                cancelLabel="Keep"
+                onCancel={() => setConfirmAction(null)}
+                onConfirm={() => handleMarkNoShow(noShowScope === 'order' ? [id!, ...otherMissed.map(r => r.id)] : [id!])}
+                destructive
+              >
+                {otherMissed.length > 0 && (
+                  <View style={d.chipRow}>
+                    {(['item', 'order'] as const).map(sc => (
+                      <TouchableOpacity
+                        key={sc}
+                        style={[d.chip, noShowScope === sc && d.chipActive]}
+                        onPress={() => setNoShowScope(sc)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[d.chipText, noShowScope === sc && d.chipTextActive]}>
+                          {sc === 'item' ? 'This item only' : `Whole order (${otherMissed.length + 1} items)`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </ConfirmBox>
+            );
+          })()}
+
+          {!actioning && confirmAction === 'lift_hold' && (
+            <ConfirmBox
+              text="Lift the no-show hold? The customer can book again right away. The no-show stays in the history."
+              confirmLabel="Lift hold"
+              cancelLabel="Keep"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={handleLiftHold}
+            />
+          )}
+
           {!actioning && confirmAction === 'cancel' && (() => {
             const otherLines = orderSiblings.filter(r =>
               r.id !== id && (ADMIN_CANCELLABLE_STATUSES as readonly string[]).includes(r.status));
@@ -1031,6 +1175,20 @@ export default function AdminReservationDetailScreen() {
                 onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
               />
 
+              {/* No-show — only once the pick-up day is over (alert, never automatic) */}
+              {(status === 'pending_payment' || status === 'confirmed') && isPickupMissed(reservation.pickupAt.toMillis()) && (
+                <TouchableOpacity style={d.cancelLink} onPress={openNoShow} activeOpacity={0.7}>
+                  <Text style={d.cancelLinkText}>Mark as no-show</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Lift the renter's no-show hold */}
+              {renterHold?.reasons.includes('noShow') && (
+                <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('lift_hold')} activeOpacity={0.7}>
+                  <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Lift no-show hold</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Cancel — only before pickup */}
               {(status === 'pending_payment' || status === 'confirmed') && (
                 <TouchableOpacity
@@ -1043,6 +1201,14 @@ export default function AdminReservationDetailScreen() {
               )}
 
               {/* End states */}
+              {status === 'no_show' && (
+                <View style={d.endState}>
+                  <Feather name="calendar" size={15} color={COLORS.fg3} />
+                  <Text style={d.endStateText}>
+                    {`No-show${reservation.noShowByName ? ` — marked by ${reservation.noShowByName}` : ''}${reservation.noShowHoldLiftedByName ? ` · hold lifted by ${reservation.noShowHoldLiftedByName}` : ''}`}
+                  </Text>
+                </View>
+              )}
               {status === 'cancelled' && (
                 <View style={d.endState}>
                   <Feather name="x-circle" size={15} color={COLORS.fg3} />
@@ -1214,6 +1380,11 @@ const d = StyleSheet.create({
   primaryBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.1 },
 
   cancelLink: { alignItems: 'center', paddingVertical: 8 },
+  missedBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#FDF0C4', borderRadius: 10, padding: 12, marginTop: 8,
+  },
+  missedBannerText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#7A5500', lineHeight: 17 },
   cancelFieldLabel: { fontSize: 12, fontWeight: '700', color: COLORS.carbon, marginTop: 4, marginBottom: 6 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
   chip: {

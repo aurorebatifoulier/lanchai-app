@@ -50,7 +50,7 @@ type TabId = 'upcoming' | 'active' | 'history';
 
 
 function getCategory(r: RentalDoc, now: number): TabId {
-  if (r.status === 'returned') return 'history';
+  if (r.status === 'returned' || r.status === 'no_show') return 'history';
   if (r.status === 'active')   return 'active';
   const pickup = r.pickupAt.toDate().getTime();
   const ret    = r.returnAt.toDate().getTime();
@@ -64,6 +64,9 @@ interface Badge { label: string; color: string; bg: string }
 function getBadge(r: RentalDoc, cat: TabId): Badge {
   if (r.status === 'cancelled') {
     return { label: 'Cancelled', color: COLORS.fg3, bg: COLORS.softGray200 };
+  }
+  if (r.status === 'no_show') {
+    return { label: 'Missed pick-up', color: COLORS.fg3, bg: COLORS.softGray200 };
   }
   if (cat === 'history') {
     return { label: 'Returned', color: COLORS.fg3, bg: COLORS.warmBeige };
@@ -534,6 +537,16 @@ export default function RentalDetailScreen() {
           <View style={s.cancelledBanner}>
             <Feather name="x-circle" size={14} color={COLORS.fg3} />
             <Text style={s.cancelledBannerText}>This rental has been cancelled.</Text>
+          </View>
+        )}
+
+        {/* ── Missed pick-up banner (friendly, never accusatory) ── */}
+        {rental.status === 'no_show' && (
+          <View style={s.cancelledBanner}>
+            <Feather name="calendar" size={14} color={COLORS.fg3} />
+            <Text style={s.cancelledBannerText}>
+              We missed you at pick-up, so this booking was released. Nothing to pay — message us to book again.
+            </Text>
           </View>
         )}
 

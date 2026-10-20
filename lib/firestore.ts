@@ -132,7 +132,10 @@ export type ReservationStatus =
   | 'active'
   | 'returned'
   | 'cancelled'
-  | 'lost'; // reported lost/stolen — terminal, never returned
+  | 'lost'
+  // Admin-marked missed pick-up (never automatic). Terminal: releases occupancy like a
+  // cancellation, and holds new bookings (syncBookingHold) until an admin lifts it.
+  | 'no_show'; // reported lost/stolen — terminal, never returned
 
 // ── Rental checklist (handover / return) ──────────────────────────────────────
 export type ChecklistRating = 'good' | 'fair' | 'damaged' | 'unusable';
@@ -215,6 +218,17 @@ export interface RentalDoc {
   // Optional advance paid before pick-up — never written today (payment happens at
   // pick-up). If it ever exists, cancellationOutcome() applies the policy tiers.
   advancePaidLak?: number;
+
+  // ── No-show (admin-marked only) ───────────────────────────────────────────
+  noShowAt?: Timestamp;
+  noShowBy?: string;                  // admin uid
+  noShowByName?: string;
+  // Lifting the booking hold keeps status 'no_show' (history) — only these are set.
+  noShowHoldLiftedAt?: Timestamp;
+  noShowHoldLiftedBy?: string;        // admin uid
+  noShowHoldLiftedByName?: string;
+  // Idempotency marker of the missedPickupAlerts Cloud Function (admin notification).
+  missedPickupAlertAt?: Timestamp;
 
   // ── Damage/loss charge — set by the return checklist (damaged/unusable) or the
   // "Report lost/stolen" admin action. Absent = no charge was ever computed. ──────
@@ -422,6 +436,51 @@ export async function cancelReservations(ids: string[]): Promise<void> {
 }
 
 // ── Admin bulk actions ────────────────────────────────────────────────────────
+
+// Marks one or several lines (e.g. a whole order) as no-show in ONE batch — same
+// noShowAt, so the "We missed you" email trigger sends one grouped email. Only for
+// pending_payment/confirmed reservations whose pick-up day is over (isPickupMissed).
+// Final: a mistaken no-show is handled by lifting the hold, not by reverting it.
+// Throws on Firestore error — caller must handle.
+export async function adminMarkNoShow(ids: string[], adminUid: string, adminName: string): Promise<void> {
+  if (ids.length === 0) return;
+  const batch = writeBatch(db);
+  for (const id of ids) {
+    batch.update(doc(db, 'reservations', id), {
+      status:       'no_show',
+      noShowAt:     serverTimestamp(),
+      noShowBy:     adminUid,
+      noShowByName: adminName,
+      updatedAt:    serverTimestamp(),
+    });
+  }
+  await batch.commit();
+}
+
+// Lifts the no-show booking hold for a renter: stamps every not-yet-lifted no_show
+// reservation of that renter (they stay no_show in the history). syncBookingHold then
+// recomputes bookingHolds/{renterId}. Equality-only query → no composite index.
+// Throws on Firestore error — caller must handle.
+export async function adminLiftNoShowHold(renterId: string, adminUid: string, adminName: string): Promise<number> {
+  const snap = await getDocs(query(
+    collection(db, 'reservations'),
+    where('renterId', '==', renterId),
+    where('status', '==', 'no_show'),
+  ));
+  const open = snap.docs.filter(d => !d.get('noShowHoldLiftedAt'));
+  if (open.length === 0) return 0;
+  const batch = writeBatch(db);
+  for (const d of open) {
+    batch.update(d.ref, {
+      noShowHoldLiftedAt:     serverTimestamp(),
+      noShowHoldLiftedBy:     adminUid,
+      noShowHoldLiftedByName: adminName,
+      updatedAt:              serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  return open.length;
+}
 
 // Admin cancellation of one or several lines (e.g. a whole order) in ONE batch: the
 // shared serverTimestamp gives every line the same cancelledAt, which is how the

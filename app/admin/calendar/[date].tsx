@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { overdueSeverity, overdueLabel, overdueChipColors } from '@/utils/overdue';
+import { isPickupMissed } from '@/functions/src/shared/dates';
 import {
   RentalDoc,
   AdminTask,
@@ -198,6 +199,7 @@ export default function AdminCalendarDayScreen() {
 
   const [pending, setPending] = useState<RentalDoc[]>([]);
   const [pickups, setPickups] = useState<RentalDoc[]>([]);
+  const [notPickedUp, setNotPickedUp] = useState<RentalDoc[]>([]);
   const [returns, setReturns] = useState<RentalDoc[]>([]);
   const [overdue, setOverdue] = useState<RentalDoc[]>([]);
   const [tasks, setTasks] = useState<AdminTask[]>([]);
@@ -239,8 +241,12 @@ export default function AdminCalendarDayScreen() {
       overdueList = allActive.filter((r: RentalDoc) => r.returnAt && r.returnAt.toMillis() < dayStart.toMillis());
     }
 
-    setPending(filteredPending);
-    setPickups(filteredPickups);
+    // "Not picked up" (pick-up day over, still pending/confirmed) — an alert only; the
+    // reservation stays fully actionable from its detail screen.
+    const missed = (r: RentalDoc) => !!r.pickupAt && isPickupMissed(r.pickupAt.toMillis());
+    setNotPickedUp([...filteredPending, ...filteredPickups].filter(missed));
+    setPending(filteredPending.filter((r: RentalDoc) => !missed(r)));
+    setPickups(filteredPickups.filter((r: RentalDoc) => !missed(r)));
     setReturns(filteredReturns);
     setOverdue(overdueList);
     setTasks(allTasks);
@@ -322,7 +328,7 @@ export default function AdminCalendarDayScreen() {
     setAdding(false);
   }, [newTitle, newNote, user, dayStart]);
 
-  const noReservations = pending.length === 0 && pickups.length === 0 && returns.length === 0 && overdue.length === 0;
+  const noReservations = notPickedUp.length === 0 && pending.length === 0 && pickups.length === 0 && returns.length === 0 && overdue.length === 0;
   const isEmpty = noReservations && tasks.length === 0;
 
   return (
@@ -356,6 +362,22 @@ export default function AdminCalendarDayScreen() {
           <Text style={s.errorText}>Failed to load — pull to refresh</Text>
         ) : (
           <>
+            {/* ── Not picked up (alert only) ── */}
+            {notPickedUp.length > 0 && (
+              <View style={s.section}>
+                <SectionHeader icon="alert-circle" label="Not picked up" color={COLORS.danger} />
+                {notPickedUp.map(r => (
+                  <ReservationRow
+                    key={r.id}
+                    item={r}
+                    type={r.status === 'pending_payment' ? 'pending' : 'pickup'}
+                    profile={renterProfiles[r.renterId]}
+                    onPress={() => router.push(`/admin/reservations/${r.id}` as any)}
+                  />
+                ))}
+              </View>
+            )}
+
             {/* ── Awaiting payment ── */}
             {pending.length > 0 && (
               <View style={s.section}>
