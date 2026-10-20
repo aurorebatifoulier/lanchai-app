@@ -304,10 +304,11 @@ export default function BookingSummaryScreen() {
           {cancelPolicyOpen && (
             <View style={s.depositExplain}>
               {[
-                'More than 48 hours before pickup: full refund of your advance.',
-                'Between 24 and 48 hours before pickup: your advance becomes a non-transferable credit for a future rental.',
-                'Less than 24 hours before pickup, or no-show: the advance is not refunded.',
-                'Premium items may be non-refundable regardless of cancellation date.',
+                // Reality at launch: nothing is charged before pick-up (no advance). The
+                // full policy tiers live in lib/legalContent.ts (pending review).
+                'Nothing is charged before pick-up — you pay in store when you collect your items.',
+                'Free cancellation: cancel anytime before pick-up in the app (My rentals).',
+                'Can’t make it? Please cancel so someone else can rent the item.',
               ].map((line, i) => (
                 <View key={i} style={s.depositExplainRow}>
                   <Text style={s.depositExplainBullet}>·</Text>

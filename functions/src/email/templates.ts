@@ -10,6 +10,9 @@ import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
 import { loyaltyPointsFor } from '../shared/loyalty';
+import {
+  cancellationOutcome, CANCEL_REASONS, type CancelReason, type CancellationOutcome,
+} from '../shared/cancellation';
 
 // Every LANCHAI email's content, on the shared card layout (layout.ts).
 // - Amounts ONLY from frozen reservation fields — never recalculated.
@@ -46,6 +49,12 @@ export interface ResData extends ReceiptInput {
   outstandingWrittenOff?: boolean;
   /** Product's "What's included" list (products/{id}.whatsIncluded), when loaded. */
   included?: string[];
+  /** Product data loaded at send time (cancellation email). */
+  isPremium?: boolean;
+  categoryId?: string;
+  /** Optional advance paid before pick-up — never set today (see shared/cancellation.ts). */
+  advancePaidLak?: number;
+  cancelledAtMs?: number;
 }
 
 // ── Shared pieces ──────────────────────────────────────────────────────────────
@@ -330,31 +339,131 @@ export function returnReminderEmail(
   );
 }
 
-// ── 4. Cancellation ──────────────────────────────────────────────────────────────
-export function cancellationEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
+// ── 4. Cancellation — variant A (customer) / B (LANCHAI) ─────────────────────────
+export interface CancellationContext {
+  variant: 'A' | 'B';
+  reason?: CancelReason | null;
+  reasonText?: string | null;
+  /** Lines of the same order that are still reserved (partial cancellation). */
+  stillReserved: ResData[];
+}
+
+const HOUR = 60 * 60 * 1000;
+
+/** Per-order outcome, from the SAME rules as the app (shared/cancellation.ts). */
+function orderOutcome(items: ResData[], byLanchai: boolean): { kind: CancellationOutcome['kind']; amountLak: number; validUntilMs?: number } {
+  const outcomes = items.map(r => cancellationOutcome({
+    advancePaidLak: r.advancePaidLak,
+    hoursUntilPickup: (r.pickupAtMs - (r.cancelledAtMs ?? Date.now())) / HOUR,
+    isPremium: r.isPremium,
+    byLanchai,
+    cancelledAtMs: r.cancelledAtMs,
+  }));
+  // Most significant outcome for the headline; amounts summed over the lines that have it.
+  const order: CancellationOutcome['kind'][] = ['retained', 'store_credit', 'full_refund', 'nothing_to_pay'];
+  const kind = order.find(k => outcomes.some(o => o.kind === k)) ?? 'nothing_to_pay';
+  const same = outcomes.filter(o => o.kind === kind) as Exclude<CancellationOutcome, { kind: 'nothing_to_pay' }>[];
+  const amountLak = same.reduce((s, o) => s + ('amountLak' in o ? o.amountLak : 0), 0);
+  const validUntilMs = same.find((o): o is Extract<CancellationOutcome, { kind: 'store_credit' }> => o.kind === 'store_credit')?.validUntilMs;
+  return { kind, amountLak, validUntilMs };
+}
+
+function outcomeInner(o: ReturnType<typeof orderOutcome>): Inner {
+  switch (o.kind) {
+    case 'nothing_to_pay': return { type: 'outcome', title: 'Nothing to pay', text: 'Nothing is charged until you collect your items.' };
+    case 'full_refund':    return { type: 'outcome', title: 'Full refund', text: `Your advance of ${fmtLak(o.amountLak)} will be refunded in full.` };
+    case 'store_credit':   return { type: 'outcome', title: 'Store credit', text: `Your advance of ${fmtLak(o.amountLak)} becomes a store credit, valid until ${vteDay(o.validUntilMs ?? Date.now())}.` };
+    case 'retained':       return { type: 'outcome', title: 'Advance kept', text: `As per our cancellation policy, your advance of ${fmtLak(o.amountLak)} is kept.` };
+  }
+}
+
+export function cancellationEmail(_name: string, rawItems: ResData[], shop: EmailShop, ctx: CancellationContext): Rendered {
   const items = sortByPickup(rawItems);
   const orderId = orderIdOf(items);
-  return build(
-    `Your LANCHAI booking is cancelled · ${orderId}`,
-    `${plural(items.length, 'item')} cancelled`,
-    'Booking cancelled',
-    [
-      {
-        type: 'hero',
-        pill: 'Booking cancelled',
-        title: items.length > 1 ? 'Your items have been cancelled' : 'Your booking has been cancelled',
-        sub: `${plural(items.length, 'item')} · Order ${orderId}`,
-        primary: { label: 'View my rentals', url: appLink('reservations') },
+  const byLanchai = ctx.variant === 'B';
+  const outcome = orderOutcome(items, byLanchai);
+  const same = sameDates(items);
+
+  // "Cancelled items": struck-through dates (once if identical), greyed names, "× n".
+  const cancelledInner: Inner[] = [];
+  if (same) cancelledInner.push({ type: 'struckDates', text: `${range(items[0])} · ${plural(items[0].durationDays, 'day')}` });
+  for (const r of items) {
+    cancelledInner.push({
+      type: 'line',
+      name: r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName,
+      detail: same ? undefined : range(r),
+      strikeDetail: true,
+      muted: true,
+      compact: same,
+    });
+  }
+
+  const blocks: Block[] = [];
+  const wa = whatsappUrl(shop, `Hi LANCHAI, about my cancelled order ${orderId}: `);
+  if (ctx.variant === 'A') {
+    blocks.push({
+      type: 'hero',
+      pill: 'Booking cancelled',
+      title: 'No worries — plans change',
+      sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+      primary: {
+        label: 'Book again',
+        url: items.length === 1 && items[0].productId ? appLink(`product/${items[0].productId}`) : appLink('explore'),
       },
-      itemsCard(items),
-      { type: 'card', items: [
-        { type: 'text', text: 'Any refund of your advance follows our cancellation policy.', tone: 'muted' },
-        { type: 'text', text: 'Didn’t request this cancellation? Just reply to this email.', tone: 'muted', small: true },
-      ] },
-      cancellationLine(),
-    ],
-    shop,
-  );
+      secondary: [{ label: 'View my rentals', url: appLink('reservations') }],
+    });
+    blocks.push({ type: 'card', items: [outcomeInner(outcome)] });
+  } else {
+    const preset = ctx.reason ? CANCEL_REASONS[ctx.reason] : null;
+    const sentence = preset?.renterSentence ?? 'We had to cancel your booking.';
+    const extra = ctx.reasonText?.trim();
+    const category = items.find(r => r.categoryId)?.categoryId;
+    blocks.push({
+      type: 'hero',
+      pill: 'Booking cancelled',
+      title: 'We’re sorry, we had to cancel',
+      sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+      primary: { label: 'Find something similar', url: category ? appLink(`category/${category}`) : appLink('explore') },
+      secondary: wa ? [{ label: 'Message us', url: wa, icon: 'whatsapp' }] : undefined,
+    });
+    blocks.push({
+      type: 'card',
+      title: 'What happened',
+      items: [
+        { type: 'text', text: sentence },
+        ...(extra && ctx.reason === 'other' ? [{ type: 'text' as const, text: extra, tone: 'muted' as const }] : []),
+        { type: 'divider' },
+        outcomeInner(outcome),
+      ],
+    });
+  }
+
+  if (ctx.stillReserved.length > 0) {
+    blocks.push({
+      type: 'banner',
+      lines: sortByPickup(ctx.stillReserved).map(r =>
+        `Still reserved: ${r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName} — ${vteDay(r.pickupAtMs)} at ${vteTime(r.pickupAtMs)}`),
+    });
+  }
+
+  blocks.push({ type: 'card', title: 'Cancelled items', items: cancelledInner });
+
+  if (ctx.variant === 'A') {
+    blocks.push({ type: 'center', text: 'Didn’t request this cancellation? Just reply to this email.' });
+  }
+  blocks.push({ type: 'center', text: '', link: { label: 'Cancellation policy', url: appLink('legal/cancellation') } });
+
+  const preheader = byLanchai
+    ? (outcome.kind === 'full_refund'
+      ? 'We’re sorry — your advance will be refunded in full'
+      : 'We’re sorry — nothing to pay, let’s find you an alternative')
+    : outcome.kind === 'store_credit'
+      ? `Your store credit of ${fmtLak(outcome.amountLak)} is ready`
+      : outcome.kind === 'nothing_to_pay'
+        ? 'Nothing to pay — hope to see you again soon'
+        : 'Your booking is cancelled';
+
+  return build(`Your LANCHAI booking is cancelled · ${orderId}`, preheader, 'Booking cancelled', blocks, shop);
 }
 
 // ── 5. End-of-rental receipt (figures via deriveReceiptData — single source) ─────

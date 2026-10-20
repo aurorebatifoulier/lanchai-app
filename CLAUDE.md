@@ -312,6 +312,23 @@ a snapshot indefinitely).
     re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane,
     skipped when `users/{uid}.emailRemindersOptOut` (Personal info toggle). Dates in
     emails are the stored `pickupLabel`/`returnLabel` — functions run in UTC.
+- **Cancellations — `functions/src/shared/cancellation.ts` is the single source.**
+  Business reality at launch: **nothing is charged before pick-up** (no advance), so
+  every outcome is "nothing to pay" and no renter screen/email warns about losing money.
+  `cancellationOutcome()` keeps the policy tiers (`cancelTier()`: >48h free, 24–48h
+  store credit 6 months, <24h retained, premium) for the day a reservation carries an
+  optional `advancePaidLak > 0` — never written today. The legal texts and FAQ
+  (`lib/legalContent.ts`, `app/profile/faq.tsx`) still describe a 40% advance and are
+  pending review — don't "fix" them without Aurore.
+  - Admin cancellation (`app/admin/reservations/[id].tsx`): `pending_payment`/`confirmed`
+    only (an `active` rental is a return, not a cancellation), reason preset
+    (`CANCEL_REASONS`) + optional text, this line or the whole order, via
+    `adminCancelReservations()` — ONE batch, same `cancelledAt`, so the email trigger
+    sends one grouped email. Stores `cancelledBy: 'admin'`, `cancelReason`,
+    `cancelReasonText`, `cancelledAt`.
+  - Email variant (`cancellationEmailVariant`): A = renter, or admin + `customer_request`;
+    B = any other admin cancellation ("We're sorry, we had to cancel" + preset sentence);
+    none for `admin_release`. Partial cancellations show a green "Still reserved" banner.
 - **Shop config (`config/shop`, `lib/shop.ts`) drives pickup/return slots and WhatsApp.**
   Slots are never hardcoded: every booking flow (single-item `app/booking/new.tsx`, bag
   `components/DateRangePicker.tsx`, and `<DateRangeCalendar>`'s required `timeSlots`

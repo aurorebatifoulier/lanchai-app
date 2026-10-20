@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { getBookingHold, BookingHoldError } from './bookingHold';
+import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
 
 // Throws on Firestore error — callers must handle.
@@ -203,6 +204,15 @@ export interface RentalDoc {
   handoverChecklist?: ChecklistData;
   returnChecklist?: ChecklistData;
   couponApplied?: { id: string; percent: number; discountAmount: number };
+
+  // ── Cancellation ──────────────────────────────────────────────────────────
+  cancelledAt?: Timestamp;
+  cancelledBy?: 'renter' | 'admin' | 'admin_release';
+  cancelReason?: CancelReason;        // admin cancellations only (functions/src/shared/cancellation.ts)
+  cancelReasonText?: string;          // optional free text from the admin
+  // Optional advance paid before pick-up — never written today (payment happens at
+  // pick-up). If it ever exists, cancellationOutcome() applies the policy tiers.
+  advancePaidLak?: number;
 
   // ── Damage/loss charge — set by the return checklist (damaged/unusable) or the
   // "Report lost/stolen" admin action. Absent = no charge was ever computed. ──────
@@ -410,6 +420,31 @@ export async function cancelReservations(ids: string[]): Promise<void> {
 }
 
 // ── Admin bulk actions ────────────────────────────────────────────────────────
+
+// Admin cancellation of one or several lines (e.g. a whole order) in ONE batch: the
+// shared serverTimestamp gives every line the same cancelledAt, which is how the
+// cancellation email trigger groups them into a single email. Pass only
+// pending_payment/confirmed reservations (ADMIN_CANCELLABLE_STATUSES).
+// Throws on Firestore error — caller must handle.
+export async function adminCancelReservations(
+  ids: string[],
+  reason: CancelReason,
+  reasonText: string,
+): Promise<void> {
+  if (ids.length === 0) return;
+  const batch = writeBatch(db);
+  for (const id of ids) {
+    batch.update(doc(db, 'reservations', id), {
+      status:           'cancelled',
+      cancelledAt:      serverTimestamp(),
+      cancelledBy:      'admin',
+      cancelReason:     reason,
+      cancelReasonText: reasonText.trim(),
+      updatedAt:        serverTimestamp(),
+    });
+  }
+  await batch.commit();
+}
 
 // Force-clears a reservation that's stuck showing as blocked (early return, a
 // cancellation that didn't go through the normal flow, or similar data drift) — a

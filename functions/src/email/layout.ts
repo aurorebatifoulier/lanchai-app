@@ -16,6 +16,8 @@ const CREAM = '#FAFAF7';
 const MUTED = '#6B6B6B';
 const BORDER = '#ECECEA';
 const DANGER = '#C8412C';
+const SUCCESS = '#2E8B57';
+const SUCCESS_TINT = '#E8F5EE';
 const FONT = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif";
 
 export interface Button { label: string; url: string; icon?: EmailIcon }
@@ -29,7 +31,10 @@ export type Inner =
   | { type: 'subtle'; text: string }                                  // small grey line
   | { type: 'dates'; text: string }                                   // clock icon + shared dates line
   | { type: 'stack'; lines: string[]; note?: string }                 // compact block (first line bold)
-  | { type: 'line'; name: string; detail?: string | string[]; amount?: string; compact?: boolean } // item row
+  | { type: 'line'; name: string; detail?: string | string[]; amount?: string; compact?: boolean;
+      muted?: boolean; strikeDetail?: boolean }                       // item row
+  | { type: 'struckDates'; text: string }                             // clock icon + struck-through dates
+  | { type: 'outcome'; title: string; text: string }                  // green check + headline + line
   | { type: 'amount'; label: string; value: string; approx?: string } // big amount + small approx line
   | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger'; gapTop?: number }
   | { type: 'bullet'; text: string; icon?: Icon }                     // icon (or amber marker) + text
@@ -47,7 +52,8 @@ export type Block =
       secondary?: Button[];   // outline buttons, side by side
     }
   | { type: 'card'; title?: string; items: Inner[] }
-  | { type: 'center'; text: string; link?: Button };
+  | { type: 'center'; text: string; link?: Button }
+  | { type: 'banner'; lines: string[] };                              // green "still reserved" banner
 
 export interface EmailContent {
   /** Hidden preview text shown by inbox lists. */
@@ -109,6 +115,16 @@ function innerHtml(it: Inner): string {
     }
     case 'subtle':
       return `<p style="margin:0 0 10px;font-size:12px;line-height:18px;color:${MUTED};">${e(it.text)}</p>`;
+    case 'struckDates':
+      return `<p style="margin:-4px 0 12px;font-size:13px;line-height:19px;color:${MUTED};">${iconImg('clock', 'Dates', 6)}<span style="text-decoration:line-through;">${e(it.text)}</span></p>`;
+    case 'outcome':
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
+        <td width="26" style="vertical-align:top;padding-top:2px;">${iconImg('check-circle', 'Done', 0)}</td>
+        <td style="font-size:14px;line-height:21px;color:${CARBON};">
+          <div style="font-weight:800;color:${SUCCESS};">${e(it.title)}</div>
+          <div style="color:${MUTED};font-size:13px;line-height:19px;">${e(it.text)}</div>
+        </td>
+      </tr></table>`;
     case 'dates':
       return `<p style="margin:-4px 0 12px;font-size:13px;line-height:19px;color:${MUTED};">${iconImg('clock', 'Dates', 6)}${e(it.text)}</p>`;
     case 'stack':
@@ -125,9 +141,9 @@ function innerHtml(it: Inner): string {
       </tr></table>`;
     case 'line':
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 ${it.compact ? 4 : 10}px;"><tr>
-        <td style="vertical-align:top;font-size:14px;line-height:20px;color:${CARBON};font-weight:700;">${e(it.name)}
+        <td style="vertical-align:top;font-size:14px;line-height:20px;color:${it.muted ? MUTED : CARBON};font-weight:700;">${e(it.name)}
           ${(Array.isArray(it.detail) ? it.detail : it.detail ? [it.detail] : [])
-            .map(dl => `<div style="font-size:12px;line-height:17px;color:${MUTED};font-weight:500;">${e(dl)}</div>`).join('')}
+            .map(dl => `<div style="font-size:12px;line-height:17px;color:${MUTED};font-weight:500;${it.strikeDetail ? 'text-decoration:line-through;' : ''}">${e(dl)}</div>`).join('')}
         </td>
         ${it.amount ? `<td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;font-size:14px;line-height:20px;color:${CARBON};font-weight:700;">${e(it.amount)}</td>` : ''}
       </tr></table>`;
@@ -171,6 +187,14 @@ function blockHtml(b: Block): string {
       ${b.secondary?.length ? outlineButtons(b.secondary) : ''}`);
     case 'card':
       return cardWrap(`${b.title ? `<div style="font-size:15px;font-weight:800;color:${CARBON};margin:0 0 12px;">${e(b.title)}</div>` : ''}${b.items.map(innerHtml).join('')}`);
+    case 'banner':
+      return `<tr><td style="padding:0 0 10px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${SUCCESS_TINT};border:1px solid #BFE3CD;border-radius:14px;">
+          <tr><td style="padding:12px 16px;font-family:${FONT};font-size:13px;line-height:20px;color:#1F5E3B;">
+            ${b.lines.map(l => `<div>${iconImg('check-circle', '', 6)}${e(l)}</div>`).join('')}
+          </td></tr>
+        </table>
+      </td></tr>`;
     case 'center':
       return `<tr><td align="center" style="padding:6px 12px 18px;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">
         ${e(b.text)}${b.link ? ` <a href="${e(b.link.url)}" style="color:${CARBON};font-weight:700;">${e(b.link.label)}</a>` : ''}
@@ -195,6 +219,8 @@ function innerText(it: Inner): string[] {
   switch (it.type) {
     case 'text': case 'subtle': return [it.text];
     case 'dates': return [it.text];
+    case 'struckDates': return [`(cancelled) ${it.text}`];
+    case 'outcome': return [it.title, it.text];
     case 'stack': return [...it.lines, ...(it.note ? ['', it.note] : [])];
     case 'line': return [`${it.name}${it.amount ? `  ${it.amount}` : ''}`,
       ...(Array.isArray(it.detail) ? it.detail : it.detail ? [it.detail] : []).map(dl => `  ${dl}`)];
@@ -214,7 +240,8 @@ function blockText(b: Block): string[] {
       '',
     ];
     case 'card': return [...(b.title ? [b.title, '-'.repeat(b.title.length)] : []), ...b.items.flatMap(innerText), ''];
-    case 'center': return [b.text + (b.link ? ` ${b.link.label.replace(/\.$/, '')}: ${b.link.url}` : ''), ''];
+    case 'center': return [[b.text, b.link ? `${b.link.label.replace(/\.$/, '')}: ${b.link.url}` : ''].filter(Boolean).join(' '), ''];
+    case 'banner': return [...b.lines, ''];
   }
 }
 

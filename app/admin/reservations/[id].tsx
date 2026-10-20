@@ -20,6 +20,8 @@ import {
   getUserProfile,
   getProduct,
   addStockAdjustmentToBatch,
+  adminCancelReservations,
+  getReservationsByOrderId,
   type RentalDoc,
   type ReservationStatus,
   type UserProfile,
@@ -38,6 +40,12 @@ import { SettlementSummary } from '@/components/SettlementSummary';
 import { RentalReceipt } from '@/components/RentalReceipt';
 import { SettlementActions } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import {
+  CANCEL_REASONS,
+  CANCEL_REASON_KEYS,
+  ADMIN_CANCELLABLE_STATUSES,
+  type CancelReason,
+} from '@/functions/src/shared/cancellation';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +114,11 @@ export default function AdminReservationDetailScreen() {
   const [confirmAction, setConfirmAction] = useState<
     'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost' | null
   >(null);
+  // Admin cancellation — reason + scope (this line or the whole order)
+  const [cancelReason,     setCancelReason]     = useState<CancelReason | null>(null);
+  const [cancelReasonText, setCancelReasonText] = useState('');
+  const [cancelScope,      setCancelScope]      = useState<'item' | 'order'>('item');
+  const [orderSiblings,    setOrderSiblings]    = useState<RentalDoc[]>([]);
   const [lostStaffName,          setLostStaffName]          = useState('');
   const [lostNotes,              setLostNotes]              = useState('');
   const [lostChargeAmountInput,  setLostChargeAmountInput]  = useState('');
@@ -209,6 +222,44 @@ export default function AdminReservationDetailScreen() {
   const lostLateChargeAmount: number | null = (latePenalty?.amountLak ?? 0) > 0
     ? convertLakTo(latePenalty!.amountLak, lostChargeCurrency, exchangeRate, thbRate)
     : null;
+
+  // ── Admin cancellation ────────────────────────────────────────────────────
+  const openCancel = useCallback(() => {
+    setCancelReason(null);
+    setCancelReasonText('');
+    setCancelScope('item');
+    setOrderSiblings([]);
+    setConfirmAction('cancel');
+    if (reservation?.orderId) {
+      getReservationsByOrderId(reservation.orderId).then(setOrderSiblings).catch(() => setOrderSiblings([]));
+    }
+  }, [reservation?.orderId]);
+
+  // One batch for every line (same cancelledAt) → the email trigger sends ONE email.
+  const handleAdminCancel = useCallback(async (ids: string[]) => {
+    if (!reservation || !cancelReason || actioning) return;
+    setActioning(true);
+    setActionError(null);
+    setConfirmAction(null);
+    try {
+      await adminCancelReservations(ids, cancelReason, cancelReasonText);
+      setReservation(prev => prev ? { ...prev, status: 'cancelled', cancelledBy: 'admin', cancelReason, cancelReasonText } : prev);
+      const names = ids.length > 1 ? `your order ${reservation.orderId}` : reservation.productName;
+      await sendNotif(reservation.renterId, {
+        type: 'rental',
+        icon: 'alert',
+        iconColor: 'coral',
+        title: 'Reservation cancelled',
+        body: `Your booking for ${names} was cancelled. Nothing to pay — check your email for details.`,
+        deepLink: ids.length > 1 ? '/reservations' : `/rentals/${reservation.id}`,
+      });
+    } catch (err: any) {
+      console.error('[AdminReservationDetail] cancel error:', err?.code, err?.message);
+      setActionError('Failed to cancel. Please try again.');
+    } finally {
+      setActioning(false);
+    }
+  }, [reservation, cancelReason, cancelReasonText, actioning]);
 
   // ── Phone handlers ────────────────────────────────────────────────────────
   const handleEditPhone = useCallback(() => {
@@ -865,26 +916,60 @@ export default function AdminReservationDetailScreen() {
               />
             </ConfirmBox>
           )}
-          {!actioning && confirmAction === 'cancel' && (
-            <ConfirmBox
-              text="Cancel this reservation? This action cannot be undone. The renter will be notified in the app and by email."
-              confirmLabel="Cancel reservation"
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                { status: 'cancelled' },
-                { status: 'cancelled' },
-                () => sendNotif(reservation.renterId, {
-                  type: 'rental',
-                  icon: 'alert',
-                  iconColor: 'coral',
-                  title: 'Reservation cancelled',
-                  body: `Your booking for ${reservation.productName} was cancelled. Contact us if you have questions.`,
-                  deepLink: `/rentals/${id}`,
-                }),
-              )}
-              destructive
-            />
-          )}
+          {!actioning && confirmAction === 'cancel' && (() => {
+            const otherLines = orderSiblings.filter(r =>
+              r.id !== id && (ADMIN_CANCELLABLE_STATUSES as readonly string[]).includes(r.status));
+            return (
+              <ConfirmBox
+                text={cancelScope === 'order'
+                  ? `Cancel the whole order (${otherLines.length + 1} items)? This cannot be undone. The customer will be notified in the app and by email.`
+                  : 'Cancel this reservation? This cannot be undone. The customer will be notified in the app and by email.'}
+                confirmLabel={cancelScope === 'order' ? 'Cancel order' : 'Cancel reservation'}
+                cancelLabel="Keep"
+                onCancel={() => setConfirmAction(null)}
+                onConfirm={() => handleAdminCancel(cancelScope === 'order' ? [id!, ...otherLines.map(r => r.id)] : [id!])}
+                confirmDisabled={!cancelReason || (cancelReason === 'other' && !cancelReasonText.trim())}
+                destructive
+              >
+                {otherLines.length > 0 && (
+                  <View style={d.chipRow}>
+                    {(['item', 'order'] as const).map(sc => (
+                      <TouchableOpacity
+                        key={sc}
+                        style={[d.chip, cancelScope === sc && d.chipActive]}
+                        onPress={() => setCancelScope(sc)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[d.chipText, cancelScope === sc && d.chipTextActive]}>
+                          {sc === 'item' ? 'This item only' : `Whole order (${otherLines.length + 1} items)`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <Text style={d.cancelFieldLabel}>Reason</Text>
+                <View style={d.chipRow}>
+                  {CANCEL_REASON_KEYS.map(key => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[d.chip, cancelReason === key && d.chipActive]}
+                      onPress={() => setCancelReason(key)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[d.chipText, cancelReason === key && d.chipTextActive]}>{CANCEL_REASONS[key].label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TextInput
+                  style={d.nameInput}
+                  placeholder={cancelReason === 'other' ? 'Details (required)' : 'Details (optional)'}
+                  placeholderTextColor={COLORS.fg3}
+                  value={cancelReasonText}
+                  onChangeText={setCancelReasonText}
+                />
+              </ConfirmBox>
+            );
+          })()}
 
           {/* ── Action buttons — shown only when no confirm is open ──── */}
           {!actioning && confirmAction === null && (
@@ -950,7 +1035,7 @@ export default function AdminReservationDetailScreen() {
               {(status === 'pending_payment' || status === 'confirmed') && (
                 <TouchableOpacity
                   style={d.cancelLink}
-                  onPress={() => setConfirmAction('cancel')}
+                  onPress={openCancel}
                   activeOpacity={0.7}
                 >
                   <Text style={d.cancelLinkText}>Cancel reservation</Text>
@@ -1129,6 +1214,15 @@ const d = StyleSheet.create({
   primaryBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.1 },
 
   cancelLink: { alignItems: 'center', paddingVertical: 8 },
+  cancelFieldLabel: { fontSize: 12, fontWeight: '700', color: COLORS.carbon, marginTop: 4, marginBottom: 6 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  chip: {
+    borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+  },
+  chipActive: { backgroundColor: COLORS.carbon, borderColor: COLORS.carbon },
+  chipText: { fontSize: 12, fontWeight: '600', color: COLORS.fg2 },
+  chipTextActive: { color: COLORS.white },
   cancelLinkText: { fontSize: 13, fontWeight: '600', color: COLORS.danger },
 
   endState: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },

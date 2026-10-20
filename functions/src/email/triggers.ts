@@ -6,6 +6,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { BREVO_API_KEY, REGION } from './config';
 import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
+import { cancellationEmailVariant } from '../shared/cancellation';
 import { getEmailShop, getRecipient, getVatPercent, getRates, type EmailShop, type Recipient } from './context';
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
@@ -27,6 +28,7 @@ const asRes = (snap: admin.firestore.DocumentSnapshot): ResData => {
     id: snap.id,
     pickupAtMs: ms(d.pickupAt),
     returnAtMs: ms(d.returnAt),
+    cancelledAtMs: d.cancelledAt ? ms(d.cancelledAt) : undefined,
     pricePerDay: d.pricePerDay ?? 0,
     durationDays: d.durationDays ?? 0,
   };
@@ -100,22 +102,34 @@ export const emailReservationUpdates = onDocumentUpdated(
       if (!before || !after || !afterSnap) return;
       const renterId: string = after.renterId;
 
-      // Cancellation. admin_release is a data correction, not a cancellation → no email.
-      if (before.status !== 'cancelled' && after.status === 'cancelled' && after.cancelledBy !== 'admin_release') {
+      // Cancellation. Variant A = customer-requested, B = cancelled by LANCHAI,
+      // null = admin_release (a data correction, not a cancellation) → no email.
+      const variant = cancellationEmailVariant(after.cancelledBy, after.cancelReason);
+      if (before.status !== 'cancelled' && after.status === 'cancelled' && variant) {
         // Group the order's lines cancelled in the same batch (same cancelledAt) into one
         // email; claimEmail's transaction makes concurrent sibling triggers send only once.
-        let group = [afterSnap];
-        if (after.orderId && after.cancelledAt) {
-          const siblings = await db().collection('reservations').where('orderId', '==', after.orderId).get();
-          group = siblings.docs.filter(d =>
-            d.get('status') === 'cancelled' && d.get('cancelledBy') !== 'admin_release'
-            && d.get('cancelledAt')?.isEqual?.(after.cancelledAt));
-          if (!group.some(d => d.id === afterSnap.id)) group.push(afterSnap);
-        }
+        const siblings = after.orderId
+          ? (await db().collection('reservations').where('orderId', '==', after.orderId).get()).docs
+          : [afterSnap as admin.firestore.QueryDocumentSnapshot];
+        let group = siblings.filter(d =>
+          d.get('status') === 'cancelled' && d.get('cancelledBy') !== 'admin_release'
+          && !!after.cancelledAt && d.get('cancelledAt')?.isEqual?.(after.cancelledAt));
+        if (!group.some(d => d.id === afterSnap.id)) group = [...group, afterSnap as admin.firestore.QueryDocumentSnapshot];
+        const groupIds = new Set(group.map(d => d.id));
+        // Partial cancellation: lines of the same order that are still reserved.
+        const stillReserved = siblings
+          .filter(d => !groupIds.has(d.id) && ['pending_payment', 'confirmed', 'active'].includes(d.get('status')))
+          .map(asRes);
+
         await claimAndSend(group.map(d => d.ref), 'emailCancellation', async claimed => {
           const ids = new Set(claimed.map(r => r.id));
-          const items = group.filter(d => ids.has(d.id)).map(asRes).sort((a, b) => a.id.localeCompare(b.id));
-          return deliver(renterId, after.renterName, (name, shop) => cancellationEmail(name, items, shop), 'cancellation');
+          const items = await withProductInfo(group.filter(d => ids.has(d.id)).map(asRes).sort((a, b) => a.id.localeCompare(b.id)));
+          return deliver(renterId, after.renterName, (name, shop) => cancellationEmail(name, items, shop, {
+            variant,
+            reason: after.cancelReason ?? null,
+            reasonText: after.cancelReasonText ?? null,
+            stillReserved,
+          }), `cancellation-${variant}`);
         });
       }
 
@@ -156,6 +170,18 @@ export const emailBtobDecision = onDocumentUpdated(
     }
   },
 );
+
+/** Adds product data the cancellation email needs (category for "similar", isPremium for the policy tiers). */
+async function withProductInfo(items: ResData[]): Promise<ResData[]> {
+  const ids = [...new Set(items.map(r => r.productId).filter((x): x is string => !!x))];
+  if (ids.length === 0) return items;
+  const snaps = await db().getAll(...ids.map(id => db().collection('products').doc(id)));
+  const byId = new Map(snaps.map(s => [s.id, s.data() ?? {}]));
+  return items.map(r => {
+    const p = byId.get(r.productId ?? '') ?? {};
+    return { ...r, isPremium: p.isPremium === true, categoryId: typeof p.category === 'string' ? p.category : undefined };
+  });
+}
 
 /** Adds each product's "What's included" list (products/{id}.whatsIncluded) for display. */
 async function withIncluded(items: ResData[]): Promise<ResData[]> {
@@ -289,7 +315,14 @@ export const sendTestEmails = onCall(
         { ...second, included: [] },
       ], shop, { loyaltyExcluded: false })],
       ['return-reminder-mixed-dates',      returnReminderEmail(name, [base, otherDates], shop, { loyaltyExcluded: false })],
-      ['cancellation',                     cancellationEmail(name, [base, second], shop)],
+      ['cancellation-A-nothing-to-pay',    cancellationEmail(name, [base, second], shop, { variant: 'A', stillReserved: [] })],
+      ['cancellation-A-store-credit',      cancellationEmail(name, [{
+        ...base, couponApplied: null, advancePaidLak: 108000, // sample only — no advance exists today
+        cancelledAtMs: base.pickupAtMs - 36 * 60 * 60 * 1000,
+      }], shop, { variant: 'A', stillReserved: [] })],
+      ['cancellation-B-partial',           cancellationEmail(name, [{ ...base, productId: 'sample', categoryId: 'outdoor' }], shop, {
+        variant: 'B', reason: 'item_unavailable', reasonText: null, stillReserved: [second],
+      })],
       ['receipt',                          receiptEmail(name, closed, vat, shop)],
       ['btob-approved',                    btobApprovedEmail(name, shop)],
       ['btob-rejected',                    btobRejectedEmail(name, 'The registration document is not readable.', shop)],

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { cancelTier as getCancelTier, cancellationOutcome, type CancelTier } from '@/functions/src/shared/cancellation';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyReservations, cancelReservations, RentalDoc } from '@/lib/firestore';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
@@ -50,14 +51,6 @@ type RenderEntry =
   | { type: 'group';  key: string; orderId: string; items: RentalDoc[] };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-type CancelTier = 'free' | 'voucher' | 'no_refund' | 'premium';
-
-function getCancelTier(hoursUntilPickup: number): CancelTier {
-  if (hoursUntilPickup > 48) return 'free';
-  if (hoursUntilPickup > 24) return 'voucher';
-  return 'no_refund';
-}
 
 function getCategory(r: RentalDoc, now: number): TabId {
   if (r.status === 'cancelled') return 'cancelled';
@@ -402,6 +395,12 @@ function OrderGroupCard({
     : itemTiers.includes('premium') ? 'premium'
     : 'free';
   const tiersAreMixed = new Set(itemTiers).size > 1;
+  // Nothing is charged before pick-up today → no money warnings. The tier flow below
+  // only applies if an item ever carries an advance (advancePaidLak > 0).
+  const nothingToPay = cancellableItems.every(r => cancellationOutcome({
+    advancePaidLak: r.advancePaidLak,
+    hoursUntilPickup: (r.pickupAt.toDate().getTime() - now) / (1000 * 60 * 60),
+  }).kind === 'nothing_to_pay');
 
   const handleDoCancel = async () => {
     if (cancelling || !isCancellable) return;
@@ -512,7 +511,7 @@ function OrderGroupCard({
               {cancelPhase === 'idle' && (
                 <TouchableOpacity
                   style={s.cancelLink}
-                  onPress={() => setCancelPhase(groupTier === 'free' ? 'confirm' : 'terms')}
+                  onPress={() => setCancelPhase(nothingToPay || groupTier === 'free' ? 'confirm' : 'terms')}
                   activeOpacity={0.7}
                 >
                   <Feather name="x-circle" size={13} color={COLORS.danger} />
@@ -526,7 +525,9 @@ function OrderGroupCard({
                 <View style={s.cancelCard}>
                   <Text style={s.cancelCardTitle}>Cancel this order?</Text>
                   <Text style={s.cancelCardBody}>
-                    {`Free cancellation — all items are more than 48 hours before pickup. No charges apply.`}
+                    {nothingToPay
+                      ? 'Nothing to pay — nothing is charged before pick-up. You can book again anytime.'
+                      : 'Free cancellation — all items are more than 48 hours before pickup. No charges apply.'}
                   </Text>
                   <View style={s.cancelBtnRow}>
                     <TouchableOpacity style={s.cancelKeepBtn} onPress={() => setCancelPhase('idle')} activeOpacity={0.8}>

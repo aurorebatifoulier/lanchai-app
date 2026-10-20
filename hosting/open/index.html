@@ -27,7 +27,7 @@
   // allow-list of in-app paths is accepted — never an arbitrary redirect target.
   (function () {
     var to = new URLSearchParams(window.location.search).get('to') || '';
-    var allowed = /^(home|rentals\/[A-Za-z0-9_-]{1,64}|reservations|legal\/cancellation)$/;
+    var allowed = /^(home|reservations|explore|legal\/cancellation|(rentals|product|category)\/[A-Za-z0-9_-]{1,64})$/;
     var path = allowed.test(to) ? to : 'reservations';
     var target = 'lanchaiapp://' + (path === 'home' ? '' : path);
     document.getElementById('open').setAttribute('href', target);

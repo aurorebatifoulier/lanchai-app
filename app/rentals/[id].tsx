@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { cancelTier as getCancelTier, cancellationOutcome } from '@/functions/src/shared/cancellation';
 import BackButton from '@/components/BackButton';
 import { getReservationById, getProduct, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
@@ -47,14 +48,6 @@ const CLAIM_STATUS_STYLE: Record<ClaimStatus, { label: string; color: string; bg
 
 type TabId = 'upcoming' | 'active' | 'history';
 
-type CancelTier = 'free' | 'voucher' | 'no_refund' | 'premium';
-
-function getCancelTier(hoursUntilPickup: number, isPremium?: boolean): CancelTier {
-  if (isPremium) return 'premium';
-  if (hoursUntilPickup > 48) return 'free';
-  if (hoursUntilPickup > 24) return 'voucher';
-  return 'no_refund';
-}
 
 function getCategory(r: RentalDoc, now: number): TabId {
   if (r.status === 'returned') return 'history';
@@ -163,6 +156,12 @@ export default function RentalDetailScreen() {
   const isCancellable = (rental.status === 'pending_payment' || rental.status === 'confirmed') &&
     hoursUntilPickup > 0;
   const cancelTier = getCancelTier(hoursUntilPickup, product?.isPremium);
+  // Nothing is charged before pick-up today → no warning about losing money. The tier
+  // flow below only applies if an advance was ever paid (advancePaidLak > 0).
+  const cancelOutcome = cancellationOutcome({
+    advancePaidLak: rental.advancePaidLak, hoursUntilPickup, isPremium: product?.isPremium,
+  });
+  const nothingToPay = cancelOutcome.kind === 'nothing_to_pay';
 
   // Once a handover checklist has been submitted, the deposit was actually received in
   // whatever currency the admin chose there — show that instead of the original LAK
@@ -403,7 +402,7 @@ export default function RentalDetailScreen() {
               <>
                 <TouchableOpacity
                   style={s.cancelLink}
-                  onPress={() => setCancelPhase(cancelTier === 'free' ? 'confirm' : 'terms')}
+                  onPress={() => setCancelPhase(nothingToPay || cancelTier === 'free' ? 'confirm' : 'terms')}
                   activeOpacity={0.7}
                 >
                   <Feather name="x-circle" size={14} color={COLORS.danger} />
@@ -424,7 +423,9 @@ export default function RentalDetailScreen() {
               <View style={s.cancelCard}>
                 <Text style={s.cancelCardTitle}>Cancel this rental?</Text>
                 <Text style={s.cancelCardBody}>
-                  Free cancellation — your pickup is more than 48 hours away. No charges apply.
+                  {nothingToPay
+                    ? 'Nothing to pay — nothing is charged before pick-up. You can book again anytime.'
+                    : 'Free cancellation — your pickup is more than 48 hours away. No charges apply.'}
                 </Text>
                 <View style={s.cancelBtnRow}>
                   <TouchableOpacity style={s.cancelKeepBtn} onPress={() => setCancelPhase('idle')} activeOpacity={0.8}>
