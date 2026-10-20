@@ -9,6 +9,7 @@ import {
   formatPenaltyDays,
 } from './shared/latePenalty';
 import { BREVO_API_KEY } from './email/config';
+import { loyaltyPointsFor } from './shared/loyalty';
 import { sendLateReturnEmail } from './email/triggers';
 
 // Transactional emails (Brevo) — see functions/src/email/.
@@ -359,7 +360,7 @@ export const applyLoyaltyPoints = onDocumentUpdated(
     if (before.status === 'returned' || after.status !== 'returned') return;
     if (after.loyaltyApplied) return;
 
-    const pointsEarned = Math.floor((after.subtotal ?? 0) / 10_000);
+    const pointsEarned = loyaltyPointsFor(after.subtotal);
     const renterId: string = after.renterId;
     const userRef = db.collection('users').doc(renterId);
 

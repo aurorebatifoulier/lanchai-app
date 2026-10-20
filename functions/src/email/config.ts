@@ -24,7 +24,9 @@ export const PUBLIC_BASE_URL = 'https://lanchai-app.firebaseapp.com';
 export const LOGO_URL = `${PUBLIC_BASE_URL}/email/lanchai-logo@2x.png`;
 
 /** Small amber line icons (hosting/email/icons/, 32px PNG shown at 16px). */
-export type EmailIcon = 'map-pin' | 'calendar-plus' | 'id-card' | 'qr-code' | 'cash' | 'clock' | 'whatsapp';
+export type EmailIcon =
+  | 'map-pin' | 'calendar-plus' | 'id-card' | 'qr-code' | 'cash' | 'clock' | 'whatsapp'
+  | 'checklist' | 'sparkles' | 'star';
 export const iconUrl = (name: EmailIcon) => `${PUBLIC_BASE_URL}/email/icons/${name}@2x.png`;
 
 /** https link that opens an in-app path (allow-listed in hosting/open/index.html). */

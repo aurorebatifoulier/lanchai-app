@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { SHOP_DISPLAY_DEFAULTS } from '../shared/shop';
+import { isLoyaltyExcluded } from '../shared/loyalty';
 
 export interface EmailShop {
   name: string;
@@ -32,6 +33,8 @@ export interface Recipient {
   email: string | null;
   name: string;
   remindersOptOut: boolean;
+  /** Business / BtoB accounts — never shown loyalty points. */
+  loyaltyExcluded: boolean;
 }
 
 /** Email comes from Firebase Auth (it isn't stored in users/{uid}). */
@@ -47,6 +50,7 @@ export async function getRecipient(uid: string, fallbackName?: string | null): P
     email: authUser?.email ?? null,
     name: String(name),
     remindersOptOut: p.emailRemindersOptOut === true,
+    loyaltyExcluded: isLoyaltyExcluded(p),
   };
 }
 

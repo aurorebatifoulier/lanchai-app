@@ -29,7 +29,7 @@ export type Inner =
   | { type: 'subtle'; text: string }                                  // small grey line
   | { type: 'dates'; text: string }                                   // clock icon + shared dates line
   | { type: 'stack'; lines: string[]; note?: string }                 // compact block (first line bold)
-  | { type: 'line'; name: string; detail?: string; amount?: string; compact?: boolean } // item row
+  | { type: 'line'; name: string; detail?: string | string[]; amount?: string; compact?: boolean } // item row
   | { type: 'amount'; label: string; value: string; approx?: string } // big amount + small approx line
   | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger'; gapTop?: number }
   | { type: 'bullet'; text: string; icon?: Icon }                     // icon (or amber marker) + text
@@ -39,6 +39,8 @@ export type Block =
   | {
       type: 'hero';
       pill?: string;
+      /** Rich pill, e.g. the tagline with one highlighted word (overrides `pill`). */
+      pillParts?: { text: string; highlight?: boolean }[];
       title: string;
       sub?: string;
       primary?: Button;
@@ -124,7 +126,8 @@ function innerHtml(it: Inner): string {
     case 'line':
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 ${it.compact ? 4 : 10}px;"><tr>
         <td style="vertical-align:top;font-size:14px;line-height:20px;color:${CARBON};font-weight:700;">${e(it.name)}
-          ${it.detail ? `<div style="font-size:12px;line-height:17px;color:${MUTED};font-weight:500;">${e(it.detail)}</div>` : ''}
+          ${(Array.isArray(it.detail) ? it.detail : it.detail ? [it.detail] : [])
+            .map(dl => `<div style="font-size:12px;line-height:17px;color:${MUTED};font-weight:500;">${e(dl)}</div>`).join('')}
         </td>
         ${it.amount ? `<td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;font-size:14px;line-height:20px;color:${CARBON};font-weight:700;">${e(it.amount)}</td>` : ''}
       </tr></table>`;
@@ -157,8 +160,11 @@ function blockHtml(b: Block): string {
     case 'hero':
       return cardWrap(`<div style="text-align:center;">
         <img src="${LOGO_URL}" width="120" alt="LANCHAI" style="display:block;margin:4px auto 14px;width:120px;height:auto;border:0;outline:none;text-decoration:none;font-family:${FONT};font-size:20px;font-weight:800;color:${CARBON};"/>
-        ${b.pill ? `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>` : ''}
-        <h1 style="margin:${b.pill ? 14 : 0}px 0 6px;font-size:24px;line-height:30px;font-weight:800;color:${CARBON};">${e(b.title)}</h1>
+        ${b.pillParts
+          ? `<span style="display:inline-block;background:${AMBER_TINT};font-size:12px;padding:5px 12px;border-radius:999px;">${b.pillParts.map(pp =>
+              `<span style="color:${pp.highlight ? AMBER_TEXT : MUTED};font-weight:${pp.highlight ? 800 : 500};">${e(pp.text)}</span>`).join(' ')}</span>`
+          : b.pill ? `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>` : ''}
+        <h1 style="margin:${b.pill || b.pillParts ? 14 : 0}px 0 6px;font-size:24px;line-height:30px;font-weight:800;color:${CARBON};">${e(b.title)}</h1>
         ${b.sub ? `<p style="margin:0;font-size:13px;line-height:19px;color:${MUTED};">${e(b.sub)}</p>` : ''}
       </div>
       ${b.primary ? primaryButton(b.primary) : ''}
@@ -188,9 +194,10 @@ function footerHtml(shop: EmailShop): string {
 function innerText(it: Inner): string[] {
   switch (it.type) {
     case 'text': case 'subtle': return [it.text];
-    case 'dates': return [`Dates: ${it.text}`];
+    case 'dates': return [it.text];
     case 'stack': return [...it.lines, ...(it.note ? ['', it.note] : [])];
-    case 'line': return [`${it.name}${it.amount ? `  ${it.amount}` : ''}`, ...(it.detail ? [`  ${it.detail}`] : [])];
+    case 'line': return [`${it.name}${it.amount ? `  ${it.amount}` : ''}`,
+      ...(Array.isArray(it.detail) ? it.detail : it.detail ? [it.detail] : []).map(dl => `  ${dl}`)];
     case 'amount': return [`${it.label}: ${it.value}${it.approx ? ` (${it.approx})` : ''}`];
     case 'row': return [`${it.label}${it.value ? `: ${it.value}` : ''}`];
     case 'bullet': return [`- ${it.text}`];
@@ -201,7 +208,7 @@ function innerText(it: Inner): string[] {
 function blockText(b: Block): string[] {
   switch (b.type) {
     case 'hero': return [
-      ...(b.pill ? [b.pill] : []), b.title, ...(b.sub ? [b.sub] : []),
+      ...(b.pillParts ? [b.pillParts.map(pp => pp.text).join(' ')] : b.pill ? [b.pill] : []), b.title, ...(b.sub ? [b.sub] : []),
       ...(b.primary ? [`${b.primary.label}: ${b.primary.url}`] : []),
       ...(b.secondary ?? []).map(s => `${s.label}: ${s.url}`),
       '',

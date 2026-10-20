@@ -1,5 +1,5 @@
 import { renderEmail, fmtLak, fmtCurrency, type Block, type Inner, type Button } from './layout';
-import type { EmailShop, Rates } from './context';
+import type { EmailShop, Rates, Recipient } from './context';
 import { appLink } from './config';
 import { googleCalendarUrl, icsAttachment, type CalendarEvent } from './calendar';
 import {
@@ -9,6 +9,7 @@ import {
 import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
+import { loyaltyPointsFor } from '../shared/loyalty';
 
 // Every LANCHAI email's content, on the shared card layout (layout.ts).
 // - Amounts ONLY from frozen reservation fields — never recalculated.
@@ -26,6 +27,7 @@ export interface Rendered {
 export interface ResData extends ReceiptInput {
   id: string;
   orderId?: string;
+  productId?: string;
   productName: string;
   quantity: number;
   pickupLabel: string;
@@ -42,6 +44,8 @@ export interface ResData extends ReceiptInput {
   lateChargeReason?: string;
   outstandingSettled?: boolean;
   outstandingWrittenOff?: boolean;
+  /** Product's "What's included" list (products/{id}.whatsIncluded), when loaded. */
+  included?: string[];
 }
 
 // ── Shared pieces ──────────────────────────────────────────────────────────────
@@ -249,25 +253,78 @@ export function pickupReminderEmail(_name: string, rawItems: ResData[], shop: Em
 }
 
 // ── 3. Return reminder ───────────────────────────────────────────────────────────
-export function returnReminderEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
-  const items = [...rawItems].sort((a, b) => a.returnAtMs - b.returnAtMs);
+export function returnReminderEmail(
+  _name: string, rawItems: ResData[], shop: EmailShop, recipient?: Pick<Recipient, 'loyaltyExcluded'>,
+): Rendered {
+  const items = [...rawItems].sort((a, b) => a.returnAtMs - b.returnAtMs || a.id.localeCompare(b.id));
   const first = items[0];
   const orderId = orderIdOf(items);
+  const day = vteDay(first.returnAtMs);
+  const time = vteTime(first.returnAtMs);
+  const sameReturn = items.every(r => r.returnAtMs === first.returnAtMs);
+  const returnBy = (ms: number) => `Return by ${vteDay(ms)} at ${vteTime(ms)}`;
+  const deposit = items.reduce((s, r) => s + (r.deposit ?? 0), 0);
+  // Same rule as applyLoyaltyPoints (per reservation, on the frozen pre-coupon subtotal).
+  const points = items.reduce((s, r) => s + loyaltyPointsFor(r.subtotal), 0);
+  const wa = whatsappUrl(shop, `Hi LANCHAI, I'd like to extend my rental ${orderId}.`);
+
+  const secondary: Button[] = [directions(shop)];
+  if (wa) secondary.push({ label: 'Need more time?', url: wa, icon: 'whatsapp' });
+
+  // "Your items": the return deadline only (once, or per item when it differs), names
+  // with "× qty", and the product's "What's included" list when the product has one.
+  const itemLines: Inner[] = [];
+  if (sameReturn) itemLines.push({ type: 'dates', text: returnBy(first.returnAtMs) });
+  for (const r of items) {
+    const detail: string[] = [];
+    if (!sameReturn) detail.push(returnBy(r.returnAtMs));
+    if (r.included?.length) detail.push(`Included: ${r.included.join(', ')}`);
+    itemLines.push({
+      type: 'line',
+      name: r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName,
+      detail: detail.length ? detail : undefined,
+      compact: detail.length === 0,
+    });
+  }
+
+  const depositItems: Inner[] = [
+    { type: 'amount', label: 'Your deposit', value: fmtLak(deposit) },
+    { type: 'text', text: 'Refunded on the spot after a quick check — about 10 minutes.', tone: 'muted', small: true },
+  ];
+  if (points > 0 && !recipient?.loyaltyExcluded) {
+    depositItems.push(
+      { type: 'divider' },
+      { type: 'bullet', text: `Return it and earn ${plural(points, 'point')}`, icon: { name: 'star', alt: 'Loyalty points' } },
+    );
+  }
+
   return build(
-    `Return due tomorrow · ${vteDay(first.returnAtMs)} at ${vteTime(first.returnAtMs)}`,
-    'Bring everything back with its accessories — your deposit is refunded on the spot',
+    `Return due tomorrow · ${day} at ${time}`,
+    'Bring everything back and get your deposit refunded on the spot',
     'Return due tomorrow',
     [
       {
         type: 'hero',
-        pill: 'Return tomorrow',
-        title: `Return due tomorrow at ${vteTime(first.returnAtMs)}`,
+        pillParts: [{ text: 'Rent.' }, { text: 'Return.', highlight: true }, { text: 'Repeat.' }],
+        title: `Return due tomorrow, ${day} at ${time}`,
         sub: `${plural(items.length, 'item')} · Order ${orderId}`,
         primary: bookingLink(items),
-        secondary: [directions(shop)],
+        secondary,
       },
-      itemsCard(items),
-      shopCard(shop, 'Please bring every item back with all its accessories. ' + DEPOSIT_NOTE),
+      { type: 'card', title: 'Your items', items: itemLines },
+      {
+        type: 'card',
+        title: 'Before you come',
+        items: [
+          { type: 'bullet', text: 'All parts and accessories', icon: { name: 'checklist', alt: 'Checklist' } },
+          { type: 'bullet', text: 'Clean and dry — no need to wash it', icon: { name: 'sparkles', alt: 'Clean' } },
+          { type: 'bullet', text: 'Your booking QR code (app › My rentals)', icon: { name: 'qr-code', alt: 'QR code' } },
+        ],
+      },
+      { type: 'card', items: depositItems },
+      shopCard(shop, undefined, 'Return'),
+      // Never mention the internal late-return grace period here.
+      { type: 'center', text: 'Please return on time — late returns may add rental days.' },
     ],
     shop,
   );

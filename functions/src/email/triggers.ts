@@ -6,7 +6,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { BREVO_API_KEY, REGION } from './config';
 import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
-import { getEmailShop, getRecipient, getVatPercent, getRates, type EmailShop } from './context';
+import { getEmailShop, getRecipient, getVatPercent, getRates, type EmailShop, type Recipient } from './context';
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
   receiptEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail,
@@ -35,14 +35,14 @@ const asRes = (snap: admin.firestore.DocumentSnapshot): ResData => {
 async function deliver(
   uid: string,
   fallbackName: string | null | undefined,
-  build: (name: string, shop: EmailShop) => Rendered,
+  build: (name: string, shop: EmailShop, recipient: Recipient) => Rendered,
   tag: string,
   opts: { respectOptOut?: boolean } = {},
 ): Promise<SendResult | 'opted_out'> {
   const [recipient, shop] = await Promise.all([getRecipient(uid, fallbackName), getEmailShop()]);
   if (opts.respectOptOut && recipient.remindersOptOut) return 'opted_out';
   if (!recipient.email) return 'no_recipient';
-  const mail = build(recipient.name, shop);
+  const mail = build(recipient.name, shop, recipient);
   return sendEmail({ to: { email: recipient.email, name: recipient.name }, ...mail, tag });
 }
 
@@ -157,6 +157,16 @@ export const emailBtobDecision = onDocumentUpdated(
   },
 );
 
+/** Adds each product's "What's included" list (products/{id}.whatsIncluded) for display. */
+async function withIncluded(items: ResData[]): Promise<ResData[]> {
+  const ids = [...new Set(items.map(r => r.productId).filter((x): x is string => !!x))];
+  if (ids.length === 0) return items;
+  const snaps = await db().getAll(...ids.map(id => db().collection('products').doc(id)));
+  const included = new Map(snaps.map(s => [s.id, (s.get('whatsIncluded') as unknown[] | undefined)
+    ?.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map(x => x.trim()) ?? []]));
+  return items.map(r => ({ ...r, included: included.get(r.productId ?? '') ?? [] }));
+}
+
 // ── 2 + 3. Day-before reminders — 18:00 Vientiane (UTC+7, no DST) ───────────────
 const VIENTIANE_OFFSET_MS = 7 * 60 * 60 * 1000;
 
@@ -170,8 +180,9 @@ async function sendReminders(
   statuses: string[],
   timeField: 'pickupAt' | 'returnAt',
   field: 'emailPickupReminder' | 'emailReturnReminder',
-  build: (name: string, items: ResData[], shop: EmailShop) => Rendered,
+  build: (name: string, items: ResData[], shop: EmailShop, recipient: Recipient) => Rendered,
   tag: string,
+  enrich?: (items: ResData[]) => Promise<ResData[]>,
 ): Promise<void> {
   const { start, end } = tomorrowWindowVientiane();
   // Equality-only query, date filtered in code — no composite index (see CLAUDE.md).
@@ -190,8 +201,9 @@ async function sendReminders(
     const renterId: string = docs[0].get('renterId');
     await claimAndSend(docs.map(d => d.ref), field, async claimed => {
       const ids = new Set(claimed.map(r => r.id));
-      const items = docs.filter(d => ids.has(d.id)).map(asRes).sort((a, b) => a.id.localeCompare(b.id));
-      return deliver(renterId, docs[0].get('renterName'), (name, shop) => build(name, items, shop), tag, { respectOptOut: true });
+      let items = docs.filter(d => ids.has(d.id)).map(asRes).sort((a, b) => a.id.localeCompare(b.id));
+      if (enrich) items = await enrich(items);
+      return deliver(renterId, docs[0].get('renterName'), (name, shop, recipient) => build(name, items, shop, recipient), tag, { respectOptOut: true });
     });
   }
 }
@@ -207,7 +219,7 @@ export const emailDailyReminders = onSchedule(
       logger.error('[email] pickup reminders failed', { err: String(err) });
     }
     try {
-      await sendReminders(['active'], 'returnAt', 'emailReturnReminder', returnReminderEmail, 'return-reminder');
+      await sendReminders(['active'], 'returnAt', 'emailReturnReminder', returnReminderEmail, 'return-reminder', withIncluded);
     } catch (err) {
       logger.error('[email] return reminders failed', { err: String(err) });
     }
@@ -272,7 +284,11 @@ export const sendTestEmails = onCall(
       ['booking-confirmation-mixed-dates', bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, otherDates], shop, vat)],
       ['pickup-reminder',                  pickupReminderEmail(name, [base, second], shop, rates)],
       ['pickup-reminder-mixed-dates',      pickupReminderEmail(name, [base, otherDates], shop, rates)],
-      ['return-reminder',                  returnReminderEmail(name, [base], shop)],
+      ['return-reminder',                  returnReminderEmail(name, [
+        { ...base, included: ['Tent body', 'Rain fly', '8 pegs', 'Carry bag'] },
+        { ...second, included: [] },
+      ], shop, { loyaltyExcluded: false })],
+      ['return-reminder-mixed-dates',      returnReminderEmail(name, [base, otherDates], shop, { loyaltyExcluded: false })],
       ['cancellation',                     cancellationEmail(name, [base, second], shop)],
       ['receipt',                          receiptEmail(name, closed, vat, shop)],
       ['btob-approved',                    btobApprovedEmail(name, shop)],

@@ -282,7 +282,14 @@ a snapshot indefinitely).
     directions" goes full width), a "To pay at pick-up" card (order totals from frozen
     fields + "approx. $X · ฿Y" from config/pricing rates, hidden if a rate is missing),
     names-only items ("Portable speaker × 2"), "Pick-up" shop card, and a centered
-    "Running late…" line (WhatsApp, else contact@lanchai.la). Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
+    "Running late…" line (WhatsApp, else contact@lanchai.la).
+  - **Return reminder** (validated mockup): tagline pill with "Return." highlighted,
+    "Need more time?" WhatsApp button (hidden without a number), "Return by …" only,
+    per-item "Included: …" from `products/{id}.whatsIncluded` (loaded at send time),
+    "Before you come" card, deposit card + "Return it and earn X points" — X from
+    `loyaltyPointsFor()` (`functions/src/shared/loyalty.ts`, also used by
+    `applyLoyaltyPoints`), hidden for business/BtoB accounts and when 0. Centered
+    "late returns may add rental days" line — never mentions the grace period. Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
     subjects and preheaders in `templates.ts`. Dates via `functions/src/shared/dates.ts`
     (Vientiane time, from `pickupAt`/`returnAt`). Shared texts: `CANCELLATION_SUMMARY`
     (`shared/policy.ts`, keep in sync with `lib/legalContent.ts`), payment methods
