@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 18 Cloud Functions (scheduled, Firestore-triggered and 1 callable, Node 22). The
+  gaps found), 19 Cloud Functions (scheduled, Firestore-triggered and 2 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -535,18 +535,33 @@ a snapshot indefinitely).
   convention used everywhere else pricing is shown (`app/bag.tsx`,
   `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
 
-## Security follow-ups (planned chantier — not fixed yet)
+## Security follow-ups
 
+**Done (phase 1):** reservations are created server-side only by the
+`createReservations` callable (`functions/src/reservations.ts`, asia-southeast1) — the
+`reservations` create rule is admin-only. It recomputes every frozen figure from server
+data with the shared rules (`functions/src/shared/{pricing,availability,productAccess,
+timeSlots}.ts`, re-exported by `utils/pricing.ts`, `utils/currency.ts`,
+`utils/availability.ts`, `utils/timeSlots.ts`, `lib/loyalty.ts`), enforces product
+state/access tier, bookingHolds, BtoB approval, phone, opening-hours slots + 2h lead
+time, quantity ≤ stock **inside a transaction** (per-product `productLocks/{id}`
+serializes concurrent bookings; occupancy read from `reservations`, not the async
+mirror), total > 0, and consumes the coupon with the CONFIG % for its tier (never the
+renter's stored percent). App: `createBooking()` (`lib/firestore.ts`) maps the
+callable's `details.code` to friendly messages. Renter cancellation rule now pins
+`cancelledBy == 'renter'` and `cancelledAt == request.time`.
+
+**Still open (phase 2):**
 - **Coupon tampering:** the `users/{uid}` update rule only checks the coupons array
-  *size*, so a renter can flip a coupon back to `used: false` (reuse) **and edit a
-  coupon's `percent`** client-side. `firstRentalDate` is also owner-writable (minor). Coupon usage should be enforced server-side (e.g. mark used / validate in a
-  Cloud Function or a stricter rule). Note: `restoreCancelledCoupon` legitimately
-  restores coupons server-side when a whole booking is cancelled.
-- **Reservation create validation:** `pricePerDay` / `quantity` / `subtotal` / `total`
-  aren't validated by `firestore.rules` — a modified client could write arbitrary
-  prices (also the base of late penalties and loyalty points).
-- **0 LAK guard is client-only:** `addReservation`/`addReservationBatch` reject
-  `pricePerDay`/`subtotal` ≤ 0, but no rule enforces it server-side.
+  size, so a renter can flip `used` back to false (the % they could edit is no longer
+  used for bookings, but reuse is still possible). `firstRentalDate` is owner-writable;
+  the create rule has no field allow-list.
+- **Reviews:** rating not validated; `averageRating` recompute is client-side and fails
+  for renters (`products` is admin-write) → move to a Cloud Function.
+- **Chat:** renter can create messages with `senderType: 'business'` in their own thread.
+- **requests:** no size limits.
+- **Storage:** any signed-in user can list/read others' chat, claim, profile and
+  checklist files (`read: request.auth != null`).
 
 ## Working with Aurore
 

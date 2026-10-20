@@ -59,21 +59,6 @@ export function useLoyaltyTier(): LoyaltyTier | null | undefined {
   return tier;
 }
 
-// Percent of the standard deposit to charge, based on customer type and (for residents)
-// platinum loyalty tier. Falls back to 100 (full deposit) when config or the field is
-// missing — safe default, consistent with how missing customerType already defaults to
-// 'tourist' elsewhere (utils/customerType.ts's getCustomerTypeConfig).
-export function depositPercentFor(
-  customerType: string | undefined,
-  loyaltyTier: LoyaltyTier | undefined,
-  config: LoyaltyConfig | null,
-): number {
-  if (!config?.depositPercentByType) return 100;
-  if (customerType === 'business') return config.depositPercentByType.business;
-  if (customerType === 'resident') {
-    return loyaltyTier === 'platinum'
-      ? config.depositPercentByType.residentPlatinum
-      : config.depositPercentByType.resident;
-  }
-  return config.depositPercentByType.tourist; // tourist, or unset/unknown — same fallback
-}
+// Deposit % by customer type (and platinum tier for residents) — defined in
+// functions/src/shared/pricing.ts, shared with the createReservations callable.
+export { depositPercentFor } from '@/functions/src/shared/pricing';

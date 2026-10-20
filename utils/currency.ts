@@ -1,8 +1,7 @@
-// Converts a USD product-price amount to LAK using the live admin-set exchange rate.
-// Rounds to the nearest 1000 LAK for a clean, readable display figure.
-export function toLak(usdAmount: number, exchangeRate: number): number {
-  return Math.round((usdAmount * exchangeRate) / 1000) * 1000;
-}
+import { toLak } from '@/functions/src/shared/pricing';
+// USD → LAK (nearest 1,000 LAK) — defined in functions/src/shared/pricing.ts so the
+// createReservations callable uses the exact same rounding.
+export { toLak };
 
 // exchangeRate === null means "not configured yet / still loading" — never compute a
 // bogus figure in that case, just show a placeholder.

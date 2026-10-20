@@ -1,6 +1,7 @@
 import type { Product } from '@/lib/mockData';
 import type { LoyaltyTier } from '@/lib/firestore';
-import { TIER_ORDER, TIER_LABELS } from '@/lib/loyalty';
+import { TIER_LABELS } from '@/lib/loyalty';
+import { accessDecision } from '@/functions/src/shared/productAccess';
 
 export interface ProductAccessState {
   locked: boolean;                          // true → booking must be disabled
@@ -22,17 +23,18 @@ export function getProductAccessState(
   product: Pick<Product, 'accessMode' | 'minTierRequired' | 'earlyAccessUntil'>,
   userTier: LoyaltyTier | null,
 ): ProductAccessState {
-  const mode = product.accessMode ?? 'public';
-  if (mode === 'public') return NOT_RESTRICTED;
+  // Lock decision shared with the createReservations callable (same rule server-side).
+  // An expired early-access window is treated as public even before the scheduled
+  // Cloud Function flips accessMode.
+  const decision = accessDecision(
+    { ...product, earlyAccessUntilMs: product.earlyAccessUntil?.toMillis() ?? null },
+    userTier,
+  );
+  const mode = decision.mode;
+  if (mode === 'public' || decision.expired) return NOT_RESTRICTED;
 
-  // Client-side belt-and-suspenders: treat as expired the instant `now` passes the
-  // deadline even if the scheduled Cloud Function hasn't flipped accessMode yet.
-  if (mode === 'earlyAccess' && product.earlyAccessUntil && product.earlyAccessUntil.toMillis() <= Date.now()) {
-    return NOT_RESTRICTED;
-  }
-
-  const minTier   = product.minTierRequired ?? 'bronze';
-  const meets     = userTier != null && TIER_ORDER.indexOf(userTier) >= TIER_ORDER.indexOf(minTier);
+  const minTier   = decision.minTier;
+  const meets     = decision.meetsTier;
   const tierLabel = TIER_LABELS[minTier];
 
   if (mode === 'exclusive') {

@@ -14,11 +14,11 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
-import { useBookingHold, BookingHoldError } from '@/lib/bookingHold';
+import { useBookingHold } from '@/lib/bookingHold';
 import { auth } from '@/lib/auth';
-import { addReservation, getUserProfile, newOrderId, type UserProfile, type LoyaltyCoupon } from '@/lib/firestore';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { createBooking, BookingError, getUserProfile, type UserProfile, type LoyaltyCoupon } from '@/lib/firestore';
+import { useLoyaltyConfig, isLoyaltyExcluded } from '@/lib/loyalty';
+import { couponPercentFor, orderDiscount } from '@/functions/src/shared/pricing';
 import { sendNotif } from '@/lib/notifications';
 import { PaymentAtPickupBox } from '@/components/PaymentAtPickupBox';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,13 +71,16 @@ export default function BookingSummaryScreen() {
     getUserProfile(user.uid).then(setProfile).catch(() => {});
   }, [user]);
 
-  // Business accounts are excluded from the loyalty program — never show or let them
-  // apply a coupon, even one issued before the account became a business account.
-  const unusedCoupons: LoyaltyCoupon[] = profile?.customerType === 'business'
+  // Excluded accounts (business/BtoB) never see or apply coupons. The % shown is the
+  // CONFIG % for the coupon's tier — exactly what createReservations applies server-side
+  // (never the percent stored on the renter's coupon).
+  const loyaltyConfig = useLoyaltyConfig();
+  const couponPct = (c: LoyaltyCoupon) => couponPercentFor(c.tier, loyaltyConfig);
+  const unusedCoupons: LoyaltyCoupon[] = isLoyaltyExcluded(profile ?? {})
     ? []
-    : (profile?.coupons ?? []).filter(c => !c.used);
+    : (profile?.coupons ?? []).filter(c => !c.used && couponPct(c) > 0);
   const selectedCoupon = unusedCoupons.find(c => c.id === selectedCouponId) ?? null;
-  const discountAmount = selectedCoupon ? Math.round((subtotal * selectedCoupon.percent) / 100) : 0;
+  const discountAmount = selectedCoupon ? orderDiscount([subtotal], couponPct(selectedCoupon)).total : 0;
   const finalTotal = subtotal - discountAmount;
   const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
   const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
@@ -99,45 +102,20 @@ export default function BookingSummaryScreen() {
         return;
       }
 
-      const pickupLabel = `${params.pickupDateLabel} · ${params.pickupTimeLabel}`;
-      const returnLabel = `${params.returnDateLabel} · ${params.returnTimeLabel}`;
-      const orderId     = await newOrderId();
-
-      const reservationId = await addReservation({
-        productId:    params.productId ?? '',
-        productName:  params.productName ?? '',
-        productImage: params.productImage || null,
-        renterId:     currentUser.uid,
-        renterName:   currentUser.displayName || currentUser.email || null,
-        pickupAt:     new Date(params.pickupDateISO ?? ''),
-        returnAt:     new Date(params.returnDateISO ?? ''),
-        pickupLabel,
-        returnLabel,
-        durationDays: billableDays,
-        quantity,
-        pricePerDay,
-        subtotal,
-        total:        finalTotal,
-        deposit,
-        currency:     'LAK',
-        notes:        params.notes ?? '',
-        status:       'pending_payment',
-        orderId,
-        ...(selectedCoupon
-          ? { couponApplied: { id: selectedCoupon.id, percent: selectedCoupon.percent, discountAmount } }
-          : {}),
+      // Server-side creation: every figure is recomputed and checked by the
+      // createReservations callable (stock, slots, hold, coupon) — what's shown above is
+      // a preview built with the same shared rules.
+      const { orderId, reservationIds } = await createBooking({
+        items: [{
+          productId: params.productId ?? '',
+          pickupAt:  new Date(params.pickupDateISO ?? ''),
+          returnAt:  new Date(params.returnDateISO ?? ''),
+          quantity,
+        }],
+        couponId: selectedCoupon?.id ?? null,
+        notes:    params.notes ?? '',
       });
-
-      // Mark the coupon used at creation time — permanent even if this booking is
-      // later cancelled.
-      if (selectedCoupon) {
-        const updatedCoupons = (profileAtSubmit.coupons ?? []).map(c =>
-          c.id === selectedCoupon.id
-            ? { ...c, used: true, usedAt: Timestamp.now(), usedOnReservationId: reservationId }
-            : c,
-        );
-        updateDoc(doc(db, 'users', currentUser.uid), { coupons: updatedCoupons }).catch(() => {});
-      }
+      const reservationId = reservationIds[0];
 
       sendNotif(currentUser.uid, {
         type:      'rental',
@@ -153,9 +131,7 @@ export default function BookingSummaryScreen() {
         params: { orderId },
       });
     } catch (err) {
-      setError(err instanceof BookingHoldError
-        ? 'New bookings are paused for your account — see the message above.'
-        : 'Could not confirm your booking. Please try again.');
+      setError(err instanceof BookingError ? err.message : 'Could not confirm your booking. Please try again.');
       setConfirming(false);
     }
   };
@@ -199,7 +175,7 @@ export default function BookingSummaryScreen() {
               <Text style={s.couponSectionLabel}>Apply a coupon</Text>
               {unusedCoupons.map(c => {
                 const selected = c.id === selectedCouponId;
-                const savings = Math.round((subtotal * c.percent) / 100);
+                const savings = orderDiscount([subtotal], couponPct(c)).total;
                 return (
                   <TouchableOpacity
                     key={c.id}
@@ -208,10 +184,10 @@ export default function BookingSummaryScreen() {
                     activeOpacity={0.75}
                   >
                     <View style={s.couponPercentBox}>
-                      <Text style={s.couponPercentText}>{c.percent}%</Text>
+                      <Text style={s.couponPercentText}>{couponPct(c)}%</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.couponCardTitle}>{c.percent}% off</Text>
+                      <Text style={s.couponCardTitle}>{couponPct(c)}% off</Text>
                       <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
                     </View>
                   </TouchableOpacity>

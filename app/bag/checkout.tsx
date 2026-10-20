@@ -15,19 +15,18 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
-import { useBookingHold, BookingHoldError } from '@/lib/bookingHold';
+import { useBookingHold } from '@/lib/bookingHold';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
 import {
-  addReservationBatch,
+  createBooking,
+  BookingError,
   getProduct,
   getUserProfile,
-  newOrderId,
   type UserProfile,
   type LoyaltyCoupon,
 } from '@/lib/firestore';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { couponPercentFor, orderDiscount } from '@/functions/src/shared/pricing';
 import { clearBag, listenBagItems, BagItem } from '@/lib/bag';
 import { sendNotif } from '@/lib/notifications';
 import { PaymentAtPickupBox } from '@/components/PaymentAtPickupBox';
@@ -35,7 +34,7 @@ import { Product } from '@/lib/mockData';
 import { getEffectiveRate, billableDaysFromDates, fmtReservationLabel } from '@/utils/pricing';
 import { useExchangeRate, useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
 import { toLak, splitHtVat, formatLakAmount } from '@/utils/currency';
-import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
+import { useLoyaltyConfig, depositPercentFor, isLoyaltyExcluded } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import { BillingSummary } from '@/components/BillingSummary';
 import { needsBtobDocument } from '@/utils/btob';
@@ -60,15 +59,6 @@ interface CheckoutItem {
   returnLabel:  string;
 }
 
-// Rounds so the per-item shares sum exactly to totalDiscount (remainder goes to the last item).
-function prorateDiscount(items: CheckoutItem[], totalDiscount: number): number[] {
-  const totalSubtotal = items.reduce((s, i) => s + i.subtotal, 0);
-  if (totalSubtotal <= 0) return items.map(() => 0);
-  const shares = items.map(i => Math.round((totalDiscount * i.subtotal) / totalSubtotal));
-  const allocated = shares.reduce((s, v) => s + v, 0);
-  if (shares.length > 0) shares[shares.length - 1] += totalDiscount - allocated;
-  return shares;
-}
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -97,11 +87,12 @@ export default function BagSummaryScreen() {
     getUserProfile(user.uid).then(setProfile).catch(() => {});
   }, [user]);
 
-  // Business accounts are excluded from the loyalty program — never show or let them
-  // apply a coupon, even one issued before the account became a business account.
-  const unusedCoupons: LoyaltyCoupon[] = profile?.customerType === 'business'
+  // Excluded accounts (business/BtoB) never see or apply coupons. The % shown is the
+  // CONFIG % for the coupon's tier — exactly what createReservations applies server-side.
+  const couponPct = (c: LoyaltyCoupon) => couponPercentFor(c.tier, loyaltyConfig);
+  const unusedCoupons: LoyaltyCoupon[] = isLoyaltyExcluded(profile ?? {})
     ? []
-    : (profile?.coupons ?? []).filter(c => !c.used);
+    : (profile?.coupons ?? []).filter(c => !c.used && couponPct(c) > 0);
   const selectedCoupon = unusedCoupons.find(c => c.id === selectedCouponId) ?? null;
 
   // ── Bag data ────────────────────────────────────────────────────────────────
@@ -167,11 +158,12 @@ export default function BagSummaryScreen() {
 
   const totalRental  = items.reduce((sum, i) => sum + i.subtotal, 0);
   const totalDeposit = items.reduce((sum, i) => sum + i.deposit, 0);
-  const discountAmount = selectedCoupon ? Math.round((totalRental * selectedCoupon.percent) / 100) : 0;
+  // Same order-level discount + per-line split as the server (shared orderDiscount).
+  const couponSplit = orderDiscount(items.map(i => i.subtotal), selectedCoupon ? couponPct(selectedCoupon) : 0);
+  const discountAmount = couponSplit.total;
   const finalTotal = totalRental - discountAmount;
   const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
   const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
-  const perItemDiscount = selectedCoupon ? prorateDiscount(items, discountAmount) : items.map(() => 0);
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
   const handleConfirm = async () => {
@@ -198,47 +190,17 @@ export default function BagSummaryScreen() {
         return;
       }
 
-      const orderId    = await newOrderId();
-      const renterName = currentUser.displayName || currentUser.email || null;
-
-      await addReservationBatch(
-        items.map((item, i) => ({
-          productId:    item.productId,
-          productName:  item.productName,
-          productImage: item.productImage,
-          renterId:     currentUser.uid,
-          renterName,
-          pickupAt:     new Date(item.pickupAt),
-          returnAt:     new Date(item.returnAt),
-          pickupLabel:  item.pickupLabel,
-          returnLabel:  item.returnLabel,
-          durationDays: item.durationDays,
-          quantity:     item.quantity,
-          pricePerDay:  item.pricePerDay,
-          subtotal:     item.subtotal,
-          total:        item.subtotal - perItemDiscount[i],
-          deposit:      item.deposit,
-          currency:     'LAK' as const,
-          notes:        '',
-          status:       'pending_payment' as const,
-          ...(selectedCoupon
-            ? { couponApplied: { id: selectedCoupon.id, percent: selectedCoupon.percent, discountAmount: perItemDiscount[i] } }
-            : {}),
+      // Server-side creation: the createReservations callable recomputes every figure,
+      // checks stock in a transaction and consumes the coupon (single order, one email).
+      const { orderId } = await createBooking({
+        items: items.map(item => ({
+          productId: item.productId,
+          pickupAt:  new Date(item.pickupAt),
+          returnAt:  new Date(item.returnAt),
+          quantity:  item.quantity,
         })),
-        orderId,
-      );
-
-      // Mark the coupon used at creation time — permanent even if the order is later
-      // cancelled. orderId (not a single reservation id) is stored since one coupon can
-      // span N reservation docs in a multi-item order.
-      if (selectedCoupon) {
-        const updatedCoupons = (profileAtSubmit.coupons ?? []).map(c =>
-          c.id === selectedCoupon.id
-            ? { ...c, used: true, usedAt: Timestamp.now(), usedOnReservationId: orderId }
-            : c,
-        );
-        updateDoc(doc(db, 'users', currentUser.uid), { coupons: updatedCoupons }).catch(() => {});
-      }
+        couponId: selectedCoupon?.id ?? null,
+      });
 
       // Clear the bag — fire and forget
       clearBag(currentUser.uid).catch(() => {});
@@ -260,9 +222,7 @@ export default function BagSummaryScreen() {
         params: { orderId },
       });
     } catch (err) {
-      setError(err instanceof BookingHoldError
-        ? 'New bookings are paused for your account — see the message above.'
-        : 'Could not submit your reservation. Please try again.');
+      setError(err instanceof BookingError ? err.message : 'Could not submit your reservation. Please try again.');
       setSubmitting(false);
     }
   };
@@ -332,7 +292,7 @@ export default function BagSummaryScreen() {
               <Text style={s.couponSectionLabel}>Apply a coupon</Text>
               {unusedCoupons.map(c => {
                 const selected = c.id === selectedCouponId;
-                const savings = Math.round((totalRental * c.percent) / 100);
+                const savings = orderDiscount(items.map(i => i.subtotal), couponPct(c)).total;
                 return (
                   <TouchableOpacity
                     key={c.id}
@@ -341,10 +301,10 @@ export default function BagSummaryScreen() {
                     activeOpacity={0.75}
                   >
                     <View style={s.couponPercentBox}>
-                      <Text style={s.couponPercentText}>{c.percent}%</Text>
+                      <Text style={s.couponPercentText}>{couponPct(c)}%</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.couponCardTitle}>{c.percent}% off</Text>
+                      <Text style={s.couponCardTitle}>{couponPct(c)}% off</Text>
                       <Text style={s.couponCardSub}>Save {savings.toLocaleString('en-US')} LAK</Text>
                     </View>
                   </TouchableOpacity>

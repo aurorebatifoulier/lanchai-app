@@ -16,8 +16,8 @@ import {
   increment,
   type WriteBatch,
 } from 'firebase/firestore';
-import { db } from './firebase';
-import { getBookingHold, BookingHoldError } from './bookingHold';
+import { db, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
 
@@ -308,105 +308,72 @@ export async function getReservationById(id: string): Promise<RentalDoc | null> 
   return { id: snap.id, ...snap.data() } as RentalDoc;
 }
 
-// ── New reservation write ──────────────────────────────────────────────────
-export interface NewReservationData {
+// ── New reservations — server-side only ─────────────────────────────────────
+// Renters can't write reservations (firestore.rules: create is admin-only). Every
+// booking goes through the createReservations callable (functions/src/reservations.ts),
+// which recomputes all figures from server data with the same shared rules the app
+// uses for previews, checks stock inside a transaction, and consumes the coupon.
+export interface BookingItemInput {
   productId: string;
-  productName: string;
-  productImage: string | null;
-  renterId: string;
-  renterName: string | null;
   pickupAt: Date;
   returnAt: Date;
-  pickupLabel: string;
-  returnLabel: string;
-  durationDays: number;
   quantity: number;
-  pricePerDay: number;
-  subtotal: number;
-  total: number;
-  deposit: number;
-  currency: 'LAK';
-  notes: string;
-  status: 'pending_payment';
-  orderId: string;
-  couponApplied?: { id: string; percent: number; discountAmount: number };
 }
 
-// Throws on Firestore error — caller must catch so the booking flow doesn't proceed on failure.
-export async function addReservation(data: NewReservationData): Promise<string> {
-  if (!data.pricePerDay || data.pricePerDay <= 0 || !data.subtotal || data.subtotal <= 0) {
-    throw new Error('Reservation rejected: pricePerDay or subtotal is 0 or unset.');
+export type BookingErrorCode =
+  | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
+  | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
+  | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal';
+
+const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
+  'unauthenticated':        'Please sign in to book.',
+  'invalid-request':        'Something is wrong with this booking. Please check it and try again.',
+  'phone-required':         'A phone number is required to book. Go to Account → Personal info to add one.',
+  'account-pending':        'Your business account is still being reviewed — you can book once it’s approved.',
+  'account-on-hold':        'New bookings are paused for your account — see the message above.',
+  'product-unavailable':    'This item is no longer available. Please remove it and try again.',
+  'access-restricted':      'This item is reserved for higher-tier members.',
+  'invalid-slot':           'This time is outside our opening hours. Please pick another slot.',
+  'too-soon':               'This pick-up time is too soon now — please choose a later slot.',
+  'invalid-dates':          'The return must be after the pick-up. Please check your dates.',
+  'unpriced':               'This item doesn’t have a price yet. Please try another item.',
+  'slot-unavailable':       'Sorry — someone just booked this item for these dates. Please choose other dates.',
+  'coupon-invalid':         'This coupon can’t be used anymore. Remove it and try again.',
+  'pricing-not-configured': 'Booking is temporarily unavailable. Please try again later.',
+  'internal':               'Could not confirm your booking. Please try again.',
+};
+
+/** Thrown by createBooking — `message` is ready to show to the renter. */
+export class BookingError extends Error {
+  constructor(public code: BookingErrorCode, message: string) {
+    super(message);
+    this.name = 'BookingError';
   }
-  // Client-side mirror of the firestore.rules bookingHolds check (the real enforcement) —
-  // here only to surface a clear BookingHoldError instead of a raw permission-denied.
-  if (await getBookingHold(data.renterId)) throw new BookingHoldError();
-  const { pickupAt, returnAt, ...rest } = data;
-  const id = `${data.orderId}_1`;
-  await setDoc(doc(db, 'reservations', id), {
-    ...rest,
-    pickupAt: Timestamp.fromDate(pickupAt),
-    returnAt: Timestamp.fromDate(returnAt),
-    createdAt: serverTimestamp(),
-  });
-  return id;
 }
 
-// Human-readable order-ID alphabet — excludes 0/O/1/I/L to avoid misreads off a screen.
-const ORDER_CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-function randomOrderCode(length = 4): string {
-  let out = '';
-  for (let i = 0; i < length; i++) out += ORDER_CODE_CHARS[Math.floor(Math.random() * ORDER_CODE_CHARS.length)];
-  return out;
-}
-function todayStamp(): string {
-  const d = new Date();
-  return `${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-}
-const MAX_ORDER_ID_ATTEMPTS = 5;
-
-// Generates a new, verified-unique, human-readable order ID (e.g. "LNC-260731-A3F2") —
-// this becomes both the `orderId` field AND the prefix of every reservation doc ID it
-// creates (`{orderId}_1`, `{orderId}_2`, ...), so sibling items in an order sort
-// adjacently in the Firebase console instead of scattering under random auto-IDs.
-// Checking only the `_1` suffix for existence is enough: every doc in an order is
-// created together from the same orderId, so a real collision would hit `_1` too.
-// Throws on Firestore error, or if it can't find a free code after MAX_ORDER_ID_ATTEMPTS.
-export async function newOrderId(): Promise<string> {
-  const stamp = todayStamp();
-  for (let attempt = 0; attempt < MAX_ORDER_ID_ATTEMPTS; attempt++) {
-    const candidate = `LNC-${stamp}-${randomOrderCode()}`;
-    const probe = await getDoc(doc(db, 'reservations', `${candidate}_1`));
-    if (!probe.exists()) return candidate;
-  }
-  throw new Error('Could not generate a unique order ID — please try again.');
-}
-
-// Atomically writes multiple reservations sharing one orderId.
-// Throws on Firestore error — caller must catch.
-export async function addReservationBatch(
-  items: Array<Omit<NewReservationData, 'orderId'>>,
-  orderId: string,
-): Promise<void> {
-  for (const item of items) {
-    if (!item.pricePerDay || item.pricePerDay <= 0 || !item.subtotal || item.subtotal <= 0) {
-      throw new Error(`Reservation rejected: item "${item.productName}" has pricePerDay or subtotal of 0.`);
-    }
-  }
-  // Same client-side mirror of the rules' bookingHolds check as addReservation.
-  if (items.length > 0 && await getBookingHold(items[0].renterId)) throw new BookingHoldError();
-  const batch = writeBatch(db);
-  items.forEach((item, i) => {
-    const ref = doc(db, 'reservations', `${orderId}_${i + 1}`);
-    const { pickupAt, returnAt, ...rest } = item;
-    batch.set(ref, {
-      ...rest,
-      orderId,
-      pickupAt:  Timestamp.fromDate(pickupAt),
-      returnAt:  Timestamp.fromDate(returnAt),
-      createdAt: serverTimestamp(),
+// Throws BookingError (friendly message) on any failure — callers just display it.
+export async function createBooking(input: {
+  items: BookingItemInput[];
+  couponId?: string | null;
+  notes?: string;
+}): Promise<{ orderId: string; reservationIds: string[] }> {
+  const call = httpsCallable<unknown, { orderId: string; reservationIds: string[] }>(functions, 'createReservations');
+  try {
+    const res = await call({
+      items: input.items.map(i => ({
+        productId: i.productId,
+        pickupAtMs: i.pickupAt.getTime(),
+        returnAtMs: i.returnAt.getTime(),
+        quantity: i.quantity,
+      })),
+      couponId: input.couponId ?? null,
+      notes: input.notes ?? '',
     });
-  });
-  await batch.commit();
+    return res.data;
+  } catch (err: any) {
+    const code = (err?.details?.code ?? 'internal') as BookingErrorCode;
+    throw new BookingError(code, BOOKING_ERROR_MESSAGES[code] ?? BOOKING_ERROR_MESSAGES.internal);
+  }
 }
 
 // ── Renter-initiated cancellation ────────────────────────────────────────────

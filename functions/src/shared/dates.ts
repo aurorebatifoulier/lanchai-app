@@ -43,3 +43,21 @@ export function vteEndOfDayMs(ms: number): number {
 export function isPickupMissed(pickupAtMs: number, nowMs: number = Date.now()): boolean {
   return pickupAtMs > 0 && nowMs >= vteEndOfDayMs(pickupAtMs);
 }
+
+/** Reservation label "Sat, 24 Oct · 10:00" in Vientiane time (pickupLabel/returnLabel). */
+export function vteReservationLabel(ms: number): string {
+  const d = local(ms);
+  return `${DOW[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]} · ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+/** Minutes since local (Vientiane) midnight, and whether `ms` falls on the same local day as `otherMs`. */
+export function vteMinutesOfDay(ms: number): number {
+  const d = local(ms);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+/** Local (Vientiane) date stamp "261024" (YYMMDD) — order IDs. */
+export function vteDateStamp(ms: number): string {
+  const d = local(ms);
+  return `${String(d.getUTCFullYear()).slice(-2)}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+}

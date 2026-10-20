@@ -110,23 +110,26 @@ service cloud.firestore {
       // (a stale/invalid reservation link would otherwise throw instead of
       // resolving to "not found").
       allow read:   if resource == null || isOwner(resource.data.renterId) || isAdmin();
-      // bookingHolds/{uid} (server-written by syncBookingHold) blocks new bookings while
-      // the renter has an overdue return or an unpaid balance — enforced HERE, not only
-      // in the app. Admins are never blocked.
-      allow create: if isAuthed() &&
+      // Renters NEVER create reservations directly: every booking goes through the
+      // createReservations callable (functions/src/reservations.ts), which recomputes
+      // prices/deposit/coupon from server data, checks stock in a transaction, slots,
+      // access tiers and bookingHolds. Admins keep their previous create rights.
+      allow create: if isAdmin() &&
                         request.resource.data.renterId == request.auth.uid &&
-                        request.resource.data.status == 'pending_payment' &&
-                        (isAdmin() ||
-                         !exists(/databases/$(database)/documents/bookingHolds/$(request.auth.uid)));
+                        request.resource.data.status == 'pending_payment';
 
       // Admins may update anything. Renters may only cancel their own
-      // reservation (status → 'cancelled') — no other field may change.
+      // reservation (status → 'cancelled') — no other field may change, and the
+      // values are pinned: cancelledBy must be 'renter' (no fake admin cancellation →
+      // wrong email) and cancelledAt must be the server time of this write.
       allow update: if isAdmin() || (
         isOwner(resource.data.renterId) &&
         request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly(['status', 'cancelledAt', 'cancelledBy']) &&
         request.resource.data.status == 'cancelled' &&
+        request.resource.data.cancelledBy == 'renter' &&
+        request.resource.data.cancelledAt == request.time &&
         (resource.data.status == 'pending_payment' ||
          resource.data.status == 'confirmed')
       );
@@ -297,6 +300,14 @@ service cloud.firestore {
     match /config/{docId} {
       allow read:  if (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth'])) || isAdmin();
       allow write: if isAdmin();
+    }
+
+    // ── productLocks/{productId} ─────────────────────────────────────────
+    // Per-product lock read+written inside the createReservations transaction to
+    // serialize concurrent bookings of the same product (no overbooking race).
+    // Server-only (Admin SDK).
+    match /productLocks/{productId} {
+      allow read, write: if false;
     }
 
     // ── bookingHolds/{uid} ───────────────────────────────────────────────

@@ -14,10 +14,14 @@ import {
   TIER_ORDER, TIER_LABELS, type LoyaltyChangeConfig, type LoyaltyTierKey,
 } from './shared/loyalty';
 import { isPickupMissed } from './shared/dates';
+import { HANDOFF_BUFFER_MS } from './shared/availability';
 import { sendLateReturnEmail } from './email/triggers';
 
 // Transactional emails (Brevo) — see functions/src/email/.
 export * from './email/triggers';
+
+// Server-side reservation creation (the only path for renters) — see reservations.ts.
+export * from './reservations';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -252,11 +256,7 @@ export const syncBookingHold = onDocumentWritten(
   },
 );
 
-// Mirrors utils/availability.ts's HANDOFF_BUFFER_MS — kept duplicated for now (see
-// OCCUPYING_STATUSES's own duplication below), so keep these two constants in sync
-// manually. New shared logic should go in functions/src/shared/ instead, which the app
-// imports directly (see shared/latePenalty.ts).
-const HANDOFF_BUFFER_MS = 12 * 60 * 60 * 1000; // 12 hours
+// HANDOFF_BUFFER_MS comes from functions/src/shared/availability.ts (shared with the app).
 
 // Releases a returned reservation's unit(s) back into the bookable pool — decrementing
 // the product's pendingSettlementUnits (see lib/types.ts) — but only once BOTH the
