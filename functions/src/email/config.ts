@@ -26,7 +26,7 @@ export const LOGO_URL = `${PUBLIC_BASE_URL}/email/lanchai-logo@2x.png`;
 /** Small amber line icons (hosting/email/icons/, 32px PNG shown at 16px). */
 export type EmailIcon =
   | 'map-pin' | 'calendar-plus' | 'id-card' | 'qr-code' | 'cash' | 'clock' | 'whatsapp'
-  | 'checklist' | 'sparkles' | 'star' | 'check-circle';
+  | 'checklist' | 'sparkles' | 'star' | 'check-circle' | 'star-solid';
 export const iconUrl = (name: EmailIcon) => `${PUBLIC_BASE_URL}/email/icons/${name}@2x.png`;
 
 /** https link that opens an in-app path (allow-listed in hosting/open/index.html). */
@@ -35,4 +35,10 @@ export function appLink(
     | `rentals/${string}` | `product/${string}` | `category/${string}`,
 ): string {
   return `${PUBLIC_BASE_URL}/open/?to=${encodeURIComponent(path).replace(/%2F/g, '/')}`;
+}
+
+/** Opens the in-app review screen for that product/reservation, rating pre-selected. */
+export function reviewLink(productId: string, reservationId: string, rating?: number): string {
+  const r = rating && rating >= 1 && rating <= 5 ? `&rating=${rating}` : '';
+  return `${PUBLIC_BASE_URL}/open/?to=review/${encodeURIComponent(productId)}&rid=${encodeURIComponent(reservationId)}${r}`;
 }

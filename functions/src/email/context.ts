@@ -35,6 +35,9 @@ export interface Recipient {
   remindersOptOut: boolean;
   /** Business / BtoB accounts — never shown loyalty points. */
   loyaltyExcluded: boolean;
+  /** Current loyalty balance (users/{uid}.loyaltyPoints). */
+  loyaltyPoints: number;
+  firstName: string;
 }
 
 /** Email comes from Firebase Auth (it isn't stored in users/{uid}). */
@@ -51,6 +54,8 @@ export async function getRecipient(uid: string, fallbackName?: string | null): P
     name: String(name),
     remindersOptOut: p.emailRemindersOptOut === true,
     loyaltyExcluded: isLoyaltyExcluded(p),
+    loyaltyPoints: typeof p.loyaltyPoints === 'number' ? p.loyaltyPoints : 0,
+    firstName: String(p.firstName || (p.displayName ?? authUser?.displayName ?? '').split(' ')[0] || 'there'),
   };
 }
 
@@ -62,6 +67,21 @@ export async function getRates(): Promise<Rates> {
   const d = snap?.data() ?? {};
   const pos = (v: unknown) => (typeof v === 'number' && v > 0 ? v : null);
   return { usdToLak: pos(d.exchangeRate), thbToLak: pos(d.thbToLakRate) };
+}
+
+/** config/loyalty tier thresholds, or null when the program isn't configured. */
+export async function getLoyaltyThresholds(): Promise<{ thresholds: { silver: number; gold: number; platinum: number } } | null> {
+  const snap = await admin.firestore().collection('config').doc('loyalty').get().catch(() => null);
+  const t = snap?.data()?.thresholds;
+  return t && typeof t.silver === 'number' ? { thresholds: t } : null;
+}
+
+/** Has this renter already reviewed this product (any reservation)? Equality-only query. */
+export async function hasReviewed(productId: string | undefined, uid: string): Promise<boolean> {
+  if (!productId) return false;
+  const snap = await admin.firestore().collection('reviews').doc(productId).collection('reviews')
+    .where('userId', '==', uid).limit(1).get().catch(() => null);
+  return !!snap && !snap.empty;
 }
 
 export async function getVatPercent(): Promise<number | null> {

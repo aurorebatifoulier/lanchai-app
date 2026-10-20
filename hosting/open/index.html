@@ -26,10 +26,23 @@
   // links), so emails point here and this page hands off to the app. Only a fixed
   // allow-list of in-app paths is accepted — never an arbitrary redirect target.
   (function () {
-    var to = new URLSearchParams(window.location.search).get('to') || '';
-    var allowed = /^(home|reservations|explore|legal\/cancellation|(rentals|product|category)\/[A-Za-z0-9_-]{1,64})$/;
+    var params = new URLSearchParams(window.location.search);
+    var to = params.get('to') || '';
+    var ID = /^[A-Za-z0-9_-]{1,64}$/;
+    var allowed = /^(home|reservations|explore|legal\/cancellation|(rentals|product|category|review)\/[A-Za-z0-9_-]{1,64})$/;
     var path = allowed.test(to) ? to : 'reservations';
-    var target = 'lanchaiapp://' + (path === 'home' ? '' : path);
+    var query = '';
+    if (path.indexOf('review/') === 0) {
+      // Review links need the reservation ID; the rating (1-5) is optional.
+      var rid = params.get('rid') || '';
+      var rating = params.get('rating') || '';
+      if (!ID.test(rid)) {
+        path = 'reservations';
+      } else {
+        query = '?reservationId=' + rid + (/^[1-5]$/.test(rating) ? '&rating=' + rating : '');
+      }
+    }
+    var target = 'lanchaiapp://' + (path === 'home' ? '' : path) + query;
     document.getElementById('open').setAttribute('href', target);
     window.location.href = target;
   })();

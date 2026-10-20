@@ -21,7 +21,9 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function ReviewScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
-  const { reservationId } = useLocalSearchParams<{ reservationId?: string }>();
+  const { reservationId, rating: ratingParam } = useLocalSearchParams<{ reservationId?: string; rating?: string }>();
+  // Optional pre-selected rating from an email star link (1–5); the renter can still change it.
+  const initialRating = /^[1-5]$/.test(ratingParam ?? '') ? Number(ratingParam) : 0;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -31,7 +33,7 @@ export default function ReviewScreen() {
   const [loading,        setLoading]        = useState(true);
   const [alreadyReviewed, setAlreadyReviewed] = useState(false);
 
-  const [rating,     setRating]     = useState(0);
+  const [rating,     setRating]     = useState(initialRating);
   const [text,       setText]       = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted]  = useState(false);

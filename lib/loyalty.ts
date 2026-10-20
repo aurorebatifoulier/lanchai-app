@@ -4,10 +4,9 @@ import { db } from './firebase';
 import { getUserProfile, type LoyaltyTier } from './firestore';
 import { useAuth } from '@/contexts/AuthContext';
 
-export const TIER_ORDER: LoyaltyTier[] = ['bronze', 'silver', 'gold', 'platinum'];
-export const TIER_LABELS: Record<LoyaltyTier, string> = {
-  bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum',
-};
+// Tier names and next-tier math live in functions/src/shared/loyalty.ts (shared with
+// the receipt email) — re-exported here so app imports stay unchanged.
+export { TIER_ORDER, TIER_LABELS, pointsToNextTier, nextTierName } from '@/functions/src/shared/loyalty';
 
 export interface LoyaltyConfig {
   thresholds: { silver: number; gold: number; platinum: number };
@@ -55,24 +54,6 @@ export function useLoyaltyTier(): LoyaltyTier | null | undefined {
       .catch(() => setTier(null));
   }, [user]);
   return tier;
-}
-
-// Points needed to reach the next tier, or null if already at the top tier or config
-// isn't loaded yet.
-export function pointsToNextTier(points: number, config: LoyaltyConfig | null): number | null {
-  if (!config) return null;
-  if (points < config.thresholds.silver)   return config.thresholds.silver - points;
-  if (points < config.thresholds.gold)     return config.thresholds.gold - points;
-  if (points < config.thresholds.platinum) return config.thresholds.platinum - points;
-  return null;
-}
-
-export function nextTierName(points: number, config: LoyaltyConfig | null): LoyaltyTier | null {
-  if (!config) return null;
-  if (points < config.thresholds.silver)   return 'silver';
-  if (points < config.thresholds.gold)     return 'gold';
-  if (points < config.thresholds.platinum) return 'platinum';
-  return null;
 }
 
 // Percent of the standard deposit to charge, based on customer type and (for residents)

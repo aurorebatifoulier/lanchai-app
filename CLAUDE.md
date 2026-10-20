@@ -289,7 +289,20 @@ a snapshot indefinitely).
     "Before you come" card, deposit card + "Return it and earn X points" — X from
     `loyaltyPointsFor()` (`functions/src/shared/loyalty.ts`, also used by
     `applyLoyaltyPoints`), hidden for business/BtoB accounts and when 0. Centered
-    "late returns may add rental days" line — never mentions the grace period. Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
+    "late returns may add rental days" line — never mentions the grace period.
+  - **Receipt** (validated mockups A/B): "✓ Returned" hero with "Returned {day} at
+    {time}" (`returnedAt`), 5 hosted star links per item → `review/<productId>` via the
+    redirect page (`reviewLink()`: `rid` + `rating` 1–5 strictly validated; the review
+    screen pre-selects `rating`), or a product link if the renter already reviewed it
+    (`hasReviewed`). ONE summary card from `deriveReceiptData`/`deriveSettlementOutcome`
+    only; late/damage charges as negative lines ("adjusted by our team" when the LAK
+    charge < `latePenaltyAmount`). Loyalty card: `loyaltyPointsFor` + shared
+    `pointsToNextTier`/`nextTierName` (`functions/src/shared/loyalty.ts`, re-exported by
+    `lib/loyalty.ts`); hidden for excluded accounts / 0 points; "You're Platinum" only
+    when the config is known.
+  - **Review follow-up:** daily 18:00 job sends ONE email for returns 48–72h old if the
+    product isn't reviewed yet (`emailReviewFollowUp` claim, respects
+    `emailRemindersOptOut`). Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
     subjects and preheaders in `templates.ts`. Dates via `functions/src/shared/dates.ts`
     (Vientiane time, from `pickupAt`/`returnAt`). Shared texts: `CANCELLATION_SUMMARY`
     (`shared/policy.ts`, keep in sync with `lib/legalContent.ts`), payment methods

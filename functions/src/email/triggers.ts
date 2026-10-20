@@ -7,10 +7,14 @@ import { BREVO_API_KEY, REGION } from './config';
 import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
 import { cancellationEmailVariant } from '../shared/cancellation';
-import { getEmailShop, getRecipient, getVatPercent, getRates, type EmailShop, type Recipient } from './context';
+import {
+  getEmailShop, getRecipient, getVatPercent, getRates, getLoyaltyThresholds, hasReviewed,
+  type EmailShop, type Recipient,
+} from './context';
+import { loyaltyPointsFor, pointsToNextTier, nextTierName } from '../shared/loyalty';
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
-  receiptEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
+  receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   type ResData, type Rendered, type LateEmailStage,
 } from './templates';
 
@@ -29,6 +33,7 @@ const asRes = (snap: admin.firestore.DocumentSnapshot): ResData => {
     pickupAtMs: ms(d.pickupAt),
     returnAtMs: ms(d.returnAt),
     cancelledAtMs: d.cancelledAt ? ms(d.cancelledAt) : undefined,
+    returnedAtMs: d.returnedAt ? ms(d.returnedAt) : undefined,
     pricePerDay: d.pricePerDay ?? 0,
     durationDays: d.durationDays ?? 0,
   };
@@ -150,10 +155,23 @@ export const emailReservationUpdates = onDocumentUpdated(
 
       // End-of-rental receipt — same gate as the in-app receipt screen.
       if (!before.returnFinalizedAt && after.returnFinalizedAt && after.status === 'returned') {
-        const vat = await getVatPercent();
         const res = asRes(afterSnap);
+        const [vat, reviewed, loyaltyCfg] = await Promise.all([
+          getVatPercent(), hasReviewed(res.productId, renterId), getLoyaltyThresholds(),
+        ]);
         await claimAndSend([afterSnap.ref], 'emailReceipt', () =>
-          deliver(renterId, after.renterName, (name, shop) => receiptEmail(name, res, vat, shop), 'receipt'));
+          deliver(renterId, after.renterName, (name, shop, recipient) => {
+            // Same rule as applyLoyaltyPoints; the balance already includes these points
+            // (credited when the reservation became 'returned', before settlement).
+            const earned = loyaltyPointsFor(res.subtotal);
+            const loyalty = recipient.loyaltyExcluded || earned <= 0 ? null : {
+              earned,
+              toNext: pointsToNextTier(recipient.loyaltyPoints, loyaltyCfg),
+              nextTier: nextTierName(recipient.loyaltyPoints, loyaltyCfg),
+              isTop: !!loyaltyCfg && nextTierName(recipient.loyaltyPoints, loyaltyCfg) === null,
+            };
+            return receiptEmail(name, res, vat, shop, { firstName: recipient.firstName, alreadyReviewed: reviewed, loyalty });
+          }, 'receipt'));
       }
     } catch (err) {
       logger.error('[email] reservation update email failed', { err: String(err) });
@@ -264,8 +282,35 @@ export const emailDailyReminders = onSchedule(
     } catch (err) {
       logger.error('[email] return reminders failed', { err: String(err) });
     }
+    try {
+      await sendReviewFollowUps();
+    } catch (err) {
+      logger.error('[email] review follow-ups failed', { err: String(err) });
+    }
   },
 );
+
+// ── Review follow-up: ONE gentle email ~2 days after return, if not reviewed yet ──
+// Runs with the daily 18:00 job. Window = returns 48–72h ago, so each reservation is
+// considered exactly once. Never more than one (emailReviewFollowUp claim), skipped
+// when the renter already reviewed the product or opted out of reminder emails.
+async function sendReviewFollowUps(): Promise<void> {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  const snap = await db().collection('reservations').where('status', '==', 'returned').get();
+  const due = snap.docs.filter(d => {
+    const t: admin.firestore.Timestamp | undefined = d.get('returnedAt') ?? d.get('returnAt');
+    const age = t ? now - t.toMillis() : -1;
+    return age >= 2 * DAY && age < 3 * DAY && !d.get('emailReviewFollowUp')?.status && !!d.get('productId');
+  });
+  for (const d of due) {
+    const r = asRes(d);
+    const renterId: string = d.get('renterId');
+    if (await hasReviewed(r.productId, renterId)) continue;
+    await claimAndSend([d.ref], 'emailReviewFollowUp', () =>
+      deliver(renterId, d.get('renterName'), (name, shop) => reviewFollowUpEmail(name, r, shop), 'review-follow-up', { respectOptOut: true }));
+  }
+}
 
 // ── 7. Late returns — called from lateReturnAlerts next to the in-app alert ──────
 // Idempotency comes from that function's own lateAlert* flags. Never throws.
@@ -315,11 +360,20 @@ export const sendTestEmails = onCall(
       pickupLabel: 'Sun, 25 Oct · 10:00', returnLabel: 'Wed, 28 Oct · 10:00',
       subtotal: 120000, total: 120000, deposit: 150000, couponApplied: null,
     };
-    const closed: ResData = {
-      ...base, couponApplied: null, total: 300000, chargeCurrency: 'LAK',
+    // Sample amounts follow the real rules: 150,000 LAK/day × 1 → 30h late = 1.5 rental
+    // days = 225,000 LAK (computeLatePenalty, rounded up to 1,000 LAK).
+    const returnedAtMs = base.returnAtMs + 12 * 60 * 1000;
+    const closedClean: ResData = {
+      ...base, productId: 'sample-tent', couponApplied: null, total: 300000, chargeCurrency: 'LAK', returnedAtMs,
       handoverChecklist: { depositAmount: 500000, depositCurrency: 'LAK' },
-      lateChargeAmount: 150000, lateChargeReason: 'Returned 30h late', depositAppliedToCharge: 150000, outstandingBalance: 0,
+      depositAppliedToCharge: 0, outstandingBalance: 0,
     };
+    const closedLate: ResData = {
+      ...closedClean, returnedAtMs: base.returnAtMs + 30 * 60 * 60 * 1000,
+      latePenaltyAmount: 225000, latePenaltyDays: 1.5,
+      lateChargeAmount: 225000, lateChargeReason: 'Returned 30h late', depositAppliedToCharge: 225000,
+    };
+    const sampleLoyalty = { earned: 30, toNext: 120, nextTier: 'gold' as const, isTop: false };
     const samples: [string, Rendered][] = [
       ['booking-confirmation',             bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, second], shop, vat)],
       ['booking-confirmation-mixed-dates', bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, otherDates], shop, vat)],
@@ -339,13 +393,15 @@ export const sendTestEmails = onCall(
         variant: 'B', reason: 'item_unavailable', reasonText: null, stillReserved: [second],
       })],
       ['no-show',                          noShowEmail(name, [base, second], shop)],
-      ['receipt',                          receiptEmail(name, closed, vat, shop)],
+      ['receipt-A-no-charges',             receiptEmail(name, closedClean, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty })],
+      ['receipt-B-late-return',            receiptEmail(name, closedLate, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty })],
+      ['review-follow-up',                 reviewFollowUpEmail(name, closedClean, shop)],
       ['btob-approved',                    btobApprovedEmail(name, shop)],
       ['btob-rejected',                    btobRejectedEmail(name, 'The registration document is not readable.', shop)],
-      ['late-tier1',                       lateReturnEmail(name, 'tier1', base, 300000, shop)],
-      ['late-tier2',                       lateReturnEmail(name, 'tier2', base, 450000, shop)],
-      ['late-tier3',                       lateReturnEmail(name, 'tier3', base, 600000, shop)],
-      ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', base, 600000, shop)],
+      ['late-tier1',                       lateReturnEmail(name, 'tier1', base, 150000, shop)],
+      ['late-tier2',                       lateReturnEmail(name, 'tier2', base, 225000, shop)],
+      ['late-tier3',                       lateReturnEmail(name, 'tier3', base, 300000, shop)],
+      ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', base, 300000, shop)],
     ];
     const results: Record<string, SendResult> = {};
     for (const [tag, mail] of samples) {

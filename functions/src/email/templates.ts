@@ -1,6 +1,6 @@
 import { renderEmail, fmtLak, fmtCurrency, type Block, type Inner, type Button } from './layout';
 import type { EmailShop, Rates, Recipient } from './context';
-import { appLink } from './config';
+import { appLink, reviewLink } from './config';
 import { googleCalendarUrl, icsAttachment, type CalendarEvent } from './calendar';
 import {
   deriveReceiptData, deriveSettlementOutcome, splitHtVat, DEFAULT_VAT_PERCENT,
@@ -9,7 +9,7 @@ import {
 import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
-import { loyaltyPointsFor } from '../shared/loyalty';
+import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
 import {
   cancellationOutcome, CANCEL_REASONS, type CancelReason, type CancellationOutcome,
 } from '../shared/cancellation';
@@ -55,6 +55,12 @@ export interface ResData extends ReceiptInput {
   /** Optional advance paid before pick-up — never set today (see shared/cancellation.ts). */
   advancePaidLak?: number;
   cancelledAtMs?: number;
+  /** Actual return time (returnedAt), when set. */
+  returnedAtMs?: number;
+  /** Late-penalty suggestion frozen by lateReturnAlerts (LAK) and its rental days. */
+  latePenaltyAmount?: number;
+  latePenaltyDays?: number;
+  chargePercent?: number;
 }
 
 // ── Shared pieces ──────────────────────────────────────────────────────────────
@@ -518,58 +524,121 @@ export function noShowEmail(_name: string, rawItems: ResData[], shop: EmailShop)
   );
 }
 
-// ── 5. End-of-rental receipt (figures via deriveReceiptData — single source) ─────
-export function receiptEmail(_name: string, r: ResData, vatPercent: number | null, shop: EmailShop): Rendered {
+// ── 5. End-of-rental receipt (figures ONLY via deriveReceiptData / deriveSettlementOutcome) ──
+export interface ReceiptContext {
+  firstName: string;
+  /** Renter already reviewed this product → link to the product instead of stars. */
+  alreadyReviewed: boolean;
+  /** null = hidden (business/BtoB account, or no points for this rental). */
+  loyalty: { earned: number; toNext: number | null; nextTier: LoyaltyTierKey | null; isTop: boolean } | null;
+}
+
+function starLinks(r: ResData): string[] {
+  return [1, 2, 3, 4, 5].map(n => reviewLink(r.productId ?? '', r.id, n));
+}
+
+function reviewPrompt(r: ResData, alreadyReviewed: boolean) {
+  return alreadyReviewed || !r.productId
+    ? { question: `How was your ${r.productName}?`, link: r.productId ? { label: 'See the product', url: appLink(`product/${r.productId}`) } : undefined }
+    : { question: `How was your ${r.productName}?`, starUrls: starLinks(r) };
+}
+
+export function receiptEmail(_name: string, r: ResData, vatPercent: number | null, shop: EmailShop, ctx?: ReceiptContext): Rendered {
   const data = deriveReceiptData(r, vatPercent);
   const cur: DepositCurrency = data.depositCurrency;
   const fmt = (n: number) => fmtCurrency(n, cur);
   const orderId = orderIdOf([r]);
-
-  const charges: Inner[] = [];
-  if (r.chargeAmount != null) charges.push({ type: 'line', name: 'Damage/condition charge', detail: r.chargeReason, amount: fmt(r.chargeAmount) });
-  if (r.lateChargeAmount != null) charges.push({ type: 'line', name: 'Late return penalty', detail: r.lateChargeReason, amount: fmt(r.lateChargeAmount) });
-  charges.push({ type: 'row', label: 'Deposit held', value: fmt(data.depositHeldAmount), tone: 'muted' });
   const outcome = deriveSettlementOutcome(r, data);
-  if (outcome.kind === 'clientOwes') {
-    charges.push({ type: 'row', label: 'Balance due', value: fmt(outcome.amount), strong: true, tone: 'danger' });
-    charges.push({ type: 'subtle', text: outcome.resolution === 'settled' ? 'Settled' : outcome.resolution === 'writtenOff' ? 'Written off' : 'Not yet settled' });
-  } else if (outcome.kind === 'owedToClient') {
-    charges.push({ type: 'row', label: 'Deposit refunded to you', value: fmt(outcome.amount), strong: true });
-  } else {
-    charges.push({ type: 'row', label: 'Fully settled — nothing owed', value: '', strong: true });
+  const hasCharges = r.chargeAmount != null || r.lateChargeAmount != null;
+  const returnedMs = r.returnedAtMs ?? r.returnAtMs;
+
+  // ONE summary card — every figure from deriveReceiptData / deriveSettlementOutcome.
+  const summary: Inner[] = [];
+  if (!hasCharges && outcome.kind === 'owedToClient') {
+    summary.push({ type: 'outcome', title: 'Deposit refunded in full', text: 'Checked — all good' });
   }
+  summary.push({ type: 'row', label: 'Rental fee', value: fmtLak(r.total) });
+  summary.push({ type: 'row', label: 'Deposit paid', value: fmt(data.depositHeldAmount) });
+  if (r.lateChargeAmount != null) {
+    const detail: string[] = [];
+    const late = [r.lateChargeReason?.replace(/^Returned\s+/i, ''), r.latePenaltyDays ? `${r.latePenaltyDays} rental ${r.latePenaltyDays === 1 ? 'day' : 'days'}` : null]
+      .filter(Boolean).join(' · ');
+    if (late) detail.push(late);
+    // Only comparable when both are LAK (the suggestion is always LAK).
+    if (cur === 'LAK' && r.latePenaltyAmount && r.lateChargeAmount < r.latePenaltyAmount) detail.push('adjusted by our team');
+    summary.push({ type: 'line', name: 'Late return', detail, amount: `− ${fmt(r.lateChargeAmount)}`, compact: true });
+  }
+  if (r.chargeAmount != null) {
+    const detail = [r.chargeReason, r.chargePercent != null ? `${r.chargePercent}% of replacement value` : null].filter(Boolean).join(' · ');
+    summary.push({ type: 'line', name: 'Damage', detail: detail || undefined, amount: `− ${fmt(r.chargeAmount)}`, compact: true });
+  }
+  if (outcome.kind === 'clientOwes') {
+    summary.push({ type: 'row', label: 'Balance due', value: fmt(outcome.amount), strong: true, tone: 'danger', gapTop: 4 });
+    summary.push({ type: 'subtle', text: outcome.resolution === 'settled' ? 'Settled' : outcome.resolution === 'writtenOff' ? 'Written off' : 'Not yet settled' });
+  } else if (outcome.kind === 'owedToClient') {
+    summary.push({ type: 'row', label: 'Deposit refunded to you', value: fmt(outcome.amount), strong: true, gapTop: 4 });
+  } else {
+    summary.push({ type: 'row', label: 'Deposit fully used for charges', value: '', strong: true, gapTop: 4 });
+  }
+  summary.push({ type: 'divider' });
+  if (data.netInLak != null) {
+    summary.push({ type: 'row', label: 'Total cost of your rental', value: fmtLak(data.netInLak), strong: true });
+  } else {
+    summary.push({ type: 'row', label: 'Total cost of your rental', value: `${fmtLak(r.total)} + ${fmt(data.chargesTotal)}`, strong: true });
+  }
+  summary.push({ type: 'subtle', text: `Rental fee includes VAT ${fmtLak(data.vatAmount)} (${data.vatPct}%) · ${fmtLak(data.vatHt)} excl. VAT` });
+  summary.push({ type: 'subtle', text: 'PDF receipt in the app: My rentals › this rental' });
 
-  const totals: Inner[] = data.netInLak != null
-    ? [{ type: 'row', label: 'Total paid', value: fmtLak(data.netInLak), strong: true }]
-    : [{ type: 'row', label: 'Rental fee paid', value: fmtLak(r.total), strong: true },
-       ...(data.chargesTotal > 0 ? [{ type: 'row' as const, label: 'Charges (see above)', value: fmt(data.chargesTotal) }] : [])];
+  const blocks: Block[] = [
+    {
+      type: 'hero',
+      pill: '✓ Returned',
+      title: `Thanks, ${ctx?.firstName ?? 'there'}!`,
+      sub: `${r.productName} · Order ${orderId}`,
+      note: `Returned ${vteDay(returnedMs)} at ${vteTime(returnedMs)}`,
+      reviews: [reviewPrompt(r, ctx?.alreadyReviewed ?? false)],
+      secondary: [{ label: 'View my receipt', url: appLink(`rentals/${r.id}`) }],
+    },
+    { type: 'card', title: hasCharges ? 'Your rental summary' : undefined, items: summary },
+  ];
 
-  const preheaderTotal = data.netInLak != null ? `Total paid ${fmtLak(data.netInLak)}` : `Rental fee ${fmtLak(r.total)}`;
+  const loyaltyItems: Inner[] = [];
+  if (ctx?.loyalty && ctx.loyalty.earned > 0) {
+    const l = ctx.loyalty;
+    // isTop only when the loyalty config is known — never claim Platinum without it.
+    const tail = l.nextTier && l.toNext != null
+      ? ` · ${plural(l.toNext, 'point')} to ${TIER_LABELS[l.nextTier]}`
+      : l.isTop ? ' · You’re Platinum — thank you!' : '';
+    loyaltyItems.push({ type: 'bullet', text: `+${plural(l.earned, 'point')}${tail}`, icon: { name: 'star', alt: 'Loyalty points' } });
+  }
+  if (r.productId) loyaltyItems.push({ type: 'button', label: 'Rent again', url: appLink(`product/${r.productId}`) });
+  if (loyaltyItems.length) blocks.push({ type: 'card', items: loyaltyItems });
+
+  if (hasCharges) blocks.push({ type: 'center', text: 'Questions about a charge? Just reply to this email.' });
+
+  const preheader = !hasCharges && outcome.kind === 'owedToClient'
+    ? 'Deposit refunded in full · thanks for renting with us'
+    : outcome.kind === 'owedToClient'
+      ? `Deposit refunded: ${fmt(outcome.amount)} · see the details`
+      : 'Your rental summary · see the details';
+  return build(`Your LANCHAI receipt · ${r.productName}`, preheader, 'Your rental receipt', blocks, shop);
+}
+
+// ── 5b. Review follow-up — ONE gentle email, 2 days after return ─────────────────
+export function reviewFollowUpEmail(_name: string, r: ResData, shop: EmailShop): Rendered {
   return build(
-    `Your LANCHAI receipt · ${r.productName}`,
-    `${preheaderTotal} · thanks for renting with LANCHAI`,
-    'Your rental receipt',
+    `How was your ${r.productName}?`,
+    'It takes 10 seconds — tap a star',
+    'How was your rental?',
     [
       {
         type: 'hero',
-        pill: 'Rental closed',
-        title: 'Thanks for renting with us',
-        sub: `${r.productName} · Order ${orderId}`,
-        primary: { label: 'View my receipt', url: appLink(`rentals/${r.id}`) },
+        pill: 'Your opinion helps',
+        title: `How was your ${r.productName}?`,
+        sub: 'It takes 10 seconds — your review helps other renters choose.',
+        reviews: [{ question: 'Tap a star to rate it', starUrls: starLinks(r) }],
+        secondary: r.productId ? [{ label: 'Rent it again', url: appLink(`product/${r.productId}`) }] : undefined,
       },
-      { type: 'card', title: 'Rental fee', items: [
-        { type: 'dates', text: `${range(r)} · ${plural(r.durationDays, 'day')}` },
-        { type: 'line', name: r.productName, detail: `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}` },
-        { type: 'divider' },
-        { type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(data.vatHt), tone: 'muted' },
-        { type: 'row', label: `VAT (${data.vatPct}%)`, value: fmtLak(data.vatAmount), tone: 'muted' },
-        { type: 'row', label: 'Rental fee paid', value: fmtLak(r.total), strong: true },
-      ] },
-      { type: 'card', title: 'Deposit & charges', items: charges },
-      { type: 'card', title: 'Total', items: [
-        ...totals,
-        { type: 'text', text: 'You can download this receipt as a PDF in the app: My rentals › this rental › Receipt.', tone: 'muted', small: true },
-      ] },
     ],
     shop,
   );

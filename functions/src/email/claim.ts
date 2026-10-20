@@ -12,6 +12,7 @@ export type EmailField =
   | 'emailReturnReminder'
   | 'emailCancellation'
   | 'emailNoShow'
+  | 'emailReviewFollowUp'
   | 'emailReceipt'
   | 'emailBtobApproved'
   | 'emailBtobRejected';
