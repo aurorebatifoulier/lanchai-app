@@ -30,7 +30,7 @@ import {
   updateBagItemQuantity,
   BagItem,
 } from '@/lib/bag';
-import { getProduct } from '@/lib/firestore';
+import { getRenterProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate, billableDaysFromDates } from '@/utils/pricing';
@@ -101,7 +101,7 @@ export default function BagScreen() {
     items.forEach(item => {
       if (fetchedProductIds.current.has(item.productId)) return;
       fetchedProductIds.current.add(item.productId);
-      getProduct(item.productId).then(p => {
+      getRenterProduct(item.productId).then(p => {
         setProductMap(prev => ({ ...prev, [item.productId]: p }));
       });
     });

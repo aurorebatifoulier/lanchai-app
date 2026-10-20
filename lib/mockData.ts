@@ -26,6 +26,8 @@ export interface Product {
   rentalCount: number;
   averageRating?: number;
   available: boolean;
+  /** Listing lifecycle (lib/types.ts ProductDoc): drafts/archived are never shown to renters. */
+  status?: 'draft' | 'published' | 'archived';
   stockLeft: number;
   // Units currently out of the bookable pool (repair/lost/pending settlement) — see
   // utils/availability.ts's effectiveStock(), the required way to read adjusted stock.

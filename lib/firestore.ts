@@ -22,11 +22,18 @@ import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
 
 // Throws on Firestore error — callers must handle.
+// Drafts and archived products are never shown or bookable for renters (the
+// createReservations callable rejects them too). Admin screens query products directly.
+export function isRenterVisible(p: { status?: string }): boolean {
+  return p.status !== 'draft' && p.status !== 'archived';
+}
+
+// Renter-facing product list (Home, Explore/search, Liked, account counts).
 export async function getProducts(): Promise<Product[]> {
   const snap = await getDocs(collection(db, 'products'));
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() } as Product))
-    .filter((p: any) => p.status !== 'archived');
+    .filter(isRenterVisible);
 }
 
 // Throws on Firestore error — callers must handle.
@@ -35,14 +42,22 @@ export async function getProductsByCategory(category: ProductCategory): Promise<
   const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() } as Product))
-    .filter((p: any) => p.status !== 'archived');
+    .filter(isRenterVisible);
 }
 
 // Returns null only when the product doesn't exist. Throws on Firestore error — callers must handle.
+// Any product, whatever its status — admin screens, rental history, reviews.
 export async function getProduct(id: string): Promise<Product | null> {
   const snap = await getDoc(doc(db, 'products', id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as Product;
+}
+
+// Renter-facing single product (detail, booking, bag, checkout): null for a draft or
+// archived product, so an old link shows "This item isn't available".
+export async function getRenterProduct(id: string): Promise<Product | null> {
+  const p = await getProduct(id);
+  return p && isRenterVisible(p) ? p : null;
 }
 
 export async function getFavorites(userId: string): Promise<string[]> {

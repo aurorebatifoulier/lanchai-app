@@ -21,7 +21,7 @@ import { auth } from '@/lib/auth';
 import {
   createBooking,
   BookingError,
-  getProduct,
+  getRenterProduct,
   getUserProfile,
   type UserProfile,
   type LoyaltyCoupon,
@@ -115,7 +115,7 @@ export default function BagSummaryScreen() {
     rawItems.forEach(item => {
       if (fetchedIds.current.has(item.productId)) return;
       fetchedIds.current.add(item.productId);
-      getProduct(item.productId)
+      getRenterProduct(item.productId)
         .then(p  => setProductMap(prev => ({ ...prev, [item.productId]: p })))
         .catch(() => setProductMap(prev => ({ ...prev, [item.productId]: null })));
     });

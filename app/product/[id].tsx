@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
-import { getProduct, getFavorites, addFavorite, removeFavorite, getProductReviews, ReviewDoc, getUserProfile, type UserProfile } from '@/lib/firestore';
+import { getRenterProduct, getFavorites, addFavorite, removeFavorite, getProductReviews, ReviewDoc, getUserProfile, type UserProfile } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { useAuth } from '@/contexts/AuthContext';
 import { addToBag, listenBagItems } from '@/lib/bag';
@@ -76,7 +76,7 @@ export default function ProductDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      getProduct(id)
+      getRenterProduct(id)
         .then(p => {
           setProduct(p);
           setLoading(false);
@@ -174,7 +174,7 @@ export default function ProductDetailScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>Product not found</Text>
+          <Text style={styles.notFoundText}>This item isn&apos;t available</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backBtnText}>Go back</Text>
           </TouchableOpacity>

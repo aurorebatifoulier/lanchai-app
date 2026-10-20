@@ -18,7 +18,7 @@ import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import { useBookingHold } from '@/lib/bookingHold';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
-import { getProduct } from '@/lib/firestore';
+import { getRenterProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate } from '@/utils/pricing';
@@ -85,7 +85,7 @@ export default function BookingNewScreen() {
 
   useEffect(() => {
     if (!productId) return;
-    getProduct(productId).then(p => {
+    getRenterProduct(productId).then(p => {
       setProduct(p);
       if (p) setAvailableStock(effectiveStock(p));
       setLoading(false);
