@@ -204,6 +204,8 @@ export interface RentalDoc {
   handoverChecklist?: ChecklistData;
   returnChecklist?: ChecklistData;
   couponApplied?: { id: string; percent: number; discountAmount: number };
+  // Set by the restoreCancelledCoupon Cloud Function once the coupon was given back.
+  couponRestored?: boolean;
 
   // ── Cancellation ──────────────────────────────────────────────────────────
   cancelledAt?: Timestamp;

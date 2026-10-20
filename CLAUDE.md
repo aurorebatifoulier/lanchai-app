@@ -326,6 +326,9 @@ a snapshot indefinitely).
     `adminCancelReservations()` — ONE batch, same `cancelledAt`, so the email trigger
     sends one grouped email. Stores `cancelledBy: 'admin'`, `cancelReason`,
     `cancelReasonText`, `cancelledAt`.
+  - **Coupons:** `restoreCancelledCoupon` (`functions/src/index.ts`) gives the coupon back
+    (`used: false`) once EVERY line carrying it is cancelled (renter or admin, not
+    `admin_release`); idempotent via `couponRestored` on those lines.
   - Email variant (`cancellationEmailVariant`): A = renter, or admin + `customer_request`;
     B = any other admin cancellation ("We're sorry, we had to cancel" + preset sentence);
     none for `admin_release`. Partial cancellations show a green "Still reserved" banner.
@@ -496,6 +499,19 @@ a snapshot indefinitely).
   payable total; `PriceLak`'s business-only breakdown is otherwise still the
   convention used everywhere else pricing is shown (`app/bag.tsx`,
   `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
+
+## Security follow-ups (planned chantier — not fixed yet)
+
+- **Coupon reuse:** the `users/{uid}` update rule lets a renter flip a coupon back to
+  `used: false` client-side (only the array *size* is checked), so a coupon could be
+  reused. Coupon usage should be enforced server-side (e.g. mark used / validate in a
+  Cloud Function or a stricter rule). Note: `restoreCancelledCoupon` legitimately
+  restores coupons server-side when a whole booking is cancelled.
+- **Reservation create validation:** `pricePerDay` / `quantity` / `subtotal` / `total`
+  aren't validated by `firestore.rules` — a modified client could write arbitrary
+  prices (also the base of late penalties and loyalty points).
+- **0 LAK guard is client-only:** `addReservation`/`addReservationBatch` reject
+  `pricePerDay`/`subtotal` ≤ 0, but no rule enforces it server-side.
 
 ## Working with Aurore
 

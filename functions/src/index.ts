@@ -349,6 +349,56 @@ export const applyRentalCount = onDocumentUpdated(
   },
 );
 
+// Gives a loyalty coupon back to the renter when the booking it was used on is
+// cancelled — renter or LANCHAI cancellation alike (nothing is charged before pick-up),
+// but never for admin_release (a data correction). Only when EVERY line carrying that
+// coupon (couponApplied.id) is cancelled: a partial cancellation keeps it used.
+// Idempotent: the transaction checks/sets `couponRestored` on those lines, so the
+// sibling triggers of a batch cancellation restore it once. Coupons live in an array,
+// so no serverTimestamp() sentinel is written inside it (CLAUDE.md gotcha).
+export const restoreCancelledCoupon = onDocumentUpdated(
+  { document: 'reservations/{reservationId}', region: 'asia-southeast1' },
+  async event => {
+    try {
+      const before = event.data?.before.data();
+      const after = event.data?.after.data();
+      if (!before || !after) return;
+      if (before.status === 'cancelled' || after.status !== 'cancelled') return;
+      if (after.cancelledBy === 'admin_release') return;
+      const couponId: string | undefined = after.couponApplied?.id;
+      if (!couponId || after.couponRestored) return;
+
+      const lines = after.orderId
+        ? (await db.collection('reservations').where('orderId', '==', after.orderId).get()).docs
+        : [event.data!.after as admin.firestore.QueryDocumentSnapshot];
+      const carrying = lines.filter(d => d.get('couponApplied')?.id === couponId);
+      if (carrying.some(d => d.get('status') !== 'cancelled')) return; // partial → keep it used
+
+      const userRef = db.collection('users').doc(after.renterId);
+      const usedOn = new Set<string>([...carrying.map(d => d.id), ...(after.orderId ? [after.orderId] : [])]);
+
+      await db.runTransaction(async tx => {
+        const lineSnaps = await Promise.all(carrying.map(d => tx.get(d.ref)));
+        if (lineSnaps.some(l => l.get('couponRestored'))) return;
+        const userSnap = await tx.get(userRef);
+        const coupons: Record<string, unknown>[] = userSnap.get('coupons') ?? [];
+        let restored = false;
+        const next = coupons.map(c => {
+          if (c.id !== couponId || c.used !== true) return c;
+          if (c.usedOnReservationId && !usedOn.has(String(c.usedOnReservationId))) return c;
+          restored = true;
+          const { usedAt: _usedAt, usedOnReservationId: _usedOn, ...rest } = c;
+          return { ...rest, used: false };
+        });
+        if (restored) tx.update(userRef, { coupons: next });
+        for (const l of lineSnaps) tx.update(l.ref, { couponRestored: true });
+      });
+    } catch (err) {
+      console.error('[restoreCancelledCoupon] failed', err);
+    }
+  },
+);
+
 export const applyLoyaltyPoints = onDocumentUpdated(
   { document: 'reservations/{reservationId}', region: 'asia-southeast1' },
   async event => {
