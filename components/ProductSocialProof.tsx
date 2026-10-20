@@ -19,7 +19,7 @@ export function hasSocialProof(product: SocialProofProduct): boolean {
     || (product.rentalCount ?? 0) >= MIN_RENTALS_FOR_COUNT;
 }
 
-// "★ 4.8 (12 rented)" · "★ 4.8" · "7 rented" · nothing. 12px, matching the price line.
+// "★ 4.8 (12 rented)" · "★ 4.8" · "⟳ 7 rentals" · nothing. 12px, matching the price line.
 export default function ProductSocialProof({ product }: { product: SocialProofProduct }) {
   const rentalCount = product.rentalCount ?? 0;
   const showRating  = product.averageRating != null && (product.reviewCount ?? 0) >= MIN_REVIEWS_FOR_RATING;
@@ -27,7 +27,16 @@ export default function ProductSocialProof({ product }: { product: SocialProofPr
   if (!showRating && !showRentals) return null;
 
   if (!showRating) {
-    return <Text style={s.secondary} numberOfLines={1}>{rentalCount} rented</Text>;
+    // Same grammar as the rated line: amber icon + bold number + secondary word.
+    return (
+      <View style={s.row}>
+        <Feather name="repeat" size={12} color={COLORS.amber} />
+        <Text style={s.line} numberOfLines={1}>
+          <Text style={s.rating}>{rentalCount}</Text>
+          <Text style={s.secondary}> rentals</Text>
+        </Text>
+      </View>
+    );
   }
 
   return (
