@@ -35,6 +35,8 @@ export default function PersonalInfoScreen() {
   const [firstName,   setFirstName]   = useState('');
   const [lastName,    setLastName]    = useState('');
   const [phone,       setPhone]       = useState('');
+  // Phone as stored — phoneVerified is only reset when the number actually changes.
+  const [savedPhone,  setSavedPhone]  = useState('');
   const [whatsapp,    setWhatsapp]    = useState('');
   const [sameAsPhone, setSameAsPhone] = useState(false);
   const [address,     setAddress]     = useState('');
@@ -73,6 +75,7 @@ export default function PersonalInfoScreen() {
           setLastName(idx  >= 0 ? name.slice(idx + 1) : '');
         }
         setPhone(profile?.phoneNumber ?? profile?.phone ?? '');
+        setSavedPhone((profile?.phoneNumber ?? profile?.phone ?? '').trim());
         setWhatsapp(profile?.whatsapp ?? '');
         setSameAsPhone(profile?.whatsappSameAsPhone ?? false);
         setAddress(profile?.address ?? '');
@@ -147,13 +150,15 @@ export default function PersonalInfoScreen() {
         lastName:            ln,
         displayName,
         phoneNumber:         phone.trim(),
-        phoneVerified:       false,
+        // Staff verify phones in person — a new number needs verifying again.
+        ...(phone.trim() !== savedPhone ? { phoneVerified: false } : {}),
         phone:               phone.trim(),
         whatsapp:            waValue,
         whatsappSameAsPhone: sameAsPhone,
         address:             address.trim(),
       });
       await updateProfile(cu, { displayName });
+      setSavedPhone(phone.trim());
 
       console.log('[PersonalInfo] Profile saved successfully');
       setSaving(false);
