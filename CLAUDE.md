@@ -282,7 +282,9 @@ a snapshot indefinitely).
     `open/index.html`, the https → `lanchaiapp://` redirect used by every email button
     (Gmail strips custom-scheme links; allow-listed paths only; works in the installed
     build, not Expo Go). `PUBLIC_BASE_URL` in `functions/src/email/config.ts` is the
-    single place to switch to https://lanchai.la. Confirmation emails attach a `.ics`
+    single place to switch to https://lanchai.la. It is
+    `https://lanchai-app.firebaseapp.com` on purpose — `*.web.app` doesn't resolve
+    (NXDOMAIN) on some networks in Laos; never use the web.app domain in emails. Confirmation emails attach a `.ics`
     (pick-up + return) and link to Google Calendar.
   - Booking confirmation fires on `{orderId}_1` creation (single bookings are `_1`
     too) → one email per order. `admin_release` cancellations send nothing. Receipt

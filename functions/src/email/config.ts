@@ -18,7 +18,8 @@ export const REGION = 'asia-southeast1';
 
 // Public web base for email assets + the https → app redirect page (Firebase Hosting,
 // files in /hosting). THE single place to change when moving to https://lanchai.la.
-export const PUBLIC_BASE_URL = 'https://lanchai-app.web.app';
+// firebaseapp.com, not web.app: *.web.app returns NXDOMAIN on some networks in Laos.
+export const PUBLIC_BASE_URL = 'https://lanchai-app.firebaseapp.com';
 
 export const LOGO_URL = `${PUBLIC_BASE_URL}/email/lanchai-logo@2x.png`;
 
