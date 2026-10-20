@@ -8,10 +8,10 @@ import { db } from '@/lib/firebase';
 export const HANDOFF_BUFFER_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // Fixed prep delay before a confirmed booking is actually ready for pickup — staff
-// need this window to pull/check the item. Display-only: not consumed by
-// computeAvailableUnits or any function in this file, just surfaced as informational
-// copy on the product screen and the booking confirmation screen. Lives here (not a
-// separate file) so it sits next to the other booking-timing buffer above.
+// need this window to pull/check the item. Single source for BOTH the "Ready within Xh"
+// copy (product screen, booking confirmation) AND the same-day pickup lead time
+// (utils/timeSlots.ts's getAvailableTimeSlots: today's first slot is now + this delay).
+// Not consumed by computeAvailableUnits. Lives next to the other booking-timing buffer.
 export const PICKUP_DELAY_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 // Reservations in these statuses occupy a unit for overlap purposes. 'lost' is

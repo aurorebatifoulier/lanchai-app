@@ -1,6 +1,8 @@
 // Pickup/return time slots (30-min increments) derived from the shop's opening hours.
 // Used by both the single-item booking flow and the bag/multi-item date range picker —
 // callers build their list via `getShopTimeSlots(shop)` (lib/shop.ts), never hardcode it.
+import { PICKUP_DELAY_MS } from '@/utils/availability';
+
 export const pad = (n: number) => n.toString().padStart(2, '0');
 
 export const SLOT_STEP_MIN = 30;
@@ -63,12 +65,13 @@ function sameDay(a: Date, b: Date) {
   );
 }
 
-// Slots for a date that is today are filtered to (now + 1h prep buffer), rounded up to
+// Slots for a date that is today are filtered to (now + PICKUP_DELAY_MS), rounded up to
 // the nearest slot increment (30 min) — a renter can't select a time that's already
-// passed or too soon to prepare. Future dates return the full slot list.
+// passed or too soon to prepare. Same constant as the "Ready within Xh" copy shown to
+// renters, so the two can never disagree. Future dates return the full slot list.
 export function getAvailableTimeSlots(date: Date | null, slots: string[]): string[] {
   if (!date || !sameDay(date, new Date())) return slots;
-  const buffer = new Date(Date.now() + 60 * 60 * 1000);
+  const buffer = new Date(Date.now() + PICKUP_DELAY_MS);
   const totalMinutes = buffer.getHours() * 60 + buffer.getMinutes();
   const roundedMinutes = Math.ceil(totalMinutes / SLOT_STEP_MIN) * SLOT_STEP_MIN;
   const threshold = toHHMM(roundedMinutes);

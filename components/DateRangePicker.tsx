@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
+import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
 import { pad, getAvailableTimeSlots } from '@/utils/timeSlots';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
 
@@ -60,24 +61,21 @@ export default function DateRangePicker({
   const [page,       setPage]       = useState<Page>('main');
   const [startDate,  setStartDate]  = useState<Date | null>(null);
   const [endDate,    setEndDate]    = useState<Date | null>(null);
-  const [pickupTime, setPickupTime] = useState<string | null>(null);
-  const [returnTime, setReturnTime] = useState<string | null>(null);
+  const { pickupTime, returnTime, selectPickupTime, selectReturnTime, resetTimes } = useLinkedReturnTime();
 
   // Re-initialise from props each time the picker opens
   useEffect(() => {
     if (!visible) { setPage('main'); return; }
-    if (initialPickupAt) {
-      setStartDate(new Date(initialPickupAt.getFullYear(), initialPickupAt.getMonth(), initialPickupAt.getDate()));
-      setPickupTime(`${pad(initialPickupAt.getHours())}:${pad(initialPickupAt.getMinutes())}`);
-    } else {
-      setStartDate(null); setPickupTime(null);
-    }
-    if (initialReturnAt) {
-      setEndDate(new Date(initialReturnAt.getFullYear(), initialReturnAt.getMonth(), initialReturnAt.getDate()));
-      setReturnTime(`${pad(initialReturnAt.getHours())}:${pad(initialReturnAt.getMinutes())}`);
-    } else {
-      setEndDate(null); setReturnTime(null);
-    }
+    setStartDate(initialPickupAt
+      ? new Date(initialPickupAt.getFullYear(), initialPickupAt.getMonth(), initialPickupAt.getDate())
+      : null);
+    setEndDate(initialReturnAt
+      ? new Date(initialReturnAt.getFullYear(), initialReturnAt.getMonth(), initialReturnAt.getDate())
+      : null);
+    resetTimes(
+      initialPickupAt ? `${pad(initialPickupAt.getHours())}:${pad(initialPickupAt.getMinutes())}` : null,
+      initialReturnAt ? `${pad(initialReturnAt.getHours())}:${pad(initialReturnAt.getMinutes())}` : null,
+    );
     setPage('main');
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -138,12 +136,8 @@ export default function DateRangePicker({
     const activeTime = mode === 'pickup' ? pickupTime : returnTime;
     const availableSlots = getAvailableTimeSlots(mode === 'pickup' ? startDate : endDate, timeSlots);
     const onSelect   = (slot: string) => {
-      if (mode === 'pickup') {
-        setPickupTime(slot);
-        if (!returnTime) setReturnTime(slot);
-      } else {
-        setReturnTime(slot);
-      }
+      if (mode === 'pickup') selectPickupTime(slot);
+      else selectReturnTime(slot);
       setPage('main');
     };
     return (

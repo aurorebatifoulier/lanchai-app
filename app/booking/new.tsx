@@ -23,6 +23,7 @@ import { Product } from '@/lib/mockData';
 import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate } from '@/utils/pricing';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
+import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
 import { toLak, formatLak } from '@/utils/currency';
 import { PriceLak } from '@/components/PriceLak';
@@ -73,8 +74,7 @@ export default function BookingNewScreen() {
   const [loading, setLoading]               = useState(true);
   const [startDate, setStartDate]           = useState<Date | null>(null);
   const [endDate, setEndDate]               = useState<Date | null>(null);
-  const [pickupTime, setPickupTime]         = useState<string | null>(null);
-  const [returnTime, setReturnTime]         = useState<string | null>(null);
+  const { pickupTime, returnTime, selectPickupTime, selectReturnTime } = useLinkedReturnTime();
   const [quantity, setQuantity]             = useState(1);
   const [notes, setNotes]                   = useState('');
   const [availableStock, setAvailableStock] = useState(1);
@@ -137,10 +137,7 @@ export default function BookingNewScreen() {
   };
 
   // Selecting pick-up time defaults the return time to the same slot
-  const handlePickupTimeSelect = (slot: string) => {
-    setPickupTime(slot);
-    setReturnTime(slot);
-  };
+  const handlePickupTimeSelect = selectPickupTime;
 
   const handleSubmit = () => {
     if (!product || !ready || dayRateLak === null || exchangeRate == null || !startDate || !endDate || !pickupTime || !returnTime || !pickupDateTime || !returnDateTime) return;
@@ -469,7 +466,7 @@ export default function BookingNewScreen() {
                   <TouchableOpacity
                     key={slot}
                     style={[s.timeModalRow, active && s.timeModalRowActive]}
-                    onPress={() => { setReturnTime(slot); setShowReturnTimeModal(false); }}
+                    onPress={() => { selectReturnTime(slot); setShowReturnTimeModal(false); }}
                     activeOpacity={0.7}
                   >
                     <Text style={[s.timeModalRowText, active && s.timeModalRowTextActive]}>{slot}</Text>

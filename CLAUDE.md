@@ -213,12 +213,14 @@ a snapshot indefinitely).
   never read, never written, no UI anywhere. Don't assume the plural field is the
   active one, and don't merge/conflate the two without a deliberate decision to
   actually build the multi-address-book feature.
-- **`PICKUP_DELAY_MS`** (`utils/availability.ts`, next to `HANDOFF_BUFFER_MS`) is a
-  **display-only** constant (2 hours) — shown as informational copy on the product
-  detail screen and the booking confirmation screen, but not consumed by
-  `computeAvailableUnits` or any availability computation in that file. If the real
-  prep-delay value ever changes, update it there; both display sites derive their
-  copy from it rather than hardcoding "2".
+- **`PICKUP_DELAY_MS`** (`utils/availability.ts`, next to `HANDOFF_BUFFER_MS`, 2 hours)
+  is the single source for the same-day pickup lead time: it's both the "Ready within
+  Xh" copy (product detail + booking confirmation) AND the filter in
+  `utils/timeSlots.ts`'s `getAvailableTimeSlots` (today's first slot = now + this delay,
+  rounded up to 30 min). Not consumed by `computeAvailableUnits`. Change it there only —
+  never hardcode the delay in copy or slot logic.
+- **Return time follows pickup time** in both booking flows via
+  `hooks/useLinkedReturnTime.ts`, until the renter picks a return time by hand.
 - **Late-return penalty — progressive, single shared calculation.** Rule (FAQ / Terms §9
   are the source of truth): measured from the scheduled `returnAt`, not cumulative —
   ]grace;24h] = 1 day, ]24;48h] = 1.5 days, ]48;72h] = 2 days (upper bounds inclusive),
