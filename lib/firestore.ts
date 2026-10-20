@@ -705,10 +705,10 @@ export async function getProductReviews(productId: string): Promise<ReviewDoc[]>
   return snap.docs.map(d => d.data() as ReviewDoc);
 }
 
-// Writes a review (using reservationId as doc ID for one-review-per-rental enforcement),
-// then re-reads all reviews for the product to recompute averageRating + reviewCount.
-// NOTE: non-atomic — race condition is negligible at current volume.
-// Migrate to Cloud Function + FieldValue.increment() when on Blaze plan.
+// Writes a review (reservationId as doc ID → one review per rental). The product's
+// averageRating/reviewCount are recomputed server-side by the syncProductRating Cloud
+// Function (renters can't write products); the review reward is applyReviewReward.
+// firestore.rules validate the shape: integer rating 1–5, text 10–2000 chars.
 // Throws on Firestore error — caller must catch and surface to the user.
 export async function submitReview(params: {
   productId: string;
@@ -730,16 +730,6 @@ export async function submitReview(params: {
     reservationId,
     productName,
     createdAt: serverTimestamp(),
-  });
-
-  const allSnap = await getDocs(collection(db, 'reviews', productId, 'reviews'));
-  const ratings = allSnap.docs.map(d => (d.data() as ReviewDoc).rating);
-  const count = ratings.length;
-  const avg = ratings.reduce((sum, r) => sum + r, 0) / count;
-
-  await updateDoc(doc(db, 'products', productId), {
-    averageRating: avg,
-    reviewCount: count,
   });
 }
 

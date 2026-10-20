@@ -16,21 +16,11 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from 'firebase/auth';
-import {
-  collection,
-  getDocs,
-  getDoc,
-  doc,
-  deleteDoc,
-  setDoc,
-  type DocumentSnapshot,
-  type QueryDocumentSnapshot,
-  type DocumentData,
-} from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
+import { functions } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyReservations, RentalDoc } from '@/lib/firestore';
 
@@ -84,54 +74,28 @@ export default function DeleteAccountScreen() {
     setDeleting(true);
     setError(null);
 
-    // Captured before any deletes so we can attempt a best-effort restore if the Auth
-    // deletion step fails after the Firestore records are already gone.
-    let userDocSnapshot: DocumentSnapshot<DocumentData> | null = null;
-    let favoriteDocs: QueryDocumentSnapshot<DocumentData>[] = [];
-    let firestoreDeleted = false;
-
     try {
-      // Re-authenticate (Firebase requires recent login before account deletion)
+      // Re-authenticate (confirms the password; the server also requires a recent login)
       const credential = EmailAuthProvider.credential(cu.email, password);
       await reauthenticateWithCredential(cu, credential);
+      await cu.getIdToken(true);
 
-      const userDocRef = doc(db, 'users', cu.uid);
-      userDocSnapshot = await getDoc(userDocRef);
-      const favsSnap = await getDocs(collection(db, 'users', cu.uid, 'favorites'));
-      favoriteDocs = favsSnap.docs;
-
-      // Delete favorites subcollection docs
-      await Promise.all(favoriteDocs.map(d => deleteDoc(d.ref)));
-
-      // Delete the users/{uid} profile document
-      await deleteDoc(userDocRef);
-      firestoreDeleted = true;
-
-      // Delete the Firebase Auth account — onAuthStateChanged fires → _layout redirects to /login
-      await cu.delete();
+      // Server-side deletion (deleteMyAccount callable): refuses while a rental is
+      // pending/confirmed/active, deletes the profile + favorites/bag/loyalty history,
+      // then the Auth account. Nothing to restore client-side if it fails.
+      await httpsCallable(functions, 'deleteMyAccount')();
+      await auth.signOut().catch(() => {}); // → _layout redirects to /login
     } catch (err: any) {
-      if (firestoreDeleted) {
-        // The Firestore records are gone but the Auth account survived — restore them
-        // rather than leave an orphaned Auth-only account with no profile.
-        try {
-          if (userDocSnapshot?.exists()) {
-            await setDoc(doc(db, 'users', cu.uid), userDocSnapshot.data());
-          }
-          await Promise.all(
-            favoriteDocs.map(d => setDoc(doc(db, 'users', cu.uid, 'favorites', d.id), d.data())),
-          );
-          setError('Could not delete your account. Your data has been restored — please try again.');
-        } catch (restoreErr) {
-          console.error('DELETE ACCOUNT RESTORE FAILED', restoreErr);
-          setError(
-            'Something went wrong and we could not confirm your account data was restored. ' +
-            'Please contact support immediately and do not attempt this again until you hear back from us.',
-          );
-        }
+      if (err?.details?.code === 'has-active-rentals') {
+        setError('You still have an active or upcoming rental — return it or cancel it before deleting your account.');
         setDeleting(false);
         return;
       }
-
+      if (err?.details?.code === 'requires-recent-login') {
+        setError('Please enter your password again and retry.');
+        setDeleting(false);
+        return;
+      }
       console.error('DELETE ACCOUNT ERROR', err?.code, err?.message);
       const code = err?.code ?? '';
       let msg = 'Could not delete your account. Please try again.';

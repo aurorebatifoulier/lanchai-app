@@ -25,9 +25,9 @@ rules_version = '2';
 //   notifications/{uid}/items/{notifId}   — per-user in-app notifications
 //                                            shape: { type, title, body, icon, iconColor,
 //                                                     deepLink?, createdAt, readAt }
-//   reviews                               — not yet written by app code; rules included
-//                                            defensively so the collection is safe the
-//                                            moment it's wired up
+//   reviews/{productId}/reviews/{resId}   — one review per returned reservation
+//                                            (averageRating synced by syncProductRating)
+//   bookingHolds, productLocks, users/{uid}/loyaltyHistory — server-written only
 //   claims                                — renter-filed disputes, one per reservation
 //                                            (Claim.userId, Claim.reservationId)
 //
@@ -163,40 +163,52 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
 
-      // customerType and the BtoB review fields (btobStatus, btobReviewedAt,
-      // btobReviewedBy, btobRejectionReason) are admin-approval-only — a client may
-      // never set 'business'/'approved' on itself. A BtoB signup may create with
-      // btobStatus == 'pending_approval' only (never 'approved'/'rejected'), and
-      // customerType is never client-settable at all (approval is the only path to
-      // customerType: 'business', via the admin back-office's isAdmin() write).
+      // ── Owner writes: ALLOW-LISTS ──────────────────────────────────────────
+      // Everything not listed is server/admin-only: coupons, loyaltyPoints,
+      // loyaltyTier, firstRentalDate, customerType, accountType (after signup),
+      // btobStatus, btobReviewed*, btobRejectionReason… (Cloud Functions use the Admin
+      // SDK; admins use the isAdmin() branch.)
+      //
+      // Profile fields the renter may edit (personal-info, account photo, email
+      // reminders toggle, BtoB document re-upload):
+      //   firstName, lastName, displayName, phoneNumber, phone, phoneVerified (false
+      //   only — only staff verify), whatsapp, whatsappSameAsPhone, address, photoURL,
+      //   emailRemindersOptOut, btobDocumentUrl (BtoB: before approval, or first upload
+      //   after approval), updatedAt.
+      // Signup adds (create only): accountType ('btoc'|'btob'), btobStatus
+      //   ('pending_approval' only), btobCompanyName, btobLicenseNumber,
+      //   btobResponsibleName, btobSubmittedAt, createdAt.
       allow create: if isOwner(userId) &&
-        (!request.resource.data.keys().hasAny(['phoneVerified']) ||
-         request.resource.data.phoneVerified == false) &&
-        !request.resource.data.keys().hasAny(['loyaltyPoints', 'loyaltyTier']) &&
-        !request.resource.data.keys().hasAny(['customerType']) &&
-        (!request.resource.data.keys().hasAny(['btobStatus']) ||
-         request.resource.data.btobStatus == 'pending_approval') &&
-        !request.resource.data.keys().hasAny(['btobReviewedAt', 'btobReviewedBy', 'btobRejectionReason']);
+        request.resource.data.keys().hasOnly([
+          'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
+          'whatsapp', 'whatsappSameAsPhone', 'address', 'photoURL', 'emailRemindersOptOut',
+          'btobDocumentUrl', 'updatedAt',
+          'accountType', 'btobStatus', 'btobCompanyName', 'btobLicenseNumber',
+          'btobResponsibleName', 'btobSubmittedAt', 'createdAt'
+        ]) &&
+        (!('phoneVerified' in request.resource.data) || request.resource.data.phoneVerified == false) &&
+        (!('accountType' in request.resource.data) || request.resource.data.accountType in ['btoc', 'btob']) &&
+        (!('btobStatus' in request.resource.data) || request.resource.data.btobStatus == 'pending_approval');
 
-      // loyaltyPoints/loyaltyTier are server-computed only (Cloud Function via Admin
-      // SDK, or admin) — owners can never set them directly, preventing self-granted
-      // tiers. coupons may only be touched by the owner when the array length is
-      // unchanged (marking an existing coupon used), never grown — prevents fabricating
-      // new coupons via a raw client write. customerType/accountType/btobStatus and the
-      // admin-review fields are locked to admin writes only — see the create rule above
-      // for why (prevents client-side self-approval of a business account).
       allow update: if isAdmin() || (
         isOwner(userId) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['loyaltyPoints', 'loyaltyTier']) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerType', 'accountType', 'btobStatus']) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['btobReviewedAt', 'btobReviewedBy', 'btobRejectionReason']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
+          'whatsapp', 'whatsappSameAsPhone', 'address', 'photoURL', 'emailRemindersOptOut',
+          'btobDocumentUrl', 'updatedAt'
+        ]) &&
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneVerified']) ||
           request.resource.data.phoneVerified == false
         ) &&
         (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['coupons']) ||
-          request.resource.data.coupons.size() == resource.data.get('coupons', []).size()
+          // BtoB registration document: re-upload while the business account isn't
+          // approved, or a first upload for an approved account that has none on file
+          // (utils/btob.ts needsBtobDocument). Never replaced after approval.
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['btobDocumentUrl']) ||
+          (resource.data.get('accountType', '') == 'btob' &&
+           (resource.data.get('btobStatus', '') != 'approved' ||
+            resource.data.get('btobDocumentUrl', null) == null))
         )
       );
 
@@ -229,7 +241,14 @@ service cloud.firestore {
     // No userId field is stored, so any authenticated user may create;
     // only admins may read, update, or delete submissions.
     match /requests/{requestId} {
-      allow create:               if isAuthed();
+      allow create:               if isAuthed() &&
+                                     request.resource.data.keys().hasOnly(['text', 'contact', 'createdAt']) &&
+                                     request.resource.data.text is string &&
+                                     request.resource.data.text.size() > 0 &&
+                                     request.resource.data.text.size() <= 1000 &&
+                                     (request.resource.data.contact == null ||
+                                      (request.resource.data.contact is string &&
+                                       request.resource.data.contact.size() <= 200));
       allow read, update, delete: if isAdmin();
     }
 
@@ -285,9 +304,22 @@ service cloud.firestore {
       //   — create (both renter via sendMessage and admin via sendBusinessMessage).
       // Update and delete are admin-only: once sent, messages are immutable for
       // renters, preserving history integrity for deposit-dispute resolution.
+      // Renters may only post as themselves (senderType 'renter', senderId = their uid)
+      // — except the fixed welcome message the app writes when it opens a new thread
+      // (lib/chat.ts initConversation: senderId 'lanchai-business', exact text, no media).
       match /messages/{messageId} {
         allow read:           if isOwner(conversationId) || isAdmin();
-        allow create:         if isOwner(conversationId) || isAdmin();
+        allow create:         if isAdmin() || (
+                                isOwner(conversationId) && (
+                                  (request.resource.data.senderType == 'renter' &&
+                                   request.resource.data.senderId == request.auth.uid) ||
+                                  (request.resource.data.senderType == 'business' &&
+                                   request.resource.data.senderId == 'lanchai-business' &&
+                                   request.resource.data.text == 'Hi! How can we help you today?' &&
+                                   request.resource.data.imageUrl == null &&
+                                   request.resource.data.videoUrl == null)
+                                )
+                              );
         allow update, delete: if isAdmin();
       }
     }
@@ -372,7 +404,20 @@ service cloud.firestore {
     match /reviews/{productId}/reviews/{reservationId} {
       allow read:   if isAuthed();
 
+      // Shape validated: integer rating 1–5, text 10–2000 chars, ids matching the
+      // path. averageRating/reviewCount are recomputed server-side (syncProductRating).
       allow create: if isAuthed()
+                    && request.resource.data.keys().hasOnly(['userId', 'reviewerName', 'rating', 'text',
+                         'productId', 'reservationId', 'productName', 'createdAt'])
+                    && request.resource.data.rating is int
+                    && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+                    && request.resource.data.text is string
+                    && request.resource.data.text.size() >= 10 && request.resource.data.text.size() <= 2000
+                    && request.resource.data.reviewerName is string && request.resource.data.reviewerName.size() <= 80
+                    && request.resource.data.productName is string && request.resource.data.productName.size() <= 200
+                    && request.resource.data.productId == productId
+                    && request.resource.data.reservationId == reservationId
+                    && request.resource.data.createdAt == request.time
                     && request.resource.data.userId == request.auth.uid
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.renterId == request.auth.uid
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.productId == productId

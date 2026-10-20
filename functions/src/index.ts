@@ -23,6 +23,9 @@ export * from './email/triggers';
 // Server-side reservation creation (the only path for renters) — see reservations.ts.
 export * from './reservations';
 
+// Review rating sync + server-side account deletion — see account.ts.
+export * from './account';
+
 admin.initializeApp();
 const db = admin.firestore();
 

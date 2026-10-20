@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 19 Cloud Functions (scheduled, Firestore-triggered and 2 callables, Node 22). The
+  gaps found), 21 Cloud Functions (scheduled, Firestore-triggered and 3 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -551,17 +551,27 @@ renter's stored percent). App: `createBooking()` (`lib/firestore.ts`) maps the
 callable's `details.code` to friendly messages. Renter cancellation rule now pins
 `cancelledBy == 'renter'` and `cancelledAt == request.time`.
 
-**Still open (phase 2):**
-- **Coupon tampering:** the `users/{uid}` update rule only checks the coupons array
-  size, so a renter can flip `used` back to false (the % they could edit is no longer
-  used for bookings, but reuse is still possible). `firstRentalDate` is owner-writable;
-  the create rule has no field allow-list.
-- **Reviews:** rating not validated; `averageRating` recompute is client-side and fails
-  for renters (`products` is admin-write) → move to a Cloud Function.
-- **Chat:** renter can create messages with `senderType: 'business'` in their own thread.
-- **requests:** no size limits.
-- **Storage:** any signed-in user can list/read others' chat, claim, profile and
-  checklist files (`read: request.auth != null`).
+**Done (phase 2):**
+- `users/{uid}`: owner create/update are **allow-lists** (profile fields only: names,
+  phones, `phoneVerified` false-only, WhatsApp, address, `photoURL`,
+  `emailRemindersOptOut`, `btobDocumentUrl` (before approval, or first upload after
+  approval), `updatedAt`; signup adds
+  `accountType`, `btobStatus: 'pending_approval'`, `btob*` company fields,
+  `btobSubmittedAt`, `createdAt`). Coupons, loyalty fields, `firstRentalDate`,
+  `customerType`, `accountType` (after signup) and BtoB review fields are server/admin
+  only. Account deletion is server-side (`deleteMyAccount` callable,
+  `functions/src/account.ts`) — never re-create a profile client-side.
+- Reviews: create rule validates shape (integer rating 1–5, text 10–2000, ids match the
+  path, `createdAt == request.time`); `averageRating`/`reviewCount` recomputed by the
+  `syncProductRating` trigger (renters can't write products).
+- Chat: renters post only as themselves; the single exception is the fixed welcome
+  message written by `initConversation` (`lanchai-business`, exact text, no media) —
+  keep `lib/chat.ts`'s WELCOME_TEXT and the rule in sync.
+- `requests`: field allow-list + size limits (text ≤ 1000, contact ≤ 200 or null).
+- Storage: chat, claim, profile and checklist files are SDK-readable only by their
+  owner/admin (checklist: admin only). Stored download URLs keep working.
+
+**Still open:** App Check (with the EAS build, before public launch).
 
 ## Working with Aurore
 

@@ -19,6 +19,12 @@ rules_version = '2';
 // hard-code `(default)` (the Firestore database name) instead of `$(database)`,
 // since the Storage rule evaluation context has no `$(database)` binding.
 // The check is otherwise identical — a document must exist at admins/{uid}.
+//
+// READS: private files (chat, claims, profile photos, checklist photos) are readable
+// via the SDK only by their owner (or staff). In Storage rules `read` includes LIST,
+// so a looser rule let any signed-in user enumerate other people's files. Images
+// already shown in the app keep working: they use download URLs with an access token,
+// which aren't subject to these rules. Product photos stay public (deliberate).
 // ─────────────────────────────────────────────────────────────────────────────
 
 service firebase.storage {
@@ -42,16 +48,14 @@ service firebase.storage {
     // ── Chat images ───────────────────────────────────────────────────────
     // Path: chat-images/{uid}/{fileName}  (uid = renterId; fileName = Date.now())
     //
-    // Read: any authenticated user. Firebase Storage download URLs embed an
-    //   unguessable token; the URL is stored in Firestore behind per-conversation
-    //   access control, so the token is the real security gate here.
+    // Read: the owner (uid in the path) or an admin — see the READS note at the top.
     //
     // Write: the renter whose UID matches the path segment, OR any admin.
     //   The admin chat (app/admin-chat/[conversationId].tsx) calls
     //   uploadChatImage(conversationId, ...) where conversationId == renterId,
     //   so the admin's own UID != uid in the path — hence the isAdmin() branch.
     match /chat-images/{uid}/{fileName} {
-      allow read:  if request.auth != null;
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if request.auth != null
                    && (request.auth.uid == uid || isAdmin())
                    && request.resource.size < 10 * 1024 * 1024
@@ -65,7 +69,7 @@ service firebase.storage {
     // videos over 50MB before starting the upload; recorded videos are capped at
     // the source (60s max, medium quality) and stay well under this ceiling.
     match /chat-videos/{uid}/{fileName} {
-      allow read:  if request.auth != null;
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if request.auth != null
                    && (request.auth.uid == uid || isAdmin())
                    && request.resource.size < 60 * 1024 * 1024
@@ -76,11 +80,11 @@ service firebase.storage {
     // Path: reservations/{reservationId}/{checklistType}/{fileName}
     //   checklistType is 'handover' or 'return'; fileName is Date.now()-based.
     //
-    // Read: any authenticated user (matches products/chat-images precedent — the
-    //   download URL is stored behind Firestore reservation access control anyway).
+    // Read: admins only via the SDK (no uid in this path). Renters still see their
+    // checklist photos through the stored download URLs — see the READS note at the top.
     // Write: admin only — condition photos are captured by staff, never by renters.
     match /reservations/{reservationId}/{checklistType}/{fileName} {
-      allow read:  if request.auth != null;
+      allow read:  if isAdmin();
       allow write: if isAdmin()
                    && request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
@@ -90,14 +94,12 @@ service firebase.storage {
     // Path: claim-photos/{uid}/{fileName}  (uid = the renter filing the claim;
     //   fileName = Date.now()_index.jpg — see lib/claims.ts's uploadClaimPhoto)
     //
-    // Read: any authenticated user (matches products/chat-images precedent — the
-    //   download URL is stored behind Firestore claim access control anyway, and
-    //   admins need to view submitted evidence).
+    // Read: the owner (uid in the path) or an admin — see the READS note at the top.
     // Write: the renter whose UID matches the path segment only — unlike chat,
     //   there's no admin-uploads-on-a-renter's-behalf case here, so no isAdmin()
     //   branch is needed.
     match /claim-photos/{uid}/{fileName} {
-      allow read:  if request.auth != null;
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if request.auth != null
                    && request.auth.uid == uid
                    && request.resource.size < 10 * 1024 * 1024
@@ -112,7 +114,7 @@ service firebase.storage {
     // sibling precedent. 50MB cap matches lib/claims.ts's CLAIM_VIDEO_MAX_BYTES
     // exactly (a deliberately independent limit from chat-videos' 60MB).
     match /claim-videos/{uid}/{fileName} {
-      allow read:  if request.auth != null;
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if request.auth != null
                    && request.auth.uid == uid
                    && request.resource.size < 50 * 1024 * 1024
@@ -122,10 +124,10 @@ service firebase.storage {
     // ── Profile photos ────────────────────────────────────────────────────────
     // Path: profile-photos/{uid}/{fileName}
     //
-    // Read: any authenticated user (needed to display avatars in admin views).
+    // Read: the owner (uid in the path) or an admin — see the READS note at the top.
     // Write: the user whose UID matches the path segment only.
     match /profile-photos/{uid}/{fileName} {
-      allow read:  if request.auth != null;
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if request.auth != null
                    && request.auth.uid == uid
                    && request.resource.size < 5 * 1024 * 1024
