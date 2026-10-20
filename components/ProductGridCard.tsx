@@ -26,8 +26,8 @@ const CARD_NAME_LH     = 17; // cardName lineHeight
 const CARD_NAME_LINES  = 2;  // title block always reserves exactly 2 lines
 const CARD_NAME_GAP    = 4;
 const CARD_PRICE_LH    = 16; // cardPrice / cardPriceUnavailable lineHeight
-const CARD_PRICE_GAP   = 8;
-const CARD_BADGE_H     = 22; // bottom slot — always reserved: booking pill, social proof, or empty
+const CARD_PRICE_GAP   = 6; // price → social proof / booking pill
+const CARD_BADGE_H     = 22; // slot under the price — always reserved: booking pill, social proof, or empty
 
 export function productCardLayout(fontScale: number) {
   const scale  = Math.max(1, fontScale);
@@ -122,7 +122,8 @@ export default function ProductGridCard({
         {minPrice != null && exchangeRate != null
           ? <Text style={s.cardPrice} numberOfLines={1}>{formatKip(toLak(minPrice, exchangeRate))} / day</Text>
           : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
-        {/* Fixed-height slot so every card in a row keeps the same height. */}
+        {/* Fixed-height slot right under the price, content top-aligned — any spare
+            height ends up at the bottom of the card, never between price and line. */}
         <View style={[s.bottomSlot, { height: layout.badge }]}>
           {availability ? (
             <View style={[s.pill, availability.kind === 'unavailable' && s.pillMuted]}>
@@ -226,7 +227,7 @@ const s = StyleSheet.create({
     marginBottom: CARD_PRICE_GAP,
   },
   bottomSlot: {
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     flexShrink: 0,
   },
   pill: {

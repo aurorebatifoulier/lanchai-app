@@ -3,53 +3,47 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 
-// Social proof shown on product cards (Home sections + Explore/Liked grid). Below the
-// thresholds it renders NOTHING — a single low review or a first rental is never
-// promoted; the "New" image badge covers fresh items instead.
+// Social proof line shown directly under the price on product cards (Home sections +
+// Explore/Liked grid). Below the thresholds it renders NOTHING — a single low review
+// or a first rental is never promoted; the "New" image badge covers fresh items.
 export const MIN_REVIEWS_FOR_RATING = 3;
 export const MIN_RENTALS_FOR_COUNT  = 3;
 
-export function hasSocialProof(product: { reviewCount?: number; averageRating?: number; rentalCount?: number }): boolean {
+/** Line height of this component — product cards reserve exactly this much for it. */
+export const SOCIAL_PROOF_LINE_H = 16;
+
+type SocialProofProduct = { reviewCount?: number; averageRating?: number; rentalCount?: number };
+
+export function hasSocialProof(product: SocialProofProduct): boolean {
   return (product.averageRating != null && (product.reviewCount ?? 0) >= MIN_REVIEWS_FOR_RATING)
     || (product.rentalCount ?? 0) >= MIN_RENTALS_FOR_COUNT;
 }
 
-// Visual style matches the original Home card rating (11px amber star, 11px/600 fg2).
-// Single line: the rating never shrinks; the rentals text truncates if space is short.
-export default function ProductSocialProof({
-  product,
-}: {
-  product: { reviewCount?: number; averageRating?: number; rentalCount?: number };
-}) {
-  const reviewCount = product.reviewCount ?? 0;
+// "★ 4.8 (12 rented)" · "★ 4.8" · "7 rented" · nothing. 12px, matching the price line.
+export default function ProductSocialProof({ product }: { product: SocialProofProduct }) {
   const rentalCount = product.rentalCount ?? 0;
-  const showRating  = product.averageRating != null && reviewCount >= MIN_REVIEWS_FOR_RATING;
+  const showRating  = product.averageRating != null && (product.reviewCount ?? 0) >= MIN_REVIEWS_FOR_RATING;
   const showRentals = rentalCount >= MIN_RENTALS_FOR_COUNT;
   if (!showRating && !showRentals) return null;
 
+  if (!showRating) {
+    return <Text style={s.secondary} numberOfLines={1}>{rentalCount} rented</Text>;
+  }
+
   return (
     <View style={s.row}>
-      {showRating && (
-        <View style={s.rating}>
-          <Feather name="star" size={11} color={COLORS.amber} />
-          <Text style={s.text} numberOfLines={1}>
-            {product.averageRating!.toFixed(1)} ({reviewCount})
-          </Text>
-        </View>
-      )}
-      {showRating && showRentals && <Text style={s.text}>·</Text>}
-      {showRentals && (
-        <Text style={[s.text, s.rentals]} numberOfLines={1}>
-          Rented {rentalCount} times
-        </Text>
-      )}
+      <Feather name="star" size={12} color={COLORS.amber} />
+      <Text style={s.line} numberOfLines={1}>
+        <Text style={s.rating}>{product.averageRating!.toFixed(1)}</Text>
+        {showRentals && <Text style={s.secondary}> ({rentalCount} rented)</Text>}
+      </Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  row:     { flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 },
-  rating:  { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 },
-  text:    { fontSize: 11, fontWeight: '600', color: COLORS.fg2 },
-  rentals: { flexShrink: 1 },
+  row:       { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  line:      { flexShrink: 1, fontSize: 12, lineHeight: SOCIAL_PROOF_LINE_H },
+  rating:    { fontSize: 12, fontWeight: '700', color: COLORS.carbon },
+  secondary: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: SOCIAL_PROOF_LINE_H },
 });
