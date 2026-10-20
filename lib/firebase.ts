@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 // Firebase Web SDK config is not a secret by design — access control happens via
 // Firestore/Storage security rules, not by hiding this config. It's still sourced
@@ -20,3 +21,6 @@ const firebaseConfig = {
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+// Callable Cloud Functions live in asia-southeast1 (same region as everything else) —
+// always call them through this instance, never the default us-central1 one.
+export const functions = getFunctions(app, 'asia-southeast1');

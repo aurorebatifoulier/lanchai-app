@@ -541,6 +541,8 @@ export interface UserProfile {
   // addresses/UserAddress below, a separate multi-entry labeled-address-book model
   // that was stubbed in but never wired to any UI — don't conflate the two.
   address?: string;
+  // true = no pickup/return reminder emails (functions/src/email). Essential emails ignore it.
+  emailRemindersOptOut?: boolean;
   addresses?: UserAddress[];
   customerType?: 'tourist' | 'resident' | 'business';
   // loyaltyPoints/loyaltyTier are server-computed only (see functions/src/index.ts

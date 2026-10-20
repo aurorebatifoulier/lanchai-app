@@ -27,6 +27,7 @@ import {
 import { DEFAULT_LATE_GRACE_HOURS } from '@/functions/src/shared/latePenalty';
 import { parseHHMM, buildTimeSlots } from '@/utils/timeSlots';
 import { getGraceHours, saveGraceHours } from '@/lib/latePolicy';
+import EmailSettingsSection from '@/components/EmailSettingsSection';
 
 interface Form {
   name: string;
@@ -295,6 +296,8 @@ export default function AdminShopSettingsScreen() {
                 ? <ActivityIndicator size="small" color={COLORS.carbon} />
                 : <Text style={s.primaryBtnText}>Save</Text>}
             </TouchableOpacity>
+
+            <EmailSettingsSection />
           </>
         )}
       </ScrollView>

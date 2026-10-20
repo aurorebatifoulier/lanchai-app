@@ -7,6 +7,7 @@ import {
   DEFAULT_CLOSE_TIME,
   DEFAULT_LAST_PICKUP_OFFSET_MIN,
 } from '@/utils/timeSlots';
+import { SHOP_DISPLAY_DEFAULTS } from '@/functions/src/shared/shop';
 
 export interface ShopInfo {
   name: string;
@@ -26,14 +27,10 @@ export interface ShopInfo {
 }
 
 export const SHOP_FALLBACK: ShopInfo = {
-  name:                'LANCHAI · Setthathirath shop',
-  addressLine:         '14 Setthathirath Road',
-  city:                'Vientiane',
-  hours:               'Daily 9:00–20:00',
+  ...SHOP_DISPLAY_DEFAULTS, // shared with the Cloud Functions' emails
   openTime:            DEFAULT_OPEN_TIME,
   closeTime:           DEFAULT_CLOSE_TIME,
   lastPickupOffsetMin: DEFAULT_LAST_PICKUP_OFFSET_MIN,
-  whatsappNumber:      '',
 };
 
 export async function getShopInfo(): Promise<ShopInfo> {

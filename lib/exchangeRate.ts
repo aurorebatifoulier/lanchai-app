@@ -11,7 +11,8 @@ export interface PricingConfig {
 
 // Placeholder default used whenever config/pricing.vatPercent hasn't been set yet —
 // callers should treat this as "not yet configured," not a guaranteed real rate.
-export const DEFAULT_VAT_PERCENT = 10;
+// Defined in functions/src/shared/receiptData.ts (shared with the Cloud Functions).
+export { DEFAULT_VAT_PERCENT } from '@/functions/src/shared/receiptData';
 
 // Returns null when config/pricing doesn't exist yet — i.e. the one-time USD migration
 // hasn't been run from the admin Exchange rate screen.

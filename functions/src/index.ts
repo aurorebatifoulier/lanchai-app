@@ -8,6 +8,11 @@ import {
   isPenaltyStage,
   formatPenaltyDays,
 } from './shared/latePenalty';
+import { BREVO_API_KEY } from './email/config';
+import { sendLateReturnEmail } from './email/triggers';
+
+// Transactional emails (Brevo) — see functions/src/email/.
+export * from './email/triggers';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -23,9 +28,12 @@ async function getGraceHours(): Promise<number> {
 // (function downtime, back-dated test data), only the HIGHEST one notifies; the lower
 // flags are just marked done so the renter isn't spammed with stale messages.
 type LateAlertKey = 'lateAlert0h' | 'lateAlert1h' | 'lateAlertGrace' | 'lateAlert24h' | 'lateAlert48h' | 'lateAlert72h';
+const LATE_EMAIL_STAGE: Partial<Record<LateAlertKey, 'tier1' | 'tier2' | 'tier3' | 'nonReturn'>> = {
+  lateAlertGrace: 'tier1', lateAlert24h: 'tier2', lateAlert48h: 'tier3', lateAlert72h: 'nonReturn',
+};
 
 export const lateReturnAlerts = onSchedule(
-  { schedule: 'every 15 minutes', region: 'asia-southeast1' },
+  { schedule: 'every 15 minutes', region: 'asia-southeast1', secrets: [BREVO_API_KEY] },
   async () => {
     const now = Date.now();
     const snap = await db
@@ -158,7 +166,16 @@ export const lateReturnAlerts = onSchedule(
 
       // Only the highest due alert is sent; all due flags are marked done.
       if (due.length > 0) {
-        await due[due.length - 1].send();
+        const highest = due[due.length - 1];
+        await highest.send();
+        // Email mirrors the in-app alert from the end of grace on (the 0h/+1h warnings
+        // stay in-app only). Same lateAlert* flag → never sent twice; never throws.
+        const emailStage = LATE_EMAIL_STAGE[highest.key];
+        if (emailStage) {
+          await sendLateReturnEmail(renterId, emailStage, {
+            id: reservationId, productName, returnLabel: data.returnLabel ?? '', renterName: data.renterName,
+          }, penalty.amountLak);
+        }
         for (const d of due) updates[d.key] = true;
       }
 

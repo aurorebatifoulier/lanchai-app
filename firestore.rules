@@ -280,11 +280,12 @@ service cloud.firestore {
     }
 
     // ── config ───────────────────────────────────────────────────────────
-    // Read-only for all authenticated users (e.g. config/shop) — EXCEPT
-    // config/latePolicy (internal late-return grace period), which renters must never
-    // be able to read. Only admins may create or update config documents.
+    // Read-only for all authenticated users (e.g. config/shop) — EXCEPT the admin-only
+    // docs: config/latePolicy (internal late-return grace period, never visible to
+    // renters), config/emailSettings (test/live email mode + redirect address) and
+    // config/emailHealth (email failure bookkeeping). Only admins may write config.
     match /config/{docId} {
-      allow read:  if (isAuthed() && docId != 'latePolicy') || isAdmin();
+      allow read:  if (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth'])) || isAdmin();
       allow write: if isAdmin();
     }
 

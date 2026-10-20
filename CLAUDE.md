@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 10 Cloud Functions (scheduled + Firestore-triggered, Node 22). The
+  gaps found), 15 Cloud Functions (scheduled, Firestore-triggered and 1 callable, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -252,6 +252,29 @@ a snapshot indefinitely).
   mirrored client-side in `addReservation`/`addReservationBatch` (`BookingHoldError`) and
   surfaced via `useBookingHold()` + `<BookingHoldNotice>` on `app/booking/new.tsx`,
   `app/booking/summary.tsx`, `app/bag.tsx` and `app/bag/checkout.tsx`.
+- **Transactional emails (Brevo) — `functions/src/email/`.** One `sendEmail()` (plain
+  `fetch` to Brevo's API, key in the `BREVO_API_KEY` Firebase secret — every sending
+  function lists it in `secrets`), one shared HTML + text layout (`layout.ts`), all
+  copy in `templates.ts`. Never throws; retries only 429/5xx/network; on 401/403 it
+  stops and alerts admins in-app (once per 24h, `config/emailHealth`).
+  - **Test mode is the default.** Unless `config/emailSettings.live === true`, every
+    email is redirected to `redirectAllTo` (or `lanchai.laos@gmail.com`). Toggled in
+    Admin → Shop settings, which also has "Send test emails to me" (callable
+    `sendTestEmails`, region `asia-southeast1` — the app's `functions` instance in
+    `lib/firebase.ts` is pinned to that region).
+  - **Idempotency:** one map field per email type on the doc it's about
+    (`emailConfirmation`, `emailCancellation`, `emailReceipt`, `emailPickupReminder`,
+    `emailReturnReminder` on reservations; `emailBtobApproved/Rejected` on users),
+    claimed in a transaction before sending (`claim.ts`). Late-return emails reuse the
+    `lateAlert*` flags of `lateReturnAlerts` (end of grace, 24h, 48h, 72h only — the
+    0h/+1h warnings stay in-app). Grace period never mentioned to renters.
+  - Booking confirmation fires on `{orderId}_1` creation (single bookings are `_1`
+    too) → one email per order. `admin_release` cancellations send nothing. Receipt
+    fires when `returnFinalizedAt` is first set on a `returned` reservation, figures via
+    the shared `deriveReceiptData` (now in `functions/src/shared/receiptData.ts`,
+    re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane,
+    skipped when `users/{uid}.emailRemindersOptOut` (Personal info toggle). Dates in
+    emails are the stored `pickupLabel`/`returnLabel` — functions run in UTC.
 - **Shop config (`config/shop`, `lib/shop.ts`) drives pickup/return slots and WhatsApp.**
   Slots are never hardcoded: every booking flow (single-item `app/booking/new.tsx`, bag
   `components/DateRangePicker.tsx`, and `<DateRangeCalendar>`'s required `timeSlots`

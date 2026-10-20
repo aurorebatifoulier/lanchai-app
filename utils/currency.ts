@@ -43,15 +43,9 @@ export function convertLakTo(
   return thbRate == null ? null : lakToThb(lak, thbRate);
 }
 
-// Splits an already-LAK amount (the same figure stored/charged today) into its
-// HT/VAT/TTC components for display — purely a render-time breakdown, never used to
-// compute what's actually charged. `ttc` always equals the input `amountLak` unchanged;
-// `ht` is rounded to the nearest whole LAK, `vat` is whatever's left so ht + vat === ttc
-// exactly (no rounding drift between the two lines).
-export function splitHtVat(amountLak: number, vatPercent: number): { ht: number; vat: number; ttc: number } {
-  const ht = Math.round(amountLak / (1 + vatPercent / 100));
-  return { ht, vat: amountLak - ht, ttc: amountLak };
-}
+// splitHtVat lives in functions/src/shared/receiptData.ts (shared with the receipt
+// email) — re-exported here so app imports stay unchanged.
+export { splitHtVat } from '@/functions/src/shared/receiptData';
 
 /** Compact kip format for product cards and price chips, e.g. "₭120,000". */
 export function formatKip(value: number): string {

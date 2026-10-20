@@ -867,7 +867,7 @@ export default function AdminReservationDetailScreen() {
           )}
           {!actioning && confirmAction === 'cancel' && (
             <ConfirmBox
-              text="Cancel this reservation? This action cannot be undone. The renter will not be notified automatically."
+              text="Cancel this reservation? This action cannot be undone. The renter will be notified in the app and by email."
               confirmLabel="Cancel reservation"
               onCancel={() => setConfirmAction(null)}
               onConfirm={() => runAction(
