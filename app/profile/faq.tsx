@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { useShopInfo } from '@/lib/shop';
+import { useShopInfo, openHoursText } from '@/lib/shop';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
 // ── FAQ content ───────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ export default function FaqScreen() {
   function resolveAnswer(idx: number): string {
     const item = ITEMS[idx];
     if ('dynamic' in item) {
-      return `Pick-up and return both happen at our shop: ${shop.name}, ${shop.addressLine}, ${shop.city}. Open ${shop.hours}.`;
+      return `Pick-up and return both happen at our shop: ${shop.name}, ${shop.addressLine}, ${shop.city}. ${openHoursText(shop.hours)}.`;
     }
     return item.a;
   }

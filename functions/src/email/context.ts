@@ -7,6 +7,9 @@ export interface EmailShop {
   city: string;
   hours: string;
   whatsappNumber: string;
+  paymentMethods: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export async function getEmailShop(): Promise<EmailShop> {
@@ -19,6 +22,9 @@ export async function getEmailShop(): Promise<EmailShop> {
     city:           str(d.city,           SHOP_DISPLAY_DEFAULTS.city),
     hours:          str(d.hours,          SHOP_DISPLAY_DEFAULTS.hours),
     whatsappNumber: typeof d.whatsappNumber === 'string' ? d.whatsappNumber.replace(/\D/g, '') : '',
+    paymentMethods: str(d.paymentMethods, SHOP_DISPLAY_DEFAULTS.paymentMethods),
+    latitude:       typeof d.latitude === 'number' ? d.latitude : undefined,
+    longitude:      typeof d.longitude === 'number' ? d.longitude : undefined,
   };
 }
 

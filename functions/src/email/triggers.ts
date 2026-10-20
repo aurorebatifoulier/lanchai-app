@@ -17,7 +17,20 @@ import {
 // sent twice. Handlers catch everything — email problems never crash or retry a trigger.
 
 const db = () => admin.firestore();
-const asRes = (snap: admin.firestore.DocumentSnapshot): ResData => ({ id: snap.id, ...(snap.data() as Omit<ResData, 'id'>) });
+// Doc data → template data: Timestamps become epoch ms (templates format them in
+// Vientiane time), everything else is the frozen reservation fields as stored.
+const asRes = (snap: admin.firestore.DocumentSnapshot): ResData => {
+  const d = snap.data() ?? {};
+  const ms = (t: unknown) => (t instanceof admin.firestore.Timestamp ? t.toMillis() : 0);
+  return {
+    ...(d as Omit<ResData, 'id' | 'pickupAtMs' | 'returnAtMs'>),
+    id: snap.id,
+    pickupAtMs: ms(d.pickupAt),
+    returnAtMs: ms(d.returnAt),
+    pricePerDay: d.pricePerDay ?? 0,
+    durationDays: d.durationDays ?? 0,
+  };
+};
 
 async function deliver(
   uid: string,
@@ -67,8 +80,9 @@ export const emailBookingConfirmation = onDocumentCreated(
         : [snap];
       const items = siblings.map(asRes).sort((a, b) => a.id.localeCompare(b.id));
       const renterId: string = snap.get('renterId');
+      const vat = await getVatPercent();
       await claimAndSend([snap.ref], 'emailConfirmation', () =>
-        deliver(renterId, snap.get('renterName'), (name, shop) => bookingConfirmationEmail(name, orderId, items, shop), 'booking-confirmation'));
+        deliver(renterId, snap.get('renterName'), (name, shop) => bookingConfirmationEmail(name, orderId, items, shop, vat), 'booking-confirmation'));
     } catch (err) {
       logger.error('[email] booking confirmation failed', { err: String(err) });
     }
@@ -227,28 +241,43 @@ export const sendTestEmails = onCall(
     const [shop, vat, mode] = await Promise.all([getEmailShop(), getVatPercent(), getEmailMode()]);
     const to = mode.redirectTo;
     const name = String(request.auth?.token.name ?? '').split(' ')[0] || 'there';
+    const DAY = 24 * 60 * 60 * 1000;
+    // Sat 24 Oct 2026 10:00 Vientiane = 03:00 UTC (sample data only).
+    const pickupAtMs = Date.UTC(2026, 9, 24, 3, 0);
     const base: ResData = {
-      id: 'LNC-TEST-0000_1', orderId: 'LNC-TEST-0000', productName: 'Camping tent (4 people)', quantity: 1,
-      pickupLabel: 'Fri 24 Oct · 10:00', returnLabel: 'Sun 26 Oct · 10:00',
-      subtotal: 300000, total: 300000, deposit: 500000,
+      id: 'LNC-261020-TEST_1', orderId: 'LNC-261020-TEST', productName: 'Camping tent (4 people)', quantity: 1,
+      pickupLabel: 'Sat, 24 Oct · 10:00', returnLabel: 'Mon, 26 Oct · 10:00',
+      pickupAtMs, returnAtMs: pickupAtMs + 2 * DAY, pricePerDay: 150000, durationDays: 2,
+      subtotal: 300000, total: 270000, deposit: 500000, couponApplied: { percent: 10, discountAmount: 30000 },
     };
-    const second: ResData = { ...base, id: 'LNC-TEST-0000_2', productName: 'Portable speaker', quantity: 2, subtotal: 120000, total: 120000, deposit: 200000 };
+    const second: ResData = {
+      ...base, id: 'LNC-261020-TEST_2', productName: 'Portable speaker', quantity: 2,
+      pricePerDay: 30000, subtotal: 120000, total: 108000, deposit: 200000, couponApplied: { percent: 10, discountAmount: 12000 },
+    };
+    const otherDates: ResData = {
+      ...second, id: 'LNC-261020-TEST_3', productName: 'Electric drill', quantity: 1,
+      pickupAtMs: pickupAtMs + DAY, returnAtMs: pickupAtMs + 4 * DAY, pricePerDay: 40000, durationDays: 3,
+      pickupLabel: 'Sun, 25 Oct · 10:00', returnLabel: 'Wed, 28 Oct · 10:00',
+      subtotal: 120000, total: 120000, deposit: 150000, couponApplied: null,
+    };
     const closed: ResData = {
-      ...base, chargeCurrency: 'LAK', handoverChecklist: { depositAmount: 500000, depositCurrency: 'LAK' },
+      ...base, couponApplied: null, total: 300000, chargeCurrency: 'LAK',
+      handoverChecklist: { depositAmount: 500000, depositCurrency: 'LAK' },
       lateChargeAmount: 150000, lateChargeReason: 'Returned 30h late', depositAppliedToCharge: 150000, outstandingBalance: 0,
     };
     const samples: [string, Rendered][] = [
-      ['booking-confirmation', bookingConfirmationEmail(name, 'LNC-TEST-0000', [base, second], shop)],
-      ['pickup-reminder',      pickupReminderEmail(name, [base, second], shop)],
-      ['return-reminder',      returnReminderEmail(name, [base], shop)],
-      ['cancellation',         cancellationEmail(name, [base, second], shop)],
-      ['receipt',              receiptEmail(name, closed, vat, shop)],
-      ['btob-approved',        btobApprovedEmail(name, shop)],
-      ['btob-rejected',        btobRejectedEmail(name, 'The registration document is not readable.', shop)],
-      ['late-tier1',           lateReturnEmail(name, 'tier1', base, 300000, shop)],
-      ['late-tier2',           lateReturnEmail(name, 'tier2', base, 450000, shop)],
-      ['late-tier3',           lateReturnEmail(name, 'tier3', base, 600000, shop)],
-      ['late-nonReturn',       lateReturnEmail(name, 'nonReturn', base, 600000, shop)],
+      ['booking-confirmation',             bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, second], shop, vat)],
+      ['booking-confirmation-mixed-dates', bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, otherDates], shop, vat)],
+      ['pickup-reminder',                  pickupReminderEmail(name, [base, second], shop)],
+      ['return-reminder',                  returnReminderEmail(name, [base], shop)],
+      ['cancellation',                     cancellationEmail(name, [base, second], shop)],
+      ['receipt',                          receiptEmail(name, closed, vat, shop)],
+      ['btob-approved',                    btobApprovedEmail(name, shop)],
+      ['btob-rejected',                    btobRejectedEmail(name, 'The registration document is not readable.', shop)],
+      ['late-tier1',                       lateReturnEmail(name, 'tier1', base, 300000, shop)],
+      ['late-tier2',                       lateReturnEmail(name, 'tier2', base, 450000, shop)],
+      ['late-tier3',                       lateReturnEmail(name, 'tier3', base, 600000, shop)],
+      ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', base, 600000, shop)],
     ];
     const results: Record<string, SendResult> = {};
     for (const [tag, mail] of samples) {

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Open LANCHAI</title>
+<style>
+  body { margin: 0; background: #FAFAF7; color: #1E1E1E; font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+  .card { max-width: 420px; margin: 48px auto; background: #FFFFFF; border: 1px solid #ECECEA; border-radius: 14px; padding: 28px 24px; text-align: center; }
+  img { width: 140px; height: auto; }
+  h1 { font-size: 20px; margin: 20px 0 8px; }
+  p { font-size: 14px; line-height: 21px; color: #6B6B6B; margin: 0 0 18px; }
+  a.btn { display: inline-block; background: #F4B400; color: #1E1E1E; font-weight: 800; text-decoration: none; padding: 13px 22px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <img src="/email/lanchai-logo@2x.png" alt="LANCHAI" />
+  <h1>Opening the LANCHAI app…</h1>
+  <p id="msg">If nothing happens, open the LANCHAI app and go to My rentals.</p>
+  <a class="btn" id="open" href="#">Open the app</a>
+</div>
+<script>
+  // Email links can't use the lanchaiapp:// scheme directly (Gmail strips non-https
+  // links), so emails point here and this page hands off to the app. Only a fixed
+  // allow-list of in-app paths is accepted — never an arbitrary redirect target.
+  (function () {
+    var to = new URLSearchParams(window.location.search).get('to') || '';
+    var allowed = /^(home|rentals\/[A-Za-z0-9_-]{1,64}|reservations|legal\/cancellation)$/;
+    var path = allowed.test(to) ? to : 'reservations';
+    var target = 'lanchaiapp://' + (path === 'home' ? '' : path);
+    document.getElementById('open').setAttribute('href', target);
+    window.location.href = target;
+  })();
+</script>
+</body>
+</html>

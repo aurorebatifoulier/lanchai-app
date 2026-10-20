@@ -7,7 +7,9 @@ import {
   DEFAULT_CLOSE_TIME,
   DEFAULT_LAST_PICKUP_OFFSET_MIN,
 } from '@/utils/timeSlots';
-import { SHOP_DISPLAY_DEFAULTS } from '@/functions/src/shared/shop';
+import { SHOP_DISPLAY_DEFAULTS, mapsUrl, openHoursText } from '@/functions/src/shared/shop';
+
+export { openHoursText };
 
 export interface ShopInfo {
   name: string;
@@ -22,6 +24,8 @@ export interface ShopInfo {
   lastPickupOffsetMin: number;
   /** International format, digits only (e.g. "8562012345678"). Empty → WhatsApp buttons hidden. */
   whatsappNumber: string;
+  /** Payment methods shown in emails ("What to bring") — aligned with Terms §4. */
+  paymentMethods: string;
   latitude?: number;
   longitude?: number;
 }
@@ -71,12 +75,9 @@ export function buildWhatsappUrl(number: string, message?: string): string {
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
 
+// Same link as the emails' "Get directions" (functions/src/shared/shop.ts).
 export function buildMapsUrl(shop: ShopInfo): string {
-  if (shop.latitude != null && shop.longitude != null) {
-    return `https://maps.google.com/?q=${shop.latitude},${shop.longitude}`;
-  }
-  const q = encodeURIComponent(`${shop.name} ${shop.addressLine} ${shop.city} Laos`);
-  return `https://maps.google.com/?q=${q}`;
+  return mapsUrl(shop);
 }
 
 export function useShopInfo(): ShopInfo {

@@ -15,3 +15,14 @@ export const EMAIL_REPLY_TO = { name: 'LANCHAI', email: 'contact@lanchai.la' };
 export const DEFAULT_TEST_REDIRECT = 'lanchai.laos@gmail.com';
 
 export const REGION = 'asia-southeast1';
+
+// Public web base for email assets + the https → app redirect page (Firebase Hosting,
+// files in /hosting). THE single place to change when moving to https://lanchai.la.
+export const PUBLIC_BASE_URL = 'https://lanchai-app.web.app';
+
+export const LOGO_URL = `${PUBLIC_BASE_URL}/email/lanchai-logo@2x.png`;
+
+/** https link that opens an in-app path (allow-listed in hosting/open/index.html). */
+export function appLink(path: 'home' | 'reservations' | 'legal/cancellation' | `rentals/${string}`): string {
+  return `${PUBLIC_BASE_URL}/open/?to=${encodeURIComponent(path).replace(/%2F/g, '/')}`;
+}

@@ -38,6 +38,7 @@ interface Form {
   closeTime: string;
   lastPickupOffsetMin: string;
   whatsappNumber: string;
+  paymentMethods: string;
   graceHours: string;
 }
 
@@ -50,13 +51,14 @@ const toForm = (shop: ShopInfo, graceHours: number): Form => ({
   closeTime:           shop.closeTime,
   lastPickupOffsetMin: String(shop.lastPickupOffsetMin),
   whatsappNumber:      shop.whatsappNumber,
+  paymentMethods:      shop.paymentMethods,
   graceHours:          String(graceHours),
 });
 
 // Returns the first validation error, or null if the form can be saved.
 function validate(f: Form): string | null {
-  if (!f.name.trim() || !f.addressLine.trim() || !f.city.trim() || !f.hours.trim()) {
-    return 'Shop name, address, city and opening hours text are all required.';
+  if (!f.name.trim() || !f.addressLine.trim() || !f.city.trim() || !f.hours.trim() || !f.paymentMethods.trim()) {
+    return 'Shop name, address, city, opening hours text and payment methods are all required.';
   }
   const open  = parseHHMM(f.openTime);
   const close = parseHHMM(f.closeTime);
@@ -159,6 +161,7 @@ export default function AdminShopSettingsScreen() {
         closeTime:           form.closeTime.trim(),
         lastPickupOffsetMin: Number(form.lastPickupOffsetMin),
         whatsappNumber:      normalizeWhatsappNumber(form.whatsappNumber),
+        paymentMethods:      form.paymentMethods.trim(),
       });
       await saveGraceHours(Number(form.graceHours));
       setForm(prev => ({ ...prev, whatsappNumber: normalizeWhatsappNumber(prev.whatsappNumber) }));
@@ -210,6 +213,13 @@ export default function AdminShopSettingsScreen() {
               hint="Shown to renters as-is, e.g. “Daily 9:00–20:00”. Keep it consistent with the times below."
               value={form.hours}
               onChangeText={set('hours')}
+              editable={!saving}
+            />
+            <Field
+              label="Payment methods (shown in emails)"
+              hint="Listed under “What to bring” in booking emails. Keep it consistent with the Terms of Service."
+              value={form.paymentMethods}
+              onChangeText={set('paymentMethods')}
               editable={!saving}
             />
 

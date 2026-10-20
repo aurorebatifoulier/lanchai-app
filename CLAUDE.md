@@ -269,6 +269,21 @@ a snapshot indefinitely).
     claimed in a transaction before sending (`claim.ts`). Late-return emails reuse the
     `lateAlert*` flags of `lateReturnAlerts` (end of grace, 24h, 48h, 72h only — the
     0h/+1h warnings stay in-app). Grace period never mentioned to renters.
+  - **Layout (validated mockup):** logo tile → hero card (amber pill, big title, amber
+    primary button, 2 outline buttons) → white cards → centered cancellation line →
+    footer with amber top line. Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
+    subjects and preheaders in `templates.ts`. Dates via `functions/src/shared/dates.ts`
+    (Vientiane time, from `pickupAt`/`returnAt`). Shared texts: `CANCELLATION_SUMMARY`
+    (`shared/policy.ts`, keep in sync with `lib/legalContent.ts`), payment methods
+    (`config/shop.paymentMethods`, default in `shared/shop.ts`, aligned with Terms §4),
+    `openHoursText()` ("Open daily …").
+  - **Public assets: Firebase Hosting** (`/hosting`, `firebase deploy --only hosting`):
+    `email/lanchai-logo@2x.png` (mark + wordmark, no tagline, white background) and
+    `open/index.html`, the https → `lanchaiapp://` redirect used by every email button
+    (Gmail strips custom-scheme links; allow-listed paths only; works in the installed
+    build, not Expo Go). `PUBLIC_BASE_URL` in `functions/src/email/config.ts` is the
+    single place to switch to https://lanchai.la. Confirmation emails attach a `.ics`
+    (pick-up + return) and link to Google Calendar.
   - Booking confirmation fires on `{orderId}_1` creation (single bookings are `_1`
     too) → one email per order. `admin_release` cancellations send nothing. Receipt
     fires when `returnFinalizedAt` is first set on a `returned` reservation, figures via

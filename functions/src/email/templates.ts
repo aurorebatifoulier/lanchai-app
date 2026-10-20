@@ -1,15 +1,28 @@
-import { renderEmail, fmtLak, fmtCurrency, type Block, type Row } from './layout';
+import { renderEmail, fmtLak, fmtCurrency, type Block, type Inner, type Button } from './layout';
 import type { EmailShop } from './context';
-import { deriveReceiptData, deriveSettlementOutcome, type ReceiptInput, type DepositCurrency } from '../shared/receiptData';
+import { appLink } from './config';
+import { googleCalendarUrl, icsAttachment, type CalendarEvent } from './calendar';
+import {
+  deriveReceiptData, deriveSettlementOutcome, splitHtVat, DEFAULT_VAT_PERCENT,
+  type ReceiptInput, type DepositCurrency,
+} from '../shared/receiptData';
+import { mapsUrl, openHoursText } from '../shared/shop';
+import { CANCELLATION_SUMMARY } from '../shared/policy';
+import { vteDay, vteTime, vteDayTime } from '../shared/dates';
 
-// Every LANCHAI email's content. Amounts ONLY from frozen reservation fields; dates are
-// the reservation's stored pickupLabel/returnLabel (functions run in UTC — never
-// re-format dates here). Renter-facing copy must NEVER mention the internal late-return
-// grace period.
+// Every LANCHAI email's content, on the shared card layout (layout.ts).
+// - Amounts ONLY from frozen reservation fields — never recalculated.
+// - Dates formatted in Vientiane time from pickupAt/returnAt (functions run in UTC).
+// - Renter-facing copy NEVER mentions the internal late-return grace period.
 
-export interface Rendered { subject: string; html: string; text: string }
+export interface Rendered {
+  subject: string;
+  html: string;
+  text: string;
+  attachments?: { name: string; content: string }[];
+}
 
-/** The reservation fields the templates read (admin SDK doc data). */
+/** The reservation fields the templates read (admin SDK doc data, Timestamps → ms). */
 export interface ResData extends ReceiptInput {
   id: string;
   orderId?: string;
@@ -17,6 +30,10 @@ export interface ResData extends ReceiptInput {
   quantity: number;
   pickupLabel: string;
   returnLabel: string;
+  pickupAtMs: number;
+  returnAtMs: number;
+  pricePerDay: number;
+  durationDays: number;
   subtotal: number;
   couponApplied?: { percent: number; discountAmount: number } | null;
   chargeAmount?: number;
@@ -27,167 +44,319 @@ export interface ResData extends ReceiptInput {
   outstandingWrittenOff?: boolean;
 }
 
-const qty = (r: ResData) => (r.quantity > 1 ? ` × ${r.quantity}` : '');
-const refLine = (r: ResData) => `Reservation ID: ${r.id}`;
-const hi = (name: string) => `Hi ${name},`;
+// ── Shared pieces ──────────────────────────────────────────────────────────────
 
-function itemBlocks(items: ResData[], lines: (r: ResData) => string[]): Block[] {
-  return items.map(r => ({ type: 'item' as const, title: `${r.productName}${qty(r)}`, lines: lines(r) }));
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const orderIdOf = (items: ResData[]) => items[0]?.orderId ?? items[0]?.id.replace(/_\d+$/, '') ?? '';
+const sortByPickup = (items: ResData[]) => [...items].sort((a, b) => a.pickupAtMs - b.pickupAtMs || a.id.localeCompare(b.id));
+const sameDates = (items: ResData[]) =>
+  items.every(r => r.pickupAtMs === items[0].pickupAtMs && r.returnAtMs === items[0].returnAtMs);
+const range = (r: ResData) => `${vteDayTime(r.pickupAtMs)} → ${vteDayTime(r.returnAtMs)}`;
+
+function bookingLink(items: ResData[]): Button {
+  return {
+    label: 'View my booking',
+    url: items.length === 1 ? appLink(`rentals/${items[0].id}`) : appLink('reservations'),
+  };
+}
+
+const directions = (shop: EmailShop): Button => ({ label: 'Get directions', url: mapsUrl(shop) });
+
+/** "Your items" card. With prices: rate × days × qty per line, then the totals. */
+function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: number | null } = {}): Block {
+  const same = sameDates(items);
+  const inner: Inner[] = [];
+  if (same) {
+    inner.push({
+      type: 'subtle',
+      text: `${range(items[0])} · ${plural(items[0].durationDays, 'day')}${items.length > 1 ? ' · same dates for all items' : ''}`,
+    });
+  }
+  for (const r of items) {
+    const priceDetail = `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}`;
+    const detail = [same ? null : range(r), opts.prices ? priceDetail : (r.quantity > 1 ? `Quantity: ${r.quantity}` : null)]
+      .filter(Boolean).join(' · ');
+    inner.push({ type: 'line', name: r.productName, detail: detail || undefined, amount: opts.prices ? fmtLak(r.subtotal) : undefined });
+  }
+  if (opts.prices) {
+    const total    = items.reduce((s, r) => s + (r.total ?? 0), 0);
+    const deposit  = items.reduce((s, r) => s + (r.deposit ?? 0), 0);
+    const discount = items.reduce((s, r) => s + (r.couponApplied?.discountAmount ?? 0), 0);
+    const vatPct   = opts.vatPercent ?? DEFAULT_VAT_PERCENT;
+    // Same build-up as the app's confirmation screen (CLAUDE.md): VAT split of the
+    // post-coupon total, for every customer type; the deposit never goes through VAT.
+    const { ht, vat } = splitHtVat(total, vatPct);
+    inner.push({ type: 'divider' });
+    if (discount > 0) inner.push({ type: 'row', label: 'Coupon', value: `− ${fmtLak(discount)}`, tone: 'muted' });
+    inner.push({ type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(ht), tone: 'muted' });
+    inner.push({ type: 'row', label: `VAT (${vatPct}%)`, value: fmtLak(vat), tone: 'muted' });
+    inner.push({ type: 'row', label: 'Total to pay at pick-up', value: fmtLak(total), strong: true });
+    inner.push({ type: 'row', label: 'Refundable deposit', value: fmtLak(deposit) });
+  }
+  return { type: 'card', title: 'Your items', items: inner };
+}
+
+function whatToBringCard(shop: EmailShop): Block {
+  return {
+    type: 'card',
+    title: 'What to bring',
+    items: [
+      { type: 'bullet', text: 'Your ID document' },
+      { type: 'bullet', text: 'Your booking QR code (app › My rentals)' },
+      { type: 'bullet', text: shop.paymentMethods },
+    ],
+  };
+}
+
+function shopCard(shop: EmailShop, note?: string): Block {
+  const items: Inner[] = [
+    { type: 'text', text: shop.name },
+    { type: 'text', text: `${shop.addressLine}, ${shop.city}`, tone: 'muted' },
+    { type: 'text', text: openHoursText(shop.hours), tone: 'muted' },
+  ];
+  if (note) items.push({ type: 'text', text: note, tone: 'muted', small: true });
+  return { type: 'card', title: 'Pick-up and return', items };
+}
+
+const DEPOSIT_NOTE = 'Your deposit is refunded at return, once the item has been checked — about 10 minutes.';
+
+const cancellationLine = (): Block => ({
+  type: 'center',
+  text: CANCELLATION_SUMMARY,
+  link: { label: 'Cancellation policy', url: appLink('legal/cancellation') },
+});
+
+function calendarEvents(items: ResData[], orderId: string): CalendarEvent[] {
+  const seen = new Set<string>();
+  const events: CalendarEvent[] = [];
+  for (const r of sortByPickup(items)) {
+    const key = `${r.pickupAtMs}|${r.returnAtMs}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const names = items.filter(i => i.pickupAtMs === r.pickupAtMs && i.returnAtMs === r.returnAtMs).map(i => i.productName).join(', ');
+    events.push(
+      { uid: `${orderId}-${r.pickupAtMs}-pickup`, title: 'LANCHAI pick-up', startMs: r.pickupAtMs, durationMin: 30,
+        description: `Pick up: ${names}. Order ${orderId}. Bring your ID and booking QR code.` },
+      { uid: `${orderId}-${r.returnAtMs}-return`, title: 'LANCHAI return', startMs: r.returnAtMs, durationMin: 30,
+        description: `Return: ${names}. Order ${orderId}.` },
+    );
+  }
+  return events;
+}
+
+function build(subject: string, preheader: string, title: string, blocks: Block[], shop: EmailShop,
+  attachments?: Rendered['attachments']): Rendered {
+  const { html, text } = renderEmail({ preheader, title, blocks }, shop);
+  return { subject, html, text, attachments };
 }
 
 // ── 1. Booking confirmation (one per order) ─────────────────────────────────────
-export function bookingConfirmationEmail(name: string, orderId: string, items: ResData[], shop: EmailShop): Rendered {
-  const total   = items.reduce((s, r) => s + (r.total ?? 0), 0);
-  const deposit = items.reduce((s, r) => s + (r.deposit ?? 0), 0);
-  const discount = items.reduce((s, r) => s + (r.couponApplied?.discountAmount ?? 0), 0);
-  const rows: Row[] = [];
-  if (discount > 0) rows.push({ label: 'Coupon discount', value: `− ${fmtLak(discount)}`, tone: 'muted' });
-  rows.push({ label: 'Total to pay at pick-up', value: fmtLak(total), strong: true });
-  rows.push({ label: 'Deposit (refundable, collected at pick-up)', value: fmtLak(deposit) });
-
-  const subject = `Booking confirmation — ${orderId}`;
-  const { html, text } = renderEmail({
-    preheader: `Your LANCHAI booking ${orderId} is registered. Payment happens at pick-up.`,
-    title: 'Booking confirmation',
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: `Thanks for renting with LANCHAI! Your booking is registered — payment happens in store at pick-up.` },
-      { type: 'note', text: `Order ID: ${orderId}` },
-      ...itemBlocks(items, r => [`Pick-up: ${r.pickupLabel}`, `Return: ${r.returnLabel}`, refLine(r)]),
-      { type: 'rows', rows },
-      { type: 'note', text: 'The deposit is refunded at return once the item has been checked (about 10 minutes). Bring your booking QR code — you can find it in the app under My rentals.' },
-      { type: 'shop' },
+export function bookingConfirmationEmail(
+  _name: string, orderId: string, rawItems: ResData[], shop: EmailShop, vatPercent: number | null = null,
+): Rendered {
+  const items = sortByPickup(rawItems);
+  const first = items[0];
+  const total = items.reduce((s, r) => s + (r.total ?? 0), 0);
+  const events = calendarEvents(items, orderId);
+  return build(
+    `Your LANCHAI booking is confirmed · Pick-up ${vteDay(first.pickupAtMs)}`,
+    `${plural(items.length, 'item')} · ${fmtLak(total)} to pay at pick-up`,
+    'Booking confirmation',
+    [
+      {
+        type: 'hero',
+        pill: 'Your items are reserved',
+        title: `See you ${vteDay(first.pickupAtMs)} at ${vteTime(first.pickupAtMs)}`,
+        sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+        primary: bookingLink(items),
+        secondary: [directions(shop), { label: 'Add to calendar', url: googleCalendarUrl(events[0], shop) }],
+      },
+      itemsCard(items, { prices: true, vatPercent }),
+      whatToBringCard(shop),
+      shopCard(shop, DEPOSIT_NOTE),
+      cancellationLine(),
     ],
-  }, shop);
-  return { subject, html, text };
+    shop,
+    [icsAttachment(events, shop)],
+  );
 }
 
-// ── 2. Pickup reminder ───────────────────────────────────────────────────────────
-export function pickupReminderEmail(name: string, items: ResData[], shop: EmailShop): Rendered {
-  const { html, text } = renderEmail({
-    preheader: 'Your LANCHAI pick-up is tomorrow.',
-    title: 'Your pick-up is tomorrow',
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: 'A quick reminder: your rental is ready to be picked up tomorrow.' },
-      ...itemBlocks(items, r => [`Pick-up: ${r.pickupLabel}`, refLine(r)]),
-      { type: 'note', text: 'Bring your booking QR code (in the app, under My rentals) and a valid ID. The rental fee balance and the refundable deposit are paid at pick-up.' },
-      { type: 'shop' },
+// ── 2. Pick-up reminder ──────────────────────────────────────────────────────────
+export function pickupReminderEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
+  const items = sortByPickup(rawItems);
+  const first = items[0];
+  const orderId = orderIdOf(items);
+  return build(
+    `Pick-up tomorrow · ${vteDay(first.pickupAtMs)} at ${vteTime(first.pickupAtMs)}`,
+    'Bring your ID and your booking QR code',
+    'Pick-up tomorrow',
+    [
+      {
+        type: 'hero',
+        pill: 'Pick-up tomorrow',
+        title: `See you tomorrow at ${vteTime(first.pickupAtMs)}`,
+        sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+        primary: bookingLink(items),
+        secondary: [directions(shop)],
+      },
+      itemsCard(items),
+      whatToBringCard(shop),
+      shopCard(shop, DEPOSIT_NOTE),
     ],
-  }, shop);
-  return { subject: 'Reminder: your pick-up is tomorrow', html, text };
+    shop,
+  );
 }
 
 // ── 3. Return reminder ───────────────────────────────────────────────────────────
-export function returnReminderEmail(name: string, items: ResData[], shop: EmailShop): Rendered {
-  const { html, text } = renderEmail({
-    preheader: 'Your LANCHAI return is due tomorrow.',
-    title: 'Your return is due tomorrow',
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: 'A quick reminder: your rental is due back tomorrow.' },
-      ...itemBlocks(items, r => [`Return: ${r.returnLabel}`, refLine(r)]),
-      { type: 'note', text: 'Please bring the item back with all its accessories. It is checked on the spot (about 10 minutes) and your deposit is refunded right away.' },
-      { type: 'shop' },
+export function returnReminderEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
+  const items = [...rawItems].sort((a, b) => a.returnAtMs - b.returnAtMs);
+  const first = items[0];
+  const orderId = orderIdOf(items);
+  return build(
+    `Return due tomorrow · ${vteDay(first.returnAtMs)} at ${vteTime(first.returnAtMs)}`,
+    'Bring everything back with its accessories — your deposit is refunded on the spot',
+    'Return due tomorrow',
+    [
+      {
+        type: 'hero',
+        pill: 'Return tomorrow',
+        title: `Return due tomorrow at ${vteTime(first.returnAtMs)}`,
+        sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+        primary: bookingLink(items),
+        secondary: [directions(shop)],
+      },
+      itemsCard(items),
+      shopCard(shop, 'Please bring every item back with all its accessories. ' + DEPOSIT_NOTE),
     ],
-  }, shop);
-  return { subject: 'Reminder: your return is due tomorrow', html, text };
+    shop,
+  );
 }
 
 // ── 4. Cancellation ──────────────────────────────────────────────────────────────
-export function cancellationEmail(name: string, items: ResData[], shop: EmailShop): Rendered {
-  const { html, text } = renderEmail({
-    preheader: 'Your LANCHAI booking has been cancelled.',
-    title: 'Your booking has been cancelled',
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: items.length > 1 ? 'The following items have been cancelled:' : 'The following booking has been cancelled:' },
-      ...itemBlocks(items, r => [`Pick-up: ${r.pickupLabel}`, `Return: ${r.returnLabel}`, refLine(r)]),
-      { type: 'note', text: 'Any refund of your advance follows our cancellation terms (available in the app). If you did not request this cancellation or have a question, just reply to this email.' },
+export function cancellationEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
+  const items = sortByPickup(rawItems);
+  const orderId = orderIdOf(items);
+  return build(
+    `Your LANCHAI booking is cancelled · ${orderId}`,
+    `${plural(items.length, 'item')} cancelled`,
+    'Booking cancelled',
+    [
+      {
+        type: 'hero',
+        pill: 'Booking cancelled',
+        title: items.length > 1 ? 'Your items have been cancelled' : 'Your booking has been cancelled',
+        sub: `${plural(items.length, 'item')} · Order ${orderId}`,
+        primary: { label: 'View my rentals', url: appLink('reservations') },
+      },
+      itemsCard(items),
+      { type: 'card', items: [
+        { type: 'text', text: 'Any refund of your advance follows our cancellation policy.', tone: 'muted' },
+        { type: 'text', text: 'Didn’t request this cancellation? Just reply to this email.', tone: 'muted', small: true },
+      ] },
+      cancellationLine(),
     ],
-  }, shop);
-  return { subject: 'Your booking has been cancelled', html, text };
+    shop,
+  );
 }
 
 // ── 5. End-of-rental receipt (figures via deriveReceiptData — single source) ─────
-export function receiptEmail(name: string, r: ResData, vatPercent: number | null, shop: EmailShop): Rendered {
+export function receiptEmail(_name: string, r: ResData, vatPercent: number | null, shop: EmailShop): Rendered {
   const data = deriveReceiptData(r, vatPercent);
   const cur: DepositCurrency = data.depositCurrency;
   const fmt = (n: number) => fmtCurrency(n, cur);
+  const orderId = orderIdOf([r]);
 
-  const feeRows: Row[] = [
-    { label: 'Subtotal (excl. VAT)', value: fmtLak(data.vatHt), tone: 'muted' },
-    { label: `VAT (${data.vatPct}%)`, value: fmtLak(data.vatAmount), tone: 'muted' },
-    { label: 'Rental fee paid', value: fmtLak(r.total), strong: true },
-  ];
-
-  const chargeRows: Row[] = [];
-  if (r.chargeAmount != null) chargeRows.push({ label: `Damage/condition charge${r.chargeReason ? ` — ${r.chargeReason}` : ''}`, value: fmt(r.chargeAmount), tone: 'danger' });
-  if (r.lateChargeAmount != null) chargeRows.push({ label: `Late return penalty${r.lateChargeReason ? ` — ${r.lateChargeReason}` : ''}`, value: fmt(r.lateChargeAmount), tone: 'danger' });
-  chargeRows.push({ label: 'Deposit held', value: fmt(data.depositHeldAmount), tone: 'muted' });
-
+  const charges: Inner[] = [];
+  if (r.chargeAmount != null) charges.push({ type: 'line', name: 'Damage/condition charge', detail: r.chargeReason, amount: fmt(r.chargeAmount) });
+  if (r.lateChargeAmount != null) charges.push({ type: 'line', name: 'Late return penalty', detail: r.lateChargeReason, amount: fmt(r.lateChargeAmount) });
+  charges.push({ type: 'row', label: 'Deposit held', value: fmt(data.depositHeldAmount), tone: 'muted' });
   const outcome = deriveSettlementOutcome(r, data);
-  let outcomeNote: string | undefined;
   if (outcome.kind === 'clientOwes') {
-    chargeRows.push({ label: 'Balance due', value: fmt(outcome.amount), strong: true, tone: 'danger' });
-    outcomeNote = outcome.resolution === 'settled' ? 'Settled' : outcome.resolution === 'writtenOff' ? 'Written off' : 'Not yet settled';
+    charges.push({ type: 'row', label: 'Balance due', value: fmt(outcome.amount), strong: true, tone: 'danger' });
+    charges.push({ type: 'subtle', text: outcome.resolution === 'settled' ? 'Settled' : outcome.resolution === 'writtenOff' ? 'Written off' : 'Not yet settled' });
   } else if (outcome.kind === 'owedToClient') {
-    chargeRows.push({ label: 'Deposit refunded to you', value: fmt(outcome.amount), strong: true });
+    charges.push({ type: 'row', label: 'Deposit refunded to you', value: fmt(outcome.amount), strong: true });
   } else {
-    chargeRows.push({ label: 'Fully settled — nothing owed', value: '', strong: true });
+    charges.push({ type: 'row', label: 'Fully settled — nothing owed', value: '', strong: true });
   }
 
-  const totalRows: Row[] = data.netInLak != null
-    ? [{ label: 'Total paid', value: fmtLak(data.netInLak), strong: true }]
-    : [{ label: 'Rental fee paid', value: fmtLak(r.total), strong: true },
-       ...(data.chargesTotal > 0 ? [{ label: 'Charges (see above)', value: fmt(data.chargesTotal) }] : [])];
+  const totals: Inner[] = data.netInLak != null
+    ? [{ type: 'row', label: 'Total paid', value: fmtLak(data.netInLak), strong: true }]
+    : [{ type: 'row', label: 'Rental fee paid', value: fmtLak(r.total), strong: true },
+       ...(data.chargesTotal > 0 ? [{ type: 'row' as const, label: 'Charges (see above)', value: fmt(data.chargesTotal) }] : [])];
 
-  const { html, text } = renderEmail({
-    preheader: `Your LANCHAI receipt for ${r.productName}.`,
-    title: 'Your rental receipt',
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: 'Thanks for renting with LANCHAI — here is the summary of your rental.' },
-      { type: 'item', title: `${r.productName}${qty(r)}`, lines: [`Pick-up: ${r.pickupLabel}`, `Return: ${r.returnLabel}`, refLine(r)] },
-      { type: 'heading', text: 'Rental fee' },
-      { type: 'rows', rows: feeRows },
-      { type: 'heading', text: 'Deposit & charges' },
-      { type: 'rows', rows: chargeRows, note: outcomeNote },
-      { type: 'heading', text: 'Total' },
-      { type: 'rows', rows: totalRows },
-      { type: 'note', text: 'You can download this receipt as a PDF in the app: My rentals → this rental → Receipt.' },
+  const preheaderTotal = data.netInLak != null ? `Total paid ${fmtLak(data.netInLak)}` : `Rental fee ${fmtLak(r.total)}`;
+  return build(
+    `Your LANCHAI receipt · ${r.productName}`,
+    `${preheaderTotal} · thanks for renting with LANCHAI`,
+    'Your rental receipt',
+    [
+      {
+        type: 'hero',
+        pill: 'Rental closed',
+        title: 'Thanks for renting with us',
+        sub: `${r.productName} · Order ${orderId}`,
+        primary: { label: 'View my receipt', url: appLink(`rentals/${r.id}`) },
+      },
+      { type: 'card', title: 'Rental fee', items: [
+        { type: 'subtle', text: `${range(r)} · ${plural(r.durationDays, 'day')}` },
+        { type: 'line', name: r.productName, detail: `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}` },
+        { type: 'divider' },
+        { type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(data.vatHt), tone: 'muted' },
+        { type: 'row', label: `VAT (${data.vatPct}%)`, value: fmtLak(data.vatAmount), tone: 'muted' },
+        { type: 'row', label: 'Rental fee paid', value: fmtLak(r.total), strong: true },
+      ] },
+      { type: 'card', title: 'Deposit & charges', items: charges },
+      { type: 'card', title: 'Total', items: [
+        ...totals,
+        { type: 'text', text: 'You can download this receipt as a PDF in the app: My rentals › this rental › Receipt.', tone: 'muted', small: true },
+      ] },
     ],
-  }, shop);
-  return { subject: `Your rental receipt — ${r.id}`, html, text };
+    shop,
+  );
 }
 
 // ── 6. Business account decision ─────────────────────────────────────────────────
-export function btobApprovedEmail(name: string, shop: EmailShop): Rendered {
-  const { html, text } = renderEmail({
-    preheader: 'Your LANCHAI business account is approved.',
-    title: 'Your business account is approved',
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: 'Good news — your business account has been approved. You can now book with your business pricing and receive VAT details on your bookings.' },
-      { type: 'p', text: 'Open the app to start renting.' },
+export function btobApprovedEmail(_name: string, shop: EmailShop): Rendered {
+  return build(
+    'Your LANCHAI business account is approved',
+    'Business pricing and VAT details are now on your bookings',
+    'Business account approved',
+    [
+      {
+        type: 'hero',
+        pill: 'Business account',
+        title: 'Your account is approved',
+        sub: 'You can now book with your business account.',
+        primary: { label: 'Open the app', url: appLink('home') },
+      },
+      { type: 'card', items: [
+        { type: 'text', text: 'Your bookings now show prices with the VAT breakdown, ready for your accounting.' },
+      ] },
     ],
-  }, shop);
-  return { subject: 'Your business account is approved', html, text };
+    shop,
+  );
 }
 
-export function btobRejectedEmail(name: string, reason: string | null, shop: EmailShop): Rendered {
-  const blocks: Block[] = [
-    { type: 'p', text: 'Thank you for applying for a LANCHAI business account. Unfortunately we could not approve it this time.' },
-  ];
-  if (reason) blocks.push({ type: 'rows', rows: [{ label: 'Reason', value: reason }] });
-  blocks.push({ type: 'p', text: 'You can update your details in the app and apply again, or reply to this email if you have questions.' });
-  const { html, text } = renderEmail({
-    preheader: 'An update on your LANCHAI business account.',
-    title: 'Your business account application',
-    greeting: hi(name),
-    blocks,
-  }, shop);
-  return { subject: 'Your business account application', html, text };
+export function btobRejectedEmail(_name: string, reason: string | null, shop: EmailShop): Rendered {
+  const items: Inner[] = [];
+  if (reason) items.push({ type: 'row', label: 'Reason', value: '' }, { type: 'text', text: reason });
+  items.push({ type: 'text', text: 'You can update your details in the app and apply again, or reply to this email if you have a question.', tone: 'muted' });
+  return build(
+    'Your LANCHAI business account application',
+    'We couldn’t approve it this time — here’s why',
+    'Business account application',
+    [
+      {
+        type: 'hero',
+        pill: 'Business account',
+        title: 'We couldn’t approve your application',
+        primary: { label: 'Open the app', url: appLink('home') },
+      },
+      { type: 'card', items },
+    ],
+    shop,
+  );
 }
 
 // ── 7. Late return (end of grace / 24h / 48h / 72h) — mirrors the in-app copy ────
@@ -195,45 +364,60 @@ export function btobRejectedEmail(name: string, reason: string | null, shop: Ema
 export type LateEmailStage = 'tier1' | 'tier2' | 'tier3' | 'nonReturn';
 
 export function lateReturnEmail(
-  name: string,
+  _name: string,
   stage: LateEmailStage,
   r: { id: string; productName: string; returnLabel: string },
   amountLak: number,
   shop: EmailShop,
 ): Rendered {
   const amount = fmtLak(amountLak);
-  const copy: Record<LateEmailStage, { subject: string; title: string; body: string }> = {
+  const copy: Record<LateEmailStage, { subject: string; preheader: string; pill: string; title: string; body: string }> = {
     tier1: {
-      subject: 'Your return is overdue',
+      subject: 'Your LANCHAI return is overdue',
+      preheader: `A late fee of ${amount} (1 rental day) may apply`,
+      pill: 'Return overdue',
       title: 'Your return is overdue',
       body: `Your ${r.productName} is overdue. A late fee of ${amount} (1 rental day) may apply, pending confirmation from our team — please return the item as soon as possible.`,
     },
     tier2: {
-      subject: 'Your return is over 24 hours late',
+      subject: 'Your LANCHAI return is over 24 hours late',
+      preheader: `The late fee may now be ${amount} (1.5 rental days)`,
+      pill: 'Over 24 hours late',
       title: 'Your return is over 24 hours late',
       body: `Your ${r.productName} is more than 24 hours overdue. The late fee may now be ${amount} (1.5 rental days), pending confirmation from our team — please return it as soon as possible.`,
     },
     tier3: {
-      subject: 'Your return is over 48 hours late',
+      subject: 'Your LANCHAI return is over 48 hours late',
+      preheader: `The late fee may now be ${amount} (2 rental days)`,
+      pill: 'Over 48 hours late',
       title: 'Your return is over 48 hours late',
       body: `Your ${r.productName} is more than 48 hours overdue. The late fee may now be ${amount} (2 rental days), pending confirmation from our team. After 72 hours, it will be treated as a non-return.`,
     },
     nonReturn: {
-      subject: 'Your rental is treated as a non-return',
+      subject: 'Your LANCHAI rental is treated as a non-return',
+      preheader: 'Please contact us right away',
+      pill: 'Non-return',
       title: 'Your rental is treated as a non-return',
       body: `Your ${r.productName} is now more than 72 hours overdue and is treated as a non-return. Your deposit may be kept and our contract procedure applies. Please contact us right away.`,
     },
   };
   const c = copy[stage];
-  const { html, text } = renderEmail({
-    preheader: c.title,
-    title: c.title,
-    greeting: hi(name),
-    blocks: [
-      { type: 'p', text: c.body },
-      { type: 'item', title: r.productName, lines: [`Return was due: ${r.returnLabel}`, `Reservation ID: ${r.id}`] },
-      { type: 'shop' },
+  return build(
+    c.subject,
+    c.preheader,
+    c.title,
+    [
+      {
+        type: 'hero',
+        pill: c.pill,
+        title: c.title,
+        sub: `${r.productName} · return was due ${r.returnLabel}`,
+        primary: { label: 'View my booking', url: appLink(`rentals/${r.id}`) },
+        secondary: [directions(shop)],
+      },
+      { type: 'card', items: [{ type: 'text', text: c.body }] },
+      shopCard(shop),
     ],
-  }, shop);
-  return { subject: c.subject, html, text };
+    shop,
+  );
 }

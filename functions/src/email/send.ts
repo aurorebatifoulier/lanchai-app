@@ -13,8 +13,10 @@ export interface OutgoingEmail {
   html: string;
   text: string;
   tag: string;               // Brevo tag, e.g. 'booking-confirmation'
-  /** Test-send only: deliver to `to` even in redirect mode (it's the admin's own address). */
+  /** Test-send only: deliver to `to` even in redirect mode (it's the test inbox itself). */
   bypassRedirect?: boolean;
+  /** Small files (e.g. a .ics calendar invite), content base64-encoded. */
+  attachments?: { name: string; content: string }[];
 }
 
 const MAX_ATTEMPTS = 3;           // 1 try + 2 retries, for 429 / 5xx / network errors only
@@ -70,6 +72,7 @@ export async function sendEmail(email: OutgoingEmail, mode?: EmailMode): Promise
           htmlContent: email.html,
           textContent: email.text,
           tags:        [email.tag],
+          ...(email.attachments?.length ? { attachment: email.attachments } : {}),
         }),
       });
       if (res.ok) return 'sent';
