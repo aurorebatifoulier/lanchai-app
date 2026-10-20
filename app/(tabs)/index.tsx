@@ -25,6 +25,7 @@ import { listenBagItems } from '@/lib/bag';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
+import ProductSocialProof from '@/components/ProductSocialProof';
 import LanchaiIcon from '@/components/LanchaiIcon';
 import SearchBar from '@/components/SearchBar';
 import { getProducts, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
@@ -463,12 +464,8 @@ function ProductCard({ product, onPress, tagBgOverride, exchangeRate, userTier, 
         {minPrice != null && exchangeRate != null
           ? <Text style={styles.prodPrice}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} <Text style={styles.prodPriceUnit}>LAK / day</Text></Text>
           : <Text style={styles.prodPriceUnavailable}>Price not set</Text>}
-        {product.averageRating != null && (
-          <View style={styles.prodRating}>
-            <Feather name="star" size={11} color={COLORS.amber} />
-            <Text style={styles.prodRatingText}>{product.averageRating.toFixed(1)} ({product.reviewCount})</Text>
-          </View>
-        )}
+        {/* Same thresholds as Explore/Liked — a single low review is never promoted here. */}
+        <ProductSocialProof product={product} />
       </View>
     </TouchableOpacity>
   );
@@ -877,16 +874,6 @@ const styles = StyleSheet.create({
     color: COLORS.fg3,
     fontStyle: 'italic',
     marginBottom: 6,
-  },
-  prodRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  prodRatingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.fg2,
   },
   // How it works
   howSection: {

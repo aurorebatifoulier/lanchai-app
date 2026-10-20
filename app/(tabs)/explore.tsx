@@ -38,6 +38,7 @@ import { filterProducts, sortProducts } from '@/utils/productFilters';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import { formatKip } from '@/utils/currency';
+import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
@@ -91,6 +92,9 @@ export default function ExploreScreen() {
   const [requestContact, setRequestContact] = useState('');
   const [requestSent,    setRequestSent]    = useState(false);
   const [requestBusy,    setRequestBusy]    = useState(false);
+  // All products' occupancy in ONE query (fetchAllOccupancy) — null until loaded or if
+  // it failed, in which case cards show no booking badge (never a false "Back on").
+  const [occupancy,      setOccupancy]      = useState<Map<string, OccupancyRecord[]> | null>(null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -103,6 +107,7 @@ export default function ExploreScreen() {
         .then(data => { setAllProducts(data); setLoading(false); })
         .catch(() => { setLoadError(true); setLoading(false); });
       getFavorites(CURRENT_USER).then(ids => setFavorites(new Set(ids)));
+      fetchAllOccupancy().then(setOccupancy).catch(() => setOccupancy(null));
     }, [CURRENT_USER])
   );
 
@@ -253,8 +258,9 @@ export default function ExploreScreen() {
       onToggleFavorite={() => handleToggleFavorite(item.id)}
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
+      availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
     />
-  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier]);
+  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy]);
 
   const ListHeader = useMemo(() => {
     if (activeChips.length === 0) return null;

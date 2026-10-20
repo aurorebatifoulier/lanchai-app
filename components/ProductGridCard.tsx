@@ -5,7 +5,9 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import type { Product } from '@/lib/mockData';
 import type { LoyaltyTier } from '@/lib/firestore';
-import { getProductAccessState } from '@/utils/productAccess';
+import { getProductAccessState, fmtShortDate } from '@/utils/productAccess';
+import type { GridAvailability } from '@/utils/availability';
+import ProductSocialProof from '@/components/ProductSocialProof';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak, formatKip } from '@/utils/currency';
 
@@ -25,7 +27,7 @@ const CARD_NAME_LINES  = 2;  // title block always reserves exactly 2 lines
 const CARD_NAME_GAP    = 4;
 const CARD_PRICE_LH    = 16; // cardPrice / cardPriceUnavailable lineHeight
 const CARD_PRICE_GAP   = 8;
-const CARD_BADGE_H     = 22;
+const CARD_BADGE_H     = 22; // bottom slot — always reserved: booking pill, social proof, or empty
 
 export function productCardLayout(fontScale: number) {
   const scale  = Math.max(1, fontScale);
@@ -52,6 +54,7 @@ export default function ProductGridCard({
   onToggleFavorite,
   exchangeRate,
   userTier,
+  availability,
 }: {
   product: Product;
   width: number;
@@ -60,6 +63,8 @@ export default function ProductGridCard({
   onToggleFavorite: () => void;
   exchangeRate: number | null;
   userTier: LoyaltyTier | null;
+  /** From gridAvailability(); null/undefined = bookable today (show social proof). */
+  availability?: GridAvailability;
 }) {
   const layout = useProductCardLayout();
   const imageUri = product.images?.[0] ?? null;
@@ -117,10 +122,19 @@ export default function ProductGridCard({
         {minPrice != null && exchangeRate != null
           ? <Text style={s.cardPrice} numberOfLines={1}>{formatKip(toLak(minPrice, exchangeRate))} / day</Text>
           : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
-        <View style={[s.badge, { height: layout.badge }, !product.available && s.badgeRented]}>
-          <Text style={[s.badgeText, !product.available && s.badgeTextRented]}>
-            {product.available ? 'Available' : 'Rented'}
-          </Text>
+        {/* Fixed-height slot so every card in a row keeps the same height. */}
+        <View style={[s.bottomSlot, { height: layout.badge }]}>
+          {availability ? (
+            <View style={[s.pill, availability.kind === 'unavailable' && s.pillMuted]}>
+              <Text style={[s.pillText, availability.kind === 'unavailable' && s.pillTextMuted]} numberOfLines={1}>
+                {availability.kind === 'backOn'
+                  ? `Back on ${fmtShortDate(availability.date)}`
+                  : availability.kind === 'fullyBooked' ? 'Fully booked' : 'Unavailable'}
+              </Text>
+            </View>
+          ) : (
+            <ProductSocialProof product={product} />
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -211,25 +225,29 @@ const s = StyleSheet.create({
     lineHeight: CARD_PRICE_LH,
     marginBottom: CARD_PRICE_GAP,
   },
-  badge: {
-    alignSelf: 'flex-start',
+  bottomSlot: {
+    justifyContent: 'center',
     flexShrink: 0,
+  },
+  pill: {
+    alignSelf: 'flex-start',
+    height: '100%',
     paddingHorizontal: 8,
     borderRadius: 6,
-    backgroundColor: COLORS.amber,
+    backgroundColor: COLORS.warmBeige,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeRented: {
-    backgroundColor: COLORS.softGray,
+  pillMuted: {
+    backgroundColor: COLORS.softGray200,
   },
-  badgeText: {
+  pillText: {
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.carbon,
     letterSpacing: 0.2,
   },
-  badgeTextRented: {
+  pillTextMuted: {
     color: COLORS.fg3,
   },
 });

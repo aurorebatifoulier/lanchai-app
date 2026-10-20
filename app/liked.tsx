@@ -30,6 +30,7 @@ import {
 } from '@/lib/filterConfig';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak, formatKip } from '@/utils/currency';
+import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD    = 16;
@@ -101,6 +102,8 @@ export default function LikedScreen() {
   const [pendingFilters, setPendingFilters]  = useState<Filters>(DEFAULT_FILTERS);
   const [searchQuery,    setSearchQuery]    = useState('');
   const [sheetVisible,   setSheetVisible]   = useState(false);
+  // Same single-query occupancy as Explore — null until loaded or on failure.
+  const [occupancy,      setOccupancy]      = useState<Map<string, OccupancyRecord[]> | null>(null);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -120,6 +123,7 @@ export default function LikedScreen() {
         setLoadError(true);
         setLoading(false);
       });
+    fetchAllOccupancy().then(setOccupancy).catch(() => setOccupancy(null));
   }, [user]);
 
   // ── Unlike ────────────────────────────────────────────────────────────────
@@ -241,8 +245,9 @@ export default function LikedScreen() {
       onToggleFavorite={() => handleUnlike(item.id)}
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
+      availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
     />
-  ), [handleUnlike, router, exchangeRate, userTier]);
+  ), [handleUnlike, router, exchangeRate, userTier, occupancy]);
 
   const keyExtractor = useCallback((item: Product) => item.id, []);
 

@@ -202,3 +202,78 @@ export async function getMonthAvailability(
   const occupancy = await fetchOccupancy(productId);
   return computeMonthAvailability(occupancy, year, month, totalStock);
 }
+
+// ── Grid cards: one query for the whole catalogue ────────────────────────────
+
+// Every non-terminal occupancy record for ALL products, grouped by productId — ONE
+// equality-only query (no composite index needed) for a whole product grid, instead of
+// one fetchOccupancy() per card. reservationOccupancy holds no personal data (productId,
+// pickupAt, returnAt, quantity, status only) and is readable by any signed-in user, and
+// terminal reservations are deleted from it, so the result stays small.
+// Throws on Firestore error — callers should then show no booking badge at all
+// (never a false "Back on").
+export async function fetchAllOccupancy(): Promise<Map<string, OccupancyRecord[]>> {
+  const snap = await getDocs(query(
+    collection(db, 'reservationOccupancy'),
+    where('status', 'in', OCCUPYING_STATUSES),
+  ));
+  const byProduct = new Map<string, OccupancyRecord[]>();
+  for (const d of snap.docs) {
+    const data = d.data();
+    const pickupAt: Timestamp | undefined = data.pickupAt;
+    const returnAt: Timestamp | undefined = data.returnAt;
+    const productId: string | undefined = data.productId;
+    if (!pickupAt || !returnAt || !productId) continue;
+    const list = byProduct.get(productId) ?? [];
+    list.push({
+      pickupAt: pickupAt.toMillis(),
+      returnAt: returnAt.toMillis(),
+      quantity: data.quantity ?? 0,
+      reservationId: d.id,
+    });
+    byProduct.set(productId, list);
+  }
+  return byProduct;
+}
+
+export const NEXT_FREE_DAY_SEARCH_DAYS = 90;
+
+// Pure. null = at least one unit is free today. Otherwise the first later day with at
+// least one free unit, or 'none' if nothing frees up within the search window. Each day
+// is tested as a FULL local day — the same conservative rule computeMonthAvailability
+// uses to grey out calendar days (buffer + occupying statuses via computeAvailableUnits).
+export function nextAvailableDay(
+  occupancy: OccupancyRecord[],
+  totalStock: number,
+  now: Date = new Date(),
+): Date | 'none' | null {
+  for (let d = 0; d <= NEXT_FREE_DAY_SEARCH_DAYS; d++) {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+    const dayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d + 1);
+    if (computeAvailableUnits(occupancy, dayStart, dayEnd, totalStock) > 0) {
+      return d === 0 ? null : dayStart;
+    }
+  }
+  return 'none';
+}
+
+export type GridAvailability =
+  | { kind: 'unavailable' }
+  | { kind: 'backOn'; date: Date }
+  | { kind: 'fullyBooked' }
+  | null; // bookable today — no badge
+
+// What a grid card should flag. `occupancy` is this product's records from
+// fetchAllOccupancy(), or undefined if that fetch failed/hasn't loaded (→ only the
+// stock check applies, never a booking badge).
+export function gridAvailability(
+  product: { available?: boolean; stockLeft: number; inRepairUnits?: number; lostUnits?: number; pendingSettlementUnits?: number },
+  occupancy: OccupancyRecord[] | undefined,
+): GridAvailability {
+  const stock = effectiveStock(product);
+  if (product.available === false || stock <= 0) return { kind: 'unavailable' };
+  if (!occupancy) return null;
+  const next = nextAvailableDay(occupancy, stock);
+  if (next === null) return null;
+  return next === 'none' ? { kind: 'fullyBooked' } : { kind: 'backOn', date: next };
+}

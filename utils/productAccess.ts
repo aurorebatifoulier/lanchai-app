@@ -11,7 +11,7 @@ export interface ProductAccessState {
 
 const NOT_RESTRICTED: ProductAccessState = { locked: false, badgeLabel: null, badgeTone: null, message: null };
 
-function fmtShortDate(d: Date): string {
+export function fmtShortDate(d: Date): string {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${months[d.getMonth()]} ${d.getDate()}`;
 }
