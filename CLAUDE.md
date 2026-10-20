@@ -190,6 +190,21 @@ a snapshot indefinitely).
   **If `collectionGroup` is ever needed for another collection, test it in isolation
   early** before building a feature around it.
 
+- **No composite indexes on this project — and no `firestore.indexes.json`.**
+  `firebase firestore:indexes` returns `"indexes": []` (only a `reviews.createdAt`
+  field override exists). Any query that combines an equality with a range/inequality
+  on a *different* field, or a `where` + `orderBy` on different fields, needs a
+  composite index and fails at runtime with `FAILED_PRECONDITION` (this silently broke
+  `expireEarlyAccess` on every run until fixed in `45abf47`). Equality-only filters
+  (incl. `in`), a range on a single field, or a single `orderBy` are fine. **Prefer
+  filtering in code when the result set is small** (as `expireEarlyAccess` now does:
+  equality-only query, date filtered in memory). Otherwise create the index through a
+  tracked `firestore.indexes.json` (start from `firebase firestore:indexes >
+  firestore.indexes.json` so the existing `reviews.createdAt` override is kept — the
+  CLI offers to delete anything missing from the file), wire it in `firebase.json`
+  (`"firestore": { "indexes": "firestore.indexes.json" }` — indexes only, rules stay
+  manual), and deploy with `firebase deploy --only firestore:indexes`.
+
 - **`UserProfile.address` vs. `UserProfile.addresses`:** `address?: string` (singular)
   is the real, active field — a simple free-text field edited in
   `app/profile/personal-info.tsx`, matching the `whatsapp` single-field pattern.
