@@ -50,6 +50,16 @@ export async function getRecipient(uid: string, fallbackName?: string | null): P
   };
 }
 
+/** Admin exchange rates (config/pricing): 1 USD = usdToLak LAK, 1 THB = thbToLak LAK. */
+export interface Rates { usdToLak: number | null; thbToLak: number | null }
+
+export async function getRates(): Promise<Rates> {
+  const snap = await admin.firestore().collection('config').doc('pricing').get().catch(() => null);
+  const d = snap?.data() ?? {};
+  const pos = (v: unknown) => (typeof v === 'number' && v > 0 ? v : null);
+  return { usdToLak: pos(d.exchangeRate), thbToLak: pos(d.thbToLakRate) };
+}
+
 export async function getVatPercent(): Promise<number | null> {
   const snap = await admin.firestore().collection('config').doc('pricing').get().catch(() => null);
   const v = snap?.data()?.vatPercent;

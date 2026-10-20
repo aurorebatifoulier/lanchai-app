@@ -276,7 +276,13 @@ a snapshot indefinitely).
     `#BA7517`), via `iconUrl()` — icon fonts don't work in email; button icons use
     `alt=""` so a blocked image never breaks the label. "Your items": shared dates
     shown once under the title (clock icon) when every line has the same
-    pickupAt/returnAt, otherwise per item. Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
+    pickupAt/returnAt, otherwise per item.
+  - **Pick-up reminder** (validated mockup): "Ready for pick-up" hero with "Message us"
+    (WhatsApp, prefilled with the order ID — hidden when no number, then "Get
+    directions" goes full width), a "To pay at pick-up" card (order totals from frozen
+    fields + "approx. $X · ฿Y" from config/pricing rates, hidden if a rate is missing),
+    names-only items ("Portable speaker × 2"), "Pick-up" shop card, and a centered
+    "Running late…" line (WhatsApp, else contact@lanchai.la). Blocks in `layout.ts` (`hero`/`card`/`center`); copy,
     subjects and preheaders in `templates.ts`. Dates via `functions/src/shared/dates.ts`
     (Vientiane time, from `pickupAt`/`returnAt`). Shared texts: `CANCELLATION_SUMMARY`
     (`shared/policy.ts`, keep in sync with `lib/legalContent.ts`), payment methods

@@ -29,7 +29,8 @@ export type Inner =
   | { type: 'subtle'; text: string }                                  // small grey line
   | { type: 'dates'; text: string }                                   // clock icon + shared dates line
   | { type: 'stack'; lines: string[]; note?: string }                 // compact block (first line bold)
-  | { type: 'line'; name: string; detail?: string; amount?: string }  // item row, amount right-aligned
+  | { type: 'line'; name: string; detail?: string; amount?: string; compact?: boolean } // item row
+  | { type: 'amount'; label: string; value: string; approx?: string } // big amount + small approx line
   | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger'; gapTop?: number }
   | { type: 'bullet'; text: string; icon?: Icon }                     // icon (or amber marker) + text
   | { type: 'divider' };
@@ -79,7 +80,8 @@ function primaryButton(b: Button): string {
 }
 
 function outlineButtons(buttons: Button[]): string {
-  const cells = buttons.map((b, i) => `<td width="${Math.floor(100 / buttons.length)}%" style="padding:${i === 0 ? '0 5px 0 0' : '0 0 0 5px'};">
+  const pad = (i: number) => (buttons.length === 1 ? '0' : i === 0 ? '0 5px 0 0' : '0 0 0 5px');
+  const cells = buttons.map((b, i) => `<td width="${Math.floor(100 / buttons.length)}%" style="padding:${pad(i)};">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
         <td align="center" bgcolor="#FFFFFF" style="border:1px solid ${CARBON};border-radius:10px;">
           <a href="${e(b.url)}" style="display:block;padding:11px 8px;font-family:${FONT};font-size:13px;font-weight:700;color:${CARBON};text-decoration:none;border-radius:10px;">${b.icon ? `<img src="${iconUrl(b.icon)}" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;outline:none;vertical-align:-3px;margin-right:6px;"/>` : ''}${e(b.label)}</a>
@@ -111,8 +113,16 @@ function innerHtml(it: Inner): string {
       return `<p style="margin:0;font-size:14px;line-height:21px;color:${MUTED};">${it.lines.map((l, i) =>
         i === 0 ? `<span style="color:${CARBON};font-weight:700;">${e(l)}</span>` : e(l)).join('<br/>')}</p>
         ${it.note ? `<p style="margin:6px 0 0;font-size:12px;line-height:18px;color:${MUTED};">${e(it.note)}</p>` : ''}`;
-    case 'line':
+    case 'amount':
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
+        <td style="vertical-align:top;font-size:14px;line-height:24px;color:${CARBON};font-weight:700;">${e(it.label)}</td>
+        <td style="vertical-align:top;text-align:right;white-space:nowrap;padding-left:12px;">
+          <div style="font-size:18px;line-height:24px;color:${CARBON};font-weight:800;">${e(it.value)}</div>
+          ${it.approx ? `<div style="font-size:12px;line-height:16px;color:${MUTED};">${e(it.approx)}</div>` : ''}
+        </td>
+      </tr></table>`;
+    case 'line':
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 ${it.compact ? 4 : 10}px;"><tr>
         <td style="vertical-align:top;font-size:14px;line-height:20px;color:${CARBON};font-weight:700;">${e(it.name)}
           ${it.detail ? `<div style="font-size:12px;line-height:17px;color:${MUTED};font-weight:500;">${e(it.detail)}</div>` : ''}
         </td>
@@ -181,6 +191,7 @@ function innerText(it: Inner): string[] {
     case 'dates': return [`Dates: ${it.text}`];
     case 'stack': return [...it.lines, ...(it.note ? ['', it.note] : [])];
     case 'line': return [`${it.name}${it.amount ? `  ${it.amount}` : ''}`, ...(it.detail ? [`  ${it.detail}`] : [])];
+    case 'amount': return [`${it.label}: ${it.value}${it.approx ? ` (${it.approx})` : ''}`];
     case 'row': return [`${it.label}${it.value ? `: ${it.value}` : ''}`];
     case 'bullet': return [`- ${it.text}`];
     case 'divider': return [''];
@@ -196,7 +207,7 @@ function blockText(b: Block): string[] {
       '',
     ];
     case 'card': return [...(b.title ? [b.title, '-'.repeat(b.title.length)] : []), ...b.items.flatMap(innerText), ''];
-    case 'center': return [b.text + (b.link ? ` ${b.link.label}: ${b.link.url}` : ''), ''];
+    case 'center': return [b.text + (b.link ? ` ${b.link.label.replace(/\.$/, '')}: ${b.link.url}` : ''), ''];
   }
 }
 

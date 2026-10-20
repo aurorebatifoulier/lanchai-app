@@ -6,7 +6,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { BREVO_API_KEY, REGION } from './config';
 import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
-import { getEmailShop, getRecipient, getVatPercent, type EmailShop } from './context';
+import { getEmailShop, getRecipient, getVatPercent, getRates, type EmailShop } from './context';
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
   receiptEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail,
@@ -200,7 +200,9 @@ export const emailDailyReminders = onSchedule(
   { schedule: '0 18 * * *', timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_API_KEY] },
   async () => {
     try {
-      await sendReminders(['pending_payment', 'confirmed'], 'pickupAt', 'emailPickupReminder', pickupReminderEmail, 'pickup-reminder');
+      const rates = await getRates();
+      await sendReminders(['pending_payment', 'confirmed'], 'pickupAt', 'emailPickupReminder',
+        (name, items, shop) => pickupReminderEmail(name, items, shop, rates), 'pickup-reminder');
     } catch (err) {
       logger.error('[email] pickup reminders failed', { err: String(err) });
     }
@@ -238,7 +240,7 @@ export const sendTestEmails = onCall(
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
     const isAdmin = (await db().collection('admins').doc(uid).get()).exists;
     if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
-    const [shop, vat, mode] = await Promise.all([getEmailShop(), getVatPercent(), getEmailMode()]);
+    const [shop, vat, mode, rates] = await Promise.all([getEmailShop(), getVatPercent(), getEmailMode(), getRates()]);
     const to = mode.redirectTo;
     const name = String(request.auth?.token.name ?? '').split(' ')[0] || 'there';
     const DAY = 24 * 60 * 60 * 1000;
@@ -268,7 +270,8 @@ export const sendTestEmails = onCall(
     const samples: [string, Rendered][] = [
       ['booking-confirmation',             bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, second], shop, vat)],
       ['booking-confirmation-mixed-dates', bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, otherDates], shop, vat)],
-      ['pickup-reminder',                  pickupReminderEmail(name, [base, second], shop)],
+      ['pickup-reminder',                  pickupReminderEmail(name, [base, second], shop, rates)],
+      ['pickup-reminder-mixed-dates',      pickupReminderEmail(name, [base, otherDates], shop, rates)],
       ['return-reminder',                  returnReminderEmail(name, [base], shop)],
       ['cancellation',                     cancellationEmail(name, [base, second], shop)],
       ['receipt',                          receiptEmail(name, closed, vat, shop)],

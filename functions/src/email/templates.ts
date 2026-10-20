@@ -1,12 +1,12 @@
 import { renderEmail, fmtLak, fmtCurrency, type Block, type Inner, type Button } from './layout';
-import type { EmailShop } from './context';
+import type { EmailShop, Rates } from './context';
 import { appLink } from './config';
 import { googleCalendarUrl, icsAttachment, type CalendarEvent } from './calendar';
 import {
   deriveReceiptData, deriveSettlementOutcome, splitHtVat, DEFAULT_VAT_PERCENT,
   type ReceiptInput, type DepositCurrency,
 } from '../shared/receiptData';
-import { mapsUrl, openHoursText } from '../shared/shop';
+import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
 
@@ -74,10 +74,18 @@ function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: numb
     inner.push({ type: 'dates', text: `${range(items[0])} · ${plural(items[0].durationDays, 'day')}` });
   }
   for (const r of items) {
-    const priceDetail = `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}`;
-    const detail = [same ? null : range(r), opts.prices ? priceDetail : (r.quantity > 1 ? `Quantity: ${r.quantity}` : null)]
-      .filter(Boolean).join(' · ');
-    inner.push({ type: 'line', name: r.productName, detail: detail || undefined, amount: opts.prices ? fmtLak(r.subtotal) : undefined });
+    if (opts.prices) {
+      const priceDetail = `${fmtLak(r.pricePerDay)} × ${plural(r.durationDays, 'day')} × ${r.quantity}`;
+      inner.push({ type: 'line', name: r.productName, detail: same ? priceDetail : `${range(r)} · ${priceDetail}`, amount: fmtLak(r.subtotal) });
+    } else {
+      // Names only, compact: "Portable speaker × 2"; per-item dates only when they differ.
+      inner.push({
+        type: 'line',
+        name: r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName,
+        detail: same ? undefined : range(r),
+        compact: same,
+      });
+    }
   }
   if (opts.prices) {
     const total    = items.reduce((s, r) => s + (r.total ?? 0), 0);
@@ -97,22 +105,32 @@ function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: numb
   return { type: 'card', title: 'Your items', items: inner };
 }
 
-function whatToBringCard(shop: EmailShop): Block {
-  return {
-    type: 'card',
-    title: 'What to bring',
-    items: [
-      { type: 'bullet', text: 'Your ID document', icon: { name: 'id-card', alt: 'ID card' } },
-      { type: 'bullet', text: 'Your booking QR code (app › My rentals)', icon: { name: 'qr-code', alt: 'QR code' } },
-      { type: 'bullet', text: shop.paymentMethods, icon: { name: 'cash', alt: 'Payment' } },
-    ],
-  };
+function whatToBringCard(shop: EmailShop, opts: { payment?: boolean } = { payment: true }): Block {
+  const items: Inner[] = [
+    { type: 'bullet', text: 'Your ID document', icon: { name: 'id-card', alt: 'ID card' } },
+    { type: 'bullet', text: 'Your booking QR code (app › My rentals)', icon: { name: 'qr-code', alt: 'QR code' } },
+  ];
+  if (opts.payment) items.push({ type: 'bullet', text: shop.paymentMethods, icon: { name: 'cash', alt: 'Payment' } });
+  return { type: 'card', title: 'What to bring', items };
 }
 
-function shopCard(shop: EmailShop, note?: string): Block {
+/** wa.me link with a prefilled message, or null when no WhatsApp number is configured. */
+function whatsappUrl(shop: EmailShop, message: string): string | null {
+  return shop.whatsappNumber ? `https://wa.me/${shop.whatsappNumber}?text=${encodeURIComponent(message)}` : null;
+}
+
+/** "approx. $27 · ฿940" from the admin exchange rates; null if either rate is missing. */
+function approxForeign(amountLak: number, rates: Rates): string | null {
+  if (!rates.usdToLak || !rates.thbToLak) return null;
+  const usd = Math.round(amountLak / rates.usdToLak);
+  const thb = Math.round(amountLak / rates.thbToLak);
+  return `approx. $${usd.toLocaleString('en-US')} · ฿${thb.toLocaleString('en-US')}`;
+}
+
+function shopCard(shop: EmailShop, note?: string, title = 'Pick-up and return'): Block {
   return {
     type: 'card',
-    title: 'Pick-up and return',
+    title,
     items: [{ type: 'stack', lines: [shop.name, `${shop.addressLine}, ${shop.city}`, openHoursText(shop.hours)], note }],
   };
 }
@@ -181,26 +199,50 @@ export function bookingConfirmationEmail(
 }
 
 // ── 2. Pick-up reminder ──────────────────────────────────────────────────────────
-export function pickupReminderEmail(_name: string, rawItems: ResData[], shop: EmailShop): Rendered {
+export function pickupReminderEmail(_name: string, rawItems: ResData[], shop: EmailShop, rates: Rates): Rendered {
   const items = sortByPickup(rawItems);
   const first = items[0];
   const orderId = orderIdOf(items);
+  const day = vteDay(first.pickupAtMs);
+  const time = vteTime(first.pickupAtMs);
+  // Frozen reservation fields, summed over the order — no breakdown, no VAT here.
+  const total   = items.reduce((s, r) => s + (r.total ?? 0), 0);
+  const deposit = items.reduce((s, r) => s + (r.deposit ?? 0), 0);
+  const wa = whatsappUrl(shop, `Hi LANCHAI, about my order ${orderId} (pick-up ${day} at ${time}): `);
+
+  const secondary: Button[] = [directions(shop)];
+  if (wa) secondary.push({ label: 'Message us', url: wa, icon: 'whatsapp' });
+
   return build(
-    `Pick-up tomorrow · ${vteDay(first.pickupAtMs)} at ${vteTime(first.pickupAtMs)}`,
-    'Bring your ID and your booking QR code',
+    `Pick-up tomorrow · ${day} at ${time}`,
+    `Bring your ID, your QR code and ${fmtLak(total)} + deposit`,
     'Pick-up tomorrow',
     [
       {
         type: 'hero',
-        pill: 'Pick-up tomorrow',
-        title: `See you tomorrow at ${vteTime(first.pickupAtMs)}`,
+        pill: 'Ready for pick-up',
+        title: `See you tomorrow, ${day} at ${time}`,
         sub: `${plural(items.length, 'item')} · Order ${orderId}`,
         primary: bookingLink(items),
-        secondary: [directions(shop)],
+        secondary,
+      },
+      {
+        type: 'card',
+        title: 'To pay at pick-up',
+        items: [
+          { type: 'amount', label: 'Total', value: fmtLak(total), approx: approxForeign(total, rates) ?? undefined },
+          { type: 'amount', label: 'Deposit', value: fmtLak(deposit), approx: approxForeign(deposit, rates) ?? undefined },
+          { type: 'text', text: 'The deposit is refunded at return after a quick check.', tone: 'muted', small: true },
+          { type: 'divider' },
+          { type: 'bullet', text: shop.paymentMethods, icon: { name: 'cash', alt: 'Payment' } },
+        ],
       },
       itemsCard(items),
-      whatToBringCard(shop),
-      shopCard(shop, DEPOSIT_NOTE),
+      whatToBringCard(shop, { payment: false }),
+      shopCard(shop, 'Pick-up takes about 10 minutes: we check each item with you.', 'Pick-up'),
+      wa
+        ? { type: 'center', text: 'Running late or can’t make it?', link: { label: 'Message us on WhatsApp.', url: wa } }
+        : { type: 'center', text: 'Running late or can’t make it?', link: { label: `Email ${CONTACT_EMAIL}.`, url: `mailto:${CONTACT_EMAIL}` } },
     ],
     shop,
   );
