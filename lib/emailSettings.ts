@@ -36,7 +36,7 @@ export interface TestEmailsResult {
   results: Record<string, string>;
 }
 
-/** Admin-only callable (functions/src/email/triggers.ts) — every template, sample data, to you. */
+/** Admin-only callable (functions/src/email/triggers.ts) — every template, sample data, to the test inbox. */
 export async function sendTestEmails(): Promise<TestEmailsResult> {
   const call = httpsCallable<void, TestEmailsResult>(functions, 'sendTestEmails');
   const res = await call();

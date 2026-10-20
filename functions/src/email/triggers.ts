@@ -214,7 +214,9 @@ export async function sendLateReturnEmail(
   }
 }
 
-// ── Test path: every template with sample data, to the calling admin's own address ─
+// ── Test path: every template with sample data, to the test inbox ───────────────
+// (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
+// to the calling admin's own address, and regardless of live/test mode.
 export const sendTestEmails = onCall(
   { region: REGION, secrets: [BREVO_API_KEY] },
   async request => {
@@ -222,10 +224,8 @@ export const sendTestEmails = onCall(
     if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
     const isAdmin = (await db().collection('admins').doc(uid).get()).exists;
     if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
-    const to = request.auth?.token.email;
-    if (!to) throw new HttpsError('failed-precondition', 'Your admin account has no email address.');
-
     const [shop, vat, mode] = await Promise.all([getEmailShop(), getVatPercent(), getEmailMode()]);
+    const to = mode.redirectTo;
     const name = String(request.auth?.token.name ?? '').split(' ')[0] || 'there';
     const base: ResData = {
       id: 'LNC-TEST-0000_1', orderId: 'LNC-TEST-0000', productName: 'Camping tent (4 people)', quantity: 1,

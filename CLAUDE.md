@@ -259,7 +259,8 @@ a snapshot indefinitely).
   stops and alerts admins in-app (once per 24h, `config/emailHealth`).
   - **Test mode is the default.** Unless `config/emailSettings.live === true`, every
     email is redirected to `redirectAllTo` (or `lanchai.laos@gmail.com`). Toggled in
-    Admin → Shop settings, which also has "Send test emails to me" (callable
+    Admin → Shop settings, which also has "Send test emails" — to the test inbox, never
+    the admin's own address (callable
     `sendTestEmails`, region `asia-southeast1` — the app's `functions` instance in
     `lib/firebase.ts` is pinned to that region).
   - **Idempotency:** one map field per email type on the doc it's about

@@ -131,10 +131,10 @@ export default function EmailSettingsSection() {
       <TouchableOpacity style={s.secondaryBtn} onPress={runTest} disabled={testing} activeOpacity={0.8}>
         {testing
           ? <ActivityIndicator size="small" color={COLORS.carbon} />
-          : <Text style={s.secondaryBtnText}>Send test emails to me</Text>}
+          : <Text style={s.secondaryBtnText}>Send test emails</Text>}
       </TouchableOpacity>
       <Text style={s.hint}>
-        Sends every email template, filled with sample data, to your own admin address.
+        Sends every email template, filled with sample data, to the test inbox ({effectiveRedirect}). Save a new test inbox above first if you want to use another address.
       </Text>
       {!!testError && <Text style={s.errText}>{testError}</Text>}
       {testResult && (
