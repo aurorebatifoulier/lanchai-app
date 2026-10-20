@@ -51,8 +51,18 @@ export type Block =
       sub?: string;
       /** Small grey line under the subtitle (e.g. "Returned Sat 26 Oct at 10:12"). */
       note?: string;
-      /** Review prompts: 5 star links each, or a plain link when already reviewed. */
-      reviews?: { question: string; starUrls?: string[]; link?: Button }[];
+      /** Review prompts: 5 star links each (or a plain link when already reviewed), an
+       *  optional product photo above the question, and an optional reward line. */
+      reviews?: {
+        question: string;
+        starUrls?: string[];
+        link?: Button;
+        image?: { url: string; alt: string; size: number };
+        caption?: string;
+        rewardText?: string;
+      }[];
+      /** Product photo at the very top of the hero (above the title). */
+      image?: { url: string; alt: string; size: number; caption?: string };
       primary?: Button;
       secondary?: Button[];   // outline buttons, side by side
     }
@@ -183,6 +193,8 @@ function blockHtml(b: Block): string {
     case 'hero':
       return cardWrap(`<div style="text-align:center;">
         <img src="${LOGO_URL}" width="120" alt="LANCHAI" style="display:block;margin:4px auto 14px;width:120px;height:auto;border:0;outline:none;text-decoration:none;font-family:${FONT};font-size:20px;font-weight:800;color:${CARBON};"/>
+        ${b.image ? `<img src="${e(b.image.url)}" width="${b.image.size}" height="${b.image.size}" alt="${e(b.image.alt)}" style="display:block;margin:0 auto ${b.image.caption ? 6 : 14}px;width:${b.image.size}px;height:${b.image.size}px;object-fit:cover;border-radius:14px;border:0;font-size:12px;color:${MUTED};"/>
+          ${b.image.caption ? `<div style="font-size:12px;color:${MUTED};margin:0 0 12px;">${e(b.image.caption)}</div>` : ''}` : ''}
         ${b.pillParts
           ? `<span style="display:inline-block;background:${AMBER_TINT};font-size:12px;padding:5px 12px;border-radius:999px;">${b.pillParts.map(pp =>
               `<span style="color:${pp.highlight ? AMBER_TEXT : MUTED};font-weight:${pp.highlight ? 800 : 500};">${e(pp.text)}</span>`).join(' ')}</span>`
@@ -192,12 +204,15 @@ function blockHtml(b: Block): string {
         ${b.note ? `<p style="margin:4px 0 0;font-size:12px;line-height:18px;color:${MUTED};">${e(b.note)}</p>` : ''}
         ${(b.reviews ?? []).map(rv => `
           <div style="margin:18px 0 0;padding-top:14px;border-top:1px solid ${BORDER};">
-            <div style="font-size:15px;font-weight:800;color:${CARBON};margin-bottom:8px;">${e(rv.question)}</div>
+            ${rv.image ? `<img src="${e(rv.image.url)}" width="${rv.image.size}" height="${rv.image.size}" alt="${e(rv.image.alt)}" style="display:block;margin:0 auto 6px;width:${rv.image.size}px;height:${rv.image.size}px;object-fit:cover;border-radius:12px;border:0;font-size:11px;color:${MUTED};"/>` : ''}
+            ${rv.caption ? `<div style="font-size:12px;color:${MUTED};margin-bottom:8px;">${e(rv.caption)}</div>` : ''}
+            ${rv.question ? `<div style="font-size:15px;font-weight:800;color:${CARBON};margin-bottom:8px;">${e(rv.question)}</div>` : ''}
             ${rv.starUrls
               ? `<table role="presentation" align="center" cellpadding="0" cellspacing="0"><tr>${rv.starUrls.map((u, i) =>
                   `<td style="padding:0 4px;"><a href="${e(u)}" style="text-decoration:none;"><img src="${iconUrl('star-solid')}" width="32" height="32" alt="${i + 1} star${i ? 's' : ''}" style="display:block;width:32px;height:32px;border:0;font-size:11px;color:${AMBER_TEXT};"/></a></td>`).join('')}</tr></table>
-                 <div style="font-size:11px;color:${MUTED};margin-top:6px;">Tap a star — it takes 10 seconds</div>`
+`
               : rv.link ? `<a href="${e(rv.link.url)}" style="font-size:13px;font-weight:700;color:${CARBON};">${e(rv.link.label)}</a>` : ''}
+            ${rv.rewardText && rv.starUrls ? `<div style="margin-top:10px;font-size:13px;font-weight:700;color:${AMBER_TEXT};">${iconImg('star', 'Loyalty points', 6)}${e(rv.rewardText)}</div>` : ''}
           </div>`).join('')}
       </div>
       ${b.primary ? primaryButton(b.primary) : ''}
@@ -252,10 +267,12 @@ function innerText(it: Inner): string[] {
 function blockText(b: Block): string[] {
   switch (b.type) {
     case 'hero': return [
+      ...(b.image?.caption ? [b.image.caption] : []),
       ...(b.pillParts ? [b.pillParts.map(pp => pp.text).join(' ')] : b.pill ? [b.pill] : []), b.title, ...(b.sub ? [b.sub] : []),
       ...(b.note ? [b.note] : []),
-      ...(b.reviews ?? []).flatMap(rv => ['', rv.question,
-        ...(rv.starUrls ? rv.starUrls.map((u, i) => `  ${i + 1} star${i ? 's' : ''}: ${u}`) : rv.link ? [`  ${rv.link.label}: ${rv.link.url}`] : [])]),
+      ...(b.reviews ?? []).flatMap(rv => ['', ...(rv.caption ? [rv.caption] : []), ...(rv.question ? [rv.question] : []),
+        ...(rv.starUrls ? rv.starUrls.map((u, i) => `  ${i + 1} star${i ? 's' : ''}: ${u}`) : rv.link ? [`  ${rv.link.label}: ${rv.link.url}`] : []),
+        ...(rv.rewardText && rv.starUrls ? [`Review: ${rv.rewardText}`] : [])]),
       ...(b.primary ? [`${b.primary.label}: ${b.primary.url}`] : []),
       ...(b.secondary ?? []).map(s => `${s.label}: ${s.url}`),
       '',

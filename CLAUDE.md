@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 17 Cloud Functions (scheduled, Firestore-triggered and 1 callable, Node 22). The
+  gaps found), 18 Cloud Functions (scheduled, Firestore-triggered and 1 callable, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -358,6 +358,15 @@ a snapshot indefinitely).
   `noShowHoldLiftedAt/By/ByName` on the renter's no_show lines — status stays no_show
   for history). Legal texts (Terms §8/§10, cancellation policy, FAQ) don't mention this
   rule yet — wording pending Aurore's validation.
+- **Loyalty points — server-side only, one shared rule.** Points change ONLY in Cloud
+  Functions via `creditLoyaltyPoints()` (`functions/src/index.ts`), which uses the pure
+  `applyLoyaltyPointsChange()` (`functions/src/shared/loyalty.ts`) for balance, tier and
+  one-time tier coupons, and writes a `users/{uid}/loyaltyHistory` entry (owner-read,
+  never client-writable). Sources: `applyLoyaltyPoints` (rental, `loyaltyPointsFor`) and
+  `applyReviewReward` (review created for a `returned` reservation of that renter —
+  `config/loyalty.reviewRewardPoints`, default 10, **whatever the rating**, once per
+  reservation via `reviewRewardApplied`, no clawback if an admin deletes the review).
+  Exclusion everywhere = `isLoyaltyExcluded()` (business customer or BtoB account).
 - **Shop config (`config/shop`, `lib/shop.ts`) drives pickup/return slots and WhatsApp.**
   Slots are never hardcoded: every booking flow (single-item `app/booking/new.tsx`, bag
   `components/DateRangePicker.tsx`, and `<DateRangeCalendar>`'s required `timeSlots`
@@ -528,9 +537,9 @@ a snapshot indefinitely).
 
 ## Security follow-ups (planned chantier — not fixed yet)
 
-- **Coupon reuse:** the `users/{uid}` update rule lets a renter flip a coupon back to
-  `used: false` client-side (only the array *size* is checked), so a coupon could be
-  reused. Coupon usage should be enforced server-side (e.g. mark used / validate in a
+- **Coupon tampering:** the `users/{uid}` update rule only checks the coupons array
+  *size*, so a renter can flip a coupon back to `used: false` (reuse) **and edit a
+  coupon's `percent`** client-side. `firstRentalDate` is also owner-writable (minor). Coupon usage should be enforced server-side (e.g. mark used / validate in a
   Cloud Function or a stricter rule). Note: `restoreCancelledCoupon` legitimately
   restores coupons server-side when a whole booking is cancelled.
 - **Reservation create validation:** `pricePerDay` / `quantity` / `subtotal` / `total`

@@ -8,7 +8,7 @@ import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
 import { cancellationEmailVariant } from '../shared/cancellation';
 import {
-  getEmailShop, getRecipient, getVatPercent, getRates, getLoyaltyThresholds, hasReviewed,
+  getEmailShop, getRecipient, getVatPercent, getRates, getLoyaltyThresholds, hasReviewed, getReviewRewardPoints,
   type EmailShop, type Recipient,
 } from './context';
 import { loyaltyPointsFor, pointsToNextTier, nextTierName } from '../shared/loyalty';
@@ -156,8 +156,8 @@ export const emailReservationUpdates = onDocumentUpdated(
       // End-of-rental receipt — same gate as the in-app receipt screen.
       if (!before.returnFinalizedAt && after.returnFinalizedAt && after.status === 'returned') {
         const res = asRes(afterSnap);
-        const [vat, reviewed, loyaltyCfg] = await Promise.all([
-          getVatPercent(), hasReviewed(res.productId, renterId), getLoyaltyThresholds(),
+        const [vat, reviewed, loyaltyCfg, rewardPoints] = await Promise.all([
+          getVatPercent(), hasReviewed(res.productId, renterId), getLoyaltyThresholds(), getReviewRewardPoints(),
         ]);
         await claimAndSend([afterSnap.ref], 'emailReceipt', () =>
           deliver(renterId, after.renterName, (name, shop, recipient) => {
@@ -170,7 +170,13 @@ export const emailReservationUpdates = onDocumentUpdated(
               nextTier: nextTierName(recipient.loyaltyPoints, loyaltyCfg),
               isTop: !!loyaltyCfg && nextTierName(recipient.loyaltyPoints, loyaltyCfg) === null,
             };
-            return receiptEmail(name, res, vat, shop, { firstName: recipient.firstName, alreadyReviewed: reviewed, loyalty });
+            return receiptEmail(name, res, vat, shop, {
+              firstName: recipient.firstName,
+              alreadyReviewed: reviewed,
+              loyalty,
+              // Same eligibility as applyReviewReward: not excluded, not rewarded yet.
+              reviewRewardPoints: recipient.loyaltyExcluded || res.reviewRewardApplied ? null : rewardPoints,
+            });
           }, 'receipt'));
       }
     } catch (err) {
@@ -303,12 +309,16 @@ async function sendReviewFollowUps(): Promise<void> {
     const age = t ? now - t.toMillis() : -1;
     return age >= 2 * DAY && age < 3 * DAY && !d.get('emailReviewFollowUp')?.status && !!d.get('productId');
   });
+  const rewardPoints = due.length ? await getReviewRewardPoints() : 0;
   for (const d of due) {
     const r = asRes(d);
     const renterId: string = d.get('renterId');
     if (await hasReviewed(r.productId, renterId)) continue;
     await claimAndSend([d.ref], 'emailReviewFollowUp', () =>
-      deliver(renterId, d.get('renterName'), (name, shop) => reviewFollowUpEmail(name, r, shop), 'review-follow-up', { respectOptOut: true }));
+      deliver(renterId, d.get('renterName'), (name, shop, recipient) => reviewFollowUpEmail(name, r, shop, {
+        firstName: recipient.firstName,
+        reviewRewardPoints: recipient.loyaltyExcluded || r.reviewRewardApplied ? null : rewardPoints,
+      }), 'review-follow-up', { respectOptOut: true }));
   }
 }
 
@@ -363,8 +373,12 @@ export const sendTestEmails = onCall(
     // Sample amounts follow the real rules: 150,000 LAK/day × 1 → 30h late = 1.5 rental
     // days = 225,000 LAK (computeLatePenalty, rounded up to 1,000 LAK).
     const returnedAtMs = base.returnAtMs + 12 * 60 * 1000;
+    // A real catalogue photo for the review samples (public product image URL), if any.
+    const sampleImage = (await db().collection('products').limit(10).get()).docs
+      .map(d => (d.get('images') as unknown[] | undefined)?.[0])
+      .find((u): u is string => typeof u === 'string' && u.startsWith('https://')) ?? null;
     const closedClean: ResData = {
-      ...base, productId: 'sample-tent', couponApplied: null, total: 300000, chargeCurrency: 'LAK', returnedAtMs,
+      ...base, productId: 'sample-tent', productImage: sampleImage, couponApplied: null, total: 300000, chargeCurrency: 'LAK', returnedAtMs,
       handoverChecklist: { depositAmount: 500000, depositCurrency: 'LAK' },
       depositAppliedToCharge: 0, outstandingBalance: 0,
     };
@@ -393,9 +407,10 @@ export const sendTestEmails = onCall(
         variant: 'B', reason: 'item_unavailable', reasonText: null, stillReserved: [second],
       })],
       ['no-show',                          noShowEmail(name, [base, second], shop)],
-      ['receipt-A-no-charges',             receiptEmail(name, closedClean, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty })],
-      ['receipt-B-late-return',            receiptEmail(name, closedLate, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty })],
-      ['review-follow-up',                 reviewFollowUpEmail(name, closedClean, shop)],
+      ['receipt-A-no-charges',             receiptEmail(name, closedClean, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
+      ['receipt-B-late-return',            receiptEmail(name, closedLate, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
+      ['review-follow-up',                 reviewFollowUpEmail(name, closedClean, shop, { firstName: name, reviewRewardPoints: 10 })],
+      ['review-follow-up-no-photo',        reviewFollowUpEmail(name, { ...closedClean, productImage: null }, shop, { firstName: null, reviewRewardPoints: null })],
       ['btob-approved',                    btobApprovedEmail(name, shop)],
       ['btob-rejected',                    btobRejectedEmail(name, 'The registration document is not readable.', shop)],
       ['late-tier1',                       lateReturnEmail(name, 'tier1', base, 150000, shop)],

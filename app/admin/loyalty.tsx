@@ -16,7 +16,7 @@ import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firest
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import type { LoyaltyConfig } from '@/lib/loyalty';
+import { DEFAULT_REVIEW_REWARD_POINTS, type LoyaltyConfig } from '@/lib/loyalty';
 
 function fmtDate(ts: Timestamp | undefined): string {
   if (!ts) return '—';
@@ -43,6 +43,7 @@ export default function AdminLoyaltyScreen() {
   const [residentPlatinumDeposit,  setResidentPlatinumDeposit]  = useState('');
   const [touristDeposit,           setTouristDeposit]           = useState('');
   const [damagedChargePercent,     setDamagedChargePercent]     = useState('');
+  const [reviewRewardPoints,       setReviewRewardPoints]       = useState(String(DEFAULT_REVIEW_REWARD_POINTS));
 
   const [saving,   setSaving]   = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function AdminLoyaltyScreen() {
           setResidentPlatinumDeposit(String(data.depositPercentByType.residentPlatinum));
           setTouristDeposit(String(data.depositPercentByType.tourist));
           setDamagedChargePercent(String(data.damagedChargePercent ?? 60));
+          setReviewRewardPoints(String(data.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS));
         }
       })
       .catch(() => {})
@@ -75,7 +77,7 @@ export default function AdminLoyaltyScreen() {
     silverThreshold, goldThreshold, platinumThreshold,
     silverPercent, goldPercent, platinumPercent,
     businessDeposit, residentDeposit, residentPlatinumDeposit, touristDeposit,
-    damagedChargePercent,
+    damagedChargePercent, reviewRewardPoints,
   ].map(v => parseFloat(v));
   const allValid = nums.every(n => !isNaN(n) && n >= 0);
   const thresholdsOrdered =
@@ -111,6 +113,7 @@ export default function AdminLoyaltyScreen() {
           tourist: parseFloat(touristDeposit),
         },
         damagedChargePercent: parseFloat(damagedChargePercent),
+        reviewRewardPoints: Math.floor(parseFloat(reviewRewardPoints)),
       };
       await setDoc(doc(db, 'config', 'loyalty'), { ...newConfig, updatedAt: serverTimestamp() }, { merge: true });
       // Omit updatedAt locally — serverTimestamp() is an unresolved sentinel here, not a
@@ -127,7 +130,7 @@ export default function AdminLoyaltyScreen() {
     allValid, thresholdsOrdered, silverThreshold, goldThreshold, platinumThreshold,
     silverPercent, goldPercent, platinumPercent,
     businessDeposit, residentDeposit, residentPlatinumDeposit, touristDeposit,
-    damagedChargePercent,
+    damagedChargePercent, reviewRewardPoints,
   ]);
 
   return (
@@ -222,6 +225,13 @@ export default function AdminLoyaltyScreen() {
             <TextInput
               style={s.input} value={damagedChargePercent} onChangeText={t => { setDamagedChargePercent(t); setSaveError(null); }}
               placeholder="e.g. 60" placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
+            />
+
+            <Text style={s.sectionLabel}>Reviews</Text>
+            <Text style={s.fieldLabel}>Points per review (any rating)</Text>
+            <TextInput
+              style={s.input} value={reviewRewardPoints} onChangeText={t => { setReviewRewardPoints(t); setSaveError(null); }}
+              placeholder={`e.g. ${DEFAULT_REVIEW_REWARD_POINTS}`} placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
             />
 
             {config && <Text style={s.updatedNote}>Updated {fmtDate(config.updatedAt)}</Text>}

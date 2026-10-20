@@ -61,6 +61,9 @@ export interface ResData extends ReceiptInput {
   latePenaltyAmount?: number;
   latePenaltyDays?: number;
   chargePercent?: number;
+  /** Frozen first product image (public URL) and the review-reward marker. */
+  productImage?: string | null;
+  reviewRewardApplied?: boolean;
 }
 
 // ── Shared pieces ──────────────────────────────────────────────────────────────
@@ -529,6 +532,8 @@ export interface ReceiptContext {
   firstName: string;
   /** Renter already reviewed this product → link to the product instead of stars. */
   alreadyReviewed: boolean;
+  /** "+N points for your review" — null when the account is excluded or already rewarded. */
+  reviewRewardPoints?: number | null;
   /** null = hidden (business/BtoB account, or no points for this rental). */
   loyalty: { earned: number; toNext: number | null; nextTier: LoyaltyTierKey | null; isTop: boolean } | null;
 }
@@ -537,10 +542,16 @@ function starLinks(r: ResData): string[] {
   return [1, 2, 3, 4, 5].map(n => reviewLink(r.productId ?? '', r.id, n));
 }
 
-function reviewPrompt(r: ResData, alreadyReviewed: boolean) {
+const rewardLine = (points: number | null | undefined) =>
+  points && points > 0 ? `+${points} points for your review` : undefined;
+
+// Compact review block (receipt): small product photo, question, stars (or a product
+// link when already reviewed), and the reward line when eligible.
+function reviewPrompt(r: ResData, alreadyReviewed: boolean, rewardPoints?: number | null) {
+  const image = r.productImage ? { url: r.productImage, alt: r.productName, size: 64 } : undefined;
   return alreadyReviewed || !r.productId
-    ? { question: `How was your ${r.productName}?`, link: r.productId ? { label: 'See the product', url: appLink(`product/${r.productId}`) } : undefined }
-    : { question: `How was your ${r.productName}?`, starUrls: starLinks(r) };
+    ? { question: `How was your ${r.productName}?`, image, link: r.productId ? { label: 'See the product', url: appLink(`product/${r.productId}`) } : undefined }
+    : { question: `How was your ${r.productName}?`, image, starUrls: starLinks(r), rewardText: rewardLine(rewardPoints) };
 }
 
 export function receiptEmail(_name: string, r: ResData, vatPercent: number | null, shop: EmailShop, ctx?: ReceiptContext): Rendered {
@@ -596,7 +607,7 @@ export function receiptEmail(_name: string, r: ResData, vatPercent: number | nul
       title: `Thanks, ${ctx?.firstName ?? 'there'}!`,
       sub: `${r.productName} · Order ${orderId}`,
       note: `Returned ${vteDay(returnedMs)} at ${vteTime(returnedMs)}`,
-      reviews: [reviewPrompt(r, ctx?.alreadyReviewed ?? false)],
+      reviews: [reviewPrompt(r, ctx?.alreadyReviewed ?? false, ctx?.reviewRewardPoints)],
       secondary: [{ label: 'View my receipt', url: appLink(`rentals/${r.id}`) }],
     },
     { type: 'card', title: hasCharges ? 'Your rental summary' : undefined, items: summary },
@@ -625,18 +636,24 @@ export function receiptEmail(_name: string, r: ResData, vatPercent: number | nul
 }
 
 // ── 5b. Review follow-up — ONE gentle email, 2 days after return ─────────────────
-export function reviewFollowUpEmail(_name: string, r: ResData, shop: EmailShop): Rendered {
+export function reviewFollowUpEmail(
+  _name: string, r: ResData, shop: EmailShop,
+  opts: { firstName?: string | null; reviewRewardPoints?: number | null } = {},
+): Rendered {
+  const title = opts.firstName && opts.firstName !== 'there'
+    ? `How was your rental, ${opts.firstName}?`
+    : 'How was your rental?';
   return build(
-    `How was your ${r.productName}?`,
-    'It takes 10 seconds — tap a star',
-    'How was your rental?',
+    title,
+    'Tap a star — your review helps other renters choose',
+    title,
     [
       {
         type: 'hero',
-        pill: 'Your opinion helps',
-        title: `How was your ${r.productName}?`,
+        image: r.productImage ? { url: r.productImage, alt: r.productName, size: 120, caption: r.productName } : undefined,
+        title,
         sub: 'It takes 10 seconds — your review helps other renters choose.',
-        reviews: [{ question: 'Tap a star to rate it', starUrls: starLinks(r) }],
+        reviews: [{ question: '', starUrls: starLinks(r), rewardText: rewardLine(opts.reviewRewardPoints) }],
         secondary: r.productId ? [{ label: 'Rent it again', url: appLink(`product/${r.productId}`) }] : undefined,
       },
     ],

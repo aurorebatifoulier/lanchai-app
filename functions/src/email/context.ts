@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import { SHOP_DISPLAY_DEFAULTS } from '../shared/shop';
-import { isLoyaltyExcluded } from '../shared/loyalty';
+import { isLoyaltyExcluded, DEFAULT_REVIEW_REWARD_POINTS } from '../shared/loyalty';
 
 export interface EmailShop {
   name: string;
@@ -74,6 +74,13 @@ export async function getLoyaltyThresholds(): Promise<{ thresholds: { silver: nu
   const snap = await admin.firestore().collection('config').doc('loyalty').get().catch(() => null);
   const t = snap?.data()?.thresholds;
   return t && typeof t.silver === 'number' ? { thresholds: t } : null;
+}
+
+/** Points per review (config/loyalty.reviewRewardPoints, default 10). */
+export async function getReviewRewardPoints(): Promise<number> {
+  const snap = await admin.firestore().collection('config').doc('loyalty').get().catch(() => null);
+  const v = snap?.data()?.reviewRewardPoints;
+  return typeof v === 'number' && v >= 0 ? Math.floor(v) : DEFAULT_REVIEW_REWARD_POINTS;
 }
 
 /** Has this renter already reviewed this product (any reservation)? Equality-only query. */

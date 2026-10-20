@@ -4,12 +4,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile, type LoyaltyCoupon } from '@/lib/firestore';
-import { useLoyaltyConfig, TIER_LABELS, pointsToNextTier, nextTierName } from '@/lib/loyalty';
+import {
+  useLoyaltyConfig, TIER_LABELS, pointsToNextTier, nextTierName, isLoyaltyExcluded, DEFAULT_REVIEW_REWARD_POINTS,
+} from '@/lib/loyalty';
+
+// users/{uid}/loyaltyHistory — written only by the Cloud Functions (applyLoyaltyPoints,
+// applyReviewReward); read-only for the owner.
+interface HistoryEntry { id: string; amount: number; source: 'rental' | 'review'; productName?: string; createdAt?: Timestamp }
 
 function fmtDate(ts: Timestamp): string {
   const d = ts.toDate();
@@ -25,6 +32,7 @@ export default function LoyaltyScreen() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -32,6 +40,10 @@ export default function LoyaltyScreen() {
       .then(setProfile)
       .catch(() => {})
       .finally(() => setLoading(false));
+    // Single orderBy, no filter → no composite index needed.
+    getDocs(query(collection(db, 'users', user.uid, 'loyaltyHistory'), orderBy('createdAt', 'desc'), limit(30)))
+      .then(snap => setHistory(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<HistoryEntry, 'id'>) }))))
+      .catch(() => setHistory([]));
   }, [user]);
 
   const points   = profile?.loyaltyPoints ?? 0;
@@ -39,9 +51,10 @@ export default function LoyaltyScreen() {
   const toNext   = pointsToNextTier(points, config);
   const nextTier = nextTierName(points, config);
   const unusedCoupons: LoyaltyCoupon[] = (profile?.coupons ?? []).filter(c => !c.used);
-  // Business accounts are excluded from the loyalty program — this screen isn't
-  // linked to from account.tsx for them, but guard direct navigation too.
-  const isBusinessAccount = profile?.customerType === 'business';
+  // Business / BtoB accounts are excluded from the loyalty program (shared rule) — this
+  // screen isn't linked to from account.tsx for them, but guard direct navigation too.
+  const isBusinessAccount = isLoyaltyExcluded(profile ?? {});
+  const reviewPoints = config?.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS;
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -99,11 +112,29 @@ export default function LoyaltyScreen() {
             ))
           )}
 
+          {/* ── Points history ── */}
+          {history.length > 0 && (
+            <>
+              <Text style={s.sectionLabel}>Points history</Text>
+              <View style={s.explainCard}>
+                {history.map(h => (
+                  <View key={h.id} style={s.historyRow}>
+                    <Text style={s.historyText} numberOfLines={1}>
+                      {`+${h.amount} · ${h.source === 'review' ? 'Review' : 'Rental'}${h.productName ? ` — ${h.productName}` : ''}`}
+                    </Text>
+                    {h.createdAt && <Text style={s.historyDate}>{fmtDate(h.createdAt)}</Text>}
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
           {/* ── How it works ── */}
           <Text style={s.sectionLabel}>How tiers work</Text>
           <View style={s.explainCard}>
             {[
               'Earn 1 point for every 10,000 LAK of rental fees, credited when a rental is completed.',
+              `Earn ${reviewPoints} points for each review of a completed rental — whatever your rating.`,
               'Points accumulate for life — no expiry, no reset.',
               'Reach a new tier and you get a one-time discount coupon to use on a future booking.',
               'Platinum members get a reduced deposit on every rental.',
@@ -122,6 +153,9 @@ export default function LoyaltyScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.porcelain },
+  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 4 },
+  historyText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.carbon },
+  historyDate: { fontSize: 12, fontWeight: '500', color: COLORS.fg3 },
 
   header: {
     flexDirection: 'row', alignItems: 'center',

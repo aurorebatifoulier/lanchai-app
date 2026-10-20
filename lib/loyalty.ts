@@ -6,7 +6,9 @@ import { useAuth } from '@/contexts/AuthContext';
 
 // Tier names and next-tier math live in functions/src/shared/loyalty.ts (shared with
 // the receipt email) — re-exported here so app imports stay unchanged.
-export { TIER_ORDER, TIER_LABELS, pointsToNextTier, nextTierName } from '@/functions/src/shared/loyalty';
+export {
+  TIER_ORDER, TIER_LABELS, pointsToNextTier, nextTierName, isLoyaltyExcluded, DEFAULT_REVIEW_REWARD_POINTS,
+} from '@/functions/src/shared/loyalty';
 
 export interface LoyaltyConfig {
   thresholds: { silver: number; gold: number; platinum: number };
@@ -18,6 +20,7 @@ export interface LoyaltyConfig {
     tourist: number;          // e.g. 100 — always, no loyalty modifier
   };
   damagedChargePercent?: number; // default % of replacement value charged for "Damaged" severity — admin-adjustable; "Unusable" is always a fixed 100%, not configurable
+  reviewRewardPoints?: number;   // points per review (any rating), credited server-side by applyReviewReward — default DEFAULT_REVIEW_REWARD_POINTS
   updatedAt?: Timestamp;
 }
 

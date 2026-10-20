@@ -37,3 +37,42 @@ export function nextTierName(points: number, config: { thresholds: TierThreshold
   if (points < config.thresholds.platinum) return 'platinum';
   return null;
 }
+
+// ── Points change → tier + one-time tier coupons (single source) ─────────────────
+// Used by every server-side credit (applyLoyaltyPoints for rentals, applyReviewReward
+// for reviews) so tier upgrades and tier coupons never diverge between sources.
+
+/** Points credited for a review, whatever the rating (config/loyalty.reviewRewardPoints). */
+export const DEFAULT_REVIEW_REWARD_POINTS = 10;
+
+export type PaidTier = 'silver' | 'gold' | 'platinum';
+
+export interface LoyaltyChangeConfig {
+  thresholds?: TierThresholds;
+  couponPercentByTier?: Record<PaidTier, number>;
+}
+
+/**
+ * Pure: new balance, new tier, and the tiers newly crossed by this change (each one
+ * earns its one-time coupon at `couponPercentByTier[tier]`). Without thresholds, the
+ * tier stays bronze and no coupon is issued — same as before the extraction.
+ */
+export function applyLoyaltyPointsChange(
+  oldPoints: number,
+  amount: number,
+  cfg: LoyaltyChangeConfig | null | undefined,
+): { newPoints: number; newTier: LoyaltyTierKey; crossed: { tier: PaidTier; percent: number }[] } {
+  const newPoints = oldPoints + amount;
+  const order: { tier: PaidTier; threshold: number }[] = cfg?.thresholds
+    ? [
+        { tier: 'silver',   threshold: cfg.thresholds.silver },
+        { tier: 'gold',     threshold: cfg.thresholds.gold },
+        { tier: 'platinum', threshold: cfg.thresholds.platinum },
+      ]
+    : [];
+  const crossed = order
+    .filter(t => oldPoints < t.threshold && newPoints >= t.threshold)
+    .map(t => ({ tier: t.tier, percent: cfg?.couponPercentByTier?.[t.tier] ?? 0 }));
+  const newTier: LoyaltyTierKey = [...order].reverse().find(t => newPoints >= t.threshold)?.tier ?? 'bronze';
+  return { newPoints, newTier, crossed };
+}

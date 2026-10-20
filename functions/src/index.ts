@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
   computeLatePenalty,
@@ -9,7 +9,10 @@ import {
   formatPenaltyDays,
 } from './shared/latePenalty';
 import { BREVO_API_KEY } from './email/config';
-import { loyaltyPointsFor } from './shared/loyalty';
+import {
+  loyaltyPointsFor, isLoyaltyExcluded, applyLoyaltyPointsChange, DEFAULT_REVIEW_REWARD_POINTS,
+  TIER_ORDER, TIER_LABELS, type LoyaltyChangeConfig, type LoyaltyTierKey,
+} from './shared/loyalty';
 import { isPickupMissed } from './shared/dates';
 import { sendLateReturnEmail } from './email/triggers';
 
@@ -441,6 +444,57 @@ export const missedPickupAlerts = onSchedule(
   },
 );
 
+// Server-side credit of loyalty points — the ONLY way points ever change. Shared by
+// rentals (applyLoyaltyPoints) and reviews (applyReviewReward): balance, tier and the
+// one-time tier coupons all come from applyLoyaltyPointsChange (shared/loyalty.ts), and
+// every credit leaves a users/{uid}/loyaltyHistory entry. Must run inside a transaction
+// that has already read `userSnap` (reads before writes).
+type LoyaltyCfg = LoyaltyChangeConfig | undefined;
+
+async function getLoyaltyCfg(): Promise<LoyaltyCfg> {
+  const snap = await db.collection('config').doc('loyalty').get();
+  return snap.data() as LoyaltyCfg & { reviewRewardPoints?: number } | undefined;
+}
+
+function creditLoyaltyPoints(
+  tx: admin.firestore.Transaction,
+  userSnap: admin.firestore.DocumentSnapshot,
+  amount: number,
+  cfg: LoyaltyCfg,
+  entry: { source: 'rental' | 'review'; reservationId: string; productName: string },
+  extraUserFields: Record<string, unknown> = {},
+): void {
+  const userData = userSnap.data() ?? {};
+  const { newPoints, newTier, crossed } = applyLoyaltyPointsChange(userData.loyaltyPoints ?? 0, amount, cfg);
+
+  // Firestore forbids FieldValue.serverTimestamp() sentinels inside array elements
+  // ("cannot be used inside of an array") — coupons live in an array, so each one
+  // needs a concrete Timestamp computed now, not a server-resolved sentinel.
+  const issuedAt = admin.firestore.Timestamp.now();
+  const newCoupons = crossed.map(c => ({
+    id: db.collection('_').doc().id, // random id — standard no-write Firestore ID trick
+    tier: c.tier,
+    percent: c.percent,
+    issuedAt,
+    used: false,
+  }));
+  const existingCoupons: unknown[] = userData.coupons ?? [];
+
+  tx.update(userSnap.ref, {
+    loyaltyPoints: newPoints,
+    loyaltyTier: newTier,
+    ...extraUserFields,
+    ...(newCoupons.length > 0 ? { coupons: [...existingCoupons, ...newCoupons] } : {}),
+  });
+  tx.set(userSnap.ref.collection('loyaltyHistory').doc(), {
+    amount,
+    source: entry.source,
+    reservationId: entry.reservationId,
+    productName: entry.productName,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+}
+
 export const applyLoyaltyPoints = onDocumentUpdated(
   { document: 'reservations/{reservationId}', region: 'asia-southeast1' },
   async event => {
@@ -453,60 +507,20 @@ export const applyLoyaltyPoints = onDocumentUpdated(
     if (after.loyaltyApplied) return;
 
     const pointsEarned = loyaltyPointsFor(after.subtotal);
-    const renterId: string = after.renterId;
-    const userRef = db.collection('users').doc(renterId);
+    const userRef = db.collection('users').doc(after.renterId);
 
-    // Business accounts are excluded entirely from the loyalty program — no points,
-    // no tier progression, no coupons, ever.
+    // Business / BtoB accounts are excluded entirely from the loyalty program — no
+    // points, no tier progression, no coupons, ever (shared isLoyaltyExcluded rule).
     const preSnap = await userRef.get();
-    if (preSnap.data()?.customerType === 'business') return;
+    if (isLoyaltyExcluded(preSnap.data() ?? {})) return;
 
-    const configSnap = await db.collection('config').doc('loyalty').get();
-    const cfg = configSnap.data() as {
-      thresholds?: { silver: number; gold: number; platinum: number };
-      couponPercentByTier?: { silver: number; gold: number; platinum: number };
-    } | undefined;
-
-    const tierOrder: Array<{ tier: 'silver' | 'gold' | 'platinum'; threshold: number }> =
-      cfg?.thresholds
-        ? [
-            { tier: 'silver',   threshold: cfg.thresholds.silver },
-            { tier: 'gold',     threshold: cfg.thresholds.gold },
-            { tier: 'platinum', threshold: cfg.thresholds.platinum },
-          ]
-        : [];
+    const cfg = await getLoyaltyCfg();
 
     await db.runTransaction(async tx => {
       const userSnap = await tx.get(userRef);
-      const userData = userSnap.data() ?? {};
-      const oldPoints: number = userData.loyaltyPoints ?? 0;
-      const newPoints = oldPoints + pointsEarned;
-
-      const newlyCrossed = tierOrder.filter(t => oldPoints < t.threshold && newPoints >= t.threshold);
-      const newTier =
-        [...tierOrder].reverse().find(t => newPoints >= t.threshold)?.tier ?? 'bronze';
-
-      // Firestore forbids FieldValue.serverTimestamp() sentinels inside array elements
-      // ("cannot be used inside of an array") — coupons live in an array, so each one
-      // needs a concrete Timestamp computed now, not a server-resolved sentinel.
-      const issuedAt = admin.firestore.Timestamp.now();
-      const newCoupons = newlyCrossed.map(t => ({
-        id: db.collection('_').doc().id, // random id — standard no-write Firestore ID trick
-        tier: t.tier,
-        percent: cfg?.couponPercentByTier?.[t.tier] ?? 0,
-        issuedAt,
-        used: false,
-      }));
-
-      const existingCoupons: unknown[] = userData.coupons ?? [];
-
-      tx.update(userRef, {
-        loyaltyPoints: newPoints,
-        loyaltyTier: newTier,
-        ...(userData.firstRentalDate ? {} : { firstRentalDate: FieldValue.serverTimestamp() }),
-        ...(newCoupons.length > 0 ? { coupons: [...existingCoupons, ...newCoupons] } : {}),
-      });
-
+      creditLoyaltyPoints(tx, userSnap, pointsEarned, cfg,
+        { source: 'rental', reservationId: event.params.reservationId, productName: after.productName ?? '' },
+        userSnap.data()?.firstRentalDate ? {} : { firstRentalDate: FieldValue.serverTimestamp() });
       tx.update(event.data!.after.ref, {
         loyaltyApplied: true,
         updatedAt: FieldValue.serverTimestamp(),
@@ -515,16 +529,52 @@ export const applyLoyaltyPoints = onDocumentUpdated(
   },
 );
 
+// Review reward: N points (config/loyalty.reviewRewardPoints, default 10) for a review
+// of a RETURNED reservation of that renter — ALWAYS, whatever the rating (the rating is
+// never read). Once per reservation: reviewRewardApplied on the reservation (only
+// Cloud Functions/admins can write it), so an admin edit (update, not create) or a
+// deleted-then-recreated review never re-credits. Excluded accounts: nothing.
+// No clawback if an admin later deletes the review.
+export const applyReviewReward = onDocumentCreated(
+  { document: 'reviews/{productId}/reviews/{reservationId}', region: 'asia-southeast1' },
+  async event => {
+    try {
+      const review = event.data?.data();
+      if (!review) return;
+      const { productId, reservationId } = event.params;
+      const resRef = db.collection('reservations').doc(reservationId);
+      const resSnap = await resRef.get();
+      const res = resSnap.data();
+      if (!res || res.status !== 'returned' || res.renterId !== review.userId || res.productId !== productId) return;
+      if (res.reviewRewardApplied) return;
+
+      const userRef = db.collection('users').doc(res.renterId);
+      const preSnap = await userRef.get();
+      if (isLoyaltyExcluded(preSnap.data() ?? {})) return;
+
+      const cfg = await getLoyaltyCfg() as (LoyaltyCfg & { reviewRewardPoints?: number }) | undefined;
+      const points = typeof cfg?.reviewRewardPoints === 'number' && cfg.reviewRewardPoints >= 0
+        ? Math.floor(cfg.reviewRewardPoints)
+        : DEFAULT_REVIEW_REWARD_POINTS;
+      if (points <= 0) return;
+
+      await db.runTransaction(async tx => {
+        const [freshRes, userSnap] = await Promise.all([tx.get(resRef), tx.get(userRef)]);
+        if (freshRes.get('reviewRewardApplied')) return;
+        creditLoyaltyPoints(tx, userSnap, points, cfg,
+          { source: 'review', reservationId, productName: res.productName ?? review.productName ?? '' });
+        tx.update(resRef, { reviewRewardApplied: true, updatedAt: FieldValue.serverTimestamp() });
+      });
+    } catch (err) {
+      console.error('[applyReviewReward] failed', err);
+    }
+  },
+);
+
 // ── Loyalty Phase 2 — tier-gated product access ──────────────────────────────
 
-// Local copies, matching the existing pattern in applyLoyaltyPoints above (this project
-// doesn't share code between the app and functions) — must stay in sync with
-// lib/loyalty.ts's TIER_ORDER/TIER_LABELS.
-const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum'] as const;
-type Tier = typeof TIER_ORDER[number];
-const TIER_LABELS: Record<Tier, string> = {
-  bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum',
-};
+// Tier order/labels come from functions/src/shared/loyalty.ts (shared with the app).
+type Tier = LoyaltyTierKey;
 
 // Auto-expires 'earlyAccess' products once their deadline has passed — flips
 // accessMode to 'public'. Never touches 'exclusive' products (query excludes them).

@@ -15,7 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { getProduct, getReview, submitReview } from '@/lib/firestore';
+import { getProduct, getReview, submitReview, getUserProfile, getReservationById } from '@/lib/firestore';
+import { isLoyaltyExcluded, useLoyaltyConfig, DEFAULT_REVIEW_REWARD_POINTS } from '@/lib/loyalty';
 import { Product } from '@/lib/mockData';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -37,6 +38,11 @@ export default function ReviewScreen() {
   const [text,       setText]       = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
+  // Review reward (credited server-side by applyReviewReward, whatever the rating):
+  // only shown to eligible accounts whose reservation hasn't been rewarded yet.
+  const loyaltyConfig = useLoyaltyConfig();
+  const [rewardEligible, setRewardEligible] = useState(false);
+  const rewardPoints = loyaltyConfig?.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS;
   const [error,      setError]      = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +50,11 @@ export default function ReviewScreen() {
       setLoadError(true);
       setLoading(false);
       return;
+    }
+    if (user) {
+      Promise.all([getUserProfile(user.uid), getReservationById(reservationId)])
+        .then(([profile, res]) => setRewardEligible(!isLoyaltyExcluded(profile ?? {}) && !res?.reviewRewardApplied))
+        .catch(() => setRewardEligible(false));
     }
     Promise.all([
       getProduct(productId),
@@ -56,7 +67,7 @@ export default function ReviewScreen() {
       })
       .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
-  }, [productId, reservationId]);
+  }, [productId, reservationId, user]);
 
   const handleSubmit = useCallback(async () => {
     if (!user || !productId || !reservationId || !product) return;
@@ -130,7 +141,9 @@ export default function ReviewScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.center}>
           <Feather name="star" size={40} color={COLORS.amber} />
-          <Text style={styles.stateTitle}>Thanks for your review!</Text>
+          <Text style={styles.stateTitle}>
+            {rewardEligible && rewardPoints > 0 ? `Thanks! +${rewardPoints} points added` : 'Thanks for your review!'}
+          </Text>
           <Text style={styles.stateSub}>
             Your feedback helps other renters and makes LANCHAI better.
           </Text>

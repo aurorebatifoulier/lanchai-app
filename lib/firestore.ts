@@ -218,6 +218,8 @@ export interface RentalDoc {
   // Optional advance paid before pick-up — never written today (payment happens at
   // pick-up). If it ever exists, cancellationOutcome() applies the policy tiers.
   advancePaidLak?: number;
+  // Set by applyReviewReward once this reservation's review earned its points.
+  reviewRewardApplied?: boolean;
 
   // ── No-show (admin-marked only) ───────────────────────────────────────────
   noShowAt?: Timestamp;

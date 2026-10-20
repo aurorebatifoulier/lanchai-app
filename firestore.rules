@@ -209,6 +209,16 @@ service cloud.firestore {
       match /bag/{itemId} {
         allow read, write: if isOwner(userId);
       }
+
+      // ── Loyalty points history ────────────────────────────────────────────
+      // Path: users/{userId}/loyaltyHistory/{entryId} — { amount, source
+      // ('rental' | 'review'), reservationId, productName, createdAt }. Written ONLY by
+      // the Cloud Functions (applyLoyaltyPoints, applyReviewReward) via the Admin SDK;
+      // the owner (and admins) can read it. No client can ever create an entry.
+      match /loyaltyHistory/{entryId} {
+        allow read:  if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
     }
 
     // ── requests ─────────────────────────────────────────────────────────
