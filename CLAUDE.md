@@ -586,6 +586,14 @@ callable's `details.code` to friendly messages. Renter cancellation rule now pin
 
 **Still open:** App Check (with the EAS build, before public launch).
 
+**Product follow-ups:**
+- **PDF upload for business documents** — to do if business accounts open widely.
+  Today `app/profile/business-document.tsx` uses the image picker only and
+  `storage.rules` `businessDocs/` accepts `image/*` only. It would need
+  `expo-document-picker`, `application/pdf` allowed in that Storage rule, and a PDF
+  viewer/link in the admin review screen. Until then, never promise PDFs in copy
+  (see `BTOB_REJECTION_REASONS.doc_unreadable` in `functions/src/shared/btob.ts`).
+
 ## Working with Aurore
 
 - For any sizeable feature, use **Plan mode** first: propose the plan, get approval,

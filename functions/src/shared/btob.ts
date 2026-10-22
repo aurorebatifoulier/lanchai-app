@@ -24,7 +24,7 @@ export const BTOB_REJECTION_REASONS: Record<BtobRejectionKey, BtobRejectionPrese
     need: 'A clearer registration document',
     needBullets: [
       { icon: 'camera', text: 'A sharp photo, all four corners visible' },
-      { icon: 'file', text: 'Or a PDF of the official document' },
+      { icon: 'camera', text: 'Good lighting, no glare or shadows' },
     ],
   },
   doc_missing_expired: {
