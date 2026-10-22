@@ -16,7 +16,7 @@ import { loyaltyPointsFor, pointsToNextTier, nextTierName } from '../shared/loya
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
-  type ResData, type Rendered, type LateEmailStage,
+  type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
 // Transactional emails (Brevo). Every sender: claim → send → finish, so nothing is ever
@@ -333,19 +333,27 @@ async function sendReviewFollowUps(): Promise<void> {
   }
 }
 
-// ── 7. Late returns — called from lateReturnAlerts next to the in-app alert ──────
-// Idempotency comes from that function's own lateAlert* flags. Never throws.
+// ── 7. Late returns — called from lateReturnAlerts, ONE email per order and run ──
+// Idempotency comes from that function's own lateAlert* flags. `lines` are the order's
+// late reservations with the fee just computed by computeLatePenalty. Never throws.
 export async function sendLateReturnEmail(
   renterId: string,
   stage: LateEmailStage,
-  r: { id: string; productName: string; returnLabel: string; renterName?: string | null },
-  amountLak: number,
+  orderId: string,
+  lines: { snap: admin.firestore.DocumentSnapshot; stage: LateEmailStage; amountLak: number; days: number }[],
+  holdActive: boolean,
 ): Promise<void> {
   try {
-    const result = await deliver(renterId, r.renterName, (name, shop) => lateReturnEmail(name, stage, r, amountLak, shop), `late-${stage}`);
-    if (result !== 'sent') logger.warn('[email] late-return email not sent', { reservationId: r.id, stage, result });
+    const late: LateLine[] = lines.map(l => ({
+      r: { ...asRes(l.snap), latePenaltyAmount: l.amountLak, latePenaltyDays: l.days },
+      stage: l.stage,
+    }));
+    const result = await deliver(renterId, lines[0]?.snap.get('renterName') as string | undefined,
+      (name, shop, recipient) => lateReturnEmail(name, stage, late, shop, { firstName: recipient.firstName, orderId, holdActive }),
+      `late-${stage}`);
+    if (result !== 'sent') logger.warn('[email] late-return email not sent', { orderId, stage, result });
   } catch (err) {
-    logger.error('[email] late-return email failed', { reservationId: r.id, err: String(err) });
+    logger.error('[email] late-return email failed', { orderId, err: String(err) });
   }
 }
 
@@ -398,6 +406,13 @@ export const sendTestEmails = onCall(
       latePenaltyAmount: 225000, latePenaltyDays: 1.5,
       lateChargeAmount: 225000, lateChargeReason: 'Returned 30h late', depositAppliedToCharge: 225000,
     };
+    // Late samples: 150,000 LAK/day → 1 / 1.5 / 2 rental days (computeLatePenalty);
+    // speaker 30,000 × 1.5 × 2 = 90,000 LAK. Deposit as held at handover.
+    const late = (r: ResData, amount: number, days: number): ResData => ({
+      ...r, latePenaltyAmount: amount, latePenaltyDays: days,
+      handoverChecklist: { depositAmount: r.deposit, depositCurrency: 'LAK' },
+    });
+    const lateCtx = { firstName: name, orderId: 'LNC-261020-TEST', holdActive: true };
     const sampleLoyalty = { earned: 30, toNext: 120, nextTier: 'gold' as const, isTop: false };
     const samples: [string, Rendered][] = [
       ['booking-confirmation',             bookingConfirmationEmail(name, 'LNC-261020-TEST', [base, second], shop, vat)],
@@ -425,10 +440,12 @@ export const sendTestEmails = onCall(
       ['btob-approved',                    btobApprovedEmail(name, shop, { firstName: name, businessDepositPercent: 0 })],
       ['btob-rejected-A-fixable',          btobRejectedEmail(name, shop, { firstName: name, reason: 'doc_unreadable', text: 'The photo is blurry on the licence number.', fixable: true })],
       ['btob-rejected-B-final',            btobRejectedEmail(name, shop, { firstName: name, reason: 'not_eligible', text: null, fixable: false })],
-      ['late-tier1',                       lateReturnEmail(name, 'tier1', base, 150000, shop)],
-      ['late-tier2',                       lateReturnEmail(name, 'tier2', base, 225000, shop)],
-      ['late-tier3',                       lateReturnEmail(name, 'tier3', base, 300000, shop)],
-      ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', base, 300000, shop)],
+      ['late-tier1',                       lateReturnEmail(name, 'tier1', [{ r: late(base, 150000, 1), stage: 'tier1' }], shop, lateCtx)],
+      ['late-tier2-two-items',             lateReturnEmail(name, 'tier2', [
+        { r: late(base, 225000, 1.5), stage: 'tier2' }, { r: late(second, 90000, 1.5), stage: 'tier2' },
+      ], shop, lateCtx)],
+      ['late-tier3',                       lateReturnEmail(name, 'tier3', [{ r: late(base, 300000, 2), stage: 'tier3' }], shop, lateCtx)],
+      ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', [{ r: late(base, 300000, 2), stage: 'nonReturn' }], shop, lateCtx)],
     ];
     const results: Record<string, SendResult> = {};
     for (const [tag, mail] of samples) {

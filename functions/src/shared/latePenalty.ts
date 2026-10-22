@@ -76,3 +76,13 @@ export function isPenaltyStage(stage: LateStage): boolean {
 export function formatPenaltyDays(days: number): string {
   return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
+
+/**
+ * End of the CURRENT tier for a late reservation (returnAt + 24h / 48h / 72h), i.e. the
+ * moment the suggestion moves up — or, at tier3, when it becomes a non-return. Null at
+ * non-return (no further tier). Never exposes the grace period.
+ */
+export function nextLateThresholdMs(returnAtMs: number, stage: LateStage): number | null {
+  const idx = (['tier1', 'tier2', 'tier3'] as LateStage[]).indexOf(stage);
+  return idx === -1 ? null : returnAtMs + LATE_TIERS[idx].maxHours * 3_600_000;
+}

@@ -269,6 +269,13 @@ a snapshot indefinitely).
     claimed in a transaction before sending (`claim.ts`). Late-return emails reuse the
     `lateAlert*` flags of `lateReturnAlerts` (end of grace, 24h, 48h, 72h only — the
     0h/+1h warnings stay in-app). Grace period never mentioned to renters.
+  - **Late-return emails** (validated mockup): ONE email per order and run
+    (`lateReturnAlerts` queues the highest stage per order, then sends with every late
+    line of that order), fee = sum of `computeLatePenalty`, next deadline from the shared
+    `nextLateThresholdMs()` (returnAt + 24/48/72h, `shared/latePenalty.ts`), deposit in
+    its handover currency. Pills: amber (overdue, 24h), light red (48h), solid red
+    (non-return). "New bookings are paused…" only when the renter is held (always past
+    the grace, admins excepted). No WhatsApp number → "Email us" (mailto).
   - **Layout (validated mockup v3):** hero card with the logo at its top (amber pill,
     big title, amber primary button, 2 outline buttons with icons) → white cards
     (14/16px padding, 10px gap) → centered cancellation line → footer with amber top

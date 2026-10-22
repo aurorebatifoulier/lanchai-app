@@ -9,6 +9,7 @@ import {
 import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
+import { nextLateThresholdMs } from '../shared/latePenalty';
 import { BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, type BtobRejectionKey } from '../shared/btob';
 import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
 import {
@@ -771,65 +772,148 @@ export function btobRejectedEmail(_name: string, shop: EmailShop, ctx: BtobRejec
   );
 }
 
-// ── 7. Late return (end of grace / 24h / 48h / 72h) — mirrors the in-app copy ────
-// NEVER mention the internal grace period: the first email just says "overdue".
+// ── 7. Late return (end of grace / 24h / 48h / 72h) — ONE email per order ───────
+// NEVER mention or hint at the internal grace period: the first email just says
+// "overdue". Fees come from computeLatePenalty (passed in as latePenaltyAmount/Days),
+// thresholds from the shared LATE_TIERS (nextLateThresholdMs) — no formula here.
 export type LateEmailStage = 'tier1' | 'tier2' | 'tier3' | 'nonReturn';
+
+/** A late line of the order, with its own current stage (lines can differ). */
+export interface LateLine { r: ResData; stage: LateEmailStage }
+
+export interface LateEmailContext {
+  firstName: string;
+  orderId: string;
+  /** bookingHolds is active for this renter (always after the grace, except admins). */
+  holdActive: boolean;
+}
 
 export function lateReturnEmail(
   _name: string,
   stage: LateEmailStage,
-  r: { id: string; productName: string; returnLabel: string },
-  amountLak: number,
+  lines: LateLine[],
   shop: EmailShop,
+  ctx: LateEmailContext,
 ): Rendered {
+  const items = [...lines].sort((a, b) => a.r.returnAtMs - b.r.returnAtMs || a.r.id.localeCompare(b.r.id));
+  const first = items[0].r;
+  const at = (ms: number) => `${vteDay(ms)} at ${vteTime(ms)}`;
+  const amountLak = items.reduce((s, l) => s + (l.r.latePenaltyAmount ?? 0), 0);
   const amount = fmtLak(amountLak);
-  const copy: Record<LateEmailStage, { subject: string; preheader: string; pill: string; title: string; body: string }> = {
+  const days = items[0].r.latePenaltyDays ?? 0;
+  const sameDays = items.every(l => (l.r.latePenaltyDays ?? 0) === days);
+  // Earliest upcoming threshold across the late lines (each from its own returnAt/stage).
+  const thresholds = items.map(l => nextLateThresholdMs(l.r.returnAtMs, l.stage)).filter((x): x is number => x != null);
+  const next = thresholds.length ? Math.min(...thresholds) : null;
+  const productLabel = items.length > 1 ? `${first.productName} + ${items.length - 1} more` : first.productName;
+
+  // Deposit held at handover, in its original currency, summed per currency.
+  const depositByCur = new Map<DepositCurrency, number>();
+  for (const { r } of items) {
+    const cur = r.handoverChecklist?.depositCurrency ?? 'LAK';
+    depositByCur.set(cur, (depositByCur.get(cur) ?? 0) + (r.handoverChecklist?.depositAmount ?? r.deposit ?? 0));
+  }
+  const depositText = [...depositByCur].filter(([, v]) => v > 0).map(([c, v]) => fmtCurrency(v, c)).join(' + ');
+
+  const wa = whatsappUrl(shop, `Hi LANCHAI, about my late return ${ctx.orderId}…`);
+  const mail = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Late return ${ctx.orderId}`)}`;
+  const messageUs = (label: string): Button => (wa ? { label, url: wa, icon: 'whatsapp' } : { label: 'Email us', url: mail });
+  const dir = directions(shop);
+
+  const copy: Record<LateEmailStage, {
+    subject: string; preheader: string; pill: string; pillTone?: 'alert' | 'danger'; title: string;
+    primary: Button; secondary: Button[];
+  }> = {
     tier1: {
-      subject: 'Your LANCHAI return is overdue',
-      preheader: `A late fee of ${amount} (1 rental day) may apply`,
+      subject: `Your LANCHAI return is overdue · ${productLabel}`,
+      preheader: `Late fee so far: ${amount}${next ? ` · return before ${at(next)} to stay at this amount` : ''}`,
       pill: 'Return overdue',
-      title: 'Your return is overdue',
-      body: `Your ${r.productName} is overdue. A late fee of ${amount} (1 rental day) may apply, pending confirmation from our team — please return the item as soon as possible.`,
+      title: 'Running late?',
+      primary: dir,
+      secondary: [messageUs('Can’t make it today? Message us')],
     },
     tier2: {
-      subject: 'Your LANCHAI return is over 24 hours late',
-      preheader: `The late fee may now be ${amount} (1.5 rental days)`,
+      subject: `Please return your item today · ${productLabel}`,
+      preheader: `Late fee so far: ${amount}${next ? ` · return before ${at(next)} to stay at this amount` : ''}`,
       pill: 'Over 24 hours late',
-      title: 'Your return is over 24 hours late',
-      body: `Your ${r.productName} is more than 24 hours overdue. The late fee may now be ${amount} (1.5 rental days), pending confirmation from our team — please return it as soon as possible.`,
+      title: 'Please return your item today',
+      primary: dir,
+      secondary: [messageUs('Can’t make it today? Message us')],
     },
     tier3: {
-      subject: 'Your LANCHAI return is over 48 hours late',
-      preheader: `The late fee may now be ${amount} (2 rental days)`,
+      subject: `Your LANCHAI return is 2 days late · ${productLabel}`,
+      preheader: `Late fee so far: ${amount} · please contact us or return it today`,
       pill: 'Over 48 hours late',
-      title: 'Your return is over 48 hours late',
-      body: `Your ${r.productName} is more than 48 hours overdue. The late fee may now be ${amount} (2 rental days), pending confirmation from our team. After 72 hours, it will be treated as a non-return.`,
+      pillTone: 'alert',
+      title: 'Your return is 2 days late',
+      primary: wa ? { label: 'Message us', url: wa, icon: 'whatsapp' } : { label: 'Email us', url: mail },
+      secondary: [dir],
     },
     nonReturn: {
       subject: 'Your LANCHAI rental is treated as a non-return',
       preheader: 'Please contact us right away',
       pill: 'Non-return',
-      title: 'Your rental is treated as a non-return',
-      body: `Your ${r.productName} is now more than 72 hours overdue and is treated as a non-return. Your deposit may be kept and our contract procedure applies. Please contact us right away.`,
+      pillTone: 'danger',
+      title: 'Please contact us right away',
+      primary: wa ? { label: 'Contact us now', url: wa, icon: 'whatsapp' } : { label: 'Contact us now', url: mail },
+      secondary: [dir],
     },
   };
   const c = copy[stage];
-  return build(
-    c.subject,
-    c.preheader,
-    c.title,
-    [
-      {
-        type: 'hero',
-        pill: c.pill,
-        title: c.title,
-        sub: `${r.productName} · return was due ${r.returnLabel}`,
-        primary: { label: 'View my booking', url: appLink(`rentals/${r.id}`) },
-        secondary: [directions(shop)],
-      },
-      { type: 'card', items: [{ type: 'text', text: c.body }] },
-      shopCard(shop),
-    ],
-    shop,
-  );
+
+  const feeCard: Block = stage === 'nonReturn'
+    ? {
+        type: 'card',
+        items: [{
+          type: 'text',
+          text: 'Your rental is now more than 72 hours late and is treated as a non-return. Your deposit may be kept and our contract procedure applies. If you still have the item, contact us — we’ll find the simplest way to sort it out.',
+        }],
+      }
+    : {
+        type: 'card',
+        title: 'Late fee so far',
+        items: [
+          { type: 'amount', label: sameDays ? `${days} rental ${days === 1 ? 'day' : 'days'}` : 'Total', value: amount },
+          ...(next ? [stage === 'tier3'
+            ? { type: 'notice' as const, tone: 'alert' as const, text: `After 72 hours (${at(next)}), it will be treated as a non-return.` }
+            : { type: 'notice' as const, tone: 'amber' as const, icon: { name: 'clock' as const, alt: 'Deadline' }, text: `Return before ${at(next)} to stay at this amount.` }] : []),
+          {
+            type: 'text', tone: 'muted', small: true,
+            text: depositText
+              ? `Deducted from your ${depositText} deposit at return — the rest is refunded on the spot. The final amount is confirmed by our team at return.`
+              : 'Settled at return. The final amount is confirmed by our team at return.',
+          },
+        ],
+      };
+
+  // "Your items": the due time once when identical, otherwise per item.
+  const sameDue = items.every(l => l.r.returnAtMs === first.returnAtMs);
+  const itemLines: Inner[] = [];
+  if (sameDue) itemLines.push({ type: 'dates', text: `Was due ${at(first.returnAtMs)}` });
+  for (const { r } of items) {
+    itemLines.push({
+      type: 'line',
+      name: r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName,
+      detail: sameDue ? undefined : `Was due ${at(r.returnAtMs)}`,
+      compact: sameDue,
+    });
+  }
+
+  const blocks: Block[] = [
+    {
+      type: 'hero',
+      pill: c.pill,
+      pillTone: c.pillTone,
+      title: c.title,
+      sub: `Hi ${ctx.firstName} · Order ${ctx.orderId}`,
+      primary: c.primary,
+      secondary: c.secondary,
+    },
+    feeCard,
+    { type: 'card', title: 'Your items', items: itemLines },
+    shopCard(shop, undefined, 'Return'),
+  ];
+  if (ctx.holdActive) blocks.push({ type: 'center', strong: true, text: 'New bookings are paused until this rental is returned.' });
+  blocks.push({ type: 'center', text: 'Already returned it? Please ignore this email.' });
+  return build(c.subject, c.preheader, c.title, blocks, shop);
 }

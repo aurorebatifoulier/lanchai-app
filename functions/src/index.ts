@@ -57,6 +57,22 @@ export const lateReturnAlerts = onSchedule(
     const adminUids = adminSnap.docs.map(d => d.id);
     const graceHours = await getGraceHours();
 
+    // Late emails go out ONE per order and run (all its late lines, fees summed), at the
+    // highest stage reached this run — the in-app alerts below stay per reservation.
+    const orderOf = (d: admin.firestore.QueryDocumentSnapshot) =>
+      (d.get('orderId') as string | undefined) ?? d.id.replace(/_\d+$/, '');
+    const penalties = new Map<string, ReturnType<typeof computeLatePenalty>>();
+    for (const d of snap.docs) {
+      const returnAt = d.get('returnAt') as admin.firestore.Timestamp | undefined;
+      if (!returnAt) continue;
+      penalties.set(d.id, computeLatePenalty({
+        returnAtMs: returnAt.toMillis(), nowMs: now,
+        pricePerDay: d.get('pricePerDay') ?? 0, quantity: d.get('quantity') ?? 1, graceHours,
+      }));
+    }
+    const STAGE_RANK = { tier1: 1, tier2: 2, tier3: 3, nonReturn: 4 } as const;
+    const lateEmails = new Map<string, { renterId: string; stage: keyof typeof STAGE_RANK }>();
+
     for (const reservationDoc of snap.docs) {
       const data = reservationDoc.data();
       const returnAt: admin.firestore.Timestamp = data.returnAt;
@@ -184,9 +200,9 @@ export const lateReturnAlerts = onSchedule(
         // stay in-app only). Same lateAlert* flag → never sent twice; never throws.
         const emailStage = LATE_EMAIL_STAGE[highest.key];
         if (emailStage) {
-          await sendLateReturnEmail(renterId, emailStage, {
-            id: reservationId, productName, returnLabel: data.returnLabel ?? '', renterName: data.renterName,
-          }, penalty.amountLak);
+          const orderId = orderOf(reservationDoc);
+          const queued = lateEmails.get(orderId);
+          if (!queued || STAGE_RANK[emailStage] > STAGE_RANK[queued.stage]) lateEmails.set(orderId, { renterId, stage: emailStage });
         }
         for (const d of due) updates[d.key] = true;
       }
@@ -194,6 +210,21 @@ export const lateReturnAlerts = onSchedule(
       if (Object.keys(updates).length > 0) {
         await reservationDoc.ref.update({ ...updates, updatedAt: FieldValue.serverTimestamp() });
       }
+    }
+
+    for (const [orderId, { renterId, stage }] of lateEmails) {
+      const lines = snap.docs
+        .filter(d => orderOf(d) === orderId && d.get('renterId') === renterId)
+        .flatMap(d => {
+          const p = penalties.get(d.id);
+          return p && isPenaltyStage(p.stage)
+            ? [{ snap: d, stage: p.stage as keyof typeof STAGE_RANK, amountLak: p.amountLak, days: p.days }]
+            : [];
+        });
+      if (lines.length === 0) continue;
+      // Past the grace period syncBookingHold always holds the renter (admins excepted) —
+      // decided here so the line doesn't depend on that trigger having run yet.
+      await sendLateReturnEmail(renterId, stage, orderId, lines, !adminUids.includes(renterId));
     }
   },
 );

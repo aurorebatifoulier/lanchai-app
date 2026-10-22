@@ -18,6 +18,8 @@ const BORDER = '#ECECEA';
 const DANGER = '#C8412C';
 const SUCCESS = '#2E8B57';
 const SUCCESS_TINT = '#E8F5EE';
+const ALERT = '#A32D2D';          // late returns: 48h pill text / non-return pill
+const ALERT_TINT = '#FCEBEB';
 const FONT = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif";
 
 export interface Button { label: string; url: string; icon?: EmailIcon }
@@ -39,14 +41,16 @@ export type Inner =
   | { type: 'amount'; label: string; value: string; approx?: string } // big amount + small approx line
   | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger'; gapTop?: number }
   | { type: 'bullet'; text: string; icon?: Icon }                     // icon (or amber marker) + text
+  | { type: 'notice'; text: string; tone: 'amber' | 'alert'; icon?: Icon } // tinted info box
   | { type: 'divider' };
 
 export type Block =
   | {
       type: 'hero';
       pill?: string;
-      /** Pill colour: amber (default) or green (approval, with a check icon). */
-      pillTone?: 'success';
+      /** Pill colour: amber (default), green (approval, with a check icon), light red
+       *  (`alert`, 48h late) or solid red (`danger`, non-return). */
+      pillTone?: 'success' | 'alert' | 'danger';
       /** Rich pill, e.g. the tagline with one highlighted word (overrides `pill`). */
       pillParts?: { text: string; highlight?: boolean }[];
       title: string;
@@ -69,7 +73,7 @@ export type Block =
       secondary?: Button[];   // outline buttons, side by side
     }
   | { type: 'card'; title?: string; items: Inner[] }
-  | { type: 'center'; text: string; link?: Button }
+  | { type: 'center'; text: string; link?: Button; strong?: boolean }
   | { type: 'banner'; lines: string[] };                              // green "still reserved" banner
 
 export interface EmailContent {
@@ -99,7 +103,7 @@ function iconImg(name: EmailIcon, alt: string, marginRight = 8): string {
 function primaryButton(b: Button): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px;">
     <tr><td align="center" bgcolor="${AMBER}" style="border-radius:10px;">
-      <a href="${e(b.url)}" style="display:block;padding:14px 18px;font-family:${FONT};font-size:15px;font-weight:800;color:${CARBON};text-decoration:none;border-radius:10px;">${e(b.label)}</a>
+      <a href="${e(b.url)}" style="display:block;padding:14px 18px;font-family:${FONT};font-size:15px;font-weight:800;color:${CARBON};text-decoration:none;border-radius:10px;">${b.icon ? `<img src="${iconUrl(b.icon)}" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;outline:none;vertical-align:-3px;margin-right:6px;"/>` : ''}${e(b.label)}</a>
     </td></tr>
   </table>`;
 }
@@ -136,6 +140,12 @@ function innerHtml(it: Inner): string {
       return `<p style="margin:-4px 0 12px;font-size:13px;line-height:19px;color:${MUTED};">${iconImg('clock', 'Dates', 6)}<span style="text-decoration:line-through;">${e(it.text)}</span></p>`;
     case 'button':
       return primaryButton({ label: it.label, url: it.url });
+    case 'notice': {
+      const [bg, color] = it.tone === 'alert' ? [ALERT_TINT, ALERT] : [AMBER_TINT, AMBER_TEXT];
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
+        <td style="background:${bg};border-radius:10px;padding:10px 12px;font-size:13px;line-height:19px;font-weight:600;color:${color};">${it.icon ? iconImg(it.icon.name, it.icon.alt, 6) : ''}${e(it.text)}</td>
+      </tr></table>`;
+    }
     case 'outcome':
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px;"><tr>
         <td width="26" style="vertical-align:top;padding-top:2px;">${iconImg('check-circle', 'Done', 0)}</td>
@@ -202,6 +212,8 @@ function blockHtml(b: Block): string {
               `<span style="color:${pp.highlight ? AMBER_TEXT : MUTED};font-weight:${pp.highlight ? 800 : 500};">${e(pp.text)}</span>`).join(' ')}</span>`
           : b.pill ? (b.pillTone === 'success'
             ? `<span style="display:inline-block;background:${SUCCESS_TINT};color:${SUCCESS};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${iconImg('check-circle', '', 4)}${e(b.pill)}</span>`
+            : b.pillTone === 'alert' || b.pillTone === 'danger'
+            ? `<span style="display:inline-block;background:${b.pillTone === 'danger' ? ALERT : ALERT_TINT};color:${b.pillTone === 'danger' ? '#FFFFFF' : ALERT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>`
             : `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>`) : ''}
         <h1 style="margin:${b.pill || b.pillParts ? 14 : 0}px 0 6px;font-size:24px;line-height:30px;font-weight:800;color:${CARBON};">${e(b.title)}</h1>
         ${b.sub ? `<p style="margin:0;font-size:13px;line-height:19px;color:${MUTED};">${e(b.sub)}</p>` : ''}
@@ -232,7 +244,7 @@ function blockHtml(b: Block): string {
         </table>
       </td></tr>`;
     case 'center':
-      return `<tr><td align="center" style="padding:6px 12px 18px;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">
+      return `<tr><td align="center" style="padding:6px 12px ${b.strong ? 4 : 18}px;font-family:${FONT};font-size:${b.strong ? 13 : 12}px;line-height:18px;color:${b.strong ? CARBON : MUTED};font-weight:${b.strong ? 700 : 400};">
         ${e(b.text)}${b.link ? ` <a href="${e(b.link.url)}" style="color:${CARBON};font-weight:700;">${e(b.link.label)}</a>` : ''}
       </td></tr>`;
   }
@@ -264,6 +276,7 @@ function innerText(it: Inner): string[] {
     case 'amount': return [`${it.label}: ${it.value}${it.approx ? ` (${it.approx})` : ''}`];
     case 'row': return [`${it.label}${it.value ? `: ${it.value}` : ''}`];
     case 'bullet': return [`- ${it.text}`];
+    case 'notice': return [`> ${it.text}`];
     case 'divider': return [''];
   }
 }
