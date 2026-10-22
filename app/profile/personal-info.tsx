@@ -28,6 +28,9 @@ function isPhoneValid(p: string): boolean {
 
 type SaveStatus = 'success' | 'error' | null;
 
+// Spaces don't make a different number: "+856 20 1234 5678" == "+8562012345678".
+const normalizePhone = (value: string) => value.replace(/\s+/g, '');
+
 export default function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -35,7 +38,8 @@ export default function PersonalInfoScreen() {
   const [firstName,   setFirstName]   = useState('');
   const [lastName,    setLastName]    = useState('');
   const [phone,       setPhone]       = useState('');
-  // Phone as stored — phoneVerified is only reset when the number actually changes.
+  // Phone as stored (normalised) — phoneVerified is only reset when the number
+  // actually changes; otherwise it isn't sent at all.
   const [savedPhone,  setSavedPhone]  = useState('');
   const [whatsapp,    setWhatsapp]    = useState('');
   const [sameAsPhone, setSameAsPhone] = useState(false);
@@ -75,7 +79,7 @@ export default function PersonalInfoScreen() {
           setLastName(idx  >= 0 ? name.slice(idx + 1) : '');
         }
         setPhone(profile?.phoneNumber ?? profile?.phone ?? '');
-        setSavedPhone((profile?.phoneNumber ?? profile?.phone ?? '').trim());
+        setSavedPhone(normalizePhone(profile?.phoneNumber ?? profile?.phone ?? ''));
         setWhatsapp(profile?.whatsapp ?? '');
         setSameAsPhone(profile?.whatsappSameAsPhone ?? false);
         setAddress(profile?.address ?? '');
@@ -151,14 +155,14 @@ export default function PersonalInfoScreen() {
         displayName,
         phoneNumber:         phone.trim(),
         // Staff verify phones in person — a new number needs verifying again.
-        ...(phone.trim() !== savedPhone ? { phoneVerified: false } : {}),
+        ...(normalizePhone(phone) !== savedPhone ? { phoneVerified: false } : {}),
         phone:               phone.trim(),
         whatsapp:            waValue,
         whatsappSameAsPhone: sameAsPhone,
         address:             address.trim(),
       });
       await updateProfile(cu, { displayName });
-      setSavedPhone(phone.trim());
+      setSavedPhone(normalizePhone(phone));
 
       console.log('[PersonalInfo] Profile saved successfully');
       setSaving(false);
