@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
   // Carousel
   carouselWrapper: {
     marginHorizontal: -20,
-    marginTop: 8,
+    marginTop: 0, // sits directly under the 48px header band
     marginBottom: 16,
   },
   slide: {
