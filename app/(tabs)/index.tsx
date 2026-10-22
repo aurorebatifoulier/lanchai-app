@@ -601,7 +601,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    // Compact band: 40px buttons + 4px top/bottom = 48px (was 12px → 64px). The safe-area
+    // inset stays with the SafeAreaView above — only our own padding shrinks.
+    paddingVertical: 4,
     backgroundColor: COLORS.porcelain,
   },
   topBtn: {
@@ -646,6 +648,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    // The 62px logo PNG is mostly white margin (wordmark ≈ 26px tall, centred): clip it to
+    // the 48px band so the margin never spills over the status bar area or the carousel.
+    overflow: 'hidden',
   },
   logo: {
     width: 62,
@@ -662,7 +667,7 @@ const styles = StyleSheet.create({
   // Carousel
   carouselWrapper: {
     marginHorizontal: -20,
-    marginTop: 4,
+    marginTop: 8,
     marginBottom: 16,
   },
   slide: {
