@@ -16,10 +16,10 @@ interface TrustFeature {
 }
 
 const FEATURES: TrustFeature[] = [
-  { id: 'quality',  icon: 'shield', title: 'Quality Checked',    description: 'Every item is inspected and maintained.' },
-  { id: 'payment',  icon: 'lock', title: 'Secure Payment',     description: 'Safe and encrypted transactions.' },
-  { id: 'support',  icon: 'message-circle', title: 'Local Support',      description: 'Need help? We\'re just a message away.' },
-  { id: 'verified', icon: 'award', title: 'Verified Equipment', description: 'Clean, reliable and ready to use.' },
+  { id: 'quality',  icon: 'shield', title: 'Quality checked',    description: 'Every item is inspected and maintained.' },
+  { id: 'payment',  icon: 'lock', title: 'Secure payment',     description: 'Safe and encrypted transactions.' },
+  { id: 'support',  icon: 'message-circle', title: 'Local support',      description: 'Need help? We\'re just a message away.' },
+  { id: 'verified', icon: 'award', title: 'Verified equipment', description: 'Clean, reliable and ready to use.' },
 ];
 
 export default function TrustSection() {
