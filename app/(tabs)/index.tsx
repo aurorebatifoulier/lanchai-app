@@ -219,7 +219,7 @@ export default function HomeScreen() {
         {/* Left: chat + notifications */}
         <View style={styles.topLeftGroup}>
           <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/chat')}>
-            <Ionicons name="chatbubble-outline" size={22} color={COLORS.carbon} />
+            <Feather name="message-circle" size={22} color={COLORS.carbon} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/notifications')}>
             <Feather name="bell" size={22} color={COLORS.carbon} />
