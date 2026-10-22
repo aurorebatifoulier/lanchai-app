@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 21 Cloud Functions (scheduled, Firestore-triggered and 3 callables, Node 22). The
+  gaps found), 22 Cloud Functions (scheduled, Firestore-triggered and 4 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -489,6 +489,19 @@ a snapshot indefinitely).
     not the raster `assets/images/lanchai-logo.png` — embedding it would need a new
     `expo-asset` dependency plus base64 asset-loading, a deliberate scope cut, not an
     oversight.
+- **BtoB rejection reasons — one shared list.** `functions/src/shared/btob.ts`
+  (`BTOB_REJECTION_REASONS`, keys `doc_unreadable | doc_missing_expired |
+  details_mismatch | not_eligible | other`) feeds the admin picker
+  (`app/admin/business-accounts/[uid].tsx`), the renter screen (`app/btob-rejected.tsx`)
+  and the rejection email. A rejection stores `btobRejectionReason` (the key),
+  `btobRejectionText` (optional admin text, required for `other`) and
+  `btobRejectionFixable` (preset value; admin choice for `other`). Fixable → email
+  variant A + "Update my application" → `app/profile/business-document.tsx`, which
+  resubmits via the `resubmitBusinessApplication` callable (`functions/src/account.ts`:
+  back to `pending_approval`, keeps `btobPreviousRejection`, clears the decision-email
+  markers so the next decision emails again, notifies admins). Final → email variant B,
+  no resubmission from the app. Legacy free-text rejections (no key) are shown as final.
+  `BTOB_REVIEW_TIME_NOTE` = '' removes the "within 1 business day" line everywhere.
 - **New shared utilities from this feature, reuse rather than re-defining:**
   `utils/calendarGrid.ts` (`buildCalendarDays`/`chunkIntoWeeks`/`sameDay`/
   `startOfDay` — pure month-grid math, extracted from `DateRangeCalendar.tsx`, no

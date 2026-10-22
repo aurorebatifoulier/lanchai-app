@@ -20,6 +20,9 @@ import BackButton from '@/components/BackButton';
 import { sendNotif } from '@/lib/notifications';
 import { BTOB_STATUS_CONFIG } from '../business-accounts';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import {
+  BTOB_REJECTION_REASONS, BTOB_REJECTION_KEYS, isBtobRejectionKey, type BtobRejectionKey,
+} from '@/functions/src/shared/btob';
 
 type BtobStatus = 'pending_approval' | 'approved' | 'rejected';
 
@@ -31,7 +34,10 @@ interface BusinessAccount {
   btobDocumentUrl?: string;
   btobStatus?: BtobStatus;
   btobSubmittedAt?: Timestamp;
-  btobRejectionReason?: string;
+  btobRejectionReason?: string;          // preset key (functions/src/shared/btob.ts)
+  btobRejectionText?: string;
+  btobRejectionFixable?: boolean;
+  btobPreviousRejection?: { reason: string | null; text: string | null; reviewedBy: string | null };
   btobReviewedAt?: Timestamp;
   btobReviewedBy?: string;
   firstName?: string;
@@ -59,7 +65,15 @@ export default function AdminBusinessAccountDetailScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
   const [staffName, setStaffName] = useState('');
-  const [rejectReason, setRejectReason] = useState('');
+  // Rejection: preset reason (shared list), optional/required free text, and for
+  // "other" the admin chooses whether the applicant can fix it and resubmit.
+  const [rejectKey, setRejectKey] = useState<BtobRejectionKey | null>(null);
+  const [rejectText, setRejectText] = useState('');
+  const [otherFixable, setOtherFixable] = useState<boolean | null>(null);
+  const rejectPreset = rejectKey ? BTOB_REJECTION_REASONS[rejectKey] : null;
+  const rejectFixable = rejectPreset ? (rejectPreset.fixable ?? otherFixable) : null;
+  const rejectReady = !!rejectKey && rejectFixable !== null
+    && (!rejectPreset?.textRequired || rejectText.trim().length > 0);
 
   useEffect(() => {
     if (!uid) return;
@@ -85,7 +99,9 @@ export default function AdminBusinessAccountDetailScreen() {
       setAccount(prev => prev ? { ...prev, ...localUpdates } : prev);
       setConfirmAction(null);
       setStaffName('');
-      setRejectReason('');
+      setRejectKey(null);
+      setRejectText('');
+      setOtherFixable(null);
       onSuccess?.();
     } catch (err) {
       console.error('[BusinessAccountDetail] action error:', err);
@@ -121,11 +137,16 @@ export default function AdminBusinessAccountDetailScreen() {
     runAction(
       {
         btobStatus: 'rejected',
-        btobRejectionReason: rejectReason.trim(),
+        btobRejectionReason: rejectKey,
+        btobRejectionText: rejectText.trim(),
+        btobRejectionFixable: rejectFixable === true,
         btobReviewedAt: serverTimestamp(),
         btobReviewedBy: staffName.trim(),
       },
-      { btobStatus: 'rejected', btobRejectionReason: rejectReason.trim(), btobReviewedBy: staffName.trim() },
+      {
+        btobStatus: 'rejected', btobRejectionReason: rejectKey ?? undefined, btobRejectionText: rejectText.trim(),
+        btobRejectionFixable: rejectFixable === true, btobReviewedBy: staffName.trim(),
+      },
       () => sendNotif(uid, {
         type: 'account',
         icon: 'x-circle',
@@ -196,7 +217,16 @@ export default function AdminBusinessAccountDetailScreen() {
             <InfoRow label="Reviewed" value={`${fmtDateTime(account.btobReviewedAt)} by ${account.btobReviewedBy ?? 'staff'}`} />
           )}
           {account.btobStatus === 'rejected' && account.btobRejectionReason && (
-            <InfoRow label="Rejection reason" value={account.btobRejectionReason} />
+            <InfoRow
+              label="Rejection reason"
+              value={`${isBtobRejectionKey(account.btobRejectionReason) ? BTOB_REJECTION_REASONS[account.btobRejectionReason].adminLabel : account.btobRejectionReason}${account.btobRejectionFixable ? ' (fixable)' : ' (final)'}${account.btobRejectionText ? ` — ${account.btobRejectionText}` : ''}`}
+            />
+          )}
+          {account.btobStatus === 'pending_approval' && account.btobPreviousRejection?.reason && (
+            <InfoRow
+              label="Resubmitted after"
+              value={`${isBtobRejectionKey(account.btobPreviousRejection.reason) ? BTOB_REJECTION_REASONS[account.btobPreviousRejection.reason].adminLabel : account.btobPreviousRejection.reason}${account.btobPreviousRejection.text ? ` — ${account.btobPreviousRejection.text}` : ''}`}
+            />
           )}
         </View>
 
@@ -253,10 +283,12 @@ export default function AdminBusinessAccountDetailScreen() {
 
           {!actioning && confirmAction === 'reject' && (
             <ConfirmBox
-              text="Reject this business account application? The applicant will see the reason below."
+              text={rejectFixable === false
+                ? 'Reject this application? This is final — the applicant can’t resubmit from the app.'
+                : 'Reject this application? The applicant will be asked to fix it and resubmit.'}
               confirmLabel="Reject"
               cancelLabel="Cancel"
-              confirmDisabled={staffName.trim().length === 0 || rejectReason.trim().length === 0}
+              confirmDisabled={staffName.trim().length === 0 || !rejectReady}
               onCancel={() => setConfirmAction(null)}
               onConfirm={handleReject}
               destructive
@@ -268,12 +300,45 @@ export default function AdminBusinessAccountDetailScreen() {
                 value={staffName}
                 onChangeText={setStaffName}
               />
+              <View style={d.chipRow}>
+                {BTOB_REJECTION_KEYS.map(key => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[d.chip, rejectKey === key && d.chipActive]}
+                    onPress={() => { setRejectKey(key); setOtherFixable(null); }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[d.chipText, rejectKey === key && d.chipTextActive]}>{BTOB_REJECTION_REASONS[key].adminLabel}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {rejectKey === 'other' && (
+                <View style={d.chipRow}>
+                  {([true, false] as const).map(f => (
+                    <TouchableOpacity
+                      key={String(f)}
+                      style={[d.chip, otherFixable === f && d.chipActive]}
+                      onPress={() => setOtherFixable(f)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[d.chipText, otherFixable === f && d.chipTextActive]}>
+                        {f ? 'Fixable — can resubmit' : 'Final'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              {rejectPreset && (
+                <Text style={d.rejectHint}>
+                  {rejectFixable ? `Customer is asked for: ${rejectPreset.need ?? 'see your details below'}` : rejectFixable === false ? `Customer sees: ${rejectPreset.reason ?? 'your details below'}` : ''}
+                </Text>
+              )}
               <TextInput
                 style={d.nameInput}
-                placeholder="Reason (shown to the applicant)"
+                placeholder={rejectPreset?.textRequired ? 'Details for the applicant (required)' : 'Details for the applicant (optional)'}
                 placeholderTextColor={COLORS.fg3}
-                value={rejectReason}
-                onChangeText={setRejectReason}
+                value={rejectText}
+                onChangeText={setRejectText}
                 multiline
               />
             </ConfirmBox>
@@ -292,7 +357,15 @@ export default function AdminBusinessAccountDetailScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={d.cancelLink}
-                onPress={() => setConfirmAction('reject')}
+                onPress={() => {
+                  if (account.btobStatus === 'rejected') {
+                    const k = isBtobRejectionKey(account.btobRejectionReason) ? account.btobRejectionReason : null;
+                    setRejectKey(k);
+                    setRejectText(account.btobRejectionText ?? '');
+                    setOtherFixable(k === 'other' ? account.btobRejectionFixable === true : null);
+                  }
+                  setConfirmAction('reject');
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={d.cancelLinkText}>
@@ -374,6 +447,15 @@ const d = StyleSheet.create({
   cancelLink: { alignItems: 'center', paddingVertical: 8 },
   cancelLinkText: { fontSize: 13, fontWeight: '600', color: COLORS.danger },
 
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  chip: {
+    borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white,
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+  },
+  chipActive: { backgroundColor: COLORS.carbon, borderColor: COLORS.carbon },
+  chipText: { fontSize: 12, fontWeight: '600', color: COLORS.fg2 },
+  chipTextActive: { color: COLORS.white },
+  rejectHint: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginBottom: 8, lineHeight: 17 },
   nameInput: {
     backgroundColor: COLORS.white,
     borderWidth: 1, borderColor: COLORS.softGray200,

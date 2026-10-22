@@ -644,7 +644,9 @@ export interface UserProfile {
   btobResponsibleName?: string;
   btobDocumentUrl?: string;
   btobSubmittedAt?: Timestamp;
-  btobRejectionReason?: string;
+  btobRejectionReason?: string;      // preset key (functions/src/shared/btob.ts)
+  btobRejectionText?: string;
+  btobRejectionFixable?: boolean;
   btobReviewedAt?: Timestamp;
   btobReviewedBy?: string;
 

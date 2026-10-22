@@ -29,7 +29,7 @@
     var params = new URLSearchParams(window.location.search);
     var to = params.get('to') || '';
     var ID = /^[A-Za-z0-9_-]{1,64}$/;
-    var allowed = /^(home|reservations|explore|legal\/cancellation|(rentals|product|category|review)\/[A-Za-z0-9_-]{1,64})$/;
+    var allowed = /^(home|reservations|explore|legal\/cancellation|profile\/business-document|(rentals|product|category|review)\/[A-Za-z0-9_-]{1,64})$/;
     var path = allowed.test(to) ? to : 'reservations';
     var query = '';
     if (path.indexOf('review/') === 0) {

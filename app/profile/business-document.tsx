@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,10 +16,11 @@ import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { auth } from '@/lib/auth';
-import { storage } from '@/lib/firebase';
+import { storage, functions } from '@/lib/firebase';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
 
 export default function BusinessDocumentScreen() {
@@ -31,14 +33,59 @@ export default function BusinessDocumentScreen() {
   const [uploadError, setUploadError] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
+  // Rejected application: fixable → company details + document can be corrected and
+  // resubmitted (resubmitBusinessApplication callable → back to pending_approval,
+  // admins notified). Final → read-only, no resubmission from the app.
+  const [rejection, setRejection] = useState<'fixable' | 'final' | null>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [responsibleName, setResponsibleName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   useEffect(() => {
     const cu = auth.currentUser;
     if (!cu) { setLoading(false); return; }
     getUserProfile(cu.uid)
-      .then(profile => setDocumentUrl(profile?.btobDocumentUrl ?? null))
+      .then(profile => {
+        setDocumentUrl(profile?.btobDocumentUrl ?? null);
+        if (profile?.accountType === 'btob' && profile.btobStatus === 'rejected') {
+          setRejection(profile.btobRejectionFixable === true ? 'fixable' : 'final');
+          setCompanyName(profile.btobCompanyName ?? '');
+          setLicenseNumber(profile.btobLicenseNumber ?? '');
+          setResponsibleName(profile.btobResponsibleName ?? '');
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const canResubmit = !!documentUrl && !uploading && !submitting
+    && companyName.trim().length > 0 && licenseNumber.trim().length > 0 && responsibleName.trim().length > 0;
+
+  const handleResubmit = async () => {
+    if (!canResubmit) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await httpsCallable(functions, 'resubmitBusinessApplication')({
+        companyName: companyName.trim(),
+        licenseNumber: licenseNumber.trim(),
+        responsibleName: responsibleName.trim(),
+      });
+      router.replace('/btob-pending');
+    } catch (err: any) {
+      const code = err?.details?.code;
+      setSubmitError(
+        code === 'missing-fields' ? 'Please fill in every company field.'
+        : code === 'document-required' ? 'Please attach your registration document first.'
+        : code === 'final-rejection' || code === 'not-rejected' ? 'This application can’t be resubmitted. Please message us.'
+        : 'Could not resubmit. Please try again.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handlePick = async () => {
     const cu = auth.currentUser;
@@ -94,14 +141,39 @@ export default function BusinessDocumentScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
       >
-        <Text style={s.intro}>
-          Upload a photo of your business license, KBIS, or registration document.
-          This is required before you can book, and helps our team verify your
-          business account faster.
-        </Text>
+        {rejection === 'final' ? (
+          <View style={s.bannerInfo}>
+            <Feather name="info" size={16} color={COLORS.fg2} />
+            <Text style={s.bannerInfoText}>
+              This application can&apos;t be resubmitted. If you think this is a mistake, please message us.
+            </Text>
+          </View>
+        ) : rejection === 'fixable' ? (
+          <Text style={s.intro}>
+            Check your company details and attach a clear photo of your registration
+            document, then resubmit — our team will review it again.
+          </Text>
+        ) : (
+          <Text style={s.intro}>
+            Upload a photo of your business license, KBIS, or registration document.
+            This is required before you can book, and helps our team verify your
+            business account faster.
+          </Text>
+        )}
+
+        {rejection === 'fixable' && (
+          <>
+            <Text style={s.fieldLabel}>Company name</Text>
+            <TextInput style={s.input} value={companyName} onChangeText={setCompanyName} maxLength={120} placeholder="Company name" placeholderTextColor={COLORS.fg3} />
+            <Text style={s.fieldLabel}>Licence / registration number</Text>
+            <TextInput style={s.input} value={licenseNumber} onChangeText={setLicenseNumber} maxLength={80} placeholder="Licence number" placeholderTextColor={COLORS.fg3} autoCapitalize="characters" />
+            <Text style={s.fieldLabel}>Responsible person</Text>
+            <TextInput style={s.input} value={responsibleName} onChangeText={setResponsibleName} maxLength={120} placeholder="Full name" placeholderTextColor={COLORS.fg3} />
+          </>
+        )}
 
         <Text style={s.fieldLabel}>Business registration document</Text>
-        <TouchableOpacity style={s.docPicker} onPress={handlePick} activeOpacity={0.8} disabled={uploading}>
+        <TouchableOpacity style={s.docPicker} onPress={handlePick} activeOpacity={0.8} disabled={uploading || rejection === 'final'}>
           {uploading ? (
             <ActivityIndicator size="small" color={COLORS.carbon} />
           ) : documentUrl ? (
@@ -130,6 +202,27 @@ export default function BusinessDocumentScreen() {
             <Feather name="alert-circle" size={16} color="#B91C1C" />
             <Text style={s.bannerErrorText}>Could not upload. Please try again.</Text>
           </View>
+        )}
+
+        {rejection === 'fixable' && (
+          <>
+            {submitError && (
+              <View style={s.bannerError}>
+                <Feather name="alert-circle" size={16} color="#B91C1C" />
+                <Text style={s.bannerErrorText}>{submitError}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={[s.submitBtn, !canResubmit && s.submitBtnDisabled]}
+              onPress={handleResubmit}
+              disabled={!canResubmit}
+              activeOpacity={0.85}
+            >
+              {submitting
+                ? <ActivityIndicator size="small" color={COLORS.carbon} />
+                : <Text style={s.submitBtnText}>Resubmit application</Text>}
+            </TouchableOpacity>
+          </>
         )}
       </ScrollView>
     </View>
@@ -194,6 +287,42 @@ const s = StyleSheet.create({
     color: COLORS.fg3,
     marginBottom: 8,
   },
+
+  input: {
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.carbon,
+    marginBottom: 16,
+  },
+  submitBtn: {
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: COLORS.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  submitBtnDisabled: { opacity: 0.45 },
+  submitBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
+  bannerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.softGray200,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 24,
+  },
+  bannerInfoText: { flex: 1, fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19 },
 
   docPicker: {
     minHeight: 64,

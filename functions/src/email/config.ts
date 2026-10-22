@@ -26,12 +26,13 @@ export const LOGO_URL = `${PUBLIC_BASE_URL}/email/lanchai-logo@2x.png`;
 /** Small amber line icons (hosting/email/icons/, 32px PNG shown at 16px). */
 export type EmailIcon =
   | 'map-pin' | 'calendar-plus' | 'id-card' | 'qr-code' | 'cash' | 'clock' | 'whatsapp'
-  | 'checklist' | 'sparkles' | 'star' | 'check-circle' | 'star-solid';
+  | 'checklist' | 'sparkles' | 'star' | 'check-circle' | 'star-solid'
+  | 'camera' | 'file' | 'shield-check' | 'receipt' | 'bank' | 'shopping-bag';
 export const iconUrl = (name: EmailIcon) => `${PUBLIC_BASE_URL}/email/icons/${name}@2x.png`;
 
 /** https link that opens an in-app path (allow-listed in hosting/open/index.html). */
 export function appLink(
-  path: 'home' | 'reservations' | 'explore' | 'legal/cancellation'
+  path: 'home' | 'reservations' | 'explore' | 'legal/cancellation' | 'profile/business-document'
     | `rentals/${string}` | `product/${string}` | `category/${string}`,
 ): string {
   return `${PUBLIC_BASE_URL}/open/?to=${encodeURIComponent(path).replace(/%2F/g, '/')}`;

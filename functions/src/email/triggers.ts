@@ -7,6 +7,7 @@ import { BREVO_API_KEY, REGION } from './config';
 import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
 import { cancellationEmailVariant } from '../shared/cancellation';
+import { isBtobRejectionKey } from '../shared/btob';
 import {
   getEmailShop, getRecipient, getVatPercent, getRates, getLoyaltyThresholds, hasReviewed, getReviewRewardPoints,
   type EmailShop, type Recipient,
@@ -196,13 +197,23 @@ export const emailBtobDecision = onDocumentUpdated(
       if (!before || !after || !afterSnap || before.btobStatus === after.btobStatus) return;
       const uid = event.params.uid;
       if (after.btobStatus === 'approved') {
+        // Deposit line/preheader depend on the configured business deposit %.
+        const loyalty = (await db().collection('config').doc('loyalty').get()).data();
+        const pct = loyalty?.depositPercentByType?.business;
         await claimAndSend([afterSnap.ref], 'emailBtobApproved', () =>
-          deliver(uid, null, (name, shop) => btobApprovedEmail(name, shop), 'btob-approved'));
+          deliver(uid, null, (name, shop, recipient) => btobApprovedEmail(name, shop, {
+            firstName: recipient.firstName,
+            businessDepositPercent: typeof pct === 'number' ? pct : null,
+          }), 'btob-approved'));
       } else if (after.btobStatus === 'rejected') {
-        const reason = typeof after.btobRejectionReason === 'string' && after.btobRejectionReason.trim()
-          ? after.btobRejectionReason.trim() : null;
+        // A: fixable (resubmit from the app) / B: final — chosen from btobRejectionFixable.
         await claimAndSend([afterSnap.ref], 'emailBtobRejected', () =>
-          deliver(uid, null, (name, shop) => btobRejectedEmail(name, reason, shop), 'btob-rejected'));
+          deliver(uid, null, (name, shop, recipient) => btobRejectedEmail(name, shop, {
+            firstName: recipient.firstName,
+            reason: isBtobRejectionKey(after.btobRejectionReason) ? after.btobRejectionReason : null,
+            text: typeof after.btobRejectionText === 'string' ? after.btobRejectionText : null,
+            fixable: after.btobRejectionFixable === true,
+          }), `btob-rejected-${after.btobRejectionFixable === true ? 'fixable' : 'final'}`));
       }
     } catch (err) {
       logger.error('[email] btob decision email failed', { err: String(err) });
@@ -411,8 +422,9 @@ export const sendTestEmails = onCall(
       ['receipt-B-late-return',            receiptEmail(name, closedLate, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
       ['review-follow-up',                 reviewFollowUpEmail(name, closedClean, shop, { firstName: name, reviewRewardPoints: 10 })],
       ['review-follow-up-no-photo',        reviewFollowUpEmail(name, { ...closedClean, productImage: null }, shop, { firstName: null, reviewRewardPoints: null })],
-      ['btob-approved',                    btobApprovedEmail(name, shop)],
-      ['btob-rejected',                    btobRejectedEmail(name, 'The registration document is not readable.', shop)],
+      ['btob-approved',                    btobApprovedEmail(name, shop, { firstName: name, businessDepositPercent: 0 })],
+      ['btob-rejected-A-fixable',          btobRejectedEmail(name, shop, { firstName: name, reason: 'doc_unreadable', text: 'The photo is blurry on the licence number.', fixable: true })],
+      ['btob-rejected-B-final',            btobRejectedEmail(name, shop, { firstName: name, reason: 'not_eligible', text: null, fixable: false })],
       ['late-tier1',                       lateReturnEmail(name, 'tier1', base, 150000, shop)],
       ['late-tier2',                       lateReturnEmail(name, 'tier2', base, 225000, shop)],
       ['late-tier3',                       lateReturnEmail(name, 'tier3', base, 300000, shop)],

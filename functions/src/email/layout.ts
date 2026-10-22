@@ -45,6 +45,8 @@ export type Block =
   | {
       type: 'hero';
       pill?: string;
+      /** Pill colour: amber (default) or green (approval, with a check icon). */
+      pillTone?: 'success';
       /** Rich pill, e.g. the tagline with one highlighted word (overrides `pill`). */
       pillParts?: { text: string; highlight?: boolean }[];
       title: string;
@@ -198,7 +200,9 @@ function blockHtml(b: Block): string {
         ${b.pillParts
           ? `<span style="display:inline-block;background:${AMBER_TINT};font-size:12px;padding:5px 12px;border-radius:999px;">${b.pillParts.map(pp =>
               `<span style="color:${pp.highlight ? AMBER_TEXT : MUTED};font-weight:${pp.highlight ? 800 : 500};">${e(pp.text)}</span>`).join(' ')}</span>`
-          : b.pill ? `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>` : ''}
+          : b.pill ? (b.pillTone === 'success'
+            ? `<span style="display:inline-block;background:${SUCCESS_TINT};color:${SUCCESS};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${iconImg('check-circle', '', 4)}${e(b.pill)}</span>`
+            : `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>`) : ''}
         <h1 style="margin:${b.pill || b.pillParts ? 14 : 0}px 0 6px;font-size:24px;line-height:30px;font-weight:800;color:${CARBON};">${e(b.title)}</h1>
         ${b.sub ? `<p style="margin:0;font-size:13px;line-height:19px;color:${MUTED};">${e(b.sub)}</p>` : ''}
         ${b.note ? `<p style="margin:4px 0 0;font-size:12px;line-height:18px;color:${MUTED};">${e(b.note)}</p>` : ''}

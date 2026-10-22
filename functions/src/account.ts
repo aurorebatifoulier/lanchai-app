@@ -60,3 +60,75 @@ export const deleteMyAccount = onCall({ region: REGION }, async request => {
   logger.info('[deleteMyAccount] deleted', { uid });
   return { ok: true };
 });
+
+// ── resubmitBusinessApplication ───────────────────────────────────────────────
+// After a FIXABLE rejection (btobRejectionFixable === true), the renter updates their
+// company details / registration document and resubmits: status goes back to
+// 'pending_approval' and admins are notified. Server-side because btobStatus and the
+// company fields are not renter-writable (firestore.rules allow-list). A final
+// rejection can't be resubmitted from the app. The document itself is uploaded by the
+// app beforehand (btobDocumentUrl is renter-writable while not approved).
+export const resubmitBusinessApplication = onCall({ region: REGION }, async request => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
+  const d = (request.data ?? {}) as Record<string, unknown>;
+  const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const companyName = clean(d.companyName, 120);
+  const licenseNumber = clean(d.licenseNumber, 80);
+  const responsibleName = clean(d.responsibleName, 120);
+  if (!companyName || !licenseNumber || !responsibleName) {
+    throw new HttpsError('invalid-argument', 'Please fill in every company field.', { code: 'missing-fields' });
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection('users').doc(uid);
+  const snap = await userRef.get();
+  const p = snap.data() ?? {};
+  if (p.accountType !== 'btob' || p.btobStatus !== 'rejected') {
+    throw new HttpsError('failed-precondition', 'There is no application to resubmit.', { code: 'not-rejected' });
+  }
+  if (p.btobRejectionFixable !== true) {
+    throw new HttpsError('failed-precondition', 'This application can’t be resubmitted.', { code: 'final-rejection' });
+  }
+  if (!p.btobDocumentUrl) {
+    throw new HttpsError('failed-precondition', 'Please upload your registration document first.', { code: 'document-required' });
+  }
+
+  const FieldValue = admin.firestore.FieldValue;
+  await userRef.update({
+    btobStatus: 'pending_approval',
+    btobCompanyName: companyName,
+    btobLicenseNumber: licenseNumber,
+    btobResponsibleName: responsibleName,
+    btobSubmittedAt: FieldValue.serverTimestamp(),
+    btobResubmittedAt: FieldValue.serverTimestamp(),
+    // Keep the last decision for the admin's context, clear the live rejection fields,
+    // and reset the decision-email markers so the NEXT decision emails again.
+    btobPreviousRejection: {
+      reason: p.btobRejectionReason ?? null,
+      text: p.btobRejectionText ?? null,
+      reviewedBy: p.btobReviewedBy ?? null,
+    },
+    btobRejectionReason: FieldValue.delete(),
+    btobRejectionText: FieldValue.delete(),
+    btobRejectionFixable: FieldValue.delete(),
+    emailBtobRejected: FieldValue.delete(),
+    emailBtobApproved: FieldValue.delete(),
+  });
+
+  const admins = await db.collection('admins').get();
+  await Promise.all(admins.docs.map(a =>
+    db.collection('notifications').doc(a.id).collection('items').add({
+      type: 'account',
+      title: 'Business account resubmitted',
+      body: `${companyName} updated their application after a rejection — ready for review.`,
+      icon: 'briefcase',
+      iconColor: 'amber',
+      deepLink: `/admin/business-accounts/${uid}`,
+      createdAt: FieldValue.serverTimestamp(),
+      readAt: null,
+    }),
+  ));
+  logger.info('[resubmitBusinessApplication] resubmitted', { uid });
+  return { ok: true };
+});

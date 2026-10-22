@@ -9,6 +9,7 @@ import {
 import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
+import { BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, type BtobRejectionKey } from '../shared/btob';
 import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
 import {
   cancellationOutcome, CANCEL_REASONS, type CancelReason, type CancellationOutcome,
@@ -662,43 +663,109 @@ export function reviewFollowUpEmail(
 }
 
 // ── 6. Business account decision ─────────────────────────────────────────────────
-export function btobApprovedEmail(_name: string, shop: EmailShop): Rendered {
+// No company name in titles (greet the person). Presets from shared/btob.ts.
+
+export interface BtobApprovedContext {
+  firstName: string;
+  /** config/loyalty.depositPercentByType.business — 0 = no deposit, 100 = standard. */
+  businessDepositPercent: number | null;
+}
+
+export function btobApprovedEmail(_name: string, shop: EmailShop, ctx: BtobApprovedContext): Rendered {
+  const pct = ctx.businessDepositPercent;
+  const noDeposit = pct === 0;
+  const wa = whatsappUrl(shop, 'Hi LANCHAI, I\'d like a quote for… ');
+  const items: Inner[] = [];
+  if (noDeposit) items.push({ type: 'bullet', text: 'No deposit on your rentals', icon: { name: 'shield-check', alt: 'No deposit' } });
+  else if (pct != null && pct > 0 && pct < 100) items.push({ type: 'bullet', text: `Reduced deposit: ${pct}% of the standard amount`, icon: { name: 'shield-check', alt: 'Reduced deposit' } });
+  items.push(
+    { type: 'bullet', text: 'VAT-ready receipts — prices excl. VAT, ready for your accounting', icon: { name: 'receipt', alt: 'Receipts' } },
+    { type: 'bullet', text: shop.paymentMethods, icon: { name: 'bank', alt: 'Payment' } },
+    { type: 'bullet', text: 'Several items in one order — perfect for events', icon: { name: 'shopping-bag', alt: 'Orders' } },
+  );
   return build(
-    'Your LANCHAI business account is approved',
-    'Business pricing and VAT details are now on your bookings',
-    'Business account approved',
+    'Welcome to LANCHAI Business',
+    noDeposit ? 'No deposit, VAT-ready receipts — start booking' : 'VAT-ready receipts — start booking',
+    'Welcome to LANCHAI Business',
     [
       {
         type: 'hero',
-        pill: 'Business account',
-        title: 'Your account is approved',
-        sub: 'You can now book with your business account.',
-        primary: { label: 'Open the app', url: appLink('home') },
+        pill: 'Business account approved',
+        pillTone: 'success',
+        title: 'Welcome to LANCHAI Business!',
+        sub: `Hi ${ctx.firstName} — your account is ready.`,
+        primary: { label: 'Book your first items', url: appLink('explore') },
+        secondary: wa ? [{ label: 'Ask for a quote', url: wa, icon: 'whatsapp' }] : undefined,
       },
-      { type: 'card', items: [
-        { type: 'text', text: 'Your bookings now show prices with the VAT breakdown, ready for your accounting.' },
-      ] },
+      { type: 'card', title: 'What your business account includes', items },
+      ...(wa ? [{ type: 'center' as const, text: 'Planning something big?', link: { label: 'Message us for a tailored quote.', url: wa } }] : []),
     ],
     shop,
   );
 }
 
-export function btobRejectedEmail(_name: string, reason: string | null, shop: EmailShop): Rendered {
-  const items: Inner[] = [];
-  if (reason) items.push({ type: 'row', label: 'Reason', value: '' }, { type: 'text', text: reason });
-  items.push({ type: 'text', text: 'You can update your details in the app and apply again, or reply to this email if you have a question.', tone: 'muted' });
+export interface BtobRejectedContext {
+  firstName: string;
+  reason: BtobRejectionKey | null;
+  text: string | null;
+  fixable: boolean;
+}
+
+export function btobRejectedEmail(_name: string, shop: EmailShop, ctx: BtobRejectedContext): Rendered {
+  const preset = ctx.reason ? BTOB_REJECTION_REASONS[ctx.reason] : null;
+  const wa = whatsappUrl(shop, 'Hi LANCHAI, about my business account application: ');
+  const message: Button[] = wa ? [{ label: 'Message us', url: wa, icon: 'whatsapp' }] : [];
+  const extra = ctx.text?.trim();
+
+  if (ctx.fixable) {
+    // Variant A — something to fix, then resubmit from the app.
+    const inner: Inner[] = [];
+    if (preset?.need) inner.push({ type: 'text', text: preset.need });
+    for (const b of preset?.needBullets ?? []) inner.push({ type: 'bullet', text: b.text, icon: { name: b.icon, alt: b.icon === 'camera' ? 'Photo' : 'PDF' } });
+    if (extra) inner.push({ type: 'text', text: extra, tone: 'muted' });
+    if (BTOB_REVIEW_TIME_NOTE) inner.push({ type: 'text', text: BTOB_REVIEW_TIME_NOTE, tone: 'muted', small: true });
+    return build(
+      'Action needed: your LANCHAI business account',
+      btobNeedLine(ctx.reason),
+      'Your business account application',
+      [
+        {
+          type: 'hero',
+          pill: 'Business account',
+          title: 'Almost there — we just need one more thing',
+          sub: `Hi ${ctx.firstName}`,
+          primary: { label: 'Update my application', url: appLink('profile/business-document') },
+          secondary: message.length ? message : undefined,
+        },
+        { type: 'card', title: 'What we need', items: inner },
+        // Pending/rejected business accounts can browse (app/_layout.tsx gating).
+        { type: 'center', text: 'In the meantime, you can still browse the catalogue in the app.' },
+      ],
+      shop,
+    );
+  }
+
+  // Variant B — final.
+  const inner: Inner[] = [];
+  const sentence = preset?.reason ?? (ctx.reason === 'other' ? null : 'We couldn’t approve your business account.');
+  if (sentence) inner.push({ type: 'text', text: sentence });
+  if (extra) inner.push({ type: 'text', text: extra, tone: sentence ? 'muted' : undefined });
+  inner.push({ type: 'text', text: 'Thank you for your interest in LANCHAI. If you think this is a mistake, just reply to this email or message us — we’re happy to take another look.', tone: 'muted', small: true });
   return build(
     'Your LANCHAI business account application',
-    'We couldn’t approve it this time — here’s why',
-    'Business account application',
+    'We couldn’t approve it this time',
+    'Your business account application',
     [
       {
         type: 'hero',
         pill: 'Business account',
         title: 'We couldn’t approve your application',
-        primary: { label: 'Open the app', url: appLink('home') },
+        sub: `Hi ${ctx.firstName}`,
+        // Rejected business accounts can still browse the catalogue.
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+        secondary: message.length ? message : undefined,
       },
-      { type: 'card', items },
+      { type: 'card', title: 'Reason', items: inner },
     ],
     shop,
   );
