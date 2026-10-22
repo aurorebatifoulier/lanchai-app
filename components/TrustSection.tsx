@@ -6,11 +6,13 @@ import Animated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 
 interface TrustFeature {
   id: string;
   icon: string;
+  /** Icon set — Ionicons by default; the chat icon is Feather "message-circle", the app-wide chat icon. */
+  family?: 'feather';
   title: string;
   description: string;
 }
@@ -18,7 +20,7 @@ interface TrustFeature {
 const FEATURES: TrustFeature[] = [
   { id: 'quality',  icon: 'shield-checkmark-outline', title: 'Quality Checked',    description: 'Every item is inspected and maintained.' },
   { id: 'payment',  icon: 'lock-closed-outline',      title: 'Secure Payment',     description: 'Safe and encrypted transactions.' },
-  { id: 'support',  icon: 'chatbubble-outline',        title: 'Local Support',      description: 'Need help? We\'re just a message away.' },
+  { id: 'support',  icon: 'message-circle', family: 'feather', title: 'Local Support',      description: 'Need help? We\'re just a message away.' },
   { id: 'verified', icon: 'ribbon-outline',            title: 'Verified Equipment', description: 'Clean, reliable and ready to use.' },
 ];
 
@@ -57,7 +59,9 @@ function FeatureCell({ feature }: { feature: TrustFeature }) {
   return (
     <View style={styles.cell}>
       <View style={styles.iconContainer}>
-        <Ionicons name={feature.icon as never} size={24} color="#1E1E1E" />
+        {feature.family === 'feather'
+          ? <Feather name={feature.icon as never} size={24} color="#1E1E1E" />
+          : <Ionicons name={feature.icon as never} size={24} color="#1E1E1E" />}
         <View style={styles.accentDot} />
       </View>
       <Text style={styles.cellTitle}>{feature.title}</Text>
