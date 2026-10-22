@@ -9,7 +9,7 @@ import {
 import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
 import { CANCELLATION_SUMMARY } from '../shared/policy';
 import { vteDay, vteTime, vteDayTime } from '../shared/dates';
-import { nextLateThresholdMs } from '../shared/latePenalty';
+import { nextLateThresholdMs, computeLatePenalty, formatPenaltyDays } from '../shared/latePenalty';
 import { BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, type BtobRejectionKey } from '../shared/btob';
 import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
 import {
@@ -805,6 +805,23 @@ export function lateReturnEmail(
   // Earliest upcoming threshold across the late lines (each from its own returnAt/stage).
   const thresholds = items.map(l => nextLateThresholdMs(l.r.returnAtMs, l.stage)).filter((x): x is number => x != null);
   const next = thresholds.length ? Math.min(...thresholds) : null;
+  // What will really be suggested just after that threshold: computeLatePenalty for
+  // every line at next + 1 ms (upper bounds are inclusive), summed. Past 24h the grace
+  // setting can't matter, so the default is passed. Lines whose own tier hasn't ended
+  // simply keep their current amount.
+  const after = next != null && stage !== 'tier3'
+    ? items.map(l => computeLatePenalty({
+        returnAtMs: l.r.returnAtMs, nowMs: next + 1, pricePerDay: l.r.pricePerDay, quantity: l.r.quantity, graceHours: undefined,
+      }))
+    : null;
+  const nextAmount = after ? fmtLak(after.reduce((s, p) => s + p.amountLak, 0)) : null;
+  const nextDays = after && after.every(p => p.days === after[0].days) ? after[0].days : null;
+  const goesUp = next != null && nextAmount
+    ? `after that, the fee goes up to ${nextAmount}${nextDays ? ` (${formatPenaltyDays(nextDays).replace(/days?$/, m => `rental ${m}`)})` : ''}`
+    : null;
+  const feePreheader = next != null && nextAmount
+    ? `Late fee so far: ${amount} · it goes up to ${nextAmount} after ${at(next)}`
+    : `Late fee so far: ${amount}`;
   const productLabel = items.length > 1 ? `${first.productName} + ${items.length - 1} more` : first.productName;
 
   // Deposit held at handover, in its original currency, summed per currency.
@@ -826,7 +843,7 @@ export function lateReturnEmail(
   }> = {
     tier1: {
       subject: `Your LANCHAI return is overdue · ${productLabel}`,
-      preheader: `Late fee so far: ${amount}${next ? ` · return before ${at(next)} to stay at this amount` : ''}`,
+      preheader: feePreheader,
       pill: 'Return overdue',
       title: 'Running late?',
       primary: dir,
@@ -834,7 +851,7 @@ export function lateReturnEmail(
     },
     tier2: {
       subject: `Please return your item today · ${productLabel}`,
-      preheader: `Late fee so far: ${amount}${next ? ` · return before ${at(next)} to stay at this amount` : ''}`,
+      preheader: feePreheader,
       pill: 'Over 24 hours late',
       title: 'Please return your item today',
       primary: dir,
@@ -876,7 +893,7 @@ export function lateReturnEmail(
           { type: 'amount', label: sameDays ? `${days} rental ${days === 1 ? 'day' : 'days'}` : 'Total', value: amount },
           ...(next ? [stage === 'tier3'
             ? { type: 'notice' as const, tone: 'alert' as const, text: `After 72 hours (${at(next)}), it will be treated as a non-return.` }
-            : { type: 'notice' as const, tone: 'amber' as const, icon: { name: 'clock' as const, alt: 'Deadline' }, text: `Return before ${at(next)} to stay at this amount.` }] : []),
+            : { type: 'notice' as const, tone: 'amber' as const, icon: { name: 'clock' as const, alt: 'Deadline' }, text: goesUp ? `Return before ${at(next)} — ${goesUp}.` : `Return before ${at(next)}.` }] : []),
           {
             type: 'text', tone: 'muted', small: true,
             text: depositText
