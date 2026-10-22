@@ -16,6 +16,7 @@ import {
 import { isPickupMissed } from './shared/dates';
 import { HANDOFF_BUFFER_MS } from './shared/availability';
 import { sendLateReturnEmail } from './email/triggers';
+import { dueLateAlerts, planLateEmails, type LateAlertKey, type LateRow } from './lateAlerts';
 
 // Transactional emails (Brevo) — see functions/src/email/.
 export * from './email/triggers';
@@ -36,13 +37,6 @@ async function getGraceHours(): Promise<number> {
   return sanitizeGraceHours(snap?.data()?.graceHours);
 }
 
-// Escalation ladder, lowest → highest. When several thresholds are crossed in one run
-// (function downtime, back-dated test data), only the HIGHEST one notifies; the lower
-// flags are just marked done so the renter isn't spammed with stale messages.
-type LateAlertKey = 'lateAlert0h' | 'lateAlert1h' | 'lateAlertGrace' | 'lateAlert24h' | 'lateAlert48h' | 'lateAlert72h';
-const LATE_EMAIL_STAGE: Partial<Record<LateAlertKey, 'tier1' | 'tier2' | 'tier3' | 'nonReturn'>> = {
-  lateAlertGrace: 'tier1', lateAlert24h: 'tier2', lateAlert48h: 'tier3', lateAlert72h: 'nonReturn',
-};
 
 export const lateReturnAlerts = onSchedule(
   { schedule: 'every 15 minutes', region: 'asia-southeast1', secrets: [BREVO_API_KEY] },
@@ -57,21 +51,9 @@ export const lateReturnAlerts = onSchedule(
     const adminUids = adminSnap.docs.map(d => d.id);
     const graceHours = await getGraceHours();
 
-    // Late emails go out ONE per order and run (all its late lines, fees summed), at the
-    // highest stage reached this run — the in-app alerts below stay per reservation.
-    const orderOf = (d: admin.firestore.QueryDocumentSnapshot) =>
-      (d.get('orderId') as string | undefined) ?? d.id.replace(/_\d+$/, '');
-    const penalties = new Map<string, ReturnType<typeof computeLatePenalty>>();
-    for (const d of snap.docs) {
-      const returnAt = d.get('returnAt') as admin.firestore.Timestamp | undefined;
-      if (!returnAt) continue;
-      penalties.set(d.id, computeLatePenalty({
-        returnAtMs: returnAt.toMillis(), nowMs: now,
-        pricePerDay: d.get('pricePerDay') ?? 0, quantity: d.get('quantity') ?? 1, graceHours,
-      }));
-    }
-    const STAGE_RANK = { tier1: 1, tier2: 2, tier3: 3, nonReturn: 4 } as const;
-    const lateEmails = new Map<string, { renterId: string; stage: keyof typeof STAGE_RANK }>();
+    // Late emails go out ONE per order and run (planLateEmails, lateAlerts.ts) — the
+    // in-app alerts below stay per reservation.
+    const lateRows: LateRow[] = [];
 
     for (const reservationDoc of snap.docs) {
       const data = reservationDoc.data();
@@ -106,125 +88,104 @@ export const lateReturnAlerts = onSchedule(
         updates.nonReturnAt = FieldValue.serverTimestamp();
       }
 
-      const due: Array<{ key: LateAlertKey; send: () => Promise<void> }> = [];
-      if (!data.lateAlert0h) {
-        due.push({ key: 'lateAlert0h', send: async () => {
-          await sendRenterNotif(renterId, {
-            title: 'Return due now',
-            body: `Your ${productName} is due back today — please return it now to avoid a late fee.`,
-            icon: 'clock', iconColor: 'amber', deepLink: renterLink,
-          });
-          await sendAdminNotifs(adminUids, {
-            title: 'Return due now',
-            body: `${renterName}'s ${productName} is due for return today.`,
-            icon: 'alert', iconColor: 'amber', deepLink: adminLink,
-          });
-        } });
-      }
-      if (penalty.hoursLate >= 1 && !data.lateAlert1h) {
-        due.push({ key: 'lateAlert1h', send: async () => {
-          await sendRenterNotif(renterId, {
-            title: 'Return is 1 hour late',
-            body: `Your ${productName} was due 1 hour ago. Please return it as soon as possible — a late fee may apply the longer it's overdue.`,
-            icon: 'alert', iconColor: 'coral', deepLink: renterLink,
-          });
-          await sendAdminNotifs(adminUids, {
-            title: '1h overdue',
-            body: `${renterName}'s ${productName} is 1 hour late — no return confirmed yet.`,
-            icon: 'alert', iconColor: 'coral', deepLink: adminLink,
-          });
-        } });
-      }
-      if (penalty.stage === 'tier1' && !data.lateAlertGrace) {
-        due.push({ key: 'lateAlertGrace', send: async () => {
-          await sendRenterNotif(renterId, {
-            title: 'Return overdue',
-            body: `Your ${productName} is overdue. A late fee of ${amount} LAK (1 rental day) may apply, pending confirmation from our team — please return the item as soon as possible.`,
-            icon: 'alert', iconColor: 'coral', deepLink: renterLink,
-          });
-          await sendAdminNotifs(adminUids, {
-            title: 'Overdue — penalty suggested',
-            body: `${renterName}'s ${productName} is ${Math.floor(penalty.hoursLate)}h overdue. Suggested penalty: ${amount} LAK (${breakdown}) — requires manual confirmation at return.`,
-            icon: 'alert', iconColor: 'coral', deepLink: adminLink,
-          });
-        } });
-      }
-      if (penalty.stage === 'tier2' && !data.lateAlert24h) {
-        due.push({ key: 'lateAlert24h', send: async () => {
-          await sendRenterNotif(renterId, {
-            title: 'Return over 24 hours late',
-            body: `Your ${productName} is more than 24 hours overdue. The late fee may now be ${amount} LAK (1.5 rental days), pending confirmation from our team — please return it as soon as possible.`,
-            icon: 'alert', iconColor: 'coral', deepLink: renterLink,
-          });
-          await sendAdminNotifs(adminUids, {
-            title: '24h+ overdue',
-            body: `${renterName}'s ${productName} is more than 24 hours overdue. Suggested penalty: ${amount} LAK (${breakdown}) — requires manual confirmation at return.`,
-            icon: 'alert', iconColor: 'coral', deepLink: adminLink,
-          });
-        } });
-      }
-      if (penalty.stage === 'tier3' && !data.lateAlert48h) {
-        due.push({ key: 'lateAlert48h', send: async () => {
-          await sendRenterNotif(renterId, {
-            title: 'Return over 48 hours late',
-            body: `Your ${productName} is more than 48 hours overdue. The late fee may now be ${amount} LAK (2 rental days), pending confirmation from our team. After 72 hours, it will be treated as a non-return.`,
-            icon: 'alert', iconColor: 'coral', deepLink: renterLink,
-          });
-          await sendAdminNotifs(adminUids, {
-            title: '48h+ overdue',
-            body: `${renterName}'s ${productName} is more than 48 hours overdue. Suggested penalty: ${amount} LAK (${breakdown}) — requires manual confirmation at return.`,
-            icon: 'alert', iconColor: 'coral', deepLink: adminLink,
-          });
-        } });
-      }
-      if (penalty.stage === 'nonReturn' && !data.lateAlert72h) {
-        due.push({ key: 'lateAlert72h', send: async () => {
-          await sendRenterNotif(renterId, {
-            title: 'Treated as a non-return',
-            body: `Your ${productName} is now more than 72 hours overdue and is treated as a non-return. Your deposit may be kept and our contract procedure applies. Please contact us right away.`,
-            icon: 'alert', iconColor: 'coral', deepLink: renterLink,
-          });
-          await sendAdminNotifs(adminUids, {
-            title: 'Non-return (72h+)',
-            body: `${renterName}'s ${productName} is more than 72 hours overdue and is flagged as a non-return. Suggested penalty: ${amount} LAK (${breakdown}). Review it, and use "Report lost/stolen" if the item won't come back.`,
-            icon: 'alert', iconColor: 'coral', deepLink: adminLink,
-          });
-        } });
-      }
+      const senders: Record<LateAlertKey, () => Promise<void>> = {} as Record<LateAlertKey, () => Promise<void>>;
+      senders.lateAlert0h = async () => {
+        await sendRenterNotif(renterId, {
+          title: 'Return due now',
+          body: `Your ${productName} is due back today — please return it now to avoid a late fee.`,
+          icon: 'clock', iconColor: 'amber', deepLink: renterLink,
+        });
+        await sendAdminNotifs(adminUids, {
+          title: 'Return due now',
+          body: `${renterName}'s ${productName} is due for return today.`,
+          icon: 'alert', iconColor: 'amber', deepLink: adminLink,
+        });
+      };
+      senders.lateAlert1h = async () => {
+        await sendRenterNotif(renterId, {
+          title: 'Return is 1 hour late',
+          body: `Your ${productName} was due 1 hour ago. Please return it as soon as possible — late returns may add rental days.`,
+          icon: 'alert', iconColor: 'coral', deepLink: renterLink,
+        });
+        await sendAdminNotifs(adminUids, {
+          title: '1h overdue',
+          body: `${renterName}'s ${productName} is 1 hour late — no return confirmed yet.`,
+          icon: 'alert', iconColor: 'coral', deepLink: adminLink,
+        });
+      };
+      senders.lateAlertGrace = async () => {
+        await sendRenterNotif(renterId, {
+          title: 'Return overdue',
+          body: `Your ${productName} is overdue. A late fee of ${amount} LAK (1 rental day) may apply, pending confirmation from our team — please return the item as soon as possible.`,
+          icon: 'alert', iconColor: 'coral', deepLink: renterLink,
+        });
+        await sendAdminNotifs(adminUids, {
+          title: 'Overdue — penalty suggested',
+          body: `${renterName}'s ${productName} is ${Math.floor(penalty.hoursLate)}h overdue. Suggested penalty: ${amount} LAK (${breakdown}) — requires manual confirmation at return.`,
+          icon: 'alert', iconColor: 'coral', deepLink: adminLink,
+        });
+      };
+      senders.lateAlert24h = async () => {
+        await sendRenterNotif(renterId, {
+          title: 'Return over 24 hours late',
+          body: `Your ${productName} is more than 24 hours overdue. The late fee may now be ${amount} LAK (1.5 rental days), pending confirmation from our team — please return it as soon as possible.`,
+          icon: 'alert', iconColor: 'coral', deepLink: renterLink,
+        });
+        await sendAdminNotifs(adminUids, {
+          title: '24h+ overdue',
+          body: `${renterName}'s ${productName} is more than 24 hours overdue. Suggested penalty: ${amount} LAK (${breakdown}) — requires manual confirmation at return.`,
+          icon: 'alert', iconColor: 'coral', deepLink: adminLink,
+        });
+      };
+      senders.lateAlert48h = async () => {
+        await sendRenterNotif(renterId, {
+          title: 'Return over 48 hours late',
+          body: `Your ${productName} is more than 48 hours overdue. The late fee may now be ${amount} LAK (2 rental days), pending confirmation from our team. After 72 hours, it will be treated as a non-return.`,
+          icon: 'alert', iconColor: 'coral', deepLink: renterLink,
+        });
+        await sendAdminNotifs(adminUids, {
+          title: '48h+ overdue',
+          body: `${renterName}'s ${productName} is more than 48 hours overdue. Suggested penalty: ${amount} LAK (${breakdown}) — requires manual confirmation at return.`,
+          icon: 'alert', iconColor: 'coral', deepLink: adminLink,
+        });
+      };
+      senders.lateAlert72h = async () => {
+        await sendRenterNotif(renterId, {
+          title: 'Treated as a non-return',
+          body: `Your ${productName} is now more than 72 hours overdue and is treated as a non-return. Your deposit may be kept and our contract procedure applies. Please contact us right away.`,
+          icon: 'alert', iconColor: 'coral', deepLink: renterLink,
+        });
+        await sendAdminNotifs(adminUids, {
+          title: 'Non-return (72h+)',
+          body: `${renterName}'s ${productName} is more than 72 hours overdue and is flagged as a non-return. Suggested penalty: ${amount} LAK (${breakdown}). Review it, and use "Report lost/stolen" if the item won't come back.`,
+          icon: 'alert', iconColor: 'coral', deepLink: adminLink,
+        });
+      };
 
-      // Only the highest due alert is sent; all due flags are marked done.
-      if (due.length > 0) {
-        const highest = due[due.length - 1];
-        await highest.send();
-        // Email mirrors the in-app alert from the end of grace on (the 0h/+1h warnings
-        // stay in-app only). Same lateAlert* flag → never sent twice; never throws.
-        const emailStage = LATE_EMAIL_STAGE[highest.key];
-        if (emailStage) {
-          const orderId = orderOf(reservationDoc);
-          const queued = lateEmails.get(orderId);
-          if (!queued || STAGE_RANK[emailStage] > STAGE_RANK[queued.stage]) lateEmails.set(orderId, { renterId, stage: emailStage });
-        }
-        for (const d of due) updates[d.key] = true;
+      // Only the highest due alert is sent; all due flags are marked done. Emails mirror
+      // it from the end of grace on (planLateEmails below); the 0h/+1h stay in-app only.
+      const due = dueLateAlerts(data, penalty, returnAt.toMillis(), now);
+      const highest = due.length ? due[due.length - 1] : null;
+      if (highest) {
+        await senders[highest]();
+        for (const k of due) updates[k] = true;
       }
+      lateRows.push({
+        id: reservationId, orderId: data.orderId ?? reservationId.replace(/_\d+$/, ''), renterId, penalty, highest,
+      });
 
       if (Object.keys(updates).length > 0) {
         await reservationDoc.ref.update({ ...updates, updatedAt: FieldValue.serverTimestamp() });
       }
     }
 
-    for (const [orderId, { renterId, stage }] of lateEmails) {
-      const lines = snap.docs
-        .filter(d => orderOf(d) === orderId && d.get('renterId') === renterId)
-        .flatMap(d => {
-          const p = penalties.get(d.id);
-          return p && isPenaltyStage(p.stage)
-            ? [{ snap: d, stage: p.stage as keyof typeof STAGE_RANK, amountLak: p.amountLak, days: p.days }]
-            : [];
-        });
-      if (lines.length === 0) continue;
+    // Same lateAlert* flags → never sent twice; sendLateReturnEmail never throws.
+    const docsById = new Map(snap.docs.map(d => [d.id, d]));
+    for (const batch of planLateEmails(lateRows)) {
+      const lines = batch.lines.map(l => ({ ...l, snap: docsById.get(l.id)! }));
       // Past the grace period syncBookingHold always holds the renter (admins excepted) —
       // decided here so the line doesn't depend on that trigger having run yet.
-      await sendLateReturnEmail(renterId, stage, orderId, lines, !adminUids.includes(renterId));
+      await sendLateReturnEmail(batch.renterId, batch.stage, batch.orderId, lines, !adminUids.includes(batch.renterId));
     }
   },
 );

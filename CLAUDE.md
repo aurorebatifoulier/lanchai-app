@@ -275,7 +275,13 @@ a snapshot indefinitely).
     `nextLateThresholdMs()` (returnAt + 24/48/72h, `shared/latePenalty.ts`), deposit in
     its handover currency. Pills: amber (overdue, 24h), light red (48h), solid red
     (non-return). "New bookings are paused…" only when the renter is held (always past
-    the grace, admins excepted). No WhatsApp number → "Email us" (mailto).
+    the grace, admins excepted). No WhatsApp number → "Email us" (mailto). The amber box
+    states the next fee explicitly ("after that, the fee goes up to X") via the shared
+    `lateFeeSummary()` (`templates.ts`). The alert/email decision logic is pure in
+    `functions/src/lateAlerts.ts` (`dueLateAlerts`, `planLateEmails`) — dry run it with
+    `cd functions && npm run build && node scripts/simulate-late-returns.js [graceHours]`
+    (no emails, no Firestore). Thresholds are inclusive upper bounds (Terms §9), so each
+    email goes out on the first 15-min run strictly after returnAt + grace/24/48/72h.
   - **Layout (validated mockup v3):** hero card with the logo at its top (amber pill,
     big title, amber primary button, 2 outline buttons with icons) → white cards
     (14/16px padding, 10px gap) → centered cancellation line → footer with amber top

@@ -788,6 +788,32 @@ export interface LateEmailContext {
   holdActive: boolean;
 }
 
+/**
+ * Current fee, next threshold and the fee just after it, for an order's late lines —
+ * shared by the email and scripts/simulate-late-returns.js. Next threshold = earliest
+ * nextLateThresholdMs over the lines; next fee = computeLatePenalty for every line at
+ * that threshold + 1 ms (upper bounds are inclusive), summed — exactly what will be
+ * suggested then (lines whose own tier hasn't ended keep their amount). Past 24h the
+ * grace setting can't matter, so the default is passed. No next fee at tier3 (the next
+ * step is the non-return) or at non-return.
+ */
+export function lateFeeSummary(lines: LateLine[], stage: LateEmailStage): {
+  amountLak: number; next: number | null; nextAmountLak: number | null; nextDays: number | null;
+} {
+  const amountLak = lines.reduce((s, l) => s + (l.r.latePenaltyAmount ?? 0), 0);
+  const thresholds = lines.map(l => nextLateThresholdMs(l.r.returnAtMs, l.stage)).filter((x): x is number => x != null);
+  const next = thresholds.length ? Math.min(...thresholds) : null;
+  if (next == null || stage === 'tier3' || stage === 'nonReturn') return { amountLak, next, nextAmountLak: null, nextDays: null };
+  const after = lines.map(l => computeLatePenalty({
+    returnAtMs: l.r.returnAtMs, nowMs: next + 1, pricePerDay: l.r.pricePerDay, quantity: l.r.quantity, graceHours: undefined,
+  }));
+  return {
+    amountLak, next,
+    nextAmountLak: after.reduce((s, p) => s + p.amountLak, 0),
+    nextDays: after.every(p => p.days === after[0].days) ? after[0].days : null,
+  };
+}
+
 export function lateReturnEmail(
   _name: string,
   stage: LateEmailStage,
@@ -798,24 +824,11 @@ export function lateReturnEmail(
   const items = [...lines].sort((a, b) => a.r.returnAtMs - b.r.returnAtMs || a.r.id.localeCompare(b.r.id));
   const first = items[0].r;
   const at = (ms: number) => `${vteDay(ms)} at ${vteTime(ms)}`;
-  const amountLak = items.reduce((s, l) => s + (l.r.latePenaltyAmount ?? 0), 0);
-  const amount = fmtLak(amountLak);
+  const amount = fmtLak(items.reduce((s, l) => s + (l.r.latePenaltyAmount ?? 0), 0));
   const days = items[0].r.latePenaltyDays ?? 0;
   const sameDays = items.every(l => (l.r.latePenaltyDays ?? 0) === days);
-  // Earliest upcoming threshold across the late lines (each from its own returnAt/stage).
-  const thresholds = items.map(l => nextLateThresholdMs(l.r.returnAtMs, l.stage)).filter((x): x is number => x != null);
-  const next = thresholds.length ? Math.min(...thresholds) : null;
-  // What will really be suggested just after that threshold: computeLatePenalty for
-  // every line at next + 1 ms (upper bounds are inclusive), summed. Past 24h the grace
-  // setting can't matter, so the default is passed. Lines whose own tier hasn't ended
-  // simply keep their current amount.
-  const after = next != null && stage !== 'tier3'
-    ? items.map(l => computeLatePenalty({
-        returnAtMs: l.r.returnAtMs, nowMs: next + 1, pricePerDay: l.r.pricePerDay, quantity: l.r.quantity, graceHours: undefined,
-      }))
-    : null;
-  const nextAmount = after ? fmtLak(after.reduce((s, p) => s + p.amountLak, 0)) : null;
-  const nextDays = after && after.every(p => p.days === after[0].days) ? after[0].days : null;
+  const { next, nextAmountLak, nextDays } = lateFeeSummary(items, stage);
+  const nextAmount = nextAmountLak != null ? fmtLak(nextAmountLak) : null;
   const goesUp = next != null && nextAmount
     ? `after that, the fee goes up to ${nextAmount}${nextDays ? ` (${formatPenaltyDays(nextDays).replace(/days?$/, m => `rental ${m}`)})` : ''}`
     : null;
