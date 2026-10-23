@@ -7,6 +7,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { auth } from '@/lib/auth';
 import { getUserProfile, saveUserProfile, setMarketingOptIn } from '@/lib/firestore';
+import { useFeatureFlags } from '@/lib/features';
 
 // Email preferences. Reminders = the non-essential emails (pick-up/return reminders,
 // review follow-up — emailRemindersOptOut, read by functions/src/email/triggers.ts).
@@ -20,6 +21,9 @@ export default function NotificationsScreen() {
   const [reminders, setReminders] = useState(true);
   const [marketing, setMarketing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // News & offers is hidden until the newsletter is decided (config/features.newsletter).
+  // The stored consent fields and their rules stay as they are.
+  const { newsletter } = useFeatureFlags();
 
   useEffect(() => {
     const cu = auth.currentUser;
@@ -80,21 +84,25 @@ export default function NotificationsScreen() {
             Booking confirmations, cancellations, late returns and receipts are always sent — they&apos;re about your rentals.
           </Text>
 
-          <Text style={s.sectionTitle}>News and offers</Text>
-          <View style={s.toggleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.toggleTitle}>News and offers</Text>
-              <Text style={s.toggleSub}>
-                Send me news, new items and offers by email. You can unsubscribe anytime.
-              </Text>
-            </View>
-            <Switch
-              value={marketing}
-              onValueChange={v => toggle(v, setMarketing, uid => setMarketingOptIn(uid, v))}
-              trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
-              thumbColor={COLORS.white}
-            />
-          </View>
+          {newsletter && (
+            <>
+              <Text style={s.sectionTitle}>News and offers</Text>
+              <View style={s.toggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.toggleTitle}>News and offers</Text>
+                  <Text style={s.toggleSub}>
+                    Send me news, new items and offers by email. You can unsubscribe anytime.
+                  </Text>
+                </View>
+                <Switch
+                  value={marketing}
+                  onValueChange={v => toggle(v, setMarketing, uid => setMarketingOptIn(uid, v))}
+                  trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
+                  thumbColor={COLORS.white}
+                />
+              </View>
+            </>
+          )}
 
           {error && <Text style={s.error}>{error}</Text>}
 

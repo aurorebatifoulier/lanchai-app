@@ -385,9 +385,10 @@ a snapshot indefinitely).
   every outcome is "nothing to pay" and no renter screen/email warns about losing money.
   `cancellationOutcome()` keeps the policy tiers (`cancelTier()`: >48h free, 24–48h
   store credit 6 months, <24h retained, premium) for the day a reservation carries an
-  optional `advancePaidLak > 0` — never written today. The legal texts and FAQ
-  (`lib/legalContent.ts`, `app/profile/faq.tsx`) still describe a 40% advance and are
-  pending review — don't "fix" them without Aurore.
+  optional `advancePaidLak > 0` — never written today (the renter cancel screens and the
+  email only show those tiers when an advance exists). The legal texts and FAQ now say:
+  no advance, free cancellation any time before pick-up, nothing charged before pick-up
+  (validated 2026-10-23) — never mention advances/vouchers/premium non-refund to renters.
   - Admin cancellation (`app/admin/reservations/[id].tsx`): `pending_payment`/`confirmed`
     only (an `active` rental is a return, not a cancellation), reason preset
     (`CANCEL_REASONS`) + optional text, this line or the whole order, via
@@ -411,8 +412,9 @@ a snapshot indefinitely).
   `syncBookingHold` adds the `noShow` reason (enforced by the existing reservations create
   rule) until an admin "Lift no-show hold" (`adminLiftNoShowHold`: stamps
   `noShowHoldLiftedAt/By/ByName` on the renter's no_show lines — status stays no_show
-  for history). Legal texts (Terms §8/§10, cancellation policy, FAQ) don't mention this
-  rule yet — wording pending Aurore's validation.
+  for history). Legal texts (Terms §8/§10, cancellation policy, FAQ "What if I can't
+  make it to my pick-up?") describe it: booking released, nothing charged, new bookings
+  paused until the renter contacts us.
 - **Loyalty points — server-side only, one shared rule.** Points change ONLY in Cloud
   Functions via `creditLoyaltyPoints()` (`functions/src/index.ts`), which uses the pure
   `applyLoyaltyPointsChange()` (`functions/src/shared/loyalty.ts`) for balance, tier and
@@ -561,6 +563,15 @@ a snapshot indefinitely).
   Alert.alert-replacement pattern, extracted from `app/admin/reservations/[id].tsx`/
   `app/admin/business-accounts/[uid].tsx` — takes an optional `cancelLabel` prop,
   default `'Keep'`).
+- **VAT display is a switch, OFF by default** (LANCHAI isn't VAT-registered yet):
+  `config/pricing.showVat` (Admin → Exchange rate & VAT). The ONE check is
+  `vatDisplayPercent()` (`functions/src/shared/receiptData.ts`) — `useVatPercent()` /
+  `getVatPercent()` (app, `lib/exchangeRate.ts`) and `getVatPercent()` (emails,
+  `functions/src/email/context.ts`) both go through it and return **null = show no VAT
+  anywhere** (booking summary/checkout/confirmation, `BillingSummary`, `PriceLak`,
+  product "Prices include VAT", receipt screen/PDF/email via `buildReceiptSummary`,
+  confirmation email, BtoB "VAT-ready" wording). Every VAT line must be gated on that
+  null. When ON, everything below applies.
 - **VAT is 10%, VAT-inclusive (TTC), and already baked into every displayed price** —
   never add it on top of a total. Single source of truth for the rate:
   `DEFAULT_VAT_PERCENT` + `useVatPercent()` (`lib/exchangeRate.ts`), a Firestore-backed
@@ -599,6 +610,27 @@ a snapshot indefinitely).
   payable total; `PriceLak`'s business-only breakdown is otherwise still the
   convention used everywhere else pricing is shown (`app/bag.tsx`,
   `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
+
+- **Legal texts (`lib/legalContent.ts`) — updated 2026-10-23, still NEED LAWYER REVIEW
+  before public launch** (limitation of liability, deposit retention on non-return, ID
+  copy retention, data transfers outside Laos — Singapore / Brevo France, operating before
+  company registration, governing law & court, damage charges, tax/VAT once registered).
+  No "DRAFT" banner is shown to renters any more; the review note lives in the file header
+  and here. Address + WhatsApp come from `config/shop` via `{{SHOP_ADDRESS}}` /
+  `{{WHATSAPP_LINE}}` placeholders filled by `components/LegalScreen.tsx`
+  (`fillLegalPlaceholders`). Effective date: `LEGAL_EFFECTIVE_DATE`. Never mention the
+  grace period, an advance, vouchers or a handling fee. Damage wording = the code: a
+  share of the replacement value depending on the damage (`damagedChargePercent`), full
+  replacement value if unusable/lost, staff can reduce or waive.
+- **Launch feature flags — `config/features`** (`lib/features.ts`, Admin → Shop settings
+  → Features; readable before sign-in by `firestore.rules`): `businessAccounts` (OFF —
+  hides the Individual/Business selector and the cross-path login block; all BtoB code
+  and existing BtoB accounts keep working) and `newsletter` (OFF — hides "News and
+  offers" on Notifications; stored consent fields/rules untouched). Missing = OFF.
+- **Shop coordinates** — `config/shop.latitude/longitude` (Shop settings → "Map
+  coordinates", "lat, lng", Laos bounds) feed the shared `mapsUrl()` for every "Get
+  directions" (app + emails); empty → address search. `SHOP_DISPLAY_DEFAULTS`
+  (`functions/src/shared/shop.ts`) holds the real address as the fallback.
 
 ## Security follow-ups
 

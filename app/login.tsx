@@ -25,6 +25,7 @@ import { COLORS } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
+import { useFeatureFlags } from '@/lib/features';
 import { requestPasswordReset, requestEmailVerification, AuthEmailRateLimitError } from '@/lib/authEmails';
 import { db, storage } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/firestore';
@@ -81,7 +82,10 @@ export default function LoginScreen() {
   const [resetMsg, setResetMsg]       = useState('');
 
   const isSignUp = mode === 'signup';
-  const isBtob = path === 'btob';
+  // Business signup is closed at launch (config/features.businessAccounts, default OFF):
+  // the Individual/Business selector is hidden and every login goes through one path.
+  const { businessAccounts } = useFeatureFlags();
+  const isBtob = businessAccounts && path === 'btob';
 
   const passwordsMatch = password === confirmPassword;
 
@@ -188,7 +192,9 @@ export default function LoginScreen() {
         if (cu) {
           const profile = await getUserProfile(cu.uid);
           const actualPath: Path = profile?.accountType === 'btob' ? 'btob' : 'btoc';
-          if (actualPath !== path) {
+          // Selector hidden (business signup closed) → no cross-path block, so existing
+          // business accounts can still sign in.
+          if (businessAccounts && actualPath !== path) {
             await signOut();
             setError(
               actualPath === 'btob'
@@ -262,7 +268,7 @@ export default function LoginScreen() {
       setBusy(false);
     }
   }, [
-    canSubmit, mode, email, password, firstName, lastName, phone, path, isBtob,
+    canSubmit, mode, email, password, firstName, lastName, phone, path, isBtob, businessAccounts,
     companyName, licenseNumber, responsibleName, docUri, signIn, signOut,
   ]);
 
@@ -310,27 +316,29 @@ export default function LoginScreen() {
             resizeMode="contain"
           />
 
-          {/* BtoC / BtoB selector */}
-          <View style={styles.pathRow}>
-            <TouchableOpacity
-              style={[styles.pathBtn, path === 'btoc' && styles.pathBtnActive]}
-              onPress={() => switchPath('btoc')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.pathBtnText, path === 'btoc' && styles.pathBtnTextActive]}>
-                Individual
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.pathBtn, path === 'btob' && styles.pathBtnActive]}
-              onPress={() => switchPath('btob')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.pathBtnText, path === 'btob' && styles.pathBtnTextActive]}>
-                Business
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* BtoC / BtoB selector — only while business accounts are open */}
+          {businessAccounts && (
+            <View style={styles.pathRow}>
+              <TouchableOpacity
+                style={[styles.pathBtn, path === 'btoc' && styles.pathBtnActive]}
+                onPress={() => switchPath('btoc')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pathBtnText, path === 'btoc' && styles.pathBtnTextActive]}>
+                  Individual
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pathBtn, path === 'btob' && styles.pathBtnActive]}
+                onPress={() => switchPath('btob')}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pathBtnText, path === 'btob' && styles.pathBtnTextActive]}>
+                  Business
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Title + subtitle — sign-up only. Sign-in shows neither, for either
               path — the Individual/Business toggle is sufficient context. */}
@@ -563,11 +571,11 @@ export default function LoginScreen() {
           <Text style={styles.consentText}>
             By continuing, you agree to our{' '}
             <Text style={styles.consentLink} onPress={() => router.push('/legal/terms')}>
-              Terms of Service
+              Terms of service
             </Text>
             {' '}and{' '}
             <Text style={styles.consentLink} onPress={() => router.push('/legal/privacy')}>
-              Privacy Policy
+              Privacy policy
             </Text>
             .
           </Text>

@@ -7,9 +7,9 @@
 export const DEFAULT_PAYMENT_METHODS = 'Cash (LAK, USD or THB), bank transfer or QR payment';
 
 export const SHOP_DISPLAY_DEFAULTS = {
-  name:           'LANCHAI · Setthathirath shop',
-  addressLine:    '14 Setthathirath Road',
-  city:           'Vientiane',
+  name:           'LANCHAI',
+  addressLine:    '9 Khouvieng Road, Shop N°43, Beung Khahiong Village, Sisattanak District',
+  city:           '01000 Vientiane',
   hours:          'Daily 9:00–20:00',
   whatsappNumber: '',
   paymentMethods: DEFAULT_PAYMENT_METHODS,

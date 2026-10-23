@@ -914,7 +914,7 @@ export default function AdminProductFormScreen() {
           <SectionLabel title="Premium" />
           <CheckboxRow
             label="Premium equipment"
-            hint='Marks this item as premium: shows a Premium badge on the card and detail page, adds it to the Home Premium section, and applies the non-refundable advance cancellation policy.'
+            hint='Marks this item as premium: shows a Premium badge on the card and detail page and adds it to the Home Premium section. (A stricter cancellation rule only applies if advance payments are ever introduced.)'
             value={isPremium}
             onToggle={() => setIsPremium(v => !v)}
           />

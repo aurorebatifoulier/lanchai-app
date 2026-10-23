@@ -3,7 +3,7 @@ import type { EmailShop, Rates, Recipient } from './context';
 import { appLink, reviewLink } from './config';
 import { googleCalendarUrl, icsAttachment, type CalendarEvent } from './calendar';
 import {
-  deriveReceiptData, deriveSettlementOutcome, splitHtVat, DEFAULT_VAT_PERCENT,
+  deriveReceiptData, deriveSettlementOutcome, splitHtVat,
   type ReceiptInput, type DepositCurrency,
 } from '../shared/receiptData';
 import { mapsUrl, openHoursText, CONTACT_EMAIL } from '../shared/shop';
@@ -121,14 +121,16 @@ function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: numb
     const total    = items.reduce((s, r) => s + (r.total ?? 0), 0);
     const deposit  = items.reduce((s, r) => s + (r.deposit ?? 0), 0);
     const discount = items.reduce((s, r) => s + (r.couponApplied?.discountAmount ?? 0), 0);
-    const vatPct   = opts.vatPercent ?? DEFAULT_VAT_PERCENT;
     // Same build-up as the app's confirmation screen (CLAUDE.md): VAT split of the
     // post-coupon total, for every customer type; the deposit never goes through VAT.
-    const { ht, vat } = splitHtVat(total, vatPct);
+    // vatPercent null = VAT display off (vatDisplayPercent) → plain total only.
     inner.push({ type: 'divider' });
     if (discount > 0) inner.push({ type: 'row', label: 'Coupon', value: `− ${fmtLak(discount)}`, tone: 'muted' });
-    inner.push({ type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(ht), tone: 'muted' });
-    inner.push({ type: 'row', label: `VAT (${vatPct}%)`, value: fmtLak(vat), tone: 'muted' });
+    if (opts.vatPercent != null) {
+      const { ht, vat } = splitHtVat(total, opts.vatPercent);
+      inner.push({ type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(ht), tone: 'muted' });
+      inner.push({ type: 'row', label: `VAT (${opts.vatPercent}%)`, value: fmtLak(vat), tone: 'muted' });
+    }
     inner.push({ type: 'row', label: 'Total to pay at pick-up', value: fmtLak(total), strong: true, gapTop: 6 });
     inner.push({ type: 'row', label: 'Refundable deposit', value: fmtLak(deposit), gapTop: 2 });
   }
@@ -658,6 +660,8 @@ export interface BtobApprovedContext {
   firstName: string;
   /** config/loyalty.depositPercentByType.business — 0 = no deposit, 100 = standard. */
   businessDepositPercent: number | null;
+  /** VAT display on (vatDisplayPercent) — otherwise no "VAT-ready" wording. */
+  showVat?: boolean;
 }
 
 export function btobApprovedEmail(_name: string, shop: EmailShop, ctx: BtobApprovedContext): Rendered {
@@ -668,13 +672,15 @@ export function btobApprovedEmail(_name: string, shop: EmailShop, ctx: BtobAppro
   if (noDeposit) items.push({ type: 'bullet', text: 'No deposit on your rentals', icon: { name: 'shield-check', alt: 'No deposit' } });
   else if (pct != null && pct > 0 && pct < 100) items.push({ type: 'bullet', text: `Reduced deposit: ${pct}% of the standard amount`, icon: { name: 'shield-check', alt: 'Reduced deposit' } });
   items.push(
-    { type: 'bullet', text: 'VAT-ready receipts — prices excl. VAT, ready for your accounting', icon: { name: 'receipt', alt: 'Receipts' } },
+    { type: 'bullet', text: ctx.showVat ? 'VAT-ready receipts — prices excl. VAT, ready for your accounting' : 'Clear receipts for your accounting', icon: { name: 'receipt', alt: 'Receipts' } },
     { type: 'bullet', text: shop.paymentMethods, icon: { name: 'bank', alt: 'Payment' } },
     { type: 'bullet', text: 'Several items in one order — perfect for events', icon: { name: 'shopping-bag', alt: 'Orders' } },
   );
   return build(
     'Welcome to LANCHAI Business',
-    noDeposit ? 'No deposit, VAT-ready receipts — start booking' : 'VAT-ready receipts — start booking',
+    ctx.showVat
+      ? (noDeposit ? 'No deposit, VAT-ready receipts — start booking' : 'VAT-ready receipts — start booking')
+      : (noDeposit ? 'No deposit, clear receipts — start booking' : 'Clear receipts — start booking'),
     'Welcome to LANCHAI Business',
     [
       {

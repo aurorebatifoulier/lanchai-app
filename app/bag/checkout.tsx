@@ -326,7 +326,7 @@ export default function BagSummaryScreen() {
           <BillingSummary
             subtotalHt={vatHt}
             vatAmount={vatAmount}
-            vatPct={vatPct}
+            vatPct={vatPercent}
             total={finalTotal}
             totalLabel="Total to pay"
             deposit={totalDeposit}

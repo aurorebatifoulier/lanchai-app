@@ -9,7 +9,8 @@ import { formatLakAmount } from '@/utils/currency';
 export interface BillingSummaryProps {
   subtotalHt: number;
   vatAmount: number;
-  vatPct: number;
+  /** null → VAT display off: only the total (and deposit) rows. */
+  vatPct: number | null;
   total: number;
   totalLabel: string;
   // Omit both to render just Subtotal/VAT/Total with no Deposit row — for a context
@@ -32,14 +33,18 @@ export function BillingSummary({
 }: BillingSummaryProps) {
   return (
     <View style={style}>
-      <View style={s.row}>
-        <Text style={s.label}>Subtotal (excl. VAT)</Text>
-        <Text style={s.value}>{formatLakAmount(subtotalHt)}</Text>
-      </View>
-      <View style={s.row}>
-        <Text style={s.label}>VAT ({vatPct}%)</Text>
-        <Text style={s.value}>{formatLakAmount(vatAmount)}</Text>
-      </View>
+      {vatPct != null && (
+        <>
+          <View style={s.row}>
+            <Text style={s.label}>Subtotal (excl. VAT)</Text>
+            <Text style={s.value}>{formatLakAmount(subtotalHt)}</Text>
+          </View>
+          <View style={s.row}>
+            <Text style={s.label}>VAT ({vatPct}%)</Text>
+            <Text style={s.value}>{formatLakAmount(vatAmount)}</Text>
+          </View>
+        </>
+      )}
       <View style={s.totalRow}>
         <Text style={s.totalLabel}>{totalLabel}</Text>
         <Text style={s.totalValue}>{formatLakAmount(total)}</Text>

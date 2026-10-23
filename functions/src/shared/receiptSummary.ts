@@ -53,7 +53,8 @@ export function buildReceiptSummary(
   const lines: SummaryLine[] = [];
 
   lines.push({ kind: 'row', label: 'Rental fee', value: formatLakAmount(r.total) });
-  lines.push({ kind: 'detail', text: `incl. VAT ${data.vatPct}%: ${formatLakAmount(data.vatAmount)}` });
+  // vatPercent === null → VAT display is off (vatDisplayPercent) → no VAT line at all.
+  if (vatPercent != null) lines.push({ kind: 'detail', text: `incl. VAT ${data.vatPct}%: ${formatLakAmount(data.vatAmount)}` });
   lines.push({ kind: 'row', label: 'Deposit paid', value: fmt(data.depositHeldAmount) });
 
   if (r.lateChargeWaived) {

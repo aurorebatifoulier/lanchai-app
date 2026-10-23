@@ -174,7 +174,7 @@ export default function BookingConfirmationScreen() {
           <BillingSummary
             subtotalHt={vatHt}
             vatAmount={vatAmount}
-            vatPct={vatPct}
+            vatPct={vatPercent}
             total={totalRental}
             totalLabel="Total to pay at pick-up"
             deposit={totalDeposit}

@@ -210,7 +210,7 @@ export default function BookingSummaryScreen() {
           <BillingSummary
             subtotalHt={vatHt}
             vatAmount={vatAmount}
-            vatPct={vatPct}
+            vatPct={vatPercent}
             total={finalTotal}
             totalLabel="Total to pay"
             deposit={deposit}

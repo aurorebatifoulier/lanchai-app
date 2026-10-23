@@ -32,7 +32,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'credit-card',
     q: 'How do I pay?',
-    a: "To reserve, you pay a 40% advance of the rental fee, and the remaining balance when you pick up the item. We accept cash, bank transfer, and QR payment. Prices are in Lao Kip (LAK); payment in USD or THB may be possible at the day's exchange rate. The security deposit is paid separately, in store at pick-up.",
+    a: "Nothing to pay online and no advance — you pay the rental fee in store at pick-up, in cash (LAK, USD or THB), by Lao bank transfer or by QR payment. Prices are in Lao Kip (LAK); USD and THB are accepted at the day's exchange rate. The deposit is paid at pick-up too, and refunded on the spot when you return the item.",
   },
   {
     icon: 'clock',
@@ -52,17 +52,22 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'x-circle',
     q: 'Can I cancel my reservation?',
-    a: 'Yes. More than 48 hours before pick-up: full refund. Between 48 and 24 hours before pick-up: a non-transferable credit note (not a cash refund). Less than 24 hours before pick-up: no refund, and the advance payment is kept. For premium items, the advance payment is non-refundable whenever you cancel.',
+    a: "Yes, for free, at any time before pick-up — nothing is charged before pick-up. If you can't come, please cancel in the app (My rentals) so someone else can rent the item.",
+  },
+  {
+    icon: 'calendar',
+    q: "What if I can't make it to my pick-up?",
+    a: "Please cancel in the app, or message us. If you don't come and haven't cancelled, the booking is released and nothing is charged, but new bookings are paused until you contact us.",
   },
   {
     icon: 'alert-circle',
     q: 'What happens if I return late?',
-    a: "The 24h clock starts at your confirmed pick-up time, so please return on time. A late return can add rental days: up to 24h late adds 1 day, 24–48h adds 1.5 days, and 48–72h adds 2 days. After 72 hours it's treated as a non-return: the deposit is kept and our contract procedure applies. New rentals are paused until any late return is settled.",
+    a: "The 24h clock starts at your confirmed pick-up time, so please return on time. A late return can add rental days: up to 24h late adds 1 day, 24–48h adds 1.5 days, and 48–72h adds 2 days. After 72 hours it's treated as a non-return: the deposit may be kept and our contract procedure applies. New bookings are paused until any late return is settled. Our team can reduce or waive late fees.",
   },
   {
     icon: 'alert-triangle',
     q: 'What if the item is damaged or lost?',
-    a: "Minor reversible marks (light scratches, normal wear) are free. Damage that partially limits use — a crack, a missing part, a blocked function — is charged at 50% of the item's value. Damage or loss that makes the item unusable is charged at its full value plus a 10% admin fee.",
+    a: "Minor reversible marks (light scratches, normal wear) are free. If an item is damaged, we charge a share of its replacement value depending on the damage, explained to you at return — the full replacement value if the item is unusable or lost. Charges are deducted from your deposit, and our team can reduce or waive them.",
   },
   {
     icon: 'user',

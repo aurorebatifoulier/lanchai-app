@@ -7,6 +7,7 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -209,6 +210,22 @@ export default function AdminExchangeRateScreen() {
   const [vatSaving, setVatSaving] = useState(false);
   const [vatSaveError, setVatSaveError] = useState<string | null>(null);
   const [vatSaved, setVatSaved] = useState(false);
+  // Show VAT on prices and receipts — default OFF (not VAT-registered yet). Read by the
+  // shared vatDisplayPercent() everywhere (app + emails).
+  const [showVatSaving, setShowVatSaving] = useState(false);
+  const [showVatError, setShowVatError] = useState<string | null>(null);
+  const toggleShowVat = useCallback(async (value: boolean) => {
+    setShowVatSaving(true);
+    setShowVatError(null);
+    try {
+      await setDoc(doc(db, 'config', 'pricing'), { showVat: value }, { merge: true });
+      setConfig(prev => ({ ...(prev ?? ({} as PricingConfig)), showVat: value }));
+    } catch {
+      setShowVatError('Could not update. Please try again.');
+    } finally {
+      setShowVatSaving(false);
+    }
+  }, []);
 
   useEffect(() => {
     getDoc(doc(db, 'config', 'pricing'))
@@ -464,7 +481,23 @@ export default function AdminExchangeRateScreen() {
 
         {!loading && (
           <View style={s.thbSection}>
-            <Text style={s.sectionLabel}>VAT (business accounts)</Text>
+            <Text style={s.sectionLabel}>VAT</Text>
+            <View style={s.vatToggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.vatToggleTitle}>Show VAT on prices and receipts</Text>
+                <Text style={s.updatedNote}>
+                  Off: plain totals everywhere (booking, receipts, PDF, emails). On: {config?.vatPercent ?? DEFAULT_VAT_PERCENT}% VAT breakdown.
+                </Text>
+              </View>
+              <Switch
+                value={config?.showVat === true}
+                onValueChange={toggleShowVat}
+                disabled={showVatSaving}
+                trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
+                thumbColor={COLORS.white}
+              />
+            </View>
+            {showVatError && <Text style={s.vatToggleError}>{showVatError}</Text>}
             <RateEditor
               displayLabel="VAT rate"
               placeholder="e.g. 10"
@@ -484,7 +517,7 @@ export default function AdminExchangeRateScreen() {
             />
             {config?.vatPercent == null && (
               <Text style={s.updatedNote}>
-                Not set yet — approved business accounts currently see a {DEFAULT_VAT_PERCENT}% placeholder.
+                Not set yet — a {DEFAULT_VAT_PERCENT}% placeholder is used when VAT is shown.
               </Text>
             )}
           </View>
@@ -559,6 +592,13 @@ const s = StyleSheet.create({
 
   rateDisplay: { fontSize: 22, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.4 },
   updatedNote: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 4 },
+  vatToggleRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.softGray200,
+    borderRadius: 12, padding: 14, marginBottom: 12,
+  },
+  vatToggleTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
+  vatToggleError: { fontSize: 12, fontWeight: '500', color: COLORS.danger, marginBottom: 8 },
 
   confirmBox: {
     backgroundColor: '#FEF2F2', borderRadius: 10, padding: 14, gap: 12,

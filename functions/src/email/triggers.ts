@@ -201,10 +201,12 @@ export const emailBtobDecision = onDocumentUpdated(
         // Deposit line/preheader depend on the configured business deposit %.
         const loyalty = (await db().collection('config').doc('loyalty').get()).data();
         const pct = loyalty?.depositPercentByType?.business;
+        const showVat = (await getVatPercent()) != null;
         await claimAndSend([afterSnap.ref], 'emailBtobApproved', () =>
           deliver(uid, null, (name, shop, recipient) => btobApprovedEmail(name, shop, {
             firstName: recipient.firstName,
             businessDepositPercent: typeof pct === 'number' ? pct : null,
+            showVat,
           }), 'btob-approved'));
       } else if (after.btobStatus === 'rejected') {
         // A: fixable (resubmit from the app) / B: final — chosen from btobRejectionFixable.
@@ -441,7 +443,7 @@ export const sendTestEmails = onCall(
       }, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
       ['review-follow-up',                 reviewFollowUpEmail(name, closedClean, shop, { firstName: name, reviewRewardPoints: 10 })],
       ['review-follow-up-no-photo',        reviewFollowUpEmail(name, { ...closedClean, productImage: null }, shop, { firstName: null, reviewRewardPoints: null })],
-      ['btob-approved',                    btobApprovedEmail(name, shop, { firstName: name, businessDepositPercent: 0 })],
+      ['btob-approved',                    btobApprovedEmail(name, shop, { firstName: name, businessDepositPercent: 0, showVat: vat != null })],
       ['btob-rejected-A-fixable',          btobRejectedEmail(name, shop, { firstName: name, reason: 'doc_unreadable', text: 'The photo is blurry on the licence number.', fixable: true })],
       ['btob-rejected-B-final',            btobRejectedEmail(name, shop, { firstName: name, reason: 'not_eligible', text: null, fixable: false })],
       ['late-tier1',                       lateReturnEmail(name, 'tier1', [{ r: late(base, 150000, 1), stage: 'tier1' }], shop, lateCtx)],

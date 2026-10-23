@@ -7,13 +7,14 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
+  Switch,
   type KeyboardTypeOptions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
@@ -28,6 +29,7 @@ import { DEFAULT_LATE_GRACE_HOURS } from '@/functions/src/shared/latePenalty';
 import { parseHHMM, buildTimeSlots } from '@/utils/timeSlots';
 import { getGraceHours, saveGraceHours } from '@/lib/latePolicy';
 import EmailSettingsSection from '@/components/EmailSettingsSection';
+import { getFeatureFlags, saveFeatureFlag, FEATURE_DEFAULTS, type FeatureFlags } from '@/lib/features';
 
 interface Form {
   name: string;
@@ -39,7 +41,19 @@ interface Form {
   lastPickupOffsetMin: string;
   whatsappNumber: string;
   paymentMethods: string;
+  /** "17.950063, 102.622828" — empty = Get directions falls back to the address search. */
+  coordinates: string;
   graceHours: string;
+}
+
+/** "lat, lng" → numbers, or null when invalid. Bounds: Laos (with a margin). */
+function parseCoordinates(text: string): { latitude: number; longitude: number } | null {
+  const m = text.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const latitude = Number(m[1]);
+  const longitude = Number(m[2]);
+  if (latitude < 13.5 || latitude > 23 || longitude < 100 || longitude > 108) return null;
+  return { latitude, longitude };
 }
 
 const toForm = (shop: ShopInfo, graceHours: number): Form => ({
@@ -52,6 +66,7 @@ const toForm = (shop: ShopInfo, graceHours: number): Form => ({
   lastPickupOffsetMin: String(shop.lastPickupOffsetMin),
   whatsappNumber:      shop.whatsappNumber,
   paymentMethods:      shop.paymentMethods,
+  coordinates:         shop.latitude != null && shop.longitude != null ? `${shop.latitude}, ${shop.longitude}` : '',
   graceHours:          String(graceHours),
 });
 
@@ -70,6 +85,9 @@ function validate(f: Form): string | null {
   const wa = normalizeWhatsappNumber(f.whatsappNumber);
   if (wa && !isValidWhatsappNumber(wa)) {
     return 'WhatsApp number must be in international format with the country code, e.g. 8562012345678.';
+  }
+  if (f.coordinates.trim() && !parseCoordinates(f.coordinates)) {
+    return 'Map coordinates must be "latitude, longitude" in Laos, e.g. 17.950063, 102.622828 (copy them from Google Maps).';
   }
   const grace = Number(f.graceHours);
   if (f.graceHours.trim() === '' || !Number.isFinite(grace) || grace < 0 || grace >= 24) {
@@ -109,6 +127,45 @@ function Field({
         editable={editable}
       />
       {!!hint && <Text style={s.hint}>{hint}</Text>}
+    </View>
+  );
+}
+
+// Launch flags (config/features) — saved on toggle, independent of the form's Save.
+function FeatureFlagsSection() {
+  const [flags, setFlags] = useState<FeatureFlags>(FEATURE_DEFAULTS);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { getFeatureFlags().then(setFlags); }, []);
+  const toggle = (key: keyof FeatureFlags, value: boolean) => {
+    setFlags(f => ({ ...f, [key]: value }));
+    setError(null);
+    saveFeatureFlag(key, value).catch(() => {
+      setFlags(f => ({ ...f, [key]: !value }));
+      setError('Could not update. Please try again.');
+    });
+  };
+  const rows: { key: keyof FeatureFlags; title: string; sub: string }[] = [
+    { key: 'businessAccounts', title: 'Business accounts', sub: 'Shows the Individual / Business choice at sign-up and login. Existing business accounts keep working either way.' },
+    { key: 'newsletter', title: 'News and offers opt-in', sub: 'Shows the newsletter consent toggle on the Notifications screen.' },
+  ];
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionLabel}>Features</Text>
+      {rows.map(r => (
+        <View key={r.key} style={s.flagRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.flagTitle}>{r.title}</Text>
+            <Text style={s.hint}>{r.sub}</Text>
+          </View>
+          <Switch
+            value={flags[r.key]}
+            onValueChange={v => toggle(r.key, v)}
+            trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
+            thumbColor={COLORS.white}
+          />
+        </View>
+      ))}
+      {error && <Text style={s.flagError}>{error}</Text>}
     </View>
   );
 }
@@ -162,6 +219,9 @@ export default function AdminShopSettingsScreen() {
         lastPickupOffsetMin: Number(form.lastPickupOffsetMin),
         whatsappNumber:      normalizeWhatsappNumber(form.whatsappNumber),
         paymentMethods:      form.paymentMethods.trim(),
+        // Exact pin for "Get directions" (app + emails, shared mapsUrl); cleared → address search.
+        ...(parseCoordinates(form.coordinates)
+          ?? ({ latitude: deleteField(), longitude: deleteField() } as unknown as { latitude: number; longitude: number })),
       });
       await saveGraceHours(Number(form.graceHours));
       setForm(prev => ({ ...prev, whatsappNumber: normalizeWhatsappNumber(prev.whatsappNumber) }));
@@ -216,8 +276,17 @@ export default function AdminShopSettingsScreen() {
               editable={!saving}
             />
             <Field
+              label="Map coordinates (Get directions)"
+              hint="Latitude, longitude — in Google Maps, long-press the shop's pin and copy the numbers shown (e.g. 17.950063, 102.622828). Empty = search by address."
+              placeholder="17.950063, 102.622828"
+              value={form.coordinates}
+              onChangeText={set('coordinates')}
+              keyboardType="numbers-and-punctuation"
+              editable={!saving}
+            />
+            <Field
               label="Payment methods (shown in emails)"
-              hint="Listed under “What to bring” in booking emails. Keep it consistent with the Terms of Service."
+              hint="Listed under “What to bring” in booking emails. Keep it consistent with the Terms of service."
               value={form.paymentMethods}
               onChangeText={set('paymentMethods')}
               editable={!saving}
@@ -307,6 +376,8 @@ export default function AdminShopSettingsScreen() {
                 : <Text style={s.primaryBtnText}>Save</Text>}
             </TouchableOpacity>
 
+            <FeatureFlagsSection />
+
             <EmailSettingsSection />
           </>
         )}
@@ -316,6 +387,13 @@ export default function AdminShopSettingsScreen() {
 }
 
 const s = StyleSheet.create({
+  flagRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.softGray200,
+    borderRadius: 12, padding: 14, marginBottom: 10,
+  },
+  flagTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
+  flagError: { fontSize: 12, fontWeight: '500', color: COLORS.danger, marginBottom: 8 },
   root: { flex: 1, backgroundColor: COLORS.porcelain },
 
   header: {

@@ -339,7 +339,11 @@ service cloud.firestore {
     // renters), config/emailSettings (test/live email mode + redirect address) and
     // config/emailHealth (email failure bookkeeping). Only admins may write config.
     match /config/{docId} {
-      allow read:  if (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth'])) || isAdmin();
+      // config/features (launch flags: businessAccounts, newsletter) is read before
+      // sign-in by the signup screen — non-sensitive booleans only.
+      allow read:  if docId == 'features'
+                    || (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth']))
+                    || isAdmin();
       allow write: if isAdmin();
     }
 

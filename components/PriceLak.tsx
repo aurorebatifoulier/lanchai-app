@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { COLORS } from '@/constants/Colors';
 import { splitHtVat } from '@/utils/currency';
-import { DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
 
 // Shared price line — renders exactly like today (`{amount} LAK`) for everyone except
 // approved business accounts, who instead see the same stored LAK total broken out into
@@ -33,7 +32,8 @@ export function PriceLak({
   const fmt = (n: number) => `${n.toLocaleString('en-US')} LAK`;
   const isBusiness = customerType === 'business';
 
-  if (!isBusiness) {
+  // VAT display off (vatPercent null — see vatDisplayPercent): plain price for everyone.
+  if (!isBusiness || vatPercent == null) {
     return (
       <Text style={[{ fontSize: size, fontWeight: bold ? '800' : '600', color }, textStyle]}>
         {fmt(lak)}
@@ -41,7 +41,7 @@ export function PriceLak({
     );
   }
 
-  const pct = vatPercent ?? DEFAULT_VAT_PERCENT;
+  const pct = vatPercent;
   const { ht, vat, ttc } = splitHtVat(lak, pct);
 
   return (

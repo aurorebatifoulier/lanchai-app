@@ -7,6 +7,8 @@ import { Feather } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { useShopInfo } from '@/lib/shop';
+import { fillLegalPlaceholders } from '@/lib/legalContent';
 
 interface Props {
   title: string;
@@ -92,6 +94,8 @@ const MD_STYLES = {
 };
 
 export default function LegalScreen({ title, content }: Props) {
+  // Address + WhatsApp come from config/shop, so the legal texts follow Shop settings.
+  const shop = useShopInfo();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -109,7 +113,7 @@ export default function LegalScreen({ title, content }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
       >
-        <Markdown style={MD_STYLES as never}>{content}</Markdown>
+        <Markdown style={MD_STYLES as never}>{fillLegalPlaceholders(content, shop)}</Markdown>
       </ScrollView>
     </View>
   );

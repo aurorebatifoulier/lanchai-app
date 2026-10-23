@@ -402,7 +402,7 @@ export default function ProductDetailScreen() {
                 </TouchableOpacity>
               );
             })}
-            <Text style={styles.vatNote}>Prices include VAT ({vatPct}%)</Text>
+            {vatPercent != null && <Text style={styles.vatNote}>Prices include VAT ({vatPct}%)</Text>}
           </View>
         ) : (
           <View style={styles.noPricingBanner}>

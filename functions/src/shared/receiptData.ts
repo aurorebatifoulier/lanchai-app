@@ -19,6 +19,17 @@ export function splitHtVat(amountLak: number, vatPercent: number): { ht: number;
   return { ht, vat: amountLak - ht, ttc: amountLak };
 }
 
+/**
+ * THE one VAT-display check (app + emails): the VAT rate to SHOW, or null when VAT must
+ * not be shown anywhere — config/pricing.showVat !== true (default OFF: LANCHAI isn't
+ * VAT-registered yet). Every renderer hides its VAT lines/breakdowns on null; prices are
+ * then plain totals. When ON: config/pricing.vatPercent, or DEFAULT_VAT_PERCENT.
+ */
+export function vatDisplayPercent(pricing: { showVat?: unknown; vatPercent?: unknown } | null | undefined): number | null {
+  if (pricing?.showVat !== true) return null;
+  return typeof pricing.vatPercent === 'number' ? pricing.vatPercent : DEFAULT_VAT_PERCENT;
+}
+
 export type DepositCurrency = 'LAK' | 'USD' | 'THB';
 
 /** The frozen reservation fields the receipt reads — structurally satisfied by RentalDoc. */

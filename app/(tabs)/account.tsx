@@ -469,17 +469,17 @@ export default function AccountScreen() {
         <ProfileSection title="Legal">
           <ProfileRow
             icon="file-text"
-            title="Terms of Service"
+            title="Terms of service"
             onPress={() => router.push('/legal/terms')}
           />
           <ProfileRow
             icon="shield"
-            title="Privacy Policy"
+            title="Privacy policy"
             onPress={() => router.push('/legal/privacy')}
           />
           <ProfileRow
             icon="x-circle"
-            title="Cancellation Policy"
+            title="Cancellation policy"
             onPress={() => router.push('/legal/cancellation')}
           />
         </ProfileSection>

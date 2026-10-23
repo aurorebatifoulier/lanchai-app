@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { vatDisplayPercent } from '@/functions/src/shared/receiptData';
 
 export interface PricingConfig {
   exchangeRate: number;
   thbToLakRate?: number;
   vatPercent?: number;
+  /** Show VAT on prices and receipts (Admin → Exchange rate & VAT). Default OFF. */
+  showVat?: boolean;
   updatedAt?: Timestamp;
 }
 
@@ -54,14 +57,14 @@ export function useThbRate(): number | null {
   return rate;
 }
 
-// Returns null when config/pricing doesn't exist yet or vatPercent hasn't been set —
-// callers fall back to DEFAULT_VAT_PERCENT themselves (kept explicit at call sites,
-// same null-safety idiom as the exchange/THB rates above).
+// The VAT rate to DISPLAY — null when VAT display is off (config/pricing.showVat, default
+// OFF) or while loading. Goes through the shared vatDisplayPercent(), the one check used
+// by the app and the emails: every caller hides its VAT lines/breakdowns on null.
 export async function getVatPercent(): Promise<number | null> {
   try {
     const snap = await getDoc(doc(db, 'config', 'pricing'));
     if (!snap.exists()) return null;
-    return (snap.data() as PricingConfig).vatPercent ?? null;
+    return vatDisplayPercent(snap.data() as PricingConfig);
   } catch {
     return null;
   }

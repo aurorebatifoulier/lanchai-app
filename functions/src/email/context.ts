@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { SHOP_DISPLAY_DEFAULTS } from '../shared/shop';
 import { isLoyaltyExcluded, DEFAULT_REVIEW_REWARD_POINTS } from '../shared/loyalty';
+import { vatDisplayPercent } from '../shared/receiptData';
 
 export interface EmailShop {
   name: string;
@@ -91,8 +92,8 @@ export async function hasReviewed(productId: string | undefined, uid: string): P
   return !!snap && !snap.empty;
 }
 
+/** VAT rate to SHOW in emails, or null when VAT display is off (shared vatDisplayPercent). */
 export async function getVatPercent(): Promise<number | null> {
   const snap = await admin.firestore().collection('config').doc('pricing').get().catch(() => null);
-  const v = snap?.data()?.vatPercent;
-  return typeof v === 'number' ? v : null;
+  return vatDisplayPercent(snap?.data());
 }
