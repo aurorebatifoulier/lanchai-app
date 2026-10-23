@@ -3,17 +3,13 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import type { RentalDoc } from '@/lib/firestore';
-import { formatLakAmount } from '@/utils/currency';
-import { deriveReceiptData, deriveSettlementOutcome } from '@/utils/receiptData';
+import { buildReceiptSummary } from '@/utils/receiptSummary';
 import { downloadReceipt } from '@/lib/receiptPdf';
 
 // End-of-service receipt — ONE "Your rental summary" card, aligned with the receipt
-// email (functions/src/email/templates.ts receiptEmail): every figure from
-// deriveReceiptData / deriveSettlementOutcome, no new calculation. Rental fee (VAT in
-// small grey), deposit paid, charges as negative lines with their detail, the
-// settlement outcome, then the total. The rental fee is always LAK; the deposit and
-// charges are in the handover currency — when that differs, both are shown, never added.
-// Renters never see staff names; `staffView` (admin reservation detail) adds them.
+// email. The lines come from buildReceiptSummary (utils/receiptSummary.ts), shared with
+// the PDF (lib/receiptPdf.ts). Renters never see staff names; `staffView` (admin
+// reservation detail) adds them.
 export interface RentalReceiptProps {
   rental: RentalDoc;
   vatPercent: number | null;
@@ -21,27 +17,7 @@ export interface RentalReceiptProps {
 }
 
 export function RentalReceipt({ rental: r, vatPercent, staffView }: RentalReceiptProps) {
-  const data = deriveReceiptData(r, vatPercent);
-  const outcome = deriveSettlementOutcome(r, data);
-  const cur = data.depositCurrency;
-  const fmt = (n: number) => (cur === 'LAK' ? formatLakAmount(n) : `${n.toLocaleString('en-US')} ${cur}`);
-
-  const lateDetail = [
-    r.lateChargeReason?.replace(/^Returned\s+/i, ''),
-    r.latePenaltyDays ? `${r.latePenaltyDays} rental ${r.latePenaltyDays === 1 ? 'day' : 'days'}` : null,
-    cur === 'LAK' && r.latePenaltyAmount && r.lateChargeAmount != null && r.lateChargeAmount < r.latePenaltyAmount
-      ? 'adjusted by our team' : null,
-  ].filter(Boolean).join(' · ');
-  const damageDetail = [r.chargeReason, r.chargePercent != null ? `${r.chargePercent}% of replacement value` : null]
-    .filter(Boolean).join(' · ');
-
-  const resolutionPill = outcome.kind === 'clientOwes'
-    ? outcome.resolution === 'settled'
-      ? { label: staffView && r.outstandingSettledBy ? `Settled by ${r.outstandingSettledBy}` : 'Settled', tone: 'success' as const }
-      : outcome.resolution === 'writtenOff'
-        ? { label: staffView && r.outstandingWrittenOffBy ? `Written off by ${r.outstandingWrittenOffBy}` : 'Written off', tone: 'muted' as const }
-        : { label: 'Not yet settled', tone: 'danger' as const }
-    : null;
+  const { lines, totalLabel, totalValues } = buildReceiptSummary(r, vatPercent, { staffView });
 
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -66,52 +42,24 @@ export function RentalReceipt({ rental: r, vatPercent, staffView }: RentalReceip
       <View style={s.card}>
         <Text style={s.cardTitle}>Your rental summary</Text>
 
-        <Row label="Rental fee" value={formatLakAmount(r.total)} />
-        <Text style={s.detail}>incl. VAT {data.vatPct}%: {formatLakAmount(data.vatAmount)}</Text>
-
-        <Row label="Deposit paid" value={fmt(data.depositHeldAmount)} />
-
-        {r.lateChargeAmount != null && (
-          <>
-            <Row label="Late return" value={`− ${fmt(r.lateChargeAmount)}`} danger />
-            {!!lateDetail && <Text style={s.detail}>{lateDetail}</Text>}
-          </>
-        )}
-        {r.chargeAmount != null && (
-          <>
-            <Row label="Damage charge" value={`− ${fmt(r.chargeAmount)}`} danger />
-            {!!damageDetail && <Text style={s.detail}>{damageDetail}</Text>}
-          </>
-        )}
-
-        {outcome.kind === 'owedToClient' ? (
-          <Row label="Deposit refunded to you" value={fmt(outcome.amount)} strong />
-        ) : outcome.kind === 'clientOwes' ? (
-          <Row
-            label={outcome.resolution === 'settled' ? 'You paid on top' : 'Balance due'}
-            value={fmt(outcome.amount)}
-            strong
-          />
+        {lines.map((l, i) => l.kind === 'row' ? (
+          <Row key={i} label={l.label} value={l.value} danger={l.danger} strong={l.strong} />
+        ) : l.kind === 'detail' ? (
+          <Text key={i} style={s.detail}>{l.text}</Text>
         ) : (
-          <Row label="Deposit fully used for charges" value="" strong />
-        )}
-        {resolutionPill && (
-          <View style={[s.pill, resolutionPill.tone === 'success' ? s.pillSuccess : resolutionPill.tone === 'danger' ? s.pillDanger : s.pillMuted]}>
-            {resolutionPill.tone === 'success' && <Feather name="check" size={12} color={COLORS.success} />}
-            <Text style={[s.pillText, resolutionPill.tone === 'success' ? s.pillTextSuccess : resolutionPill.tone === 'danger' ? s.pillTextDanger : s.pillTextMuted]}>
-              {resolutionPill.label}
+          <View key={i} style={[s.pill, l.tone === 'success' ? s.pillSuccess : l.tone === 'danger' ? s.pillDanger : s.pillMuted]}>
+            {l.tone === 'success' && <Feather name="check" size={12} color={COLORS.success} />}
+            <Text style={[s.pillText, l.tone === 'success' ? s.pillTextSuccess : l.tone === 'danger' ? s.pillTextDanger : s.pillTextMuted]}>
+              {l.label}
             </Text>
           </View>
-        )}
+        ))}
 
         <View style={s.divider} />
         <View style={s.totalRow}>
-          <Text style={s.totalLabel}>Total cost of your rental</Text>
+          <Text style={s.totalLabel}>{totalLabel}</Text>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={s.totalValue}>{formatLakAmount(data.netInLak ?? r.total)}</Text>
-            {data.netInLak == null && data.chargesTotal > 0 && (
-              <Text style={s.totalValue}>+ {fmt(data.chargesTotal)}</Text>
-            )}
+            {totalValues.map(v => <Text key={v} style={s.totalValue}>{v}</Text>)}
           </View>
         </View>
       </View>

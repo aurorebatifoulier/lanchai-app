@@ -523,12 +523,11 @@ a snapshot indefinitely).
     button lives inside `RentalReceipt.tsx` itself, so both the customer and admin
     receipt views get it automatically with no separate wiring). Any future receipt
     figure — on-screen or exported — must go through `deriveReceiptData`, not
-    re-derive `splitHtVat`/deposit math a third time. The one deliberate exception:
-    `lib/receiptPdf.ts` re-expresses `SettlementSummary.tsx`'s tiny internal
-    owed/resolution derivation itself (documented inline as intentionally mirroring
-    it), since a plain HTML string can't invoke a React component — that component
-    itself was left untouched rather than refactored, since it's already reused in 3
-    other places. The PDF branding is a text "LANCHAI" wordmark in the brand colors,
+    re-derive `splitHtVat`/deposit math a third time. The screen card and the PDF both
+    render the SAME lines from `buildReceiptSummary()` (`utils/receiptSummary.ts`, on
+    top of `deriveReceiptData`/`deriveSettlementOutcome`) — change the receipt there,
+    never in one renderer only. The PDF fits one A4 page and never shows staff names.
+    The PDF branding is a text "LANCHAI" wordmark in the brand colors,
     not the raster `assets/images/lanchai-logo.png` — embedding it would need a new
     `expo-asset` dependency plus base64 asset-loading, a deliberate scope cut, not an
     oversight.

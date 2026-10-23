@@ -26,6 +26,7 @@ import { useVatPercent } from '@/lib/exchangeRate';
 import { QRThumb } from '@/components/QRThumb';
 import { QRLightbox } from '@/components/QRLightbox';
 import { ChecklistSummary } from '@/components/ChecklistSummary';
+import { displayOrderId } from '@/utils/rentalDocs';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { PriceLak } from '@/components/PriceLak';
 import { getClaimsForReservation, type ClaimDoc, type ClaimType, type ClaimStatus } from '@/lib/claims';
@@ -312,8 +313,8 @@ export default function RentalDetailScreen() {
           Deposit is collected in store at pick-up and refunded on the spot when you return the item, once it&apos;s inspected (about 10 minutes).
         </Text>
 
-        {/* ── Ref ID ── */}
-        <Text style={s.refId}>Ref: {rental.id}</Text>
+        {/* ── Order number (LNC-…); nothing for legacy reservations ── */}
+        {displayOrderId(rental) && <Text style={s.refId}>Order {displayOrderId(rental)}</Text>}
 
         {/* ── Pick-up location ── */}
         <Text style={s.sectionLabel}>Pick-up location</Text>
