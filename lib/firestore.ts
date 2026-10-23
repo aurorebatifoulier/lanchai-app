@@ -260,6 +260,21 @@ export interface RentalDoc {
   // confirms/overrides it on the return checklist (or, read-only, on lost/stolen reports).
   lateChargeAmount?: number;          // frozen, in chargeCurrency
   lateChargeReason?: string;          // e.g. "Returned 6h late"
+  // ── Waivers — staff explicitly waived a suggested charge (return checklist "Waive",
+  // undone from the admin detail until returnFinalizedAt). The amount field stays
+  // absent; renters see "… · waived by our team" (buildReceiptSummary), never the
+  // staff name. *WaivedAmount = the suggestion, in chargeCurrency, for reference/undo.
+  lateChargeWaived?: boolean;
+  lateChargeWaivedAmount?: number;
+  lateChargeWaivedReason?: string;    // e.g. "Returned 6h late" — restored on undo
+  lateChargeWaivedBy?: string;        // internal only
+  lateChargeWaivedAt?: Timestamp;
+  damageChargeWaived?: boolean;
+  damageChargeWaivedAmount?: number;
+  damageChargeWaivedReason?: string;  // e.g. "Main item condition — Damaged"
+  damageChargeWaivedPercent?: number;
+  damageChargeWaivedBy?: string;      // internal only
+  damageChargeWaivedAt?: Timestamp;
   // Combined across BOTH charge sources vs. the deposit held — the only point where
   // damage charge and late penalty are summed; both stay separate fields above this.
   depositAppliedToCharge?: number;    // min(chargeAmount + lateChargeAmount, depositHeld), same currency
@@ -539,6 +554,16 @@ export interface ChecklistBatchChargeFields {
   // independent of the damage fields above; either, neither, or both may be set.
   lateChargeAmount?: number;
   lateChargeReason?: string;
+  // Explicit staff waivers (see RentalDoc). *WaivedAt is stamped by submitChecklistBatch.
+  lateChargeWaived?: boolean;
+  lateChargeWaivedAmount?: number;
+  lateChargeWaivedReason?: string;
+  lateChargeWaivedBy?: string;
+  damageChargeWaived?: boolean;
+  damageChargeWaivedAmount?: number;
+  damageChargeWaivedReason?: string;
+  damageChargeWaivedPercent?: number;
+  damageChargeWaivedBy?: string;
   // Always present whenever this object is passed at all — combined across both sources.
   chargeCurrency: 'LAK' | 'USD' | 'THB';
   depositAppliedToCharge: number;
@@ -564,7 +589,10 @@ export async function submitChecklistBatch(
       [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
       status: isHandover ? 'active' : 'returned',
       ...(isHandover ? {} : { returnedAt: serverTimestamp(), stockReleasedAt: null }),
-      ...(charge ?? {}),
+      // Optional fields may be undefined (e.g. no suggested amount) — Firestore rejects those.
+      ...Object.fromEntries(Object.entries(charge ?? {}).filter(([, v]) => v !== undefined)),
+      ...(charge?.lateChargeWaived ? { lateChargeWaivedAt: serverTimestamp() } : {}),
+      ...(charge?.damageChargeWaived ? { damageChargeWaivedAt: serverTimestamp() } : {}),
       updatedAt: serverTimestamp(),
     });
     // Excluded from available stock the instant it's marked returned — released only by

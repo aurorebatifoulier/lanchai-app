@@ -20,6 +20,16 @@ export interface ChainItemDraft {
   // both may be set. Shares chargeCurrency.
   lateChargeAmount?: number;
   lateChargeReason?: string;
+  // Explicit staff waivers (see RentalDoc) — decided on the item screen, forwarded as-is.
+  lateChargeWaived?: boolean;
+  lateChargeWaivedAmount?: number;
+  lateChargeWaivedReason?: string;
+  lateChargeWaivedBy?: string;
+  damageChargeWaived?: boolean;
+  damageChargeWaivedAmount?: number;
+  damageChargeWaivedReason?: string;
+  damageChargeWaivedPercent?: number;
+  damageChargeWaivedBy?: string;
   depositAppliedToCharge?: number;
   outstandingBalance?: number;
 }

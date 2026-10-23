@@ -12,6 +12,7 @@ import { vteDay, vteTime, vteDayTime } from '../shared/dates';
 import { nextLateThresholdMs, computeLatePenalty, formatPenaltyDays } from '../shared/latePenalty';
 import { BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, type BtobRejectionKey } from '../shared/btob';
 import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
+import { buildReceiptSummary } from '../shared/receiptSummary';
 import {
   cancellationOutcome, CANCEL_REASONS, type CancelReason, type CancellationOutcome,
 } from '../shared/cancellation';
@@ -63,6 +64,11 @@ export interface ResData extends ReceiptInput {
   latePenaltyAmount?: number;
   latePenaltyDays?: number;
   chargePercent?: number;
+  /** Explicit staff waivers — shown as "… · waived by our team" (buildReceiptSummary). */
+  lateChargeWaived?: boolean;
+  damageChargeWaived?: boolean;
+  outstandingSettledBy?: string;
+  outstandingWrittenOffBy?: string;
   /** Frozen first product image (public URL) and the review-reward marker. */
   productImage?: string | null;
   reviewRewardApplied?: boolean;
@@ -558,48 +564,30 @@ function reviewPrompt(r: ResData, alreadyReviewed: boolean, rewardPoints?: numbe
 
 export function receiptEmail(_name: string, r: ResData, vatPercent: number | null, shop: EmailShop, ctx?: ReceiptContext): Rendered {
   const data = deriveReceiptData(r, vatPercent);
-  const cur: DepositCurrency = data.depositCurrency;
-  const fmt = (n: number) => fmtCurrency(n, cur);
   const orderId = orderIdOf([r]);
   const outcome = deriveSettlementOutcome(r, data);
-  const hasCharges = r.chargeAmount != null || r.lateChargeAmount != null;
+  const hasCharges = (r.chargeAmount ?? 0) > 0 || (r.lateChargeAmount ?? 0) > 0;
+  const hasWaiver = !!r.lateChargeWaived || !!r.damageChargeWaived;
+  const cur: DepositCurrency = data.depositCurrency;
+  const fmt = (n: number) => fmtCurrency(n, cur);
   const returnedMs = r.returnedAtMs ?? r.returnAtMs;
 
-  // ONE summary card — every figure from deriveReceiptData / deriveSettlementOutcome.
+  // ONE summary card — the SAME lines as the app's receipt screen and PDF
+  // (buildReceiptSummary, shared/receiptSummary.ts). Never staff names.
+  const { lines, totalLabel, totalValues } = buildReceiptSummary(r, vatPercent);
   const summary: Inner[] = [];
-  if (!hasCharges && outcome.kind === 'owedToClient') {
+  if (!hasCharges && !hasWaiver && outcome.kind === 'owedToClient') {
     summary.push({ type: 'outcome', title: 'Deposit refunded in full', text: 'Checked — all good' });
   }
-  summary.push({ type: 'row', label: 'Rental fee', value: fmtLak(r.total) });
-  summary.push({ type: 'row', label: 'Deposit paid', value: fmt(data.depositHeldAmount) });
-  if (r.lateChargeAmount != null) {
-    const detail: string[] = [];
-    const late = [r.lateChargeReason?.replace(/^Returned\s+/i, ''), r.latePenaltyDays ? `${r.latePenaltyDays} rental ${r.latePenaltyDays === 1 ? 'day' : 'days'}` : null]
-      .filter(Boolean).join(' · ');
-    if (late) detail.push(late);
-    // Only comparable when both are LAK (the suggestion is always LAK).
-    if (cur === 'LAK' && r.latePenaltyAmount && r.lateChargeAmount < r.latePenaltyAmount) detail.push('adjusted by our team');
-    summary.push({ type: 'line', name: 'Late return', detail, amount: `− ${fmt(r.lateChargeAmount)}`, compact: true });
-  }
-  if (r.chargeAmount != null) {
-    const detail = [r.chargeReason, r.chargePercent != null ? `${r.chargePercent}% of replacement value` : null].filter(Boolean).join(' · ');
-    summary.push({ type: 'line', name: 'Damage', detail: detail || undefined, amount: `− ${fmt(r.chargeAmount)}`, compact: true });
-  }
-  if (outcome.kind === 'clientOwes') {
-    summary.push({ type: 'row', label: 'Balance due', value: fmt(outcome.amount), strong: true, tone: 'danger', gapTop: 4 });
-    summary.push({ type: 'subtle', text: outcome.resolution === 'settled' ? 'Settled' : outcome.resolution === 'writtenOff' ? 'Written off' : 'Not yet settled' });
-  } else if (outcome.kind === 'owedToClient') {
-    summary.push({ type: 'row', label: 'Deposit refunded to you', value: fmt(outcome.amount), strong: true, gapTop: 4 });
-  } else {
-    summary.push({ type: 'row', label: 'Deposit fully used for charges', value: '', strong: true, gapTop: 4 });
+  for (const l of lines) {
+    if (l.kind === 'row') {
+      summary.push({ type: 'row', label: l.label, value: l.value, strong: l.strong, tone: l.danger ? 'danger' : undefined, gapTop: l.strong ? 4 : undefined });
+    } else {
+      summary.push({ type: 'subtle', text: l.kind === 'pill' ? l.label : l.text });
+    }
   }
   summary.push({ type: 'divider' });
-  if (data.netInLak != null) {
-    summary.push({ type: 'row', label: 'Total cost of your rental', value: fmtLak(data.netInLak), strong: true });
-  } else {
-    summary.push({ type: 'row', label: 'Total cost of your rental', value: `${fmtLak(r.total)} + ${fmt(data.chargesTotal)}`, strong: true });
-  }
-  summary.push({ type: 'subtle', text: `Rental fee includes VAT ${fmtLak(data.vatAmount)} (${data.vatPct}%) · ${fmtLak(data.vatHt)} excl. VAT` });
+  summary.push({ type: 'row', label: totalLabel, value: totalValues.join(' '), strong: true });
   summary.push({ type: 'subtle', text: 'PDF receipt in the app: My rentals › this rental' });
 
   const blocks: Block[] = [
@@ -612,7 +600,7 @@ export function receiptEmail(_name: string, r: ResData, vatPercent: number | nul
       reviews: [reviewPrompt(r, ctx?.alreadyReviewed ?? false, ctx?.reviewRewardPoints)],
       secondary: [{ label: 'View my receipt', url: appLink(`rentals/${r.id}`) }],
     },
-    { type: 'card', title: hasCharges ? 'Your rental summary' : undefined, items: summary },
+    { type: 'card', title: hasCharges || hasWaiver ? 'Your rental summary' : undefined, items: summary },
   ];
 
   const loyaltyItems: Inner[] = [];

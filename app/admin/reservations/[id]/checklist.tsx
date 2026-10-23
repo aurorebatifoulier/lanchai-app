@@ -44,6 +44,8 @@ import { worstRating, chargePercentFor, convertUsdTo } from '@/utils/damageCharg
 import { setChainItemDraft } from '@/lib/checklistChainDraft';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { SettlementActions, type SettlementConfirmAction } from '@/components/SettlementActions';
+import { ConfirmBox } from '@/components/ConfirmBox';
+import { auth } from '@/lib/auth';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -101,6 +103,11 @@ export default function ChecklistScreen() {
   const [chargeAmountTouched, setChargeAmountTouched]  = useState(false);
   const [lateChargeAmountInput,   setLateChargeAmountInput]   = useState('');
   const [lateChargeAmountTouched, setLateChargeAmountTouched]  = useState(false);
+  // Explicit waivers ("Waive" + inline confirmation). Undo here until submit; after
+  // submit, from the reservation detail until the settlement is finalised.
+  const [lateWaived,   setLateWaived]   = useState(false);
+  const [damageWaived, setDamageWaived] = useState(false);
+  const [confirmWaive, setConfirmWaive] = useState<'late' | 'damage' | null>(null);
   const [submitting,       setSubmitting]       = useState(false);
   const [submitError,      setSubmitError]      = useState<string | null>(null);
   const [submitted,        setSubmitted]        = useState(false);
@@ -188,12 +195,12 @@ export default function ChecklistScreen() {
   // (no decimals for LAK/USD/THB). Math.ceil defensively covers pasted/decimal input even
   // though the field itself is a whole-number keypad.
   const parsedChargeAmount = parseFloat(chargeAmountInput);
-  const chargeAmount = chargePercent != null && !isNaN(parsedChargeAmount) && parsedChargeAmount > 0
+  const chargeAmount = chargePercent != null && !damageWaived && !isNaN(parsedChargeAmount) && parsedChargeAmount > 0
     ? Math.ceil(parsedChargeAmount)
     : null;
   // true whenever a charge is due but not yet resolvable (missing replacementValue,
-  // missing exchange rate, or no valid override entered) — blocks submit.
-  const chargeUnresolved = chargePercent != null && chargeAmount === null;
+  // missing exchange rate, or no valid override entered) and not waived — blocks submit.
+  const chargeUnresolved = chargePercent != null && !damageWaived && chargeAmount === null;
 
   // ── Late-return penalty — fully independent line item. The suggestion is computed
   // live here with the shared computeLatePenalty (same function as the Cloud Function),
@@ -224,11 +231,15 @@ export default function ChecklistScreen() {
     }
   }, [defaultLateChargeAmount, lateChargeAmountTouched]);
 
-  // 0 is a valid, explicit waiver (no lateCharge* fields written); only an empty or
-  // non-numeric input blocks submit.
+  // Dropping a suggested penalty is an explicit "Waive" (stored as lateChargeWaived, so
+  // the receipt can say "waived by our team") — typing 0 no longer waives silently.
+  // 0 stays valid only within the grace period, where nothing is suggested.
   const parsedLateChargeAmount = lateChargeAmountInput.trim() === '' ? NaN : parseFloat(lateChargeAmountInput);
-  const lateChargeValid = hasLatePenalty && !isNaN(parsedLateChargeAmount) && parsedLateChargeAmount >= 0;
-  const lateChargeAmount = lateChargeValid && parsedLateChargeAmount > 0
+  const lateChargeValid = hasLatePenalty && (
+    lateWaived ||
+    (!isNaN(parsedLateChargeAmount) && (parsedLateChargeAmount > 0 || (withinGrace && parsedLateChargeAmount === 0)))
+  );
+  const lateChargeAmount = lateChargeValid && !lateWaived && parsedLateChargeAmount > 0
     ? Math.ceil(parsedLateChargeAmount)
     : null;
   const lateChargeUnresolved = hasLatePenalty && !lateChargeValid;
@@ -245,6 +256,31 @@ export default function ChecklistScreen() {
         return hoursLate > 0 ? `Returned ${hoursLate}h late` : 'Late return penalty';
       })()
     : null;
+  const lateWaivedReason = hasLatePenalty && latePenalty
+    ? (Math.floor(latePenalty.hoursLate) > 0 ? `Returned ${Math.floor(latePenalty.hoursLate)}h late` : 'Late return penalty')
+    : null;
+  const staffWaiverName = auth.currentUser?.displayName || auth.currentUser?.email || 'staff';
+  const waiverFields = useMemo(() => ({
+    ...(lateWaived && hasLatePenalty ? {
+      lateChargeWaived: true,
+      ...(defaultLateChargeAmount != null ? { lateChargeWaivedAmount: defaultLateChargeAmount } : {}),
+      ...(lateWaivedReason ? { lateChargeWaivedReason: lateWaivedReason } : {}),
+      lateChargeWaivedBy: staffWaiverName,
+    } : {}),
+    ...(damageWaived && chargePercent != null && worst != null ? {
+      damageChargeWaived: true,
+      ...(defaultChargeAmount != null ? { damageChargeWaivedAmount: defaultChargeAmount } : {}),
+      damageChargeWaivedReason: `${worstCategoryLabel} — ${RATING_LABELS[worst]}`,
+      damageChargeWaivedPercent: chargePercent,
+      damageChargeWaivedBy: staffWaiverName,
+      // Still recorded: drives the release/repair choice at settlement.
+      chargeSeverity: worst as 'damaged' | 'unusable',
+    } : {}),
+  }), [
+    lateWaived, hasLatePenalty, defaultLateChargeAmount, lateWaivedReason, staffWaiverName,
+    damageWaived, chargePercent, worst, defaultChargeAmount, worstCategoryLabel,
+  ]);
+  const hasWaiver = Object.keys(waiverFields).length > 0;
   const totalCharge = (chargeAmount ?? 0) + (lateChargeAmount ?? 0);
   const depositAppliedToCharge = Math.min(totalCharge, calculatedDepositAmount ?? 0);
   const outstandingBalanceCalc = Math.max(0, totalCharge - (calculatedDepositAmount ?? 0));
@@ -325,8 +361,9 @@ export default function ChecklistScreen() {
       // Damage charge and late-return penalty, frozen at submit time as fully separate
       // fields — they only combine into depositAppliedToCharge/outstandingBalance below,
       // never into one "penalty" concept upstream of that.
-      const chargeFields = (totalCharge > 0 && depositCurrency != null)
+      const chargeFields = ((totalCharge > 0 || hasWaiver) && depositCurrency != null)
         ? {
+            ...waiverFields,
             ...(chargeAmount != null && worst != null ? {
               chargeAmount,
               chargeReason: chargeReason!,
@@ -447,7 +484,7 @@ export default function ChecklistScreen() {
     reservation, id, type, canSubmit, inChain, categories, photos,
     depositCurrency, calculatedDepositAmount,
     chargeAmount, worst, chargePercent, chargeReason,
-    lateChargeAmount, lateChargeReason,
+    lateChargeAmount, lateChargeReason, waiverFields, hasWaiver,
     totalCharge, depositAppliedToCharge, outstandingBalanceCalc,
     confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified,
   ]);
@@ -770,17 +807,34 @@ export default function ChecklistScreen() {
                   <Text style={styles.chargeHintText}>
                     Damage/condition charge — {worstCategoryLabel} — {RATING_LABELS[worst!]} · {chargePercent}% of replacement value
                   </Text>
-                  <View style={styles.numRow}>
-                    <TextInput
-                      style={[styles.nameInput, { flex: 1, marginBottom: 0 }]}
-                      keyboardType="number-pad"
-                      value={chargeAmountInput}
-                      onChangeText={t => { setChargeAmountInput(t); setChargeAmountTouched(true); }}
-                      placeholder="0"
-                      placeholderTextColor={COLORS.fg3}
+                  {damageWaived ? (
+                    <WaivedRow
+                      text={`Waived — suggested ${defaultChargeAmount.toLocaleString('en-US')} ${depositCurrency}. The renter sees "waived by our team".`}
+                      onUndo={() => setDamageWaived(false)}
                     />
-                    <Text style={styles.currencyUnit}>{depositCurrency}</Text>
-                  </View>
+                  ) : (
+                    <View style={styles.numRow}>
+                      <TextInput
+                        style={[styles.nameInput, { flex: 1, marginBottom: 0 }]}
+                        keyboardType="number-pad"
+                        value={chargeAmountInput}
+                        onChangeText={t => { setChargeAmountInput(t); setChargeAmountTouched(true); }}
+                        placeholder="0"
+                        placeholderTextColor={COLORS.fg3}
+                      />
+                      <Text style={styles.currencyUnit}>{depositCurrency}</Text>
+                      <WaiveButton onPress={() => setConfirmWaive('damage')} />
+                    </View>
+                  )}
+                  {confirmWaive === 'damage' && (
+                    <ConfirmBox
+                      text={`Waive the damage charge (suggested ${defaultChargeAmount.toLocaleString('en-US')} ${depositCurrency})? The renter will see "Damage charge · waived by our team".`}
+                      confirmLabel="Waive"
+                      cancelLabel="Keep"
+                      onCancel={() => setConfirmWaive(null)}
+                      onConfirm={() => { setDamageWaived(true); setConfirmWaive(null); }}
+                    />
+                  )}
                 </>
               )
             )}
@@ -799,19 +853,39 @@ export default function ChecklistScreen() {
                   <Text style={styles.chargeHintText}>
                     {withinGrace
                       ? `Late return — ${Math.floor(latePenalty!.hoursLate * 60)} min late, within grace period · no penalty suggested`
-                      : `Late return penalty — ${Math.floor(latePenalty!.hoursLate)}h late · ${formatPenaltyDays(latePenalty!.days)} × ${reservation!.pricePerDay.toLocaleString('en-US')} LAK × ${reservation!.quantity} = ${latePenalty!.amountLak.toLocaleString('en-US')} LAK suggested. Lower it, or enter 0 to waive.`}
+                      : `Late return penalty — ${Math.floor(latePenalty!.hoursLate)}h late · ${formatPenaltyDays(latePenalty!.days)} × ${reservation!.pricePerDay.toLocaleString('en-US')} LAK × ${reservation!.quantity} = ${latePenalty!.amountLak.toLocaleString('en-US')} LAK suggested. Lower it, or waive it.`}
                   </Text>
-                  <View style={styles.numRow}>
-                    <TextInput
-                      style={[styles.nameInput, { flex: 1, marginBottom: 0 }]}
-                      keyboardType="number-pad"
-                      value={lateChargeAmountInput}
-                      onChangeText={t => { setLateChargeAmountInput(t); setLateChargeAmountTouched(true); }}
-                      placeholder="0"
-                      placeholderTextColor={COLORS.fg3}
+                  {lateWaived ? (
+                    <WaivedRow
+                      text={`Waived — suggested ${defaultLateChargeAmount.toLocaleString('en-US')} ${depositCurrency}. The renter sees "waived by our team".`}
+                      onUndo={() => setLateWaived(false)}
                     />
-                    <Text style={styles.currencyUnit}>{depositCurrency}</Text>
-                  </View>
+                  ) : (
+                    <View style={styles.numRow}>
+                      <TextInput
+                        style={[styles.nameInput, { flex: 1, marginBottom: 0 }]}
+                        keyboardType="number-pad"
+                        value={lateChargeAmountInput}
+                        onChangeText={t => { setLateChargeAmountInput(t); setLateChargeAmountTouched(true); }}
+                        placeholder="0"
+                        placeholderTextColor={COLORS.fg3}
+                      />
+                      <Text style={styles.currencyUnit}>{depositCurrency}</Text>
+                      {!withinGrace && <WaiveButton onPress={() => setConfirmWaive('late')} />}
+                    </View>
+                  )}
+                  {!withinGrace && !lateWaived && !isNaN(parsedLateChargeAmount) && parsedLateChargeAmount === 0 && (
+                    <Text style={styles.depositWarningText}>Use “Waive” to drop the late fee.</Text>
+                  )}
+                  {confirmWaive === 'late' && (
+                    <ConfirmBox
+                      text={`Waive the late fee (suggested ${defaultLateChargeAmount.toLocaleString('en-US')} ${depositCurrency})? The renter will see "Late return fee · waived by our team".`}
+                      confirmLabel="Waive"
+                      cancelLabel="Keep"
+                      onCancel={() => setConfirmWaive(null)}
+                      onConfirm={() => { setLateWaived(true); setConfirmWaive(null); }}
+                    />
+                  )}
                 </>
               )
             )}
@@ -925,6 +999,27 @@ export default function ChecklistScreen() {
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+// "Waive" (outline) next to a suggested charge, and the waived state with an undo link.
+function WaiveButton({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.waiveBtn} onPress={onPress} activeOpacity={0.75}>
+      <Text style={styles.waiveBtnText}>Waive</Text>
+    </TouchableOpacity>
+  );
+}
+
+function WaivedRow({ text, onUndo }: { text: string; onUndo: () => void }) {
+  return (
+    <View style={styles.waivedRow}>
+      <Feather name="slash" size={14} color={COLORS.fg2} />
+      <Text style={styles.waivedText}>{text}</Text>
+      <TouchableOpacity onPress={onUndo} hitSlop={8}>
+        <Text style={styles.waivedUndo}>Undo</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -1057,6 +1152,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 8,
   },
+  waiveBtn: {
+    height: 40, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1.5, borderColor: COLORS.carbon,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  waiveBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.carbon },
+  waivedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.softGray200, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
+  },
+  waivedText: { flex: 1, fontSize: 12, fontWeight: '600', color: COLORS.fg2, lineHeight: 17 },
+  waivedUndo: { fontSize: 13, fontWeight: '800', color: COLORS.carbon },
   chargeHintText: {
     fontSize: 12,
     fontWeight: '500',

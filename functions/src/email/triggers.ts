@@ -436,6 +436,9 @@ export const sendTestEmails = onCall(
       ['no-show',                          noShowEmail(name, [base, second], shop)],
       ['receipt-A-no-charges',             receiptEmail(name, closedClean, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
       ['receipt-B-late-return',            receiptEmail(name, closedLate, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
+      ['receipt-C-late-fee-waived',        receiptEmail(name, {
+        ...closedClean, returnedAtMs: base.returnAtMs + 5 * 60 * 60 * 1000, lateChargeWaived: true,
+      }, vat, shop, { firstName: name, alreadyReviewed: false, loyalty: sampleLoyalty, reviewRewardPoints: 10 })],
       ['review-follow-up',                 reviewFollowUpEmail(name, closedClean, shop, { firstName: name, reviewRewardPoints: 10 })],
       ['review-follow-up-no-photo',        reviewFollowUpEmail(name, { ...closedClean, productImage: null }, shop, { firstName: null, reviewRewardPoints: null })],
       ['btob-approved',                    btobApprovedEmail(name, shop, { firstName: name, businessDepositPercent: 0 })],

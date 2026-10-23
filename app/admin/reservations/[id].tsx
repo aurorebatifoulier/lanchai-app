@@ -116,6 +116,8 @@ export default function AdminReservationDetailScreen() {
   const [actioning,     setActioning]     = useState(false);
   const [actionError,   setActionError]   = useState<string | null>(null);
   // One confirm dialog at a time; null = buttons visible
+  // Undo of a waiver made on the return checklist — allowed until returnFinalizedAt.
+  const [confirmUnwaive, setConfirmUnwaive] = useState<'late' | 'damage' | null>(null);
   const [confirmAction, setConfirmAction] = useState<
     'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
     | 'no_show' | 'lift_hold' | null
@@ -738,6 +740,82 @@ export default function AdminReservationDetailScreen() {
             outstandingWrittenOffBy={reservation.outstandingWrittenOffBy}
           />
         )}
+
+        {/* ── WAIVED CHARGES (internal) ─────────────────────────────────── */}
+        {(reservation.lateChargeWaived || reservation.damageChargeWaived) && (() => {
+          const cur = reservation.chargeCurrency ?? handoverDeposit?.depositCurrency ?? 'LAK';
+          const canUndo = !reservation.returnFinalizedAt;
+          const entries = ([
+            reservation.lateChargeWaived ? {
+              key: 'late' as const, label: 'Late fee waived', amount: reservation.lateChargeWaivedAmount,
+              reason: reservation.lateChargeWaivedReason, by: reservation.lateChargeWaivedBy,
+            } : null,
+            reservation.damageChargeWaived ? {
+              key: 'damage' as const, label: 'Damage charge waived', amount: reservation.damageChargeWaivedAmount,
+              reason: reservation.damageChargeWaivedReason, by: reservation.damageChargeWaivedBy,
+            } : null,
+          ]).filter((e): e is NonNullable<typeof e> => e != null);
+          // Reinstates the suggested amount and recomputes the deposit split exactly like
+          // the return checklist does (min/max against the deposit held).
+          const undo = (key: 'late' | 'damage') => {
+            const late = key === 'late' ? reservation.lateChargeWaivedAmount : reservation.lateChargeAmount;
+            const damage = key === 'damage' ? reservation.damageChargeWaivedAmount : reservation.chargeAmount;
+            const total = (late ?? 0) + (damage ?? 0);
+            const split = {
+              chargeCurrency: cur,
+              depositAppliedToCharge: Math.min(total, depositHeldAmount),
+              outstandingBalance: Math.max(0, total - depositHeldAmount),
+            };
+            const fields = key === 'late'
+              ? {
+                  lateChargeWaived: false,
+                  lateChargeAmount: reservation.lateChargeWaivedAmount!,
+                  lateChargeReason: reservation.lateChargeWaivedReason ?? 'Late return penalty',
+                  ...split,
+                }
+              : {
+                  damageChargeWaived: false,
+                  chargeAmount: reservation.damageChargeWaivedAmount!,
+                  chargeReason: reservation.damageChargeWaivedReason ?? 'Item condition',
+                  ...(reservation.damageChargeWaivedPercent != null ? { chargePercent: reservation.damageChargeWaivedPercent } : {}),
+                  ...split,
+                };
+            setConfirmUnwaive(null);
+            runAction(fields, fields);
+          };
+          return (
+            <View style={[d.card, { marginBottom: 12 }]}>
+              <Text style={d.cardLabel}>Waived charges</Text>
+              {entries.map(e => (
+                <View key={e.key} style={{ marginTop: 6 }}>
+                  <InfoRow
+                    label={e.label}
+                    value={e.amount != null ? `${e.amount.toLocaleString('en-US')} ${cur} suggested` : '—'}
+                    muted
+                  />
+                  {!!(e.reason || e.by) && (
+                    <Text style={d.notesText}>{[e.reason, e.by ? `waived by ${e.by}` : null].filter(Boolean).join(' · ')}</Text>
+                  )}
+                  {canUndo && e.amount != null && confirmUnwaive !== e.key && (
+                    <TouchableOpacity onPress={() => setConfirmUnwaive(e.key)} activeOpacity={0.7} style={{ marginTop: 6 }}>
+                      <Text style={d.cancelLinkText}>Undo waiver</Text>
+                    </TouchableOpacity>
+                  )}
+                  {confirmUnwaive === e.key && (
+                    <ConfirmBox
+                      text={`Charge the ${e.amount!.toLocaleString('en-US')} ${cur} again? The deposit refund will be recalculated.`}
+                      confirmLabel="Undo waiver"
+                      cancelLabel="Keep waived"
+                      onCancel={() => setConfirmUnwaive(null)}
+                      onConfirm={() => undo(e.key)}
+                    />
+                  )}
+                </View>
+              ))}
+              {!canUndo && <Text style={d.notesText}>The settlement is finalised — waivers can no longer be undone.</Text>}
+            </View>
+          );
+        })()}
 
         {/* ── SETTLEMENT RECEIPT ───────────────────────────────────────── */}
         {status === 'returned' && reservation.returnFinalizedAt && (

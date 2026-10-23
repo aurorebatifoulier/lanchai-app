@@ -226,8 +226,18 @@ a snapshot indefinitely).
   ]grace;24h] = 1 day, ]24;48h] = 1.5 days, ]48;72h] = 2 days (upper bounds inclusive),
   capped at 2 days beyond 72h. Base = `reservation.pricePerDay` (booked tier rate,
   pre-coupon) × `quantity`, rounded UP to the nearest 1,000 LAK. Always a suggestion:
-  staff confirm, lower, or waive (enter 0) it on the return checklist — never deducted
+  staff confirm, lower, or explicitly "Waive" it on the return checklist — never deducted
   automatically.
+  - **Waivers (late fee and damage charge).** "Waive" + inline ConfirmBox on the return
+    checklist (also inside a multi-item chain — forwarded by the draft/summary). Stores
+    `lateChargeWaived` / `damageChargeWaived: true` + `…WaivedAmount` (the suggestion),
+    `…WaivedReason`, `…WaivedBy` (internal), `…WaivedAt` (`submitChecklistBatch`); the
+    amount field stays absent. Typing 0 no longer waives (only valid within grace).
+    "Undo waiver" on the admin reservation detail until `returnFinalizedAt` (reinstates
+    the suggestion, recomputes the deposit split). Renters see "Late return fee · waived
+    by our team" / "Damage charge · waived by our team", no amount, never a name — via
+    `buildReceiptSummary()` (`functions/src/shared/receiptSummary.ts`, re-exported by
+    `utils/receiptSummary.ts`), the ONE source for the receipt screen, PDF and email.
   - **`functions/src/shared/latePenalty.ts`** (`computeLatePenalty`) is the ONLY place
     this is computed. It lives under `functions/` because `firebase deploy` only uploads
     that folder; the app imports it as `@/functions/src/shared/latePenalty`. Keep it

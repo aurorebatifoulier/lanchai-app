@@ -148,7 +148,8 @@ export default function ChecklistSummaryScreen() {
         const hasDamage = draft.chargeAmount != null && draft.chargeSeverity != null
           && draft.chargePercent != null && draft.chargeReason != null;
         const hasLate = draft.lateChargeAmount != null && draft.lateChargeReason != null;
-        const charge = (hasDamage || hasLate) && draft.chargeCurrency != null
+        const waived = !!draft.lateChargeWaived || !!draft.damageChargeWaived;
+        const charge = (hasDamage || hasLate || waived) && draft.chargeCurrency != null
           && draft.depositAppliedToCharge != null && draft.outstandingBalance != null
           ? {
               ...(hasDamage ? {
@@ -160,6 +161,21 @@ export default function ChecklistSummaryScreen() {
               ...(hasLate ? {
                 lateChargeAmount: draft.lateChargeAmount,
                 lateChargeReason: draft.lateChargeReason,
+              } : {}),
+              // Explicit waivers — forwarded as decided on the item screen.
+              ...(draft.lateChargeWaived ? {
+                lateChargeWaived: true,
+                lateChargeWaivedAmount: draft.lateChargeWaivedAmount,
+                lateChargeWaivedReason: draft.lateChargeWaivedReason,
+                lateChargeWaivedBy: draft.lateChargeWaivedBy,
+              } : {}),
+              ...(draft.damageChargeWaived ? {
+                damageChargeWaived: true,
+                damageChargeWaivedAmount: draft.damageChargeWaivedAmount,
+                damageChargeWaivedReason: draft.damageChargeWaivedReason,
+                damageChargeWaivedPercent: draft.damageChargeWaivedPercent,
+                damageChargeWaivedBy: draft.damageChargeWaivedBy,
+                ...(draft.chargeSeverity ? { chargeSeverity: draft.chargeSeverity } : {}),
               } : {}),
               chargeCurrency: draft.chargeCurrency,
               depositAppliedToCharge: draft.depositAppliedToCharge,
