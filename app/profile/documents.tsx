@@ -80,6 +80,17 @@ export default function DocumentsScreen() {
             </>
           )}
 
+          {/* ── My ID ── */}
+          <Text style={s.sectionTitle}>My ID</Text>
+          <TouchableOpacity style={[s.card, s.row]} onPress={() => router.push('/profile/identity')} activeOpacity={0.75}>
+            <Feather name="credit-card" size={16} color={COLORS.carbon} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowTitle}>ID document</Text>
+              <Text style={s.rowSub}>{profile?.idOnFile ? 'On file' : 'Needed to rent — add it here or show it at the shop'}</Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={COLORS.fg3} />
+          </TouchableOpacity>
+
           {/* ── Business document (BtoB only) ── */}
           {isBtob && (
             <>

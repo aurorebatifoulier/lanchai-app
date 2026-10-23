@@ -148,6 +148,21 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
+    // ── Identity / residency documents (very sensitive) ───────────────────────
+    // Path: idDocs/{uid}/{fileName} — the renter's ID document photos (and, later,
+    // residency documents). Read/delete: the owner or an admin only (never public;
+    // the app never stores download URLs — paths only). Create: the owner, or an admin
+    // photographing the ID at the counter. Images only, < 10 MB. No overwrite.
+    match /idDocs/{uid}/{fileName} {
+      allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth != null
+                    && (request.auth.uid == uid || isAdmin())
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
     // Default deny for everything else
     match /{allPaths=**} {
       allow read, write: if false;

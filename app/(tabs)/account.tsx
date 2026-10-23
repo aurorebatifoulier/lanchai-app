@@ -382,6 +382,12 @@ export default function AccountScreen() {
             />
           )}
           <ProfileRow
+            icon="credit-card"
+            title="My ID"
+            sub={profile?.idOnFile ? 'On file' : 'Needed to rent'}
+            onPress={() => router.push('/profile/identity')}
+          />
+          <ProfileRow
             icon="map-pin"
             title="Pick-up location"
             sub={`${shop.addressLine}, ${shop.city}`}

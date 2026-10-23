@@ -38,6 +38,8 @@ import { useLoyaltyConfig, depositPercentFor, isLoyaltyExcluded } from '@/lib/lo
 import { getProductAccessState } from '@/utils/productAccess';
 import { BillingSummary } from '@/components/BillingSummary';
 import { needsBtobDocument } from '@/utils/btob';
+import { useMyIdentity } from '@/lib/identity';
+import { IdRequirementStep } from '@/components/IdRequirementStep';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -166,7 +168,12 @@ export default function BagSummaryScreen() {
   const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
 
   // ── Confirm ──────────────────────────────────────────────────────────────────
-  const handleConfirm = async () => {
+  // ID document required to rent: without one on file, "Confirm" opens the ID step
+  // (add it now, or show it at the shop) and resumes here with the bag kept.
+  const { identity } = useMyIdentity();
+  const [idStepOpen, setIdStepOpen] = useState(false);
+
+  const handleConfirm = async (opts: { idCheckAtCounter?: boolean; idJustAdded?: boolean } = {}) => {
     if (!agreed || submitting || items.length === 0) return;
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -175,6 +182,10 @@ export default function BagSummaryScreen() {
     }
     if (needsBtobDocument(profile)) {
       setDocRequired(true);
+      return;
+    }
+    if (identity?.status !== 'on_file' && !opts.idJustAdded && !opts.idCheckAtCounter) {
+      setIdStepOpen(true);
       return;
     }
     setSubmitting(true);
@@ -200,6 +211,7 @@ export default function BagSummaryScreen() {
           quantity:  item.quantity,
         })),
         couponId: selectedCoupon?.id ?? null,
+        idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
       });
 
       // Clear the bag — fire and forget
@@ -264,6 +276,13 @@ export default function BagSummaryScreen() {
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
+      <IdRequirementStep
+        visible={idStepOpen}
+        rejected={identity?.status === 'rejected'}
+        onClose={() => setIdStepOpen(false)}
+        onUploaded={() => { setIdStepOpen(false); handleConfirm({ idJustAdded: true }); }}
+        onAtCounter={() => { setIdStepOpen(false); handleConfirm({ idCheckAtCounter: true }); }}
+      />
       {header}
 
       <ScrollView
@@ -458,7 +477,7 @@ export default function BagSummaryScreen() {
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={[s.cta, (!agreed || submitting || !!bookingHold) && s.ctaOff]}
-          onPress={handleConfirm}
+          onPress={() => handleConfirm()}
           disabled={!agreed || submitting || !!bookingHold}
           activeOpacity={0.85}
         >

@@ -353,7 +353,8 @@ export interface BookingItemInput {
 export type BookingErrorCode =
   | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
   | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
-  | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal';
+  | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal'
+  | 'id-required' | 'id-rejected';
 
 const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
   'unauthenticated':        'Please sign in to book.',
@@ -371,6 +372,8 @@ const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
   'coupon-invalid':         'This coupon can’t be used anymore. Remove it and try again.',
   'pricing-not-configured': 'Booking is temporarily unavailable. Please try again later.',
   'internal':               'Could not confirm your booking. Please try again.',
+  'id-required':            'An ID document is required to book — add it now, or choose to show it at the shop.',
+  'id-rejected':            'Your ID document was declined — please add a new one to book.',
 };
 
 /** Thrown by createBooking — `message` is ready to show to the renter. */
@@ -386,6 +389,8 @@ export async function createBooking(input: {
   items: BookingItemInput[];
   couponId?: string | null;
   notes?: string;
+  /** "I'll show my ID at the shop" (no ID document on file yet). */
+  idCheckAtCounter?: boolean;
 }): Promise<{ orderId: string; reservationIds: string[] }> {
   const call = httpsCallable<unknown, { orderId: string; reservationIds: string[] }>(functions, 'createReservations');
   try {
@@ -398,6 +403,7 @@ export async function createBooking(input: {
       })),
       couponId: input.couponId ?? null,
       notes: input.notes ?? '',
+      idCheckAtCounter: input.idCheckAtCounter === true,
     });
     return res.data;
   } catch (err: any) {
@@ -653,6 +659,9 @@ export interface UserProfile {
   emailRemindersOptOut?: boolean;
   /** News & offers email consent (app/profile/notifications.tsx) — not synced to Brevo yet. */
   marketingOptIn?: boolean;
+  /** Server-written (submitIdentityDocument / retention): an ID document is on file. */
+  idOnFile?: boolean;
+  idDocVersion?: number;
   marketingOptInAt?: Timestamp;
   marketingOptOutAt?: Timestamp;
   addresses?: UserAddress[];

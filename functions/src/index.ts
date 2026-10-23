@@ -30,6 +30,9 @@ export * from './account';
 // Branded password-reset / email-verification emails — see authEmails.ts.
 export * from './authEmails';
 
+// Identity document required to rent — see identity.ts.
+export * from './identity';
+
 admin.initializeApp();
 const db = admin.firestore();
 

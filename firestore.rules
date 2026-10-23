@@ -338,6 +338,14 @@ service cloud.firestore {
     // docs: config/latePolicy (internal late-return grace period, never visible to
     // renters), config/emailSettings (test/live email mode + redirect address) and
     // config/emailHealth (email failure bookkeeping). Only admins may write config.
+    // ── identityChecks/{uid} — the renter's current ID document (paths only) ───
+    // Written ONLY by Cloud Functions (submitIdentityDocument, admin ID actions,
+    // retention). The renter reads their own; admins read all.
+    match /identityChecks/{uid} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow write: if false;
+    }
+
     match /config/{docId} {
       // config/features (launch flags: businessAccounts, newsletter) is read before
       // sign-in by the signup screen — non-sensitive booleans only.

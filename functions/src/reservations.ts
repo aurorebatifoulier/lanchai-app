@@ -10,6 +10,7 @@ import { accessDecision } from './shared/productAccess';
 import { isLoyaltyExcluded } from './shared/loyalty';
 import { buildTimeSlots, toHHMM } from './shared/timeSlots';
 import { vteReservationLabel, vteMinutesOfDay, vteDateStamp } from './shared/dates';
+import { identityBookingDecision, type IdentityRecord } from './shared/identity';
 
 // ── createReservations ─────────────────────────────────────────────────────────
 // The ONLY way a renter creates reservations (firestore.rules: reservations create is
@@ -36,7 +37,8 @@ const ORDER_CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 export type BookingErrorCode =
   | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
   | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
-  | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal';
+  | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal'
+  | 'id-required' | 'id-rejected';
 
 function fail(code: BookingErrorCode, message: string, extra: Record<string, unknown> = {}): never {
   const status = code === 'unauthenticated' ? 'unauthenticated'
@@ -48,7 +50,7 @@ function fail(code: BookingErrorCode, message: string, extra: Record<string, unk
 
 interface ItemInput { productId: string; pickupAtMs: number; returnAtMs: number; quantity: number }
 
-function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; notes: string } {
+function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; notes: string; idCheckAtCounter: boolean } {
   const d = (data ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(d.items) ? d.items : [];
   if (raw.length === 0 || raw.length > MAX_ITEMS) fail('invalid-request', 'Choose between 1 and 10 items.');
@@ -66,7 +68,7 @@ function parseInput(data: unknown): { items: ItemInput[]; couponId: string | nul
   });
   const couponId = typeof d.couponId === 'string' && d.couponId ? d.couponId : null;
   const notes = typeof d.notes === 'string' ? d.notes.trim().slice(0, MAX_NOTES) : '';
-  return { items, couponId, notes };
+  return { items, couponId, notes, idCheckAtCounter: d.idCheckAtCounter === true };
 }
 
 function randomOrderCode(length = 4): string {
@@ -78,18 +80,19 @@ function randomOrderCode(length = 4): string {
 export const createReservations = onCall({ region: REGION }, async request => {
   const uid = request.auth?.uid;
   if (!uid) fail('unauthenticated', 'Please sign in to book.');
-  const { items, couponId, notes } = parseInput(request.data);
+  const { items, couponId, notes, idCheckAtCounter } = parseInput(request.data);
   const db = admin.firestore();
   const now = Date.now();
 
   // ── Account checks ──────────────────────────────────────────────────────────
-  const [userSnap, adminSnap, holdSnap, pricingSnap, loyaltySnap, shopSnap] = await Promise.all([
+  const [userSnap, adminSnap, holdSnap, pricingSnap, loyaltySnap, shopSnap, identitySnap] = await Promise.all([
     db.collection('users').doc(uid).get(),
     db.collection('admins').doc(uid).get(),
     db.collection('bookingHolds').doc(uid).get(),
     db.collection('config').doc('pricing').get(),
     db.collection('config').doc('loyalty').get(),
     db.collection('config').doc('shop').get(),
+    db.collection('identityChecks').doc(uid).get(),
   ]);
   const profile = userSnap.data() ?? {};
   const isAdmin = adminSnap.exists;
@@ -98,6 +101,12 @@ export const createReservations = onCall({ region: REGION }, async request => {
     fail('account-pending', 'Your business account is not approved yet.');
   }
   if (holdSnap.exists && !isAdmin) fail('account-on-hold', 'New bookings are paused for this account.');
+  // Identity document required to rent (shared/identity.ts): on file, or shown at the
+  // shop — never after a rejection until a new one is sent. Admins are exempt.
+  const idDecision = isAdmin ? 'ok' : identityBookingDecision(identitySnap.data() as IdentityRecord | undefined, idCheckAtCounter);
+  if (idDecision === 'id-rejected') fail('id-rejected', 'Your ID document was declined — please add a new one to book.');
+  if (idDecision === 'id-required') fail('id-required', 'An ID document is required to book.');
+  const idOnFile = identitySnap.get('status') === 'on_file';
 
   const exchangeRate = pricingSnap.get('exchangeRate');
   if (typeof exchangeRate !== 'number' || exchangeRate <= 0) fail('pricing-not-configured', 'Pricing is not available right now.');
@@ -229,6 +238,8 @@ export const createReservations = onCall({ region: REGION }, async request => {
         notes,
         status:       'pending_payment',
         orderId,
+        // "I'll show my ID at the shop" — staff photograph and check it at pick-up.
+        idCheckAtCounter: !idOnFile,
         ...(couponId ? { couponApplied: { id: couponId, percent: couponPercent, discountAmount: discount.perLine[i] } } : {}),
         createdAt:    FieldValue.serverTimestamp(),
       });

@@ -25,6 +25,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
 import { splitHtVat, formatLakAmount } from '@/utils/currency';
 import { BillingSummary } from '@/components/BillingSummary';
+import { useMyIdentity } from '@/lib/identity';
+import { IdRequirementStep } from '@/components/IdRequirementStep';
 
 export default function BookingSummaryScreen() {
   const router = useRouter();
@@ -85,11 +87,20 @@ export default function BookingSummaryScreen() {
   const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
   const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
 
-  const handleConfirm = async () => {
+  // ID document required to rent: without one on file, "Confirm" opens the ID step
+  // (add it now, or show it at the shop) and resumes here with the selection kept.
+  const { identity } = useMyIdentity();
+  const [idStepOpen, setIdStepOpen] = useState(false);
+
+  const handleConfirm = async (opts: { idCheckAtCounter?: boolean; idJustAdded?: boolean } = {}) => {
     if (!agreed || confirming) return;
     const currentUser = auth.currentUser;
     if (!currentUser) {
       setError('Please sign in to confirm your booking.');
+      return;
+    }
+    if (identity?.status !== 'on_file' && !opts.idJustAdded && !opts.idCheckAtCounter) {
+      setIdStepOpen(true);
       return;
     }
     setConfirming(true);
@@ -113,6 +124,7 @@ export default function BookingSummaryScreen() {
           quantity,
         }],
         couponId: selectedCoupon?.id ?? null,
+        idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes:    params.notes ?? '',
       });
       const reservationId = reservationIds[0];
@@ -139,6 +151,13 @@ export default function BookingSummaryScreen() {
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
+      <IdRequirementStep
+        visible={idStepOpen}
+        rejected={identity?.status === 'rejected'}
+        onClose={() => setIdStepOpen(false)}
+        onUploaded={() => { setIdStepOpen(false); handleConfirm({ idJustAdded: true }); }}
+        onAtCounter={() => { setIdStepOpen(false); handleConfirm({ idCheckAtCounter: true }); }}
+      />
 
       {/* ── Header ── */}
       <View style={s.header}>
@@ -331,7 +350,7 @@ export default function BookingSummaryScreen() {
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={[s.confirmBtn, (!agreed || confirming || !!bookingHold) && s.confirmBtnOff]}
-          onPress={handleConfirm}
+          onPress={() => handleConfirm()}
           disabled={!agreed || confirming || !!bookingHold}
           activeOpacity={0.85}
         >

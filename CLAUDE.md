@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 24 Cloud Functions (scheduled, Firestore-triggered and 6 callables, Node 22). The
+  gaps found), 25 Cloud Functions (scheduled, Firestore-triggered and 7 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -634,6 +634,23 @@ a snapshot indefinitely).
   coordinates", "lat, lng", Laos bounds) feed the shared `mapsUrl()` for every "Get
   directions" (app + emails); empty → address search. `SHOP_DISPLAY_DEFAULTS`
   (`functions/src/shared/shop.ts`) holds the real address as the fallback.
+
+- **Identity document — required to rent (phase 1 of identity/residency, 2026-10-23).**
+  `functions/src/shared/identity.ts` (types, `identityBookingDecision`) +
+  `functions/src/identity.ts` (`submitIdentityDocument`, `validateIdFiles`,
+  `registerIdentityDocument`). Data: `identityChecks/{uid}` (server-written; owner +
+  admin read) `{status: none|on_file|rejected, docType, files (Storage PATHS, never
+  URLs), source: renter|counter, version (+1 per new document — the first-pick-up check
+  is tied to it), supersededFiles (kept for the retention job)}`; `users.idOnFile` /
+  `idDocVersion` server-only. Storage `idDocs/{uid}/` — owner/admin read+delete,
+  owner/admin create, images < 10 MB, no overwrite. Booking: `createReservations` refuses
+  without an ID on file unless `idCheckAtCounter` ("I'll show my ID at the shop"), and
+  always after a rejection (`id-required` / `id-rejected`); admins exempt; each line
+  stores `idCheckAtCounter`. App: `lib/identity.ts`, `<IdUploadPanel>`,
+  `<IdRequirementStep>` (modal on Confirm in `booking/summary.tsx` and `bag/checkout.tsx`,
+  booking kept), `app/profile/identity.tsx` ("My ID", from Account and Documents).
+  NEVER show these photos anywhere else or put them in emails. Next phases: first-pick-up
+  double check, residency, retention, business + emails.
 
 ## Security follow-ups
 
