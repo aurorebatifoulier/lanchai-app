@@ -431,7 +431,10 @@ a snapshot indefinitely).
   lastPickupOffsetMin)` (`utils/timeSlots.ts`), 30-min steps, falling back to
   09:00–19:30 when the doc is missing/invalid. `hours` stays free display text only.
   `whatsappNumber` (digits, international format) feeds the shared
-  `components/WhatsAppButton.tsx`, which renders nothing when it's empty. All of it is
+  `components/WhatsAppButton.tsx`, which renders nothing when it's empty. `useShopInfo()`
+  is LIVE: one shared `onSnapshot` on `config/shop` (restarted on sign-in/out), so Shop
+  settings changes reach mounted screens (Account tab) immediately — never read the shop
+  once at mount or hardcode its address/hours. All of it is
   edited at `app/admin/shop-settings.tsx`. `components/AdminDateTimePicker.tsx` keeps its
   own full-day slot list on purpose (staff can log off-hours handovers).
 - **Product stock condition — no per-unit identity, counts only.** Products have no

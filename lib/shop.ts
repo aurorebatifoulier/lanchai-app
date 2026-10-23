@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 import { db } from './firebase';
+import { auth } from './auth';
 import {
   buildTimeSlots,
   DEFAULT_OPEN_TIME,
@@ -80,10 +82,40 @@ export function buildMapsUrl(shop: ShopInfo): string {
   return mapsUrl(shop);
 }
 
+// ONE live subscription to config/shop shared by every useShopInfo() caller, so a change
+// saved in Admin → Shop settings shows up everywhere immediately — including screens that
+// stay mounted (the Account tab used to keep the value read at mount). Restarted on
+// sign-in/out because config/* is only readable when signed in; while signed out (or on
+// a read error) callers keep the last value / SHOP_FALLBACK.
+let liveShop: ShopInfo = SHOP_FALLBACK;
+const shopListeners = new Set<(shop: ShopInfo) => void>();
+let stopDoc: Unsubscribe | null = null;
+let stopAuth: Unsubscribe | null = null;
+
+function startShopSubscription(): void {
+  if (stopAuth) return;
+  stopAuth = onAuthStateChanged(auth, user => {
+    stopDoc?.();
+    stopDoc = null;
+    if (!user) return;
+    stopDoc = onSnapshot(
+      doc(db, 'config', 'shop'),
+      snap => {
+        liveShop = snap.exists() ? { ...SHOP_FALLBACK, ...(snap.data() as Partial<ShopInfo>) } : SHOP_FALLBACK;
+        shopListeners.forEach(l => l(liveShop));
+      },
+      () => { /* keep the last known value */ },
+    );
+  });
+}
+
 export function useShopInfo(): ShopInfo {
-  const [shop, setShop] = useState<ShopInfo>(SHOP_FALLBACK);
+  const [shop, setShop] = useState<ShopInfo>(liveShop);
   useEffect(() => {
-    getShopInfo().then(setShop);
+    startShopSubscription();
+    shopListeners.add(setShop);
+    setShop(liveShop); // a value may have arrived between render and effect
+    return () => { shopListeners.delete(setShop); };
   }, []);
   return shop;
 }
