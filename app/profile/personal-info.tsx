@@ -47,6 +47,8 @@ export default function PersonalInfoScreen() {
     firstName: false, lastName: false, phone: false, whatsapp: false,
   });
   const [customerType, setCustomerType] = useState<string>('tourist');
+  // Locked once an ID has been checked in person (users.idCheckedVersion set).
+  const [nameLocked, setNameLocked] = useState(false);
   const [loading,      setLoading]      = useState(true);
   const [saving,       setSaving]       = useState(false);
   // Opt-out for NON-essential emails only (pickup/return reminders). Confirmations,
@@ -80,6 +82,7 @@ export default function PersonalInfoScreen() {
         setWhatsapp(profile?.whatsapp ?? '');
         setSameAsPhone(profile?.whatsappSameAsPhone ?? false);
         setAddress(profile?.address ?? '');
+        setNameLocked(profile?.idCheckedVersion != null);
         setCustomerType(profile?.customerType ?? 'tourist');
       })
       .catch(() => {
@@ -103,8 +106,8 @@ export default function PersonalInfoScreen() {
   // ── Validation ───────────────────────────────────────────────────────────────
 
   const errors = {
-    firstName: firstName.trim()    ? '' : 'First name is required.',
-    lastName:  lastName.trim()     ? '' : 'Last name is required.',
+    firstName: nameLocked || firstName.trim() ? '' : 'First name is required.',
+    lastName:  nameLocked || lastName.trim()  ? '' : 'Last name is required.',
     phone:     isPhoneValid(phone) ? '' : 'Enter a valid phone number (min 6 digits).',
     whatsapp:  (!sameAsPhone && whatsapp.trim() && !isPhoneValid(whatsapp))
       ? 'Enter a valid WhatsApp number (min 6 digits).'
@@ -146,9 +149,7 @@ export default function PersonalInfoScreen() {
       const waValue     = sameAsPhone ? phone.trim() : whatsapp.trim();
 
       await saveUserProfile(cu.uid, {
-        firstName:           fn,
-        lastName:            ln,
-        displayName,
+        ...(nameLocked ? {} : { firstName: fn, lastName: ln, displayName }),
         phoneNumber:         phone.trim(),
         // Staff verify phones in person — a new number needs verifying again.
         ...(normalizePhone(phone) !== savedPhone ? { phoneVerified: false } : {}),
@@ -157,7 +158,7 @@ export default function PersonalInfoScreen() {
         whatsappSameAsPhone: sameAsPhone,
         address:             address.trim(),
       });
-      await updateProfile(cu, { displayName });
+      if (!nameLocked) await updateProfile(cu, { displayName });
       setSavedPhone(normalizePhone(phone));
 
       console.log('[PersonalInfo] Profile saved successfully');
@@ -233,38 +234,52 @@ export default function PersonalInfoScreen() {
           );
         })()}
 
-        {/* First name */}
-        <Text style={s.fieldLabel}>First name</Text>
-        <TextInput
-          style={[s.input, touched.firstName && !!errors.firstName && s.inputError]}
-          value={firstName}
-          onChangeText={setFirstName}
-          onBlur={() => touch('firstName')}
-          onSubmitEditing={() => lastNameRef.current?.focus()}
-          placeholder="e.g. Aurore"
-          placeholderTextColor={COLORS.fg3}
-          autoCapitalize="words"
-          returnKeyType="next"
-          blurOnSubmit={false}
-        />
-        <Text style={s.errorText}>{touched.firstName ? errors.firstName : ''}</Text>
+        {/* Name — read-only once an ID has been checked in person (firestore.rules
+            enforces it too); staff can correct it from the ID check. */}
+        {nameLocked ? (
+          <>
+            <Text style={s.fieldLabel}>Name</Text>
+            <View style={s.readonlyField}>
+              <Text style={s.readonlyValue}>{`${firstName} ${lastName}`.trim() || '—'}</Text>
+            </View>
+            <Text style={s.fieldNote}>Your name was checked against your ID. Contact us to change your name.</Text>
+          </>
+        ) : (
+          <>
+            {/* First name */}
+            <Text style={s.fieldLabel}>First name</Text>
+            <TextInput
+              style={[s.input, touched.firstName && !!errors.firstName && s.inputError]}
+              value={firstName}
+              onChangeText={setFirstName}
+              onBlur={() => touch('firstName')}
+              onSubmitEditing={() => lastNameRef.current?.focus()}
+              placeholder="e.g. Aurore"
+              placeholderTextColor={COLORS.fg3}
+              autoCapitalize="words"
+              returnKeyType="next"
+              blurOnSubmit={false}
+            />
+            <Text style={s.errorText}>{touched.firstName ? errors.firstName : ''}</Text>
 
-        {/* Last name */}
-        <Text style={s.fieldLabel}>Last name</Text>
-        <TextInput
-          ref={lastNameRef}
-          style={[s.input, touched.lastName && !!errors.lastName && s.inputError]}
-          value={lastName}
-          onChangeText={setLastName}
-          onBlur={() => touch('lastName')}
-          onSubmitEditing={() => phoneRef.current?.focus()}
-          placeholder="e.g. Batifoulier"
-          placeholderTextColor={COLORS.fg3}
-          autoCapitalize="words"
-          returnKeyType="next"
-          blurOnSubmit={false}
-        />
-        <Text style={s.errorText}>{touched.lastName ? errors.lastName : ''}</Text>
+            {/* Last name */}
+            <Text style={s.fieldLabel}>Last name</Text>
+            <TextInput
+              ref={lastNameRef}
+              style={[s.input, touched.lastName && !!errors.lastName && s.inputError]}
+              value={lastName}
+              onChangeText={setLastName}
+              onBlur={() => touch('lastName')}
+              onSubmitEditing={() => phoneRef.current?.focus()}
+              placeholder="e.g. Batifoulier"
+              placeholderTextColor={COLORS.fg3}
+              autoCapitalize="words"
+              returnKeyType="next"
+              blurOnSubmit={false}
+            />
+            <Text style={s.errorText}>{touched.lastName ? errors.lastName : ''}</Text>
+          </>
+        )}
 
         {/* Phone */}
         <Text style={s.fieldLabel}>Phone</Text>

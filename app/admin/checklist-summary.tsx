@@ -345,7 +345,7 @@ export default function ChecklistSummaryScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {type === 'handover' && (
-          <IdCheckSection check={idCheck} renterName={reservations[0]?.renterName} />
+          <IdCheckSection check={idCheck} />
         )}
 
         <Text style={styles.fieldLabel}>Items in this group</Text>

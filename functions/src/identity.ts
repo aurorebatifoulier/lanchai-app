@@ -199,3 +199,57 @@ export const adminIdentityAction = onCall({ region: REGION }, async request => {
   logger.info('[identity] admin action', { renterId, action: d.action, by: adminUid });
   return { ok: true };
 });
+
+// ── adminRenterProfile — staff: contact details next to the ID, and name fix ──────
+// { renterId, action: 'get' } → { firstName, lastName, displayName, phone, email }
+//   (email from Firebase Auth — users docs don't store it).
+// { renterId, action: 'setName', firstName, lastName } → users first/last/displayName +
+//   nameEditedAt/By (internal), Auth displayName, and renterName on upcoming pick-ups.
+// Renters can't change their own name once an ID has been checked (firestore.rules).
+export const adminRenterProfile = onCall({ region: REGION }, async request => {
+  const adminUid = await requireAdmin(request.auth?.uid);
+  const d = (request.data ?? {}) as { renterId?: unknown; action?: unknown; firstName?: unknown; lastName?: unknown };
+  const renterId = typeof d.renterId === 'string' ? d.renterId : '';
+  if (!renterId) fail('invalid-request', 'Missing renter.', 'invalid-argument');
+  const db = admin.firestore();
+  const userRef = db.collection('users').doc(renterId);
+
+  if (d.action === 'setName') {
+    const clean = (v: unknown) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, 60) : '');
+    const firstName = clean(d.firstName);
+    const lastName = clean(d.lastName);
+    if (!firstName || !lastName) fail('invalid-name', 'First and last name are required.', 'invalid-argument');
+    const displayName = `${firstName} ${lastName}`;
+    await userRef.set({
+      firstName, lastName, displayName,
+      nameEditedAt: FieldValue.serverTimestamp(),
+      nameEditedBy: staffName(request.auth?.token),
+    }, { merge: true });
+    await admin.auth().updateUser(renterId, { displayName }).catch(() => {});
+    const res = await db.collection('reservations').where('renterId', '==', renterId).get();
+    const batch = db.batch();
+    let n = 0;
+    for (const r of res.docs) {
+      if (!(PRE_PICKUP_STATUSES as readonly string[]).includes(r.get('status'))) continue;
+      batch.update(r.ref, { renterName: displayName });
+      n++;
+    }
+    if (n > 0) await batch.commit();
+    logger.info('[identity] renter name edited', { renterId, by: adminUid });
+  } else if (d.action !== 'get') {
+    fail('invalid-request', 'Unknown action.', 'invalid-argument');
+  }
+
+  const [user, authUser] = await Promise.all([
+    userRef.get(),
+    admin.auth().getUser(renterId).catch(() => null),
+  ]);
+  const u = user.data() ?? {};
+  return {
+    firstName: u.firstName ?? '',
+    lastName: u.lastName ?? '',
+    displayName: u.displayName ?? authUser?.displayName ?? '',
+    phone: u.phoneNumber ?? u.phone ?? '',
+    email: authUser?.email ?? '',
+  };
+});

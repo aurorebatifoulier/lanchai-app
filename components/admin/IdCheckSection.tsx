@@ -6,6 +6,7 @@ import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import { db, storage, functions } from '@/lib/firebase';
+import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
 import {
   ID_DOC_TYPES, idCheckNeeded, pickIdPhoto, uploadIdPhotos, type IdDocType, type IdentityRecord,
 } from '@/lib/identity';
@@ -17,6 +18,7 @@ import {
 // perform() uploads that photo to idDocs/{renterId}/ and calls recordIdCheck.
 
 export interface IdCheck {
+  renterId: string | null;
   loading: boolean;
   needed: boolean;
   onFile: boolean;
@@ -88,6 +90,7 @@ export function useIdCheck(renterId: string | null | undefined): IdCheck {
   }, [needed, renterId, onFile, counterDocType, counterPhotos, matchesPerson, nameMatches]);
 
   return {
+    renterId: renterId ?? null,
     loading, needed, onFile, urls,
     docTypeLabel: ID_DOC_TYPES.find(t => t.key === identity?.docType)?.label ?? 'ID document',
     matchesPerson, nameMatches, counterDocType, counterPhotos,
@@ -109,7 +112,8 @@ function Check({ checked, label, onPress }: { checked: boolean; label: string; o
   );
 }
 
-export function IdCheckSection({ check, renterName }: { check: IdCheck; renterName?: string | null }) {
+// The two confirmations stay mandatory after a name edit (they're never auto-ticked).
+export function IdCheckSection({ check }: { check: IdCheck }) {
   const [zoom, setZoom] = useState<string | null>(null);
   if (check.loading) return <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 12 }} />;
   if (!check.needed) return null;
@@ -122,7 +126,7 @@ export function IdCheckSection({ check, renterName }: { check: IdCheck; renterNa
       {check.onFile ? (
         <>
           <Text style={s.body}>
-            Compare the person and their {check.docTypeLabel.toLowerCase()} with the uploaded photo{renterName ? ` (account: ${renterName})` : ''}. Tap to enlarge.
+            Compare the person and their {check.docTypeLabel.toLowerCase()} with the uploaded photo and the name below. Tap to enlarge.
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photos}>
             {check.urls.map(u => (
@@ -135,7 +139,7 @@ export function IdCheckSection({ check, renterName }: { check: IdCheck; renterNa
       ) : (
         <>
           <Text style={s.body}>
-            No ID on file — ask for the renter&apos;s ID and take a photo of it{renterName ? ` (account: ${renterName})` : ''}.
+            No ID on file — ask for the renter&apos;s ID, take a photo of it and compare it with the name below.
           </Text>
           <View style={s.chips}>
             {ID_DOC_TYPES.map(t => (
@@ -165,6 +169,7 @@ export function IdCheckSection({ check, renterName }: { check: IdCheck; renterNa
           </ScrollView>
         </>
       )}
+      {check.renterId && <RenterNameBlock renterId={check.renterId} />}
       <Check checked={check.matchesPerson} label="The document matches the person" onPress={() => check.setMatchesPerson(!check.matchesPerson)} />
       <Check checked={check.nameMatches} label="The name matches the account" onPress={() => check.setNameMatches(!check.nameMatches)} />
       {!check.ready && <Text style={s.required}>Required before handover.</Text>}

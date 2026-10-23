@@ -210,6 +210,12 @@ service cloud.firestore {
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneVerified']) ||
           request.resource.data.phoneVerified == false
         ) &&
+        // Name locked once an ID has been checked in person (recordIdCheck sets
+        // idCheckedVersion) — only staff can change it then (adminRenterProfile / isAdmin).
+        (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['firstName', 'lastName', 'displayName']) ||
+          !('idCheckedVersion' in resource.data)
+        ) &&
         (
           // BtoB registration document: re-upload while the business account isn't
           // approved, or a first upload for an approved account that has none on file

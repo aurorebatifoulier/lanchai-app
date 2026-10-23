@@ -666,6 +666,9 @@ export interface UserProfile {
   /** Server-written (submitIdentityDocument / retention): an ID document is on file. */
   idOnFile?: boolean;
   idDocVersion?: number;
+  /** Server-written by recordIdCheck: the document version checked in person. Once set,
+   *  the renter can't change their name (firestore.rules) — staff can. */
+  idCheckedVersion?: number;
   marketingOptInAt?: Timestamp;
   marketingOptOutAt?: Timestamp;
   addresses?: UserAddress[];

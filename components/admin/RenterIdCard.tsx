@@ -6,6 +6,7 @@ import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
 import { db, storage, functions } from '@/lib/firebase';
 import {
   ID_DOC_TYPES, ID_REJECTION_REASONS, pickIdPhoto, uploadIdPhotos, type IdDocType, type IdentityRecord,
@@ -83,6 +84,7 @@ export function RenterIdCard({ renterId }: { renterId: string }) {
             ? `Declined — ${identity.rejection?.text ?? ''}`
             : 'No ID on file'}
       </Text>
+      <RenterNameBlock renterId={renterId} />
       {urls.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photos}>
           {urls.map(u => (

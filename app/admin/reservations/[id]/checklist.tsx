@@ -717,7 +717,7 @@ export default function ChecklistScreen() {
         <Text style={styles.productName}>{reservation.productName}</Text>
 
         {type === 'handover' && !inChain && (
-          <IdCheckSection check={idCheck} renterName={reservation.renterName} />
+          <IdCheckSection check={idCheck} />
         )}
 
         {CHECKLIST_CATEGORIES.map(cat => {

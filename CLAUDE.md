@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 27 Cloud Functions (scheduled, Firestore-triggered and 9 callables, Node 22). The
+  gaps found), 28 Cloud Functions (scheduled, Firestore-triggered and 10 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -662,8 +662,13 @@ a snapshot indefinitely).
   single handover checklist and on the handover chain summary (two confirmations, staff
   photo when no ID on file) → `recordIdCheck` callable BEFORE the checklist write.
   `<RenterIdCard>` (reservation detail): view, add/replace a counter photo, decline
-  (`adminIdentityAction`, `ID_REJECTION_REASONS`, blocks bookings). Next phases:
-  residency, retention, business + emails.
+  (`adminIdentityAction`, `ID_REJECTION_REASONS`, blocks bookings).
+  `<RenterNameBlock>` (in both) shows the account's name big + phone/email (email from
+  Auth via the `adminRenterProfile` callable) with "Edit name" (inline confirm,
+  `nameEditedAt/By`, also Auth displayName + renterName on upcoming pick-ups). Once
+  `users.idCheckedVersion` is set the renter can't change first/last/displayName
+  (Personal info read-only + users update rule) — staff can. Next phases: residency,
+  retention, business + emails (incl. "ID verified" email).
 
 ## Security follow-ups
 
