@@ -743,7 +743,7 @@ export default function AdminReservationDetailScreen() {
         {status === 'returned' && reservation.returnFinalizedAt && (
           <View style={{ marginBottom: 12 }}>
             <Text style={d.cardLabel}>Receipt</Text>
-            <RentalReceipt rental={reservation} vatPercent={vatPercent} />
+            <RentalReceipt rental={reservation} vatPercent={vatPercent} staffView />
           </View>
         )}
 

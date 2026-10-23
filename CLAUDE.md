@@ -344,10 +344,14 @@ a snapshot indefinitely).
   `marketingOptIn` + `marketingOptInAt`/`marketingOptOutAt` (`setMarketingOptIn()`,
   server time — the users rule requires `== request.time`; OFF by default; stored only,
   NOT synced to Brevo yet — that needs a contacts-capable key, a list, a users trigger,
-  an unsubscribe webhook and a Privacy policy update). `app/profile/documents.tsx`:
-  receipts (returned + `returnFinalizedAt`, one per reservation → existing receipt
-  screen), condition reports (`ChecklistSummary`), BtoB document, legal links — one
-  `getMyReservations` query, filtered in code. `canReplaceBtobDocument()`
+  an unsubscribe webhook and a Privacy policy update). `app/profile/documents.tsx`
+  (validated mockup): "Your rentals" — the 3 most recent rentals with a document,
+  `<RentalDocCard>` with Receipt / Pick-up / Return buttons (greyed when missing;
+  reports open `app/rentals/[id]/report.tsx?type=pickup|return`, `ChecklistSummary
+  audience="renter"`: "Confirmed by you on …", never a name) — "See all" →
+  `app/profile/rentals.tsx` (search, period chips, 10 per page "Load more" rendered
+  client-side), BtoB document, legal links. One `getMyReservations` query (renterId ==,
+  no orderBy), filtered/sorted/paged in code (`utils/rentalDocs.ts`) — no composite index. `canReplaceBtobDocument()`
   (`utils/btob.ts`) mirrors the rule: no document replacement once approved.
 - **Password reset / email verification emails are ours, not Firebase's.**
   `functions/src/authEmails.ts`: callables `requestPasswordReset({ email })` (no auth;
@@ -499,20 +503,18 @@ a snapshot indefinitely).
     the same neutral, informational style as its existing `overdue`/`soldOutPublished`
     entries, matching the earlier, deliberate removal of the old 48h deposit-urgency
     chip system.
-  - `components/RentalReceipt.tsx` — the end-of-service settlement receipt, pure
-    aggregation of already-persisted figures (no new financial math): rental fee via
-    `<BillingSummary>` (now supports omitting its `deposit`/`depositLabel` props to
-    avoid duplicating the deposit line shown separately below it), deposit/charges via
-    `<SettlementSummary>` unchanged, and a Net total — `total + depositAppliedToCharge
-    + outstandingBalance`, shown as one LAK figure only when `chargeCurrency` is LAK
-    (the rental fee is always LAK but the deposit/charge currency is a staff choice at
-    handover and can be USD/THB; forcing those into one blended LAK figure would need a
-    new current-rate conversion that could make a closed receipt's numbers drift later,
-    so a currency mismatch is shown as two separate figures instead). Rendered inline
-    on the admin reservation detail screen and at the customer route
-    `app/rentals/[id]/receipt.tsx` (first use of the `[id].tsx`+`[id]/child.tsx`
-    coexistence pattern outside `app/admin/reservations/` — see the gotcha above), both
-    gated on `status === 'returned' && returnFinalizedAt` being set.
+  - `components/RentalReceipt.tsx` — the end-of-service receipt, ONE "Your rental
+    summary" card aligned with the receipt email (validated mockup): rental fee (VAT in
+    small grey), deposit paid, late/damage charges as negative lines with their detail,
+    the outcome from `deriveSettlementOutcome` ("Deposit refunded to you" / "You paid on
+    top" + Settled pill / "Balance due"), then "Total cost of your rental" — one LAK
+    figure only when the charge currency is LAK, otherwise LAK and "+ X USD" on separate
+    lines, never added. No staff names for renters; `staffView` (admin reservation
+    detail) shows "Settled by …". Shown at `app/rentals/[id]/receipt.tsx` (title: product
+    + "Order LNC-… · Returned …") and inline on the admin detail, both gated on
+    `status === 'returned' && returnFinalizedAt`. Order numbers shown to renters go
+    through `displayOrderId()` (`utils/rentalDocs.ts`): the LNC-… id, or nothing for
+    legacy rows — never the raw Firestore id (also used by the PDF).
   - **`utils/receiptData.ts`'s `deriveReceiptData(rental, vatPercent)`** is the single
     source of every derived receipt figure (VAT split, deposit held/applied, net) —
     `RentalReceipt.tsx` calls it for the on-screen render, and `lib/receiptPdf.ts`

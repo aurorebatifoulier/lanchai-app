@@ -349,12 +349,12 @@ export default function RentalDetailScreen() {
         {/* ── Checklists ── */}
         {rental.handoverChecklist?.confirmedAt && (
           <View style={{ marginBottom: 12 }}>
-            <ChecklistSummary checklist={rental.handoverChecklist} title="Handover checklist" />
+            <ChecklistSummary checklist={rental.handoverChecklist} title="Pick-up checklist" audience="renter" />
           </View>
         )}
         {rental.returnChecklist?.confirmedAt && (
           <View style={{ marginBottom: 12 }}>
-            <ChecklistSummary checklist={rental.returnChecklist} title="Return checklist" />
+            <ChecklistSummary checklist={rental.returnChecklist} title="Return checklist" audience="renter" />
           </View>
         )}
 

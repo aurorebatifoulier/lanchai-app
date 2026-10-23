@@ -9,6 +9,7 @@ import BackButton from '@/components/BackButton';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { useVatPercent } from '@/lib/exchangeRate';
 import { RentalReceipt } from '@/components/RentalReceipt';
+import { displayOrderId, fmtDay } from '@/utils/rentalDocs';
 
 export default function RentalReceiptScreen() {
   const insets = useSafeAreaInsets();
@@ -58,8 +59,13 @@ export default function RentalReceiptScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}
         >
-          <Text style={s.productName}>{rental.productName}</Text>
-          <Text style={s.refId}>Ref: {rental.id}</Text>
+          <Text style={s.productName} numberOfLines={2}>
+            {rental.quantity > 1 ? `${rental.productName} × ${rental.quantity}` : rental.productName}
+          </Text>
+          <Text style={s.refId}>
+            {[displayOrderId(rental) ? `Order ${displayOrderId(rental)}` : null, `Returned ${fmtDay(rental.returnedAt ?? rental.returnAt)}`]
+              .filter(Boolean).join(' · ')}
+          </Text>
           <RentalReceipt rental={rental} vatPercent={vatPercent} />
         </ScrollView>
       )}
@@ -81,7 +87,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
   content: { paddingHorizontal: 20, paddingTop: 20 },
   productName: { fontSize: 20, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.4, marginBottom: 4 },
-  refId: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginBottom: 8 },
+  refId: { fontSize: 13, fontWeight: '500', color: COLORS.fg3, marginBottom: 4, lineHeight: 18 },
   errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40 },
   errorText: { fontSize: 14, fontWeight: '500', color: COLORS.fg3, textAlign: 'center' },
 });

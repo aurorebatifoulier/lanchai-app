@@ -4,6 +4,7 @@ import { File, Paths } from 'expo-file-system';
 import type { RentalDoc } from './firestore';
 import { formatLakAmount } from '@/utils/currency';
 import { deriveReceiptData, type ReceiptData } from '@/utils/receiptData';
+import { displayOrderId } from '@/utils/rentalDocs';
 
 // Matches SettlementSummary.tsx's own currency formatter exactly — reused here rather
 // than reinvented, since expo-print needs a plain HTML string and can't call that
@@ -58,10 +59,11 @@ function buildSettlementSection(rental: RentalDoc, data: ReceiptData): string {
   rows.push(`<tr><td class="label muted">Deposit held</td><td class="value muted">${fmt(depositHeldAmount)}</td></tr>`);
 
   if (outstandingBalance > 0) {
+    // The PDF goes to the renter: never a staff name.
     const resolutionText = resolution === 'settled'
-      ? `Settled${rental.outstandingSettledBy ? ` by ${escapeHtml(rental.outstandingSettledBy)}` : ''}`
+      ? 'Settled'
       : resolution === 'writtenOff'
-      ? `Written off${rental.outstandingWrittenOffBy ? ` by ${escapeHtml(rental.outstandingWrittenOffBy)}` : ''}`
+      ? 'Written off'
       : 'Not yet settled';
     rows.push(`
       <tr class="net-row"><td class="label">Client owes</td><td class="value danger bold">${fmt(outstandingBalance)}</td></tr>
@@ -77,6 +79,7 @@ function buildSettlementSection(rental: RentalDoc, data: ReceiptData): string {
 }
 
 export function buildReceiptHtml(rental: RentalDoc, data: ReceiptData): string {
+  const orderId = displayOrderId(rental);
   const { vatPct, vatHt, vatAmount, depositCurrency, chargesTotal, netInLak } = data;
 
   const netSection = netInLak != null
@@ -121,7 +124,7 @@ export function buildReceiptHtml(rental: RentalDoc, data: ReceiptData): string {
     <div class="brand">LANCHAI</div>
     <div class="tagline">Rent. Return. Repeat.</div>
     <div class="meta">
-      Reservation <strong>${escapeHtml(rental.id)}</strong><br/>
+      ${orderId ? `Order <strong>${escapeHtml(orderId)}</strong><br/>` : ''}
       ${escapeHtml(rental.productName)}<br/>
       ${rental.renterName ? escapeHtml(rental.renterName) + '<br/>' : ''}
       Pick-up: ${escapeHtml(rental.pickupLabel)} &middot; Return: ${escapeHtml(rental.returnLabel)}
@@ -173,7 +176,7 @@ export async function downloadReceipt(rental: RentalDoc, vatPercent: number | nu
     const { uri } = await Print.printToFileAsync({ html, base64: false });
 
     const sourceFile = new File(uri);
-    const destFile = new File(Paths.cache, `LANCHAI-receipt-${rental.id}.pdf`);
+    const destFile = new File(Paths.cache, `LANCHAI-receipt-${(displayOrderId(rental) ?? 'rental').replace(/[^A-Za-z0-9-]/g, '')}.pdf`);
     if (destFile.exists) destFile.delete();
     sourceFile.copy(destFile);
 

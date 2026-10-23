@@ -4,24 +4,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import type { Timestamp } from 'firebase/firestore';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { ChecklistSummary } from '@/components/ChecklistSummary';
+import { RentalDocCard } from '@/components/RentalDocCard';
 import { auth } from '@/lib/auth';
 import { getMyReservations, getUserProfile, type RentalDoc, type UserProfile } from '@/lib/firestore';
-import { formatLakAmount } from '@/utils/currency';
 import { canReplaceBtobDocument } from '@/utils/btob';
+import { rentalsWithDocuments } from '@/utils/rentalDocs';
 
-// Renter's documents in one place. Receipts reuse the existing receipt screen
-// (app/rentals/[id]/receipt.tsx — RentalReceipt + PDF), same condition: returned +
-// returnFinalizedAt; one receipt per reservation, like that screen. Condition reports
-// reuse the read-only ChecklistSummary. One equality query (renterId), sorted in code.
+// Renter's documents in one place (validated mockup): "Your rentals" — the 3 most
+// recent finished/ongoing rentals with at least one document (receipt, pick-up or
+// return report), then "See all" → app/profile/rentals.tsx — business document (BtoB)
+// and legal links. One equality query (getMyReservations), filtered/sorted in code.
 
-const fmtDate = (ts?: Timestamp | null) =>
-  ts ? ts.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const itemName = (r: RentalDoc) => (r.quantity > 1 ? `${r.productName} × ${r.quantity}` : r.productName);
-const ms = (ts?: Timestamp | null) => ts?.toMillis() ?? 0;
+const PREVIEW_COUNT = 3;
 
 const LEGAL = [
   { title: 'Terms and conditions', route: '/legal/terms' },
@@ -47,18 +43,7 @@ export default function DocumentsScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const receipts = useMemo(
-    () => rentals
-      .filter(r => r.status === 'returned' && r.returnFinalizedAt)
-      .sort((a, b) => ms(b.returnedAt ?? b.returnAt) - ms(a.returnedAt ?? a.returnAt)),
-    [rentals],
-  );
-  const reports = useMemo(
-    () => rentals
-      .filter(r => r.handoverChecklist || r.returnChecklist)
-      .sort((a, b) => ms(b.pickupAt) - ms(a.pickupAt)),
-    [rentals],
-  );
+  const withDocs = useMemo(() => rentalsWithDocuments(rentals), [rentals]);
   const isBtob = profile?.accountType === 'btob';
 
   return (
@@ -79,50 +64,20 @@ export default function DocumentsScreen() {
         >
           {error && <Text style={s.error}>Could not load your rentals. Please try again later.</Text>}
 
-          {/* ── Receipts ── */}
-          <Text style={s.sectionTitle}>Receipts</Text>
-          {receipts.length === 0 ? (
-            <Text style={s.empty}>Your receipts will appear here after your first rental.</Text>
+          {/* ── Your rentals ── */}
+          <Text style={s.sectionTitle}>Your rentals</Text>
+          {withDocs.length === 0 ? (
+            <Text style={s.empty}>Your receipts and condition reports will appear here after your first rental.</Text>
           ) : (
-            <View style={s.card}>
-              {receipts.map((r, i) => (
-                <TouchableOpacity
-                  key={r.id}
-                  style={[s.row, i > 0 && s.rowBorder]}
-                  onPress={() => router.push(`/rentals/${r.id}/receipt`)}
-                  activeOpacity={0.75}
-                >
-                  <View style={s.rowIcon}>
-                    <Feather name="file-text" size={16} color={COLORS.carbon} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.rowTitle} numberOfLines={1}>{itemName(r)}</Text>
-                    <Text style={s.rowSub}>
-                      Returned {fmtDate(r.returnedAt ?? r.returnAt)}{r.orderId ? ` · Order ${r.orderId}` : ''}
-                    </Text>
-                  </View>
-                  <Text style={s.rowAmount}>{formatLakAmount(r.total)}</Text>
-                  <Feather name="chevron-right" size={16} color={COLORS.fg3} />
+            <>
+              {withDocs.slice(0, PREVIEW_COUNT).map(r => <RentalDocCard key={r.id} rental={r} />)}
+              {withDocs.length > PREVIEW_COUNT && (
+                <TouchableOpacity style={s.seeAll} onPress={() => router.push('/profile/rentals')} activeOpacity={0.7}>
+                  <Text style={s.seeAllText}>See all ({withDocs.length})</Text>
+                  <Feather name="chevron-right" size={16} color={COLORS.amberTintText} />
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* ── Condition reports ── */}
-          <Text style={s.sectionTitle}>Condition reports</Text>
-          {reports.length === 0 ? (
-            <Text style={s.empty}>The condition of your items at pick-up and return will appear here.</Text>
-          ) : (
-            reports.map(r => (
-              <View key={r.id} style={s.reportBlock}>
-                <Text style={s.rowTitle}>{itemName(r)}</Text>
-                <Text style={[s.rowSub, { marginBottom: 8 }]}>
-                  {fmtDate(r.pickupAt)} → {fmtDate(r.returnAt)}
-                </Text>
-                {r.handoverChecklist && <ChecklistSummary checklist={r.handoverChecklist} title="Pick-up checklist" />}
-                {r.returnChecklist && <ChecklistSummary checklist={r.returnChecklist} title="Return checklist" />}
-              </View>
-            ))
+              )}
+            </>
           )}
 
           {/* ── Business document (BtoB only) ── */}
@@ -202,17 +157,10 @@ const s = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   rowBorder: { borderTopWidth: 1, borderTopColor: COLORS.softGray200 },
-  rowIcon: {
-    width: 32, height: 32, borderRadius: 9, backgroundColor: COLORS.warmBeige,
-    alignItems: 'center', justifyContent: 'center',
-  },
   rowTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
   rowSub: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 2 },
-  rowAmount: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
-  reportBlock: {
-    backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, borderColor: COLORS.softGray200,
-    padding: 14, marginBottom: 10,
-  },
+  seeAll: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8 },
+  seeAllText: { fontSize: 14, fontWeight: '800', color: COLORS.amberTintText },
   bizCard: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, marginBottom: 6 },
   docThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: COLORS.softGray200 },
   docThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
