@@ -29,6 +29,7 @@ import {
   deleteAdminTask,
   getUserProfile,
 } from '@/lib/firestore';
+import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,9 @@ function ReservationRow({ item, type, profile, onPress }: {
       <View style={{ flex: 1 }}>
         <Text style={rr.product} numberOfLines={1}>{item.productName}</Text>
         {timeLabel ? <Text style={rr.timeLabel} numberOfLines={1}>{timeLabel}</Text> : null}
+        {(type === 'pickup' || type === 'pending') && showsFirstRentalIdCheck(item) && (
+          <FirstRentalIdChip atCounter={item.idCheckAtCounter} />
+        )}
         {overdueChip ? (() => {
           const { bg, border: bdr, fg: txt } = overdueChipColors(overdueChip.sev);
           return (

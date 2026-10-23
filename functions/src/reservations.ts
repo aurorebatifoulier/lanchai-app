@@ -10,7 +10,7 @@ import { accessDecision } from './shared/productAccess';
 import { isLoyaltyExcluded } from './shared/loyalty';
 import { buildTimeSlots, toHHMM } from './shared/timeSlots';
 import { vteReservationLabel, vteMinutesOfDay, vteDateStamp } from './shared/dates';
-import { identityBookingDecision, type IdentityRecord } from './shared/identity';
+import { identityBookingDecision, idCheckNeeded, type IdentityRecord } from './shared/identity';
 
 // ── createReservations ─────────────────────────────────────────────────────────
 // The ONLY way a renter creates reservations (firestore.rules: reservations create is
@@ -107,6 +107,9 @@ export const createReservations = onCall({ region: REGION }, async request => {
   if (idDecision === 'id-rejected') fail('id-rejected', 'Your ID document was declined — please add a new one to book.');
   if (idDecision === 'id-required') fail('id-required', 'An ID document is required to book.');
   const idOnFile = identitySnap.get('status') === 'on_file';
+  // First pick-up double check (badge, admin alerts, blocking checklist section) — tied
+  // to the current document version, see shared/identity.ts idCheckNeeded.
+  const firstRentalIdCheck = idCheckNeeded(profile);
 
   const exchangeRate = pricingSnap.get('exchangeRate');
   if (typeof exchangeRate !== 'number' || exchangeRate <= 0) fail('pricing-not-configured', 'Pricing is not available right now.');
@@ -240,6 +243,7 @@ export const createReservations = onCall({ region: REGION }, async request => {
         orderId,
         // "I'll show my ID at the shop" — staff photograph and check it at pick-up.
         idCheckAtCounter: !idOnFile,
+        firstRentalIdCheck,
         ...(couponId ? { couponApplied: { id: couponId, percent: couponPercent, discountAmount: discount.perLine[i] } } : {}),
         createdAt:    FieldValue.serverTimestamp(),
       });

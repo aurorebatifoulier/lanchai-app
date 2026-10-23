@@ -45,6 +45,7 @@ import { setChainItemDraft } from '@/lib/checklistChainDraft';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { SettlementActions, type SettlementConfirmAction } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 import { auth } from '@/lib/auth';
 
 type ChecklistType = 'handover' | 'return';
@@ -285,6 +286,10 @@ export default function ChecklistScreen() {
   const depositAppliedToCharge = Math.min(totalCharge, calculatedDepositAmount ?? 0);
   const outstandingBalanceCalc = Math.max(0, totalCharge - (calculatedDepositAmount ?? 0));
 
+  // First-pick-up ID double check — single handover only (a chain does it once, on the
+  // consolidated summary screen). Blocking until both confirmations (+ counter photo).
+  const idCheck = useIdCheck(type === 'handover' && !inChain ? reservation?.renterId : null);
+
   // In a chain, this screen only collects condition ratings + photos — deposit and
   // confirmation are entered once, on the consolidated summary screen after the last item.
   const canSubmit = inChain
@@ -297,6 +302,7 @@ export default function ChecklistScreen() {
       clientConfirmed &&
       !chargeUnresolved &&
       !lateChargeUnresolved &&
+      (type !== 'handover' || idCheck.ready) &&
       !submitting;
 
   const setRating = useCallback((catId: ChecklistCategoryId, rating: ChecklistRating) => {
@@ -334,6 +340,16 @@ export default function ChecklistScreen() {
     if (!inChain && (depositCurrency === null || calculatedDepositAmount === null)) return;
     setSubmitting(true);
     setSubmitError(null);
+    // Record the ID check first — if it fails, nothing else is written.
+    if (type === 'handover' && !inChain) {
+      try {
+        await idCheck.perform();
+      } catch (e) {
+        setSubmitError((e as Error).message);
+        setSubmitting(false);
+        return;
+      }
+    }
     try {
       const photoUrls: string[] = [];
       for (let i = 0; i < photos.length; i++) {
@@ -486,7 +502,7 @@ export default function ChecklistScreen() {
     chargeAmount, worst, chargePercent, chargeReason,
     lateChargeAmount, lateChargeReason, waiverFields, hasWaiver,
     totalCharge, depositAppliedToCharge, outstandingBalanceCalc,
-    confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified,
+    confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified, idCheck,
   ]);
 
   // ── Loading / error states ────────────────────────────────────────────────────
@@ -699,6 +715,10 @@ export default function ChecklistScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.productName}>{reservation.productName}</Text>
+
+        {type === 'handover' && !inChain && (
+          <IdCheckSection check={idCheck} renterName={reservation.renterName} />
+        )}
 
         {CHECKLIST_CATEGORIES.map(cat => {
           const entry = categories[cat.id];

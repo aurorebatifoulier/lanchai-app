@@ -13,7 +13,7 @@ import {
   loyaltyPointsFor, isLoyaltyExcluded, applyLoyaltyPointsChange, DEFAULT_REVIEW_REWARD_POINTS,
   TIER_ORDER, TIER_LABELS, type LoyaltyChangeConfig, type LoyaltyTierKey,
 } from './shared/loyalty';
-import { isPickupMissed } from './shared/dates';
+import { isPickupMissed, vteDateStamp, vteMinutesOfDay, vteTime } from './shared/dates';
 import { HANDOFF_BUFFER_MS } from './shared/availability';
 import { sendLateReturnEmail } from './email/triggers';
 import { dueLateAlerts, planLateEmails, type LateAlertKey, type LateRow } from './lateAlerts';
@@ -412,6 +412,44 @@ export const restoreCancelledCoupon = onDocumentUpdated(
 // pending_payment/confirmed booking, notify admins ONCE per order. Alert only — never
 // changes the reservation status (a late pick-up still goes through; the admin decides
 // whether to mark a no-show). Equality-only query + date filter in code (no index).
+// "First rental — check ID" admin alerts, run by the hourly missedPickupAlerts job: the
+// evening before (from 18:00 Vientiane) and the morning of the pick-up (from 07:00),
+// once each per order (markers idCheckAlertEveAt / idCheckAlertMorningAt), for upcoming
+// pick-ups still flagged firstRentalIdCheck (see functions/src/identity.ts).
+async function sendFirstRentalIdAlerts(docs: admin.firestore.QueryDocumentSnapshot[], now: number): Promise<void> {
+  const today = vteDateStamp(now);
+  const tomorrow = vteDateStamp(now + 24 * 60 * 60 * 1000);
+  const minutes = vteMinutesOfDay(now);
+  const pending = new Map<string, { docs: admin.firestore.QueryDocumentSnapshot[]; marker: 'idCheckAlertEveAt' | 'idCheckAlertMorningAt' }>();
+  for (const d of docs) {
+    if (d.get('firstRentalIdCheck') !== true) continue;
+    const p: admin.firestore.Timestamp | undefined = d.get('pickupAt');
+    if (!p || p.toMillis() < now) continue;
+    const day = vteDateStamp(p.toMillis());
+    const marker = day === today && minutes >= 7 * 60 ? 'idCheckAlertMorningAt'
+      : day === tomorrow && minutes >= 18 * 60 ? 'idCheckAlertEveAt' : null;
+    if (!marker || d.get(marker)) continue;
+    const key = `${d.get('orderId') ?? d.id}|${marker}`;
+    const g = pending.get(key) ?? { docs: [], marker };
+    g.docs.push(d);
+    pending.set(key, g);
+  }
+  if (pending.size === 0) return;
+  const adminUids = (await db.collection('admins').get()).docs.map(a => a.id);
+  for (const { docs: group, marker } of pending.values()) {
+    const first = group[0];
+    const when = `${marker === 'idCheckAlertMorningAt' ? 'today' : 'tomorrow'} at ${vteTime(first.get('pickupAt').toMillis())}`;
+    const counter = group.some(d => d.get('idCheckAtCounter') === true);
+    await sendAdminNotifs(adminUids, {
+      title: 'First rental — check ID',
+      body: `${first.get('renterName') ?? 'A renter'} picks up ${when}. ${counter ? 'They will show their ID at the shop — photograph it and check it.' : 'Check their ID against the uploaded photo.'}`,
+      icon: 'alert', iconColor: 'amber',
+      deepLink: `/admin/reservations/${first.id}`,
+    });
+    await Promise.all(group.map(d => d.ref.update({ [marker]: FieldValue.serverTimestamp() })));
+  }
+}
+
 export const missedPickupAlerts = onSchedule(
   { schedule: 'every 60 minutes', region: 'asia-southeast1' },
   async () => {
@@ -419,6 +457,7 @@ export const missedPickupAlerts = onSchedule(
     const snap = await db.collection('reservations')
       .where('status', 'in', ['pending_payment', 'confirmed'])
       .get();
+    await sendFirstRentalIdAlerts(snap.docs, now);
     const due = snap.docs.filter(d => {
       const p: admin.firestore.Timestamp | undefined = d.get('pickupAt');
       return p && isPickupMissed(p.toMillis(), now) && !d.get('missedPickupAlertAt');

@@ -264,6 +264,10 @@ export interface RentalDoc {
   // undone from the admin detail until returnFinalizedAt). The amount field stays
   // absent; renters see "… · waived by our team" (buildReceiptSummary), never the
   // staff name. *WaivedAmount = the suggestion, in chargeCurrency, for reference/undo.
+  // Identity (functions/src/identity.ts): "I'll show my ID at the shop", and the first
+  // pick-up double check still pending for this renter (server-kept in sync).
+  idCheckAtCounter?: boolean;
+  firstRentalIdCheck?: boolean;
   lateChargeWaived?: boolean;
   lateChargeWaivedAmount?: number;
   lateChargeWaivedReason?: string;    // e.g. "Returned 6h late" — restored on undo

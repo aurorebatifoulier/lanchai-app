@@ -31,6 +31,30 @@ export interface IdentityRecord {
   rejection?: { reason: string; text?: string };
 }
 
+/**
+ * First-pick-up double check: needed when no document is on file (shown at the shop),
+ * or when the document on file hasn't been checked in person yet — the check is tied to
+ * the document VERSION (users.idCheckedVersion), so every NEW document (after a purge,
+ * a replacement or a rejection) requires it again. users.idCheckedAt stays as history.
+ */
+export function idCheckNeeded(
+  user: { idOnFile?: unknown; idDocVersion?: unknown; idCheckedVersion?: unknown } | null | undefined,
+): boolean {
+  if (user?.idOnFile !== true) return true;
+  return typeof user.idDocVersion !== 'number' || user.idCheckedVersion !== user.idDocVersion;
+}
+
+/** Reservation statuses that still lead to a pick-up (the check happens at handover). */
+export const PRE_PICKUP_STATUSES = ['pending_payment', 'confirmed'] as const;
+
+/** Fixable reasons staff can give when declining an ID document. */
+export const ID_REJECTION_REASONS: { key: string; label: string; text: string }[] = [
+  { key: 'unreadable', label: 'Photo unreadable', text: 'The photo is blurry or cut off — please add a sharp photo with all four corners visible.' },
+  { key: 'expired', label: 'Document expired', text: 'This document has expired — please add a valid one.' },
+  { key: 'name_mismatch', label: 'Name doesn\u2019t match', text: 'The name doesn\u2019t match your account — please add your own ID document.' },
+  { key: 'wrong_document', label: 'Not an ID document', text: 'This isn\u2019t a passport or ID card — please add one of those.' },
+];
+
 /** Storage path prefix a renter's identity files must use. */
 export const idDocPrefix = (uid: string) => `idDocs/${uid}/`;
 

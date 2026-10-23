@@ -27,6 +27,7 @@ import { MultiCurrencyAmount } from '@/components/MultiCurrencyAmount';
 import { useExchangeRate, useThbRate } from '@/lib/exchangeRate';
 import { lakToUsd, lakToThb } from '@/utils/currency';
 import { getChainItemDraft, clearChainDrafts } from '@/lib/checklistChainDraft';
+import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -107,8 +108,12 @@ export default function ChecklistSummaryScreen() {
     depositCurrency === 'THB' ? (thbRate != null ? lakToThb(totalDepositLak, thbRate) : null) :
     null;
 
+  // First-pick-up ID double check — once for the whole handover chain (same renter).
+  const idCheck = useIdCheck(type === 'handover' ? reservations?.[0]?.renterId : null);
+
   const canSubmit =
     !!reservations &&
+    (type !== 'handover' || idCheck.ready) &&
     missingDraftIds.length === 0 &&
     depositCurrency !== null &&
     !currencyMismatch &&
@@ -122,6 +127,16 @@ export default function ChecklistSummaryScreen() {
     if (!reservations || !canSubmit || depositCurrency === null || calculatedTotalDepositAmount === null) return;
     setSubmitting(true);
     setSubmitError(null);
+    // Record the ID check first — if it fails, nothing else is written.
+    if (type === 'handover') {
+      try {
+        await idCheck.perform();
+      } catch (e) {
+        setSubmitError((e as Error).message);
+        setSubmitting(false);
+        return;
+      }
+    }
     try {
       const decimals = depositCurrency === 'LAK' ? 0 : 2;
       const proratedAmounts = prorateDeposit(reservations, calculatedTotalDepositAmount, decimals);
@@ -241,7 +256,7 @@ export default function ChecklistSummaryScreen() {
       setSubmitting(false);
     }
   }, [
-    reservations, canSubmit, depositCurrency, calculatedTotalDepositAmount, type,
+    reservations, canSubmit, depositCurrency, calculatedTotalDepositAmount, type, idCheck,
     confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerifiedList, idList,
   ]);
 
@@ -329,6 +344,10 @@ export default function ChecklistSummaryScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {type === 'handover' && (
+          <IdCheckSection check={idCheck} renterName={reservations[0]?.renterName} />
+        )}
+
         <Text style={styles.fieldLabel}>Items in this group</Text>
         <View style={styles.itemsList}>
           {reservations.map(r => (

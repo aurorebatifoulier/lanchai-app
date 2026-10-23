@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 25 Cloud Functions (scheduled, Firestore-triggered and 7 callables, Node 22). The
+  gaps found), 27 Cloud Functions (scheduled, Firestore-triggered and 9 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -649,8 +649,21 @@ a snapshot indefinitely).
   stores `idCheckAtCounter`. App: `lib/identity.ts`, `<IdUploadPanel>`,
   `<IdRequirementStep>` (modal on Confirm in `booking/summary.tsx` and `bag/checkout.tsx`,
   booking kept), `app/profile/identity.tsx` ("My ID", from Account and Documents).
-  NEVER show these photos anywhere else or put them in emails. Next phases: first-pick-up
-  double check, residency, retention, business + emails.
+  NEVER show these photos anywhere else or put them in emails.
+- **First-pick-up ID double check (phase 2).** Tied to the CURRENT document version:
+  `idCheckNeeded(user)` (`shared/identity.ts`) = no ID on file, or
+  `users.idCheckedVersion !== users.idDocVersion` — so every NEW document (purge,
+  replacement, rejection) requires it again; `idCheckedAt/By` stay as history.
+  `reservation.firstRentalIdCheck` is set by `createReservations` and kept in sync on
+  upcoming pick-ups by `syncFirstRentalIdFlags` (after every ID change). Admin: chip
+  `<FirstRentalIdChip>` (list, calendar day, detail), alerts from the hourly
+  `missedPickupAlerts` job (eve 18:00 + morning 07:00, markers `idCheckAlertEveAt` /
+  `idCheckAlertMorningAt`), blocking `<IdCheckSection>` + `useIdCheck` at the top of the
+  single handover checklist and on the handover chain summary (two confirmations, staff
+  photo when no ID on file) → `recordIdCheck` callable BEFORE the checklist write.
+  `<RenterIdCard>` (reservation detail): view, add/replace a counter photo, decline
+  (`adminIdentityAction`, `ID_REJECTION_REASONS`, blocks bookings). Next phases:
+  residency, retention, business + emails.
 
 ## Security follow-ups
 

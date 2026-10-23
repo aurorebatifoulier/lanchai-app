@@ -28,6 +28,7 @@ import {
   getDateFieldValue,
   compareByDateField,
 } from '@/lib/dateFilterConfig';
+import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 
 const DATE_FIELD_OPTIONS: DateFieldOption[] = [
   { id: 'pickupAt',   label: 'Pickup date' },
@@ -79,6 +80,8 @@ interface ReservationRow {
   outstandingSettled?: boolean;
   outstandingWrittenOff?: boolean;
   chargeCurrency?:     'LAK' | 'USD' | 'THB';
+  firstRentalIdCheck?: boolean;
+  idCheckAtCounter?:   boolean;
 }
 
 // Bulk actions are all-or-nothing: only offered when every item in the group shares
@@ -140,6 +143,8 @@ export default function AdminReservationsScreen() {
               outstandingSettled: data.outstandingSettled ?? undefined,
               outstandingWrittenOff: data.outstandingWrittenOff ?? undefined,
               chargeCurrency:     data.chargeCurrency ?? undefined,
+              firstRentalIdCheck: data.firstRentalIdCheck === true,
+              idCheckAtCounter:   data.idCheckAtCounter === true,
             };
           }),
         );
@@ -361,6 +366,9 @@ export default function AdminReservationsScreen() {
                         <Text style={s.rowPrice}>
                           {groupTotal.toLocaleString('en-US')} LAK total
                         </Text>
+                        {entry.rows.some(showsFirstRentalIdCheck) && (
+                          <FirstRentalIdChip atCounter={entry.rows.some(r => r.idCheckAtCounter)} />
+                        )}
                       </View>
                       <Feather
                         name={expanded ? 'chevron-up' : 'chevron-down'}
@@ -452,6 +460,7 @@ export default function AdminReservationsScreen() {
                             <Text style={s.rowPrice}>
                               {row.total.toLocaleString('en-US')} LAK
                             </Text>
+                            {showsFirstRentalIdCheck(row) && <FirstRentalIdChip atCounter={row.idCheckAtCounter} />}
                           </View>
                           <View style={[s.statusChip, { backgroundColor: badge.bg }]}>
                             <Text style={[s.statusChipText, { color: badge.fg }]}>{badge.label}</Text>
@@ -502,6 +511,7 @@ export default function AdminReservationsScreen() {
                     <Text style={s.rowPrice}>
                       {entry.row.total.toLocaleString('en-US')} LAK
                     </Text>
+                    {showsFirstRentalIdCheck(entry.row) && <FirstRentalIdChip atCounter={entry.row.idCheckAtCounter} />}
                   </View>
                   <View style={[s.statusChip, { backgroundColor: badge.bg }]}>
                     <Text style={[s.statusChipText, { color: badge.fg }]}>{badge.label}</Text>

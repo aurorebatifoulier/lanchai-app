@@ -51,6 +51,8 @@ import {
   ADMIN_CANCELLABLE_STATUSES,
   type CancelReason,
 } from '@/functions/src/shared/cancellation';
+import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
+import { RenterIdCard } from '@/components/admin/RenterIdCard';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -470,6 +472,13 @@ export default function AdminReservationDetailScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[d.scroll, { paddingBottom: insets.bottom + 40 }]}
       >
+        {/* ── First pick-up ID check reminder ──────────────────────────── */}
+        {showsFirstRentalIdCheck(reservation) && (
+          <View style={{ marginBottom: 10 }}>
+            <FirstRentalIdChip atCounter={reservation.idCheckAtCounter} />
+          </View>
+        )}
+
         {/* ── Status + deposit chips ────────────────────────────────────── */}
         <View style={[d.statusRow, isReturnOverdue && { backgroundColor: '#FFF1F2', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 }]}>
           {isReturnOverdue ? (() => {
@@ -705,6 +714,9 @@ export default function AdminReservationDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* ── ID DOCUMENT (admin only) ──────────────────────────────────── */}
+        <RenterIdCard renterId={reservation.renterId} />
 
         {/* ── PRICE BREAKDOWN ───────────────────────────────────────────── */}
         <View style={d.card}>
