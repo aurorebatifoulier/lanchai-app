@@ -15,6 +15,12 @@ export interface OutgoingEmail {
   tag: string;               // Brevo tag, e.g. 'booking-confirmation'
   /** Test-send only: deliver to `to` even in redirect mode (it's the test inbox itself). */
   bypassRedirect?: boolean;
+  /**
+   * Account-security email (password reset / email verification): ALWAYS delivered to
+   * the account's own address, even in test mode — redirecting it would hand a working
+   * access link to the test inbox. The link is never logged.
+   */
+  security?: boolean;
   /** Small files (e.g. a .ics calendar invite), content base64-encoded. */
   attachments?: { name: string; content: string }[];
 }
@@ -47,7 +53,7 @@ export async function sendEmail(email: OutgoingEmail, mode?: EmailMode): Promise
   if (!email.to.email || !EMAIL_RE.test(email.to.email)) return 'no_recipient';
 
   const m = mode ?? await getEmailMode();
-  const redirected = !m.live && !email.bypassRedirect;
+  const redirected = !m.live && !email.bypassRedirect && !email.security;
   const to = redirected ? { email: m.redirectTo, name: 'LANCHAI test inbox' } : email.to;
   const subject = redirected ? `[test → ${email.to.email}] ${email.subject}` : email.subject;
 

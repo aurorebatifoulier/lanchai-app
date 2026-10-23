@@ -18,8 +18,6 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
-  sendPasswordResetEmail,
-  sendEmailVerification,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -27,6 +25,7 @@ import { COLORS } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
+import { requestPasswordReset, requestEmailVerification, AuthEmailRateLimitError } from '@/lib/authEmails';
 import { db, storage } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/firestore';
 
@@ -161,16 +160,15 @@ export default function LoginScreen() {
     setResetStatus('sending');
     setResetMsg('');
     try {
-      await sendPasswordResetEmail(auth, trimmed);
+      await requestPasswordReset(trimmed);
       setResetStatus('sent');
       setResetMsg(
         `If an account exists for ${trimmed}, a reset link has been sent. Check your inbox.`,
       );
     } catch (err: any) {
-      const code = err?.code ?? '';
       setResetStatus('error');
       setResetMsg(
-        code === 'auth/too-many-requests'
+        err instanceof AuthEmailRateLimitError
           ? 'Too many attempts, please try again later.'
           : 'Could not send the reset email. Please try again.',
       );
@@ -256,7 +254,7 @@ export default function LoginScreen() {
             { merge: true },
           );
         }
-        try { await sendEmailVerification(user); } catch {}
+        try { await requestEmailVerification(user); } catch {}
       }
     } catch (err) {
       setError(firebaseAuthErrorMessage(err));

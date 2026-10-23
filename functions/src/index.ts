@@ -27,6 +27,9 @@ export * from './reservations';
 // Review rating sync + server-side account deletion — see account.ts.
 export * from './account';
 
+// Branded password-reset / email-verification emails — see authEmails.ts.
+export * from './authEmails';
+
 admin.initializeApp();
 const db = admin.firestore();
 

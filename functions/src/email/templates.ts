@@ -947,3 +947,60 @@ export function lateReturnEmail(
   blocks.push({ type: 'center', text: 'Already returned it? Please ignore this email.' });
   return build(c.subject, c.preheader, c.title, blocks, shop);
 }
+
+// ── 8. Account security — password reset / email verification ───────────────────
+// Sent by the requestPasswordReset / requestEmailVerification callables (authEmails.ts)
+// with `security: true` (always to the account's own address). `link` is the Firebase
+// action link (lanchai-app.firebaseapp.com/__/auth/action) — never logged.
+
+// Firebase doesn't publish the reset-link lifetime (and says it may change), so no
+// number here. Edit this ONE line to state a duration if Firebase ever documents one.
+export const RESET_LINK_EXPIRY_NOTE = 'For your security, this link expires soon — if it no longer works, just request a new one.';
+
+export function passwordResetEmail(link: string, shop: EmailShop): Rendered {
+  return build(
+    'Reset your LANCHAI password',
+    'Choose a new password in one tap',
+    'Reset your password',
+    [
+      {
+        type: 'hero',
+        pill: 'Account security',
+        pillIcon: 'lock',
+        title: 'Reset your password',
+        sub: 'We received a request to reset the password of your LANCHAI account.',
+        primary: { label: 'Choose a new password', url: link },
+        footnote: RESET_LINK_EXPIRY_NOTE,
+      },
+      {
+        type: 'card',
+        items: [{
+          type: 'iconNote',
+          icon: { name: 'shield-check', alt: 'Security' },
+          title: 'Didn’t ask for this?',
+          text: 'You can safely ignore this email — your password stays the same and your account is secure.',
+        }],
+      },
+    ],
+    shop,
+  );
+}
+
+export function emailVerificationEmail(link: string, shop: EmailShop): Rendered {
+  return build(
+    'Confirm your LANCHAI email',
+    'One tap to confirm your account',
+    'Confirm your email',
+    [
+      {
+        type: 'hero',
+        pill: 'Welcome',
+        title: 'Confirm your email',
+        sub: 'One last step to finish setting up your LANCHAI account.',
+        primary: { label: 'Confirm my email', url: link },
+        footnote: 'If you didn’t create an account, you can ignore this email.',
+      },
+    ],
+    shop,
+  );
+}

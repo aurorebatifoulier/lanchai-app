@@ -16,13 +16,13 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import {
   updatePassword,
-  sendPasswordResetEmail,
   EmailAuthProvider,
   reauthenticateWithCredential,
 } from 'firebase/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { auth } from '@/lib/auth';
+import { requestPasswordReset, AuthEmailRateLimitError } from '@/lib/authEmails';
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -115,13 +115,15 @@ export default function ChangePasswordScreen() {
     if (!cu?.email || resetting) return;
     setResetting(true);
     try {
-      await sendPasswordResetEmail(auth, cu.email);
+      await requestPasswordReset(cu.email);
       setResetStatus('success');
       setResetMsg(`A reset link was sent to ${cu.email}.`);
       scheduleResetHide();
-    } catch {
+    } catch (err) {
       setResetStatus('error');
-      setResetMsg('Could not send the reset email. Please try again.');
+      setResetMsg(err instanceof AuthEmailRateLimitError
+        ? 'Too many attempts, please try again later.'
+        : 'Could not send the reset email. Please try again.');
       scheduleResetHide();
     } finally {
       setResetting(false);

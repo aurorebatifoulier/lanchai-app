@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 22 Cloud Functions (scheduled, Firestore-triggered and 4 callables, Node 22). The
+  gaps found), 24 Cloud Functions (scheduled, Firestore-triggered and 6 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -338,6 +338,23 @@ a snapshot indefinitely).
     re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane,
     skipped when `users/{uid}.emailRemindersOptOut` (Personal info toggle). Dates in
     emails are the stored `pickupLabel`/`returnLabel` — functions run in UTC.
+- **Password reset / email verification emails are ours, not Firebase's.**
+  `functions/src/authEmails.ts`: callables `requestPasswordReset({ email })` (no auth;
+  ALWAYS `{ ok: true }` whether or not the account exists — no enumeration; only a
+  rate-limit hit is reported) and `requestEmailVerification()` (signed-in, own address
+  only). Links from `admin.auth().generatePasswordResetLink` /
+  `generateEmailVerificationLink` → default action page
+  `lanchai-app.firebaseapp.com/__/auth/action`. Rate limits in `authEmailLimits/*`
+  (hashed keys, sliding hour: 3/email, 3/account, 10/IP, 200 global — `AUTH_EMAIL_LIMITS`;
+  no client rule → denied by the catch-all). Sent with `sendEmail({ security: true })`:
+  ALWAYS to the real address, even in test mode. Never log the link. App:
+  `lib/authEmails.ts` (login "Forgot password?", Security screen, signup, verify banner
+  "Resend") — falls back to Firebase's own `sendPasswordResetEmail` /
+  `sendEmailVerification` (Firebase Auth SMTP = Brevo, kept as fallback) unless
+  rate-limited. Brevo offers no per-message way to disable click tracking, so links may
+  be wrapped by Brevo's tracking domain. Firebase doesn't publish the reset-link
+  lifetime — `RESET_LINK_EXPIRY_NOTE` (`templates.ts`) states no number on purpose.
+  Email change isn't possible in the app (read-only, "Contact us").
 - **Cancellations — `functions/src/shared/cancellation.ts` is the single source.**
   Business reality at launch: **nothing is charged before pick-up** (no advance), so
   every outcome is "nothing to pay" and no renter screen/email warns about losing money.

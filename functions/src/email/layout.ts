@@ -37,6 +37,7 @@ export type Inner =
       muted?: boolean; strikeDetail?: boolean }                       // item row
   | { type: 'struckDates'; text: string }                             // clock icon + struck-through dates
   | { type: 'outcome'; title: string; text: string }                  // green check + headline + line
+  | { type: 'iconNote'; icon: Icon; title: string; text: string }     // icon + bold headline + grey line
   | { type: 'button'; label: string; url: string }                    // full-width amber button in a card
   | { type: 'amount'; label: string; value: string; approx?: string } // big amount + small approx line
   | { type: 'row'; label: string; value: string; strong?: boolean; tone?: 'muted' | 'danger'; gapTop?: number }
@@ -53,6 +54,8 @@ export type Block =
       pillTone?: 'success' | 'alert' | 'danger';
       /** Rich pill, e.g. the tagline with one highlighted word (overrides `pill`). */
       pillParts?: { text: string; highlight?: boolean }[];
+      /** Icon before the (amber) pill text, e.g. the lock of "Account security". */
+      pillIcon?: EmailIcon;
       title: string;
       sub?: string;
       /** Small grey line under the subtitle (e.g. "Returned Sat 26 Oct at 10:12"). */
@@ -71,6 +74,8 @@ export type Block =
       image?: { url: string; alt: string; size: number; caption?: string };
       primary?: Button;
       secondary?: Button[];   // outline buttons, side by side
+      /** Small grey centred line under the buttons (e.g. "This link expires in 1 hour."). */
+      footnote?: string;
     }
   | { type: 'card'; title?: string; items: Inner[] }
   | { type: 'center'; text: string; link?: Button; strong?: boolean }
@@ -154,6 +159,14 @@ function innerHtml(it: Inner): string {
           <div style="color:${MUTED};font-size:13px;line-height:19px;">${e(it.text)}</div>
         </td>
       </tr></table>`;
+    case 'iconNote':
+      return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px;"><tr>
+        <td width="26" style="vertical-align:top;padding-top:2px;">${iconImg(it.icon.name, it.icon.alt, 0)}</td>
+        <td style="font-size:14px;line-height:21px;color:${CARBON};">
+          <div style="font-weight:800;">${e(it.title)}</div>
+          <div style="color:${MUTED};font-size:13px;line-height:19px;">${e(it.text)}</div>
+        </td>
+      </tr></table>`;
     case 'dates':
       return `<p style="margin:-4px 0 12px;font-size:13px;line-height:19px;color:${MUTED};">${iconImg('clock', 'Dates', 6)}${e(it.text)}</p>`;
     case 'stack':
@@ -214,7 +227,7 @@ function blockHtml(b: Block): string {
             ? `<span style="display:inline-block;background:${SUCCESS_TINT};color:${SUCCESS};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${iconImg('check-circle', '', 4)}${e(b.pill)}</span>`
             : b.pillTone === 'alert' || b.pillTone === 'danger'
             ? `<span style="display:inline-block;background:${b.pillTone === 'danger' ? ALERT : ALERT_TINT};color:${b.pillTone === 'danger' ? '#FFFFFF' : ALERT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>`
-            : `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${e(b.pill)}</span>`) : ''}
+            : `<span style="display:inline-block;background:${AMBER_TINT};color:${AMBER_TEXT};font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;">${b.pillIcon ? iconImg(b.pillIcon, '', 4) : ''}${e(b.pill)}</span>`) : ''}
         <h1 style="margin:${b.pill || b.pillParts ? 14 : 0}px 0 6px;font-size:24px;line-height:30px;font-weight:800;color:${CARBON};">${e(b.title)}</h1>
         ${b.sub ? `<p style="margin:0;font-size:13px;line-height:19px;color:${MUTED};">${e(b.sub)}</p>` : ''}
         ${b.note ? `<p style="margin:4px 0 0;font-size:12px;line-height:18px;color:${MUTED};">${e(b.note)}</p>` : ''}
@@ -232,7 +245,8 @@ function blockHtml(b: Block): string {
           </div>`).join('')}
       </div>
       ${b.primary ? primaryButton(b.primary) : ''}
-      ${b.secondary?.length ? outlineButtons(b.secondary) : ''}`);
+      ${b.secondary?.length ? outlineButtons(b.secondary) : ''}
+      ${b.footnote ? `<p style="margin:12px 0 0;text-align:center;font-size:12px;line-height:18px;color:${MUTED};">${e(b.footnote)}</p>` : ''}`);
     case 'card':
       return cardWrap(`${b.title ? `<div style="font-size:15px;font-weight:800;color:${CARBON};margin:0 0 12px;">${e(b.title)}</div>` : ''}${b.items.map(innerHtml).join('')}`);
     case 'banner':
@@ -268,7 +282,7 @@ function innerText(it: Inner): string[] {
     case 'text': case 'subtle': return [it.text];
     case 'dates': return [it.text];
     case 'struckDates': return [`(cancelled) ${it.text}`];
-    case 'outcome': return [it.title, it.text];
+    case 'outcome': case 'iconNote': return [it.title, it.text];
     case 'button': return [`${it.label}: ${it.url}`];
     case 'stack': return [...it.lines, ...(it.note ? ['', it.note] : [])];
     case 'line': return [`${it.name}${it.amount ? `  ${it.amount}` : ''}`,
@@ -292,6 +306,7 @@ function blockText(b: Block): string[] {
         ...(rv.rewardText && rv.starUrls ? [`Review: ${rv.rewardText}`] : [])]),
       ...(b.primary ? [`${b.primary.label}: ${b.primary.url}`] : []),
       ...(b.secondary ?? []).map(s => `${s.label}: ${s.url}`),
+      ...(b.footnote ? [b.footnote] : []),
       '',
     ];
     case 'card': return [...(b.title ? [b.title, '-'.repeat(b.title.length)] : []), ...b.items.flatMap(innerText), ''];

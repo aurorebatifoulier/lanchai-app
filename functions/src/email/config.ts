@@ -27,7 +27,7 @@ export const LOGO_URL = `${PUBLIC_BASE_URL}/email/lanchai-logo@2x.png`;
 export type EmailIcon =
   | 'map-pin' | 'calendar-plus' | 'id-card' | 'qr-code' | 'cash' | 'clock' | 'whatsapp'
   | 'checklist' | 'sparkles' | 'star' | 'check-circle' | 'star-solid'
-  | 'camera' | 'file' | 'shield-check' | 'receipt' | 'bank' | 'shopping-bag';
+  | 'camera' | 'file' | 'shield-check' | 'receipt' | 'bank' | 'shopping-bag' | 'lock';
 export const iconUrl = (name: EmailIcon) => `${PUBLIC_BASE_URL}/email/icons/${name}@2x.png`;
 
 /** https link that opens an in-app path (allow-listed in hosting/open/index.html). */

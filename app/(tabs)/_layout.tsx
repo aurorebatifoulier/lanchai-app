@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Tabs } from 'expo-router';
-import { sendEmailVerification } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
+import { requestEmailVerification } from '@/lib/authEmails';
 import { db } from '@/lib/firebase';
 import { subscribeToUnreadInboxCount } from '@/lib/chat';
 
@@ -115,7 +115,7 @@ export default function TabLayout() {
     if (!cu || resendStatus !== 'idle') return;
     setResendStatus('sending');
     try {
-      await sendEmailVerification(cu);
+      await requestEmailVerification(cu);
       setResendStatus('sent');
       if (resendTimerRef.current) clearTimeout(resendTimerRef.current);
       resendTimerRef.current = setTimeout(() => setResendStatus('idle'), 5000);

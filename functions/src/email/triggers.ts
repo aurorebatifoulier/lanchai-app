@@ -16,6 +16,7 @@ import { loyaltyPointsFor, pointsToNextTier, nextTierName } from '../shared/loya
 import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
+  passwordResetEmail, emailVerificationEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -445,6 +446,9 @@ export const sendTestEmails = onCall(
         { r: late(base, 225000, 1.5), stage: 'tier2' }, { r: late(second, 90000, 1.5), stage: 'tier2' },
       ], shop, lateCtx)],
       ['late-tier3',                       lateReturnEmail(name, 'tier3', [{ r: late(base, 300000, 2), stage: 'tier3' }], shop, lateCtx)],
+      // Non-working sample links (oobCode=SAMPLE) — real ones only come from the callables.
+      ['auth-password-reset',              passwordResetEmail('https://lanchai-app.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=SAMPLE', shop)],
+      ['auth-email-verification',          emailVerificationEmail('https://lanchai-app.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=SAMPLE', shop)],
       ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', [{ r: late(base, 300000, 2), stage: 'nonReturn' }], shop, lateCtx)],
     ];
     const results: Record<string, SendResult> = {};
