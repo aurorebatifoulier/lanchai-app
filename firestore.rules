@@ -170,11 +170,12 @@ service cloud.firestore {
       // SDK; admins use the isAdmin() branch.)
       //
       // Profile fields the renter may edit (personal-info, account photo, email
-      // reminders toggle, BtoB document re-upload):
+      // reminders toggle, news & offers consent, BtoB document re-upload):
       //   firstName, lastName, displayName, phoneNumber, phone, phoneVerified (false
       //   only — only staff verify), whatsapp, whatsappSameAsPhone, address, photoURL,
-      //   emailRemindersOptOut, btobDocumentUrl (BtoB: before approval, or first upload
-      //   after approval), updatedAt.
+      //   emailRemindersOptOut, marketingOptIn (bool) + marketingOptInAt /
+      //   marketingOptOutAt (== request.time only), btobDocumentUrl (BtoB: before
+      //   approval, or first upload after approval), updatedAt.
       // Signup adds (create only): accountType ('btoc'|'btob'), btobStatus
       //   ('pending_approval' only), btobCompanyName, btobLicenseNumber,
       //   btobResponsibleName, btobSubmittedAt, createdAt.
@@ -195,8 +196,16 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
           'whatsapp', 'whatsappSameAsPhone', 'address', 'photoURL', 'emailRemindersOptOut',
-          'btobDocumentUrl', 'updatedAt'
+          'btobDocumentUrl', 'updatedAt',
+          'marketingOptIn', 'marketingOptInAt', 'marketingOptOutAt'
         ]) &&
+        // News & offers consent: a boolean, and its consent timestamps are server time.
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['marketingOptIn']) ||
+          request.resource.data.marketingOptIn is bool) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['marketingOptInAt']) ||
+          request.resource.data.marketingOptInAt == request.time) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['marketingOptOutAt']) ||
+          request.resource.data.marketingOptOutAt == request.time) &&
         (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['phoneVerified']) ||
           request.resource.data.phoneVerified == false

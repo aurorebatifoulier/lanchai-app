@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -52,8 +51,6 @@ export default function PersonalInfoScreen() {
   const [saving,       setSaving]       = useState(false);
   // Opt-out for NON-essential emails only (pickup/return reminders). Confirmations,
   // cancellations, late-return alerts and receipts always go out.
-  const [emailReminders, setEmailReminders] = useState(true);
-  const [remindersError, setRemindersError] = useState(false);
   const [saveStatus,   setSaveStatus]   = useState<SaveStatus>(null);
 
   const lastNameRef  = useRef<TextInput>(null);
@@ -83,7 +80,6 @@ export default function PersonalInfoScreen() {
         setWhatsapp(profile?.whatsapp ?? '');
         setSameAsPhone(profile?.whatsappSameAsPhone ?? false);
         setAddress(profile?.address ?? '');
-        setEmailReminders(profile?.emailRemindersOptOut !== true);
         setCustomerType(profile?.customerType ?? 'tourist');
       })
       .catch(() => {
@@ -343,29 +339,12 @@ export default function PersonalInfoScreen() {
         />
         <Text style={s.errorText} />
 
-        {/* Email reminders — saved on toggle, independent of the form's Save button */}
-        <View style={s.toggleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.toggleTitle}>Email reminders</Text>
-            <Text style={s.toggleSub}>Pick-up and return reminders the day before. Booking emails are always sent.</Text>
-          </View>
-          <Switch
-            value={emailReminders}
-            onValueChange={value => {
-              const cu = auth.currentUser;
-              if (!cu) return;
-              setEmailReminders(value);
-              setRemindersError(false);
-              saveUserProfile(cu.uid, { emailRemindersOptOut: !value }).catch(() => {
-                setEmailReminders(!value);
-                setRemindersError(true);
-              });
-            }}
-            trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
-            thumbColor={COLORS.white}
-          />
-        </View>
-        {remindersError && <Text style={s.toggleError}>Could not update your email preference. Please try again.</Text>}
+        {/* Email reminders now live in Notifications (app/profile/notifications.tsx). */}
+        <TouchableOpacity style={s.notifLink} onPress={() => router.push('/profile/notifications')} activeOpacity={0.7}>
+          <Feather name="bell" size={14} color={COLORS.fg2} />
+          <Text style={s.notifLinkText}>Notification settings</Text>
+          <Feather name="chevron-right" size={14} color={COLORS.fg3} />
+        </TouchableOpacity>
 
         {/* Status banner — shown directly above the Save button */}
         {saveStatus === 'success' && (
@@ -416,14 +395,8 @@ function Header({ onBack }: { onBack: () => void }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.softGray200,
-    borderRadius: 12, padding: 14, marginBottom: 16,
-  },
-  toggleTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
-  toggleSub: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 2, lineHeight: 17 },
-  toggleError: { fontSize: 12, fontWeight: '500', color: COLORS.danger, marginTop: -8, marginBottom: 12 },
+  notifLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 12 },
+  notifLinkText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
   root: {
     flex: 1,
     backgroundColor: COLORS.porcelain,

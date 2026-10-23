@@ -396,8 +396,8 @@ export default function AccountScreen() {
           <ProfileRow
             icon="file-text"
             title="Documents"
-            sub="ID, contracts, invoices"
-            comingSoon
+            sub="Receipts, condition reports, legal"
+            onPress={() => router.push('/profile/documents')}
           />
         </ProfileSection>
 
@@ -418,8 +418,8 @@ export default function AccountScreen() {
           <ProfileRow
             icon="bell"
             title="Notifications"
-            sub="Returns, deals, support"
-            comingSoon
+            sub="Email reminders, news and offers"
+            onPress={() => router.push('/profile/notifications')}
           />
         </ProfileSection>
 

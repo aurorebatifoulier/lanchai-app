@@ -338,6 +338,17 @@ a snapshot indefinitely).
     re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane,
     skipped when `users/{uid}.emailRemindersOptOut` (Personal info toggle). Dates in
     emails are the stored `pickupLabel`/`returnLabel` — functions run in UTC.
+- **Account → Notifications / Documents.** `app/profile/notifications.tsx` is the ONE
+  place for email preferences: `emailRemindersOptOut` (pick-up/return reminders + review
+  follow-up; Personal info only links here) and the news & offers consent
+  `marketingOptIn` + `marketingOptInAt`/`marketingOptOutAt` (`setMarketingOptIn()`,
+  server time — the users rule requires `== request.time`; OFF by default; stored only,
+  NOT synced to Brevo yet — that needs a contacts-capable key, a list, a users trigger,
+  an unsubscribe webhook and a Privacy policy update). `app/profile/documents.tsx`:
+  receipts (returned + `returnFinalizedAt`, one per reservation → existing receipt
+  screen), condition reports (`ChecklistSummary`), BtoB document, legal links — one
+  `getMyReservations` query, filtered in code. `canReplaceBtobDocument()`
+  (`utils/btob.ts`) mirrors the rule: no document replacement once approved.
 - **Password reset / email verification emails are ours, not Firebase's.**
   `functions/src/authEmails.ts`: callables `requestPasswordReset({ email })` (no auth;
   ALWAYS `{ ok: true }` whether or not the account exists — no enumeration; only a

@@ -623,6 +623,10 @@ export interface UserProfile {
   address?: string;
   // true = no pickup/return reminder emails (functions/src/email). Essential emails ignore it.
   emailRemindersOptOut?: boolean;
+  /** News & offers email consent (app/profile/notifications.tsx) — not synced to Brevo yet. */
+  marketingOptIn?: boolean;
+  marketingOptInAt?: Timestamp;
+  marketingOptOutAt?: Timestamp;
   addresses?: UserAddress[];
   customerType?: 'tourist' | 'resident' | 'business';
   // loyaltyPoints/loyaltyTier are server-computed only (see functions/src/index.ts
@@ -661,6 +665,15 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 }
 
 // Throws on Firestore error — caller must catch so the UI knows the save failed.
+/** News & offers consent, with the server time of the opt-in / opt-out (rules require request.time). */
+export async function setMarketingOptIn(uid: string, optIn: boolean): Promise<void> {
+  await updateDoc(doc(db, 'users', uid), {
+    marketingOptIn: optIn,
+    [optIn ? 'marketingOptInAt' : 'marketingOptOutAt']: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function saveUserProfile(uid: string, data: Partial<UserProfile>): Promise<void> {
   await setDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() }, { merge: true });
 }

@@ -7,3 +7,11 @@ export function needsBtobDocument(profile: Pick<UserProfile, 'btobStatus' | 'cus
     && profile?.customerType === 'business'
     && !profile?.btobDocumentUrl;
 }
+
+// Mirrors the users update rule in firestore.rules: the registration document can be
+// (re)uploaded while the business account isn't approved, or once after approval if
+// none is on file — never replaced after approval.
+export function canReplaceBtobDocument(profile: Pick<UserProfile, 'accountType' | 'btobStatus' | 'btobDocumentUrl'> | null | undefined): boolean {
+  return profile?.accountType === 'btob'
+    && (profile.btobStatus !== 'approved' || !profile.btobDocumentUrl);
+}

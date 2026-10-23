@@ -22,6 +22,7 @@ import BackButton from '@/components/BackButton';
 import { auth } from '@/lib/auth';
 import { storage, functions } from '@/lib/firebase';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
+import { canReplaceBtobDocument } from '@/utils/btob';
 
 export default function BusinessDocumentScreen() {
   const insets = useSafeAreaInsets();
@@ -37,6 +38,9 @@ export default function BusinessDocumentScreen() {
   // resubmitted (resubmitBusinessApplication callable → back to pending_approval,
   // admins notified). Final → read-only, no resubmission from the app.
   const [rejection, setRejection] = useState<'fixable' | 'final' | null>(null);
+  // false once approved with a document on file (the rules refuse a replacement), so
+  // we never upload a file to Storage that can't be saved on the profile.
+  const [canReplace, setCanReplace] = useState(true);
   const [companyName, setCompanyName] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [responsibleName, setResponsibleName] = useState('');
@@ -49,6 +53,7 @@ export default function BusinessDocumentScreen() {
     getUserProfile(cu.uid)
       .then(profile => {
         setDocumentUrl(profile?.btobDocumentUrl ?? null);
+        setCanReplace(canReplaceBtobDocument(profile));
         if (profile?.accountType === 'btob' && profile.btobStatus === 'rejected') {
           setRejection(profile.btobRejectionFixable === true ? 'fixable' : 'final');
           setCompanyName(profile.btobCompanyName ?? '');
@@ -89,7 +94,7 @@ export default function BusinessDocumentScreen() {
 
   const handlePick = async () => {
     const cu = auth.currentUser;
-    if (!cu || uploading) return;
+    if (!cu || uploading || !canReplace) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -173,13 +178,13 @@ export default function BusinessDocumentScreen() {
         )}
 
         <Text style={s.fieldLabel}>Business registration document</Text>
-        <TouchableOpacity style={s.docPicker} onPress={handlePick} activeOpacity={0.8} disabled={uploading || rejection === 'final'}>
+        <TouchableOpacity style={s.docPicker} onPress={handlePick} activeOpacity={0.8} disabled={uploading || rejection === 'final' || !canReplace}>
           {uploading ? (
             <ActivityIndicator size="small" color={COLORS.carbon} />
           ) : documentUrl ? (
             <>
               <Image source={{ uri: documentUrl }} style={s.docThumb} />
-              <Text style={s.docPickerText}>Document attached — tap to replace</Text>
+              <Text style={s.docPickerText}>{canReplace ? 'Document attached — tap to replace' : 'Document on file'}</Text>
             </>
           ) : (
             <>
@@ -190,6 +195,12 @@ export default function BusinessDocumentScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        {!canReplace && (
+          <Text style={s.lockedNote}>
+            Your account is approved — contact us if your registration document changes.
+          </Text>
+        )}
 
         {uploadSuccess && (
           <View style={s.bannerSuccess}>
@@ -349,6 +360,14 @@ const s = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.fg3,
     lineHeight: 17,
+  },
+
+  lockedNote: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: COLORS.fg3,
+    lineHeight: 18,
+    marginTop: 10,
   },
 
   bannerSuccess: {
