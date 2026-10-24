@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 36 Cloud Functions (scheduled, Firestore-triggered and 16 callables, Node 22). The
+  gaps found), 38 Cloud Functions (scheduled, Firestore-triggered and 18 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -732,6 +732,32 @@ a snapshot indefinitely).
   it when it sees the email verified (`(tabs)/_layout.tsx`, once per device), the server
   re-checks Auth `emailVerified` and claims `users.welcomeEmailSentAt` (once; BtoB
   skipped) — there is no server-side event for email verification.
+
+- **Loyalty UI + referral programme (2026-10-24, validated mockup).** Every playful
+  string lives in `constants/loyaltyCopy.ts` (edit there only). Shared pure helpers in
+  `shared/loyalty.ts`: `tierProgress`, `tierForPoints`, `tierPerksText` /
+  `defaultTierPerks` (coupon % + lower deposit for Platinum RESIDENTS only; never "early
+  access" unless the admin's per-tier text says so — `config/loyalty.perksTextByTier`),
+  `DEFAULT_TYPICAL_RENTAL_POINTS` (`typicalRentalPoints`), `DEFAULT_REFERRAL_REWARD_POINTS`.
+  `lib/loyaltyUi.ts` (`useMyLoyalty` live, `useAveragePointsPerRental`,
+  `loyaltyCardSubline`). `<LoyaltyCard>` (My Account, replaces the Tier tile + row),
+  `<TierUpCelebration>` (mounted in `(tabs)/_layout.tsx`, once per tier via
+  `users.celebratedTier` — renter may write only their CURRENT tier; `creditLoyaltyPoints`
+  seeds it with the pre-credit tier; missing → initialised silently),
+  `<BookingPointsHint>` (summary + bag checkout, `loyaltyPointsFor` per line),
+  redesigned `app/profile/loyalty.tsx`. Referral: `functions/src/referral.ts`
+  (`getMyInviteCode` FIRSTNAME-XXX via `inviteCodes/{code}`, `applyInviteCode` — not own
+  uid/phone/email, no booking ever incl. cancelled, one referrer, no business), reward in
+  `applyLoyaltyPoints` → `creditReferralIfAny` on the referred renter's FIRST returned
+  rental: both sides `referralRewardPoints` via `creditLoyaltyPoints` (source
+  'referral'), once (`referrals/{uid}` pending → credited), optional
+  `referralMonthlyCap` (referrer only). `inviteCodes` deny-all, `referrals` admin read;
+  `inviteCode`/`referredBy`/`referralCount` server-only. App: `<ReferralCard>`,
+  `app/profile/invite-code.tsx`, optional signup field. Admin: referral settings in
+  Loyalty, "Referred by · n referrals" in `<RenterNameBlock>`.
+  Lawyer list adds: a "Loyalty programme" Terms section (no cash value, not
+  transferable, may change/end, abuse → cancelled, lost on account deletion) and the
+  referral mention in the Privacy policy — proposals only, legal texts unchanged.
 
 ## Security follow-ups
 

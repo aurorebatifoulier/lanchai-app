@@ -9,7 +9,10 @@ import { functions } from '@/lib/firebase';
 // detail ID card) so staff compare it with the document — plus phone and email in grey
 // (email comes from Auth via the adminRenterProfile callable). "Edit name" fixes
 // first/last name with an inline confirmation (nameEditedAt/By recorded server-side).
-interface Contact { firstName: string; lastName: string; displayName: string; phone: string; email: string }
+interface Contact {
+  firstName: string; lastName: string; displayName: string; phone: string; email: string;
+  referredByName?: string | null; referralCount?: number;
+}
 
 export function RenterNameBlock({ renterId, onNameChanged }: { renterId: string; onNameChanged?: () => void }) {
   const [contact, setContact] = useState<Contact | null>(null);
@@ -94,6 +97,13 @@ export function RenterNameBlock({ renterId, onNameChanged }: { renterId: string;
       )}
       {(!!contact.phone || !!contact.email) && (
         <Text style={s.contact} selectable>{[contact.phone, contact.email].filter(Boolean).join(' · ')}</Text>
+      )}
+      {(!!contact.referredByName || !!contact.referralCount) && (
+        <Text style={s.contact}>
+          {[contact.referredByName ? `Referred by ${contact.referredByName}` : null,
+            contact.referralCount ? `${contact.referralCount} referral${contact.referralCount > 1 ? 's' : ''}` : null]
+            .filter(Boolean).join(' · ')}
+        </Text>
       )}
       {error && <Text style={s.error}>{error}</Text>}
     </View>

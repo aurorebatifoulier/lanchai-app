@@ -28,6 +28,7 @@ import { auth } from '@/lib/auth';
 import { useFeatureFlags } from '@/lib/features';
 import { requestPasswordReset, requestEmailVerification, AuthEmailRateLimitError } from '@/lib/authEmails';
 import { ID_DOC_TYPES, pickIdPhoto, submitMyIdentityDocument, type IdDocType } from '@/lib/identity';
+import { applyInviteCode } from '@/lib/referral';
 import { db, storage } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/firestore';
 
@@ -80,6 +81,8 @@ export default function LoginScreen() {
   // Business signup: ID of the responsible person (optional here, required before approval).
   const [idType, setIdType]                   = useState<IdDocType | null>(null);
   const [idPhotos, setIdPhotos]               = useState<string[]>([]);
+  // Individual signup: optional friend's invite code (applied right after the account exists).
+  const [inviteCode, setInviteCode]           = useState('');
 
   // Forgot-password inline feedback
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -273,6 +276,11 @@ export default function LoginScreen() {
           );
         }
         try { await requestEmailVerification(user); } catch {}
+        // Never blocks the signup — if it fails, Account → "Have an invite code?" lets
+        // them retry before their first booking.
+        if (!isBtob && inviteCode.trim()) {
+          await applyInviteCode(inviteCode).catch(err => console.warn('[Login] invite code not applied:', err));
+        }
       }
     } catch (err) {
       setError(firebaseAuthErrorMessage(err));
@@ -281,7 +289,7 @@ export default function LoginScreen() {
     }
   }, [
     canSubmit, mode, email, password, firstName, lastName, phone, path, isBtob, businessAccounts,
-    companyName, licenseNumber, responsibleName, docUri, idType, idPhotos, signIn, signOut,
+    companyName, licenseNumber, responsibleName, docUri, idType, idPhotos, inviteCode, signIn, signOut,
   ]);
 
   // Rendered at two different positions in the form depending on path (see below) —
@@ -404,6 +412,23 @@ export default function LoginScreen() {
           {/* Phone — sign-up only (rendered inline below for individual accounts;
               re-used further down, after the company fields, for business accounts) */}
           {isSignUp && !isBtob && phoneField}
+          {isSignUp && !isBtob && (
+            <View style={styles.field}>
+              <View style={styles.fieldLabelRow}>
+                <Text style={styles.label}>Invite code</Text>
+                <Text style={styles.labelOptional}>Optional</Text>
+              </View>
+              <TextInput
+                style={styles.input}
+                value={inviteCode}
+                onChangeText={t => setInviteCode(t.toUpperCase())}
+                placeholder="e.g. AURORE-7K2"
+                placeholderTextColor={COLORS.fg3}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            </View>
+          )}
 
           {/* BtoB-only fields — sign-up only */}
           {isSignUp && isBtob && (

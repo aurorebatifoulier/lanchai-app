@@ -10,6 +10,7 @@ import { auth } from '@/lib/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { LoyaltyCard } from '@/components/LoyaltyCard';
+import { ReferralCard } from '@/components/ReferralCard';
 import {
   TIER_ORDER, TIER_LABELS, tierPerksText, DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_REFERRAL_REWARD_POINTS,
   type PaidTier,
@@ -121,6 +122,9 @@ export default function LoyaltyScreen() {
               </View>
             ))}
           </View>
+
+          {/* ── Referral ── */}
+          <ReferralCard points={referralPts} />
 
           {/* ── Recent points ── */}
           {history.length > 0 && (

@@ -268,11 +268,16 @@ export const adminRenterProfile = onCall({ region: REGION }, async request => {
     admin.auth().getUser(renterId).catch(() => null),
   ]);
   const u = user.data() ?? {};
+  // Referral info (admin only): who invited them, and how many friends they brought.
+  const referrerUid = (u.referredBy as { uid?: string } | undefined)?.uid;
+  const referrer = referrerUid ? (await db.collection('users').doc(referrerUid).get()).data() : null;
   return {
     firstName: u.firstName ?? '',
     lastName: u.lastName ?? '',
     displayName: u.displayName ?? authUser?.displayName ?? '',
     phone: u.phoneNumber ?? u.phone ?? '',
     email: authUser?.email ?? '',
+    referredByName: referrer ? (referrer.displayName || [referrer.firstName, referrer.lastName].filter(Boolean).join(' ') || 'a renter') : null,
+    referralCount: typeof u.referralCount === 'number' ? u.referralCount : 0,
   };
 });

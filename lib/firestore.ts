@@ -669,6 +669,11 @@ export interface UserProfile {
   /** Server-written by recordIdCheck: the document version checked in person. Once set,
    *  the renter can't change their name (firestore.rules) — staff can. */
   idCheckedVersion?: number;
+  /** Referral programme (server-written, functions/src/referral.ts). */
+  inviteCode?: string;
+  referredBy?: { uid: string; code: string };
+  referralCount?: number;
+  celebratedTier?: 'silver' | 'gold' | 'platinum';
   marketingOptInAt?: Timestamp;
   marketingOptOutAt?: Timestamp;
   addresses?: UserAddress[];

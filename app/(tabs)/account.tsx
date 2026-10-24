@@ -373,6 +373,15 @@ export default function AccountScreen() {
               onPress={() => router.push('/profile/business-document')}
             />
           )}
+          {/* Invite code — new renters only: no booking yet, no referrer, not business */}
+          {!isBtob && profile?.customerType !== 'business' && rentalCount === 0 && !profile?.referredBy && (
+            <ProfileRow
+              icon="users"
+              title="Have an invite code?"
+              sub="Enter a friend's code before your first booking"
+              onPress={() => router.push('/profile/invite-code')}
+            />
+          )}
           <ProfileRow
             icon="credit-card"
             title="ID & residency"
