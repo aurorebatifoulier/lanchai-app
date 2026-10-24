@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { COLORS } from '@/constants/Colors';
 import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import { TIER_LABELS, loyaltyPointsFor, tierForPoints } from '@/lib/loyalty';
 import { useMyLoyalty } from '@/lib/loyaltyUi';

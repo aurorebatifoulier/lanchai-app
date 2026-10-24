@@ -1,60 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { Timestamp, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { auth } from '@/lib/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { useAuth } from '@/contexts/AuthContext';
-import { getUserProfile, type UserProfile, type LoyaltyCoupon } from '@/lib/firestore';
+import { LoyaltyCard } from '@/components/LoyaltyCard';
 import {
-  useLoyaltyConfig, TIER_LABELS, pointsToNextTier, nextTierName, isLoyaltyExcluded, DEFAULT_REVIEW_REWARD_POINTS,
+  TIER_ORDER, TIER_LABELS, tierPerksText, DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_REFERRAL_REWARD_POINTS,
+  type PaidTier,
 } from '@/lib/loyalty';
+import { useMyLoyalty } from '@/lib/loyaltyUi';
 
-// users/{uid}/loyaltyHistory — written only by the Cloud Functions (applyLoyaltyPoints,
-// applyReviewReward); read-only for the owner.
-interface HistoryEntry { id: string; amount: number; source: 'rental' | 'review'; productName?: string; createdAt?: Timestamp }
+// Loyalty screen (validated mockup): the loyalty card, "Your path" (every tier: reached
+// ✓ with its coupon used / ready, current "You're here", locked with required points and
+// perks), "Earn more points", the referral card, and "Recent points" (users/{uid}/
+// loyaltyHistory — written only by Cloud Functions). Excluded / business: not shown.
+interface HistoryEntry { id: string; amount: number; source: 'rental' | 'review' | 'referral'; productName?: string; createdAt?: Timestamp }
 
-function fmtDate(ts: Timestamp): string {
-  const d = ts.toDate();
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-}
+const fmtDate = (ts: Timestamp) => ts.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const SOURCE_LABEL: Record<HistoryEntry['source'], string> = { rental: 'Rental', review: 'Review', referral: 'Invited friend' };
 
 export default function LoyaltyScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
-  const config = useLoyaltyConfig();
-
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const loyalty = useMyLoyalty();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    getUserProfile(user.uid)
-      .then(setProfile)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
     // Single orderBy, no filter → no composite index needed.
-    getDocs(query(collection(db, 'users', user.uid, 'loyaltyHistory'), orderBy('createdAt', 'desc'), limit(30)))
+    getDocs(query(collection(db, 'users', uid, 'loyaltyHistory'), orderBy('createdAt', 'desc'), limit(30)))
       .then(snap => setHistory(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<HistoryEntry, 'id'>) }))))
       .catch(() => setHistory([]));
-  }, [user]);
+  }, []);
 
-  const points   = profile?.loyaltyPoints ?? 0;
-  const tier     = profile?.loyaltyTier ?? 'bronze';
-  const toNext   = pointsToNextTier(points, config);
-  const nextTier = nextTierName(points, config);
-  const unusedCoupons: LoyaltyCoupon[] = (profile?.coupons ?? []).filter(c => !c.used);
-  // Business / BtoB accounts are excluded from the loyalty program (shared rule) — this
-  // screen isn't linked to from account.tsx for them, but guard direct navigation too.
-  const isBusinessAccount = isLoyaltyExcluded(profile ?? {});
-  const reviewPoints = config?.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS;
+  const { config, points, tier, coupons, isResident } = loyalty;
+  const reviewPts = config?.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS;
+  const referralPts = config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
+  const currentRank = TIER_ORDER.indexOf(tier);
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -64,12 +53,11 @@ export default function LoyaltyScreen() {
         <Text style={s.headerTitle}>Loyalty</Text>
       </View>
 
-      {loading ? (
+      {loyalty.loading ? (
         <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
-      ) : isBusinessAccount ? (
-        <View style={[s.emptyBox, { marginHorizontal: 20, marginTop: 20 }]}>
-          <Feather name="award" size={20} color={COLORS.fg3} />
-          <Text style={s.emptyText}>Business accounts aren&apos;t part of the loyalty program.</Text>
+      ) : loyalty.excluded ? (
+        <View style={[s.card, { margin: 20 }]}>
+          <Text style={s.muted}>Business accounts aren&apos;t part of the loyalty programme.</Text>
         </View>
       ) : (
         <ScrollView
@@ -77,50 +65,72 @@ export default function LoyaltyScreen() {
           contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Tier card ── */}
-          <View style={s.tierCard}>
-            <View style={s.tierBadge}>
-              <Feather name="award" size={22} color={COLORS.amber} />
-            </View>
-            <Text style={s.tierName}>{TIER_LABELS[tier]}</Text>
-            <Text style={s.tierPoints}>{points} points</Text>
-            {toNext != null && nextTier ? (
-              <Text style={s.tierNext}>{toNext} points to {TIER_LABELS[nextTier]}</Text>
-            ) : config ? (
-              <Text style={s.tierNext}>You&apos;ve reached the top tier</Text>
-            ) : null}
-          </View>
+          <LoyaltyCard interactive={false} />
 
-          {/* ── Coupons ── */}
-          <Text style={s.sectionLabel}>Your coupons</Text>
-          {unusedCoupons.length === 0 ? (
-            <View style={s.emptyBox}>
-              <Feather name="tag" size={20} color={COLORS.fg3} />
-              <Text style={s.emptyText}>No coupons yet — reach a new tier to earn one.</Text>
-            </View>
-          ) : (
-            unusedCoupons.map(c => (
-              <View key={c.id} style={s.couponCard}>
-                <View style={s.couponPercentBox}>
-                  <Text style={s.couponPercentText}>{c.percent}%</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.couponTitle}>{TIER_LABELS[c.tier]} tier reward</Text>
-                  <Text style={s.couponSub}>Issued {fmtDate(c.issuedAt)} · apply at checkout</Text>
-                </View>
+          {/* ── Your path ── */}
+          {config && (
+            <>
+              <Text style={s.section}>Your path</Text>
+              <View style={s.card}>
+                {TIER_ORDER.map((t, i) => {
+                  const reached = i <= currentRank;
+                  const isCurrent = i === currentRank;
+                  const threshold = t === 'bronze' ? 0 : config.thresholds[t as PaidTier];
+                  const coupon = t === 'bronze' ? null : coupons.find(c => c.tier === t);
+                  return (
+                    <View key={t} style={[s.pathRow, i > 0 && s.pathBorder]}>
+                      <View style={[s.dot, reached ? s.dotOn : s.dotOff]}>
+                        <Feather name={reached ? 'check' : 'lock'} size={14} color={reached ? COLORS.carbon : COLORS.fg3} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={s.pathTitleRow}>
+                          <Text style={[s.pathTitle, !reached && s.pathTitleOff]}>{TIER_LABELS[t]}</Text>
+                          {isCurrent && <Text style={s.here}>You&apos;re here</Text>}
+                        </View>
+                        <Text style={s.pathSub}>
+                          {t === 'bronze'
+                            ? 'Where everyone starts.'
+                            : reached
+                              ? coupon
+                                ? (coupon.used ? `${coupon.percent}% coupon used` : `${coupon.percent}% coupon ready — apply it at checkout`)
+                                : tierPerksText(t as PaidTier, config, isResident)
+                              : `${threshold.toLocaleString('en-US')} points · ${tierPerksText(t as PaidTier, config, isResident)}`}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-            ))
+            </>
           )}
 
-          {/* ── Points history ── */}
+          {/* ── Earn more points ── */}
+          <Text style={s.section}>Earn more points</Text>
+          <View style={s.card}>
+            {[
+              { icon: 'shopping-bag' as const, title: 'Rent', sub: '1 point per 10,000 LAK of rental fees, once the rental is returned.' },
+              { icon: 'star' as const, title: `Review · +${reviewPts}`, sub: 'For each review of a returned rental — whatever your rating.' },
+              { icon: 'users' as const, title: `Invite a friend · +${referralPts}`, sub: 'For you and your friend, after their first rental.' },
+            ].map((e, i) => (
+              <View key={e.title} style={[s.pathRow, i > 0 && s.pathBorder]}>
+                <View style={[s.dot, s.dotSoft]}><Feather name={e.icon} size={14} color="#B07A12" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.pathTitle}>{e.title}</Text>
+                  <Text style={s.pathSub}>{e.sub}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* ── Recent points ── */}
           {history.length > 0 && (
             <>
-              <Text style={s.sectionLabel}>Points history</Text>
-              <View style={s.explainCard}>
+              <Text style={s.section}>Recent points</Text>
+              <View style={s.card}>
                 {history.map(h => (
                   <View key={h.id} style={s.historyRow}>
                     <Text style={s.historyText} numberOfLines={1}>
-                      {`+${h.amount} · ${h.source === 'review' ? 'Review' : 'Rental'}${h.productName ? ` — ${h.productName}` : ''}`}
+                      {`+${h.amount} · ${SOURCE_LABEL[h.source] ?? 'Points'}${h.productName ? ` — ${h.productName}` : ''}`}
                     </Text>
                     {h.createdAt && <Text style={s.historyDate}>{fmtDate(h.createdAt)}</Text>}
                   </View>
@@ -129,22 +139,9 @@ export default function LoyaltyScreen() {
             </>
           )}
 
-          {/* ── How it works ── */}
-          <Text style={s.sectionLabel}>How tiers work</Text>
-          <View style={s.explainCard}>
-            {[
-              'Earn 1 point for every 10,000 LAK of rental fees, credited when a rental is completed.',
-              `Earn ${reviewPoints} points for each review of a completed rental — whatever your rating.`,
-              'Points accumulate for life — no expiry, no reset.',
-              'Reach a new tier and you get a one-time discount coupon to use on a future booking.',
-              'Platinum members get a reduced deposit on every rental.',
-            ].map((line, i) => (
-              <View key={i} style={s.explainRow}>
-                <Text style={s.explainBullet}>·</Text>
-                <Text style={s.explainText}>{line}</Text>
-              </View>
-            ))}
-          </View>
+          <Text style={s.footnote}>
+            Points never expire. Each tier&apos;s coupon is one-time. Points have no cash value.{points > 0 ? '' : ' Your first rental gets you started.'}
+          </Text>
         </ScrollView>
       )}
     </View>
@@ -153,79 +150,34 @@ export default function LoyaltyScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.porcelain },
-  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 4 },
-  historyText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.carbon },
-  historyDate: { fontSize: 12, fontWeight: '500', color: COLORS.fg3 },
-
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
   },
   headerTitle: {
     position: 'absolute', left: 0, right: 0, textAlign: 'center',
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
-
-  content: { paddingHorizontal: 20, paddingTop: 20 },
-
-  tierCard: {
-    backgroundColor: COLORS.carbon,
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 24,
+  content: { paddingHorizontal: 20 },
+  section: { fontSize: 15, fontWeight: '800', color: COLORS.carbon, marginTop: 22, marginBottom: 10 },
+  card: { backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1, borderColor: COLORS.softGray200, paddingHorizontal: 14 },
+  muted: { fontSize: 14, color: COLORS.fg3, paddingVertical: 14 },
+  pathRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12 },
+  pathBorder: { borderTopWidth: 1, borderTopColor: COLORS.softGray200 },
+  dot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  dotOn: { backgroundColor: COLORS.amber },
+  dotOff: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.softGray },
+  dotSoft: { backgroundColor: '#F7ECD9' },
+  pathTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pathTitle: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
+  pathTitleOff: { color: COLORS.fg3 },
+  here: {
+    fontSize: 11, fontWeight: '800', color: '#7A5500', backgroundColor: '#FDF0C4',
+    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
   },
-  tierBadge: {
-    width: 52, height: 52, borderRadius: 26,
-    backgroundColor: 'rgba(244,180,0,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 10,
-  },
-  tierName: {
-    fontSize: 20, fontWeight: '800', color: COLORS.porcelain, letterSpacing: -0.3,
-  },
-  tierPoints: {
-    fontSize: 13, fontWeight: '600', color: 'rgba(250,250,247,0.7)', marginTop: 4,
-  },
-  tierNext: {
-    fontSize: 12, fontWeight: '500', color: 'rgba(250,250,247,0.55)', marginTop: 8,
-  },
-
-  sectionLabel: {
-    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
-    color: COLORS.fg3, marginBottom: 10,
-  },
-
-  emptyBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.white, borderRadius: 14,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-    padding: 16, marginBottom: 24,
-  },
-  emptyText: { flex: 1, fontSize: 13, fontWeight: '500', color: COLORS.fg3, lineHeight: 18 },
-
-  couponCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.white, borderRadius: 14,
-    borderWidth: 1, borderColor: COLORS.amberTintBorder,
-    padding: 14, marginBottom: 10,
-  },
-  couponPercentBox: {
-    width: 52, height: 52, borderRadius: 12,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  couponPercentText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
-  couponTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
-  couponSub: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 2 },
-
-  explainCard: {
-    backgroundColor: COLORS.white, borderRadius: 14,
-    borderWidth: 1, borderColor: COLORS.softGray200,
-    padding: 16, gap: 10, marginBottom: 12,
-  },
-  explainRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  explainBullet: { fontSize: 14, color: COLORS.fg3, lineHeight: 18 },
-  explainText: { flex: 1, fontSize: 12, fontWeight: '400', color: COLORS.fg2, lineHeight: 18 },
+  pathSub: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, marginTop: 2, lineHeight: 18 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10 },
+  historyText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.carbon },
+  historyDate: { fontSize: 12, fontWeight: '500', color: COLORS.fg3 },
+  footnote: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: 17, marginTop: 18, textAlign: 'center' },
 });

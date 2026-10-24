@@ -12,7 +12,7 @@ import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/l
 // right, fill animated on screen focus), "{n} points to {next}.", a playful sub-line
 // and the next tier's perks. Platinum: full badge, no gauge. Tap → Loyalty screen.
 // Hidden for excluded / business accounts and before the loyalty config exists.
-export function LoyaltyCard() {
+export function LoyaltyCard({ interactive = true }: { interactive?: boolean }) {
   const router = useRouter();
   const loyalty = useMyLoyalty();
   const avg = useAveragePointsPerRental();
@@ -30,7 +30,7 @@ export function LoyaltyCard() {
   const next = progress.next ? TIER_LABELS[progress.next] : null;
 
   return (
-    <TouchableOpacity style={s.card} onPress={() => router.push('/profile/loyalty')} activeOpacity={0.9}>
+    <TouchableOpacity style={s.card} onPress={() => router.push('/profile/loyalty')} activeOpacity={0.9} disabled={!interactive}>
       <View style={s.topRow}>
         <Text style={s.member}>{LOYALTY_COPY.memberLabel}</Text>
         <Text style={s.points}>{LOYALTY_COPY.points(points)}</Text>
