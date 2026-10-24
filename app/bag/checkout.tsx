@@ -41,6 +41,7 @@ import { needsBtobDocument } from '@/utils/btob';
 import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import { ResidentPromoHint } from '@/components/ResidentPromo';
+import { BookingPointsHint } from '@/components/BookingPointsHint';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -353,7 +354,8 @@ export default function BagSummaryScreen() {
             depositLabel="Deposits (refundable)"
             style={{ paddingHorizontal: 14 }}
           />
-          <ResidentPromoHint style={{ marginHorizontal: 14, marginBottom: 12 }} />
+          <ResidentPromoHint style={{ marginHorizontal: 14 }} />
+          <BookingPointsHint subtotals={items.map(i => i.subtotal)} style={{ marginHorizontal: 14, marginBottom: 12 }} />
         </View>
 
         {/* ── Payment info ── */}

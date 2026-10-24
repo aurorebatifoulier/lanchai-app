@@ -28,6 +28,7 @@ import { BillingSummary } from '@/components/BillingSummary';
 import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import { ResidentPromoHint } from '@/components/ResidentPromo';
+import { BookingPointsHint } from '@/components/BookingPointsHint';
 
 export default function BookingSummaryScreen() {
   const router = useRouter();
@@ -237,6 +238,7 @@ export default function BookingSummaryScreen() {
             depositLabel="Deposit (refundable)"
           />
           <ResidentPromoHint />
+          <BookingPointsHint subtotals={[subtotal]} />
         </View>
 
         {params.notes ? (
