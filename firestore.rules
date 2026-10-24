@@ -372,6 +372,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── Referral programme — server-written only (callables + applyLoyaltyPoints) ──
+    // inviteCodes/{code} → owner uid (uniqueness); referrals/{referredUid} → link,
+    // status and credit. users.inviteCode / referredBy / referralCount are NOT in the
+    // users allow-list, so they're server-only too.
+    match /inviteCodes/{code} {
+      allow read, write: if false;
+    }
+    match /referrals/{referredUid} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     match /config/{docId} {
       // config/features (launch flags: businessAccounts, newsletter) is read before
       // sign-in by the signup screen — non-sensitive booleans only.

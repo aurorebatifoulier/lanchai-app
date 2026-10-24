@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import * as logger from 'firebase-functions/logger';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -10,7 +11,7 @@ import {
 } from './shared/latePenalty';
 import { BREVO_API_KEY } from './email/config';
 import {
-  loyaltyPointsFor, isLoyaltyExcluded, applyLoyaltyPointsChange, DEFAULT_REVIEW_REWARD_POINTS,
+  loyaltyPointsFor, isLoyaltyExcluded, applyLoyaltyPointsChange, DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_REFERRAL_REWARD_POINTS,
   TIER_ORDER, TIER_LABELS, type LoyaltyChangeConfig, type LoyaltyTierKey,
 } from './shared/loyalty';
 import { isPickupMissed, vteDateStamp, vteMinutesOfDay, vteTime } from './shared/dates';
@@ -38,6 +39,9 @@ export * from './residency';
 
 // Retention + automatic deletion of identity / residency documents — see retention.ts.
 export * from './retention';
+
+// Referral programme (invite codes) — see referral.ts; reward in creditReferralIfAny below.
+export * from './referral';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -576,8 +580,69 @@ export const applyLoyaltyPoints = onDocumentUpdated(
         updatedAt: FieldValue.serverTimestamp(),
       });
     });
+
+    // First returned rental of this renter → referral reward, if they were invited.
+    if (!preSnap.data()?.firstRentalDate) {
+      await creditReferralIfAny(after.renterId, event.params.reservationId).catch(err =>
+        logger.error('[referral] credit failed', { renterId: after.renterId, err: String(err) }));
+    }
   },
 );
+
+/**
+ * Referral reward — both sides get config/loyalty.referralRewardPoints (default 50)
+ * through creditLoyaltyPoints (tier + coupons), history source 'referral', ONCE per
+ * referred renter (referrals/{uid}.status pending → credited, in a transaction).
+ * Excluded accounts earn nothing; optional monthly cap per referrer
+ * (referralMonthlyCap > 0): beyond it only the referred renter is credited.
+ */
+async function creditReferralIfAny(referredUid: string, reservationId: string): Promise<void> {
+  const refDoc = db.collection('referrals').doc(referredUid);
+  const pre = await refDoc.get();
+  if (!pre.exists || pre.get('status') !== 'pending') return;
+  const referrerUid = pre.get('referrerUid') as string;
+  const raw = (await db.collection('config').doc('loyalty').get()).data() ?? {};
+  const amount = typeof raw.referralRewardPoints === 'number' && raw.referralRewardPoints > 0
+    ? Math.floor(raw.referralRewardPoints) : DEFAULT_REFERRAL_REWARD_POINTS;
+  const cap = typeof raw.referralMonthlyCap === 'number' ? Math.floor(raw.referralMonthlyCap) : 0;
+  const cfg = await getLoyaltyCfg();
+
+  let referrerCapped = false;
+  if (cap > 0) {
+    const since = new Date(); since.setUTCDate(1); since.setUTCHours(0, 0, 0, 0);
+    const credited = await db.collection('referrals').where('referrerUid', '==', referrerUid).get();
+    referrerCapped = credited.docs.filter(d => d.get('referrerCredited') === true
+      && (d.get('creditedAt')?.toMillis?.() ?? 0) >= since.getTime()).length >= cap;
+  }
+
+  const result = await db.runTransaction(async tx => {
+    const [ref, referred, referrer] = await Promise.all([
+      tx.get(refDoc),
+      tx.get(db.collection('users').doc(referredUid)),
+      tx.get(db.collection('users').doc(referrerUid)),
+    ]);
+    if (ref.get('status') !== 'pending') return null;
+    const referredOk = referred.exists && !isLoyaltyExcluded(referred.data() ?? {});
+    const referrerOk = referrer.exists && !isLoyaltyExcluded(referrer.data() ?? {}) && !referrerCapped;
+    if (referredOk) {
+      creditLoyaltyPoints(tx, referred, amount, cfg, { source: 'referral', reservationId, productName: '' });
+    }
+    if (referrerOk) {
+      creditLoyaltyPoints(tx, referrer, amount, cfg, { source: 'referral', reservationId: '', productName: '' },
+        { referralCount: FieldValue.increment(1) });
+    }
+    tx.update(refDoc, {
+      status: 'credited', creditedAt: FieldValue.serverTimestamp(), amount,
+      referredCredited: referredOk, referrerCredited: referrerOk, referrerCapped,
+    });
+    return { referredOk, referrerOk };
+  });
+  if (!result) return;
+  const notif = { title: 'Referral bonus', body: `Your friend's first rental is done: +${amount} points`, icon: 'star', iconColor: 'amber', deepLink: '/profile/loyalty' };
+  if (result.referredOk) await sendRenterNotif(referredUid, { ...notif, body: `Thanks for joining with a friend's invite: +${amount} points` });
+  if (result.referrerOk) await sendRenterNotif(referrerUid, notif);
+  logger.info('[referral] credited', { referredUid, referrerUid, ...result, referrerCapped });
+}
 
 // Review reward: N points (config/loyalty.reviewRewardPoints, default 10) for a review
 // of a RETURNED reservation of that renter — ALWAYS, whatever the rating (the rating is
