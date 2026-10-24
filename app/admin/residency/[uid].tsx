@@ -10,6 +10,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { RenterIdCard } from '@/components/admin/RenterIdCard';
+import AdminDateTimePicker from '@/components/AdminDateTimePicker';
 import { db, storage, functions } from '@/lib/firebase';
 import {
   RESIDENCY_PROOF_TYPES, RESIDENCY_REJECTION_REASONS, RESIDENCY_REJECTION_KEYS, validUntilRequired,
@@ -31,7 +32,10 @@ export default function AdminResidencyScreen() {
   const [urls, setUrls] = useState<string[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
   const [mode, setMode] = useState<'idle' | 'approve' | 'reject'>('idle');
-  const [validUntil, setValidUntil] = useState('');
+  // "Valid until": picked with the admin date picker (future dates only), sent as
+  // YYYY-MM-DD (the callable stores the end of that day, Vientiane time).
+  const [validUntil, setValidUntil] = useState<Date | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [reason, setReason] = useState<ResidencyRejectionKey | null>(null);
   const [text, setText] = useState('');
   const [otherFixable, setOtherFixable] = useState<boolean | null>(null);
@@ -54,8 +58,8 @@ export default function AdminResidencyScreen() {
 
   const preset = reason ? RESIDENCY_REJECTION_REASONS[reason] : null;
   const fixable = preset ? (preset.fixable ?? otherFixable) : null;
-  const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(validUntil.trim());
-  const approveReady = req && (dateOk || (!validUntil.trim() && !validUntilRequired(req.path)));
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const approveReady = !!req && (!!validUntil || !validUntilRequired(req.path));
   const rejectReady = !!reason && fixable !== null && (!preset?.textRequired || text.trim().length > 0);
 
   const decide = async (payload: Record<string, unknown>) => {
@@ -140,16 +144,20 @@ export default function AdminResidencyScreen() {
               cancelLabel="Cancel"
               confirmDisabled={!approveReady || busy}
               onCancel={() => setMode('idle')}
-              onConfirm={() => decide({ decision: 'approve', validUntil: validUntil.trim() || undefined })}
+              onConfirm={() => decide({ decision: 'approve', validUntil: validUntil ? ymd(validUntil) : undefined })}
             >
-              <TextInput
-                style={s.input}
-                value={validUntil}
-                onChangeText={setValidUntil}
-                placeholder={validUntilRequired(req.path) ? 'Valid until (YYYY-MM-DD)' : 'Valid until (optional, YYYY-MM-DD)'}
-                placeholderTextColor={COLORS.fg3}
-                keyboardType="numbers-and-punctuation"
-              />
+              <TouchableOpacity style={s.dateField} onPress={() => setPickerOpen(true)} activeOpacity={0.8}>
+                <Text style={[s.dateText, !validUntil && { color: COLORS.fg3 }]}>
+                  {validUntil
+                    ? `Valid until ${validUntil.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                    : validUntilRequired(req.path) ? 'Valid until — choose a date' : 'Valid until (optional) — choose a date'}
+                </Text>
+              </TouchableOpacity>
+              {validUntil && !validUntilRequired(req.path) && (
+                <TouchableOpacity onPress={() => setValidUntil(null)} style={{ marginTop: 6 }}>
+                  <Text style={s.clear}>No end date</Text>
+                </TouchableOpacity>
+              )}
             </ConfirmBox>
           )}
 
@@ -193,6 +201,16 @@ export default function AdminResidencyScreen() {
         </ScrollView>
       )}
 
+      <AdminDateTimePicker
+        visible={pickerOpen}
+        dateOnly
+        minDaysAhead={1}
+        title="Valid until"
+        initialValue={validUntil}
+        onClose={() => setPickerOpen(false)}
+        onConfirm={d => { setValidUntil(d); setPickerOpen(false); }}
+      />
+
       <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
         <TouchableOpacity style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)}>
           {zoom && <Image source={{ uri: zoom }} style={s.zoomImage} resizeMode="contain" />}
@@ -232,6 +250,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: COLORS.carbon, marginTop: 8,
   },
   error: { fontSize: 12, fontWeight: '500', color: COLORS.danger, marginTop: 8 },
+  dateField: {
+    height: 44, borderRadius: 8, borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white,
+    paddingHorizontal: 12, justifyContent: 'center', marginTop: 8,
+  },
+  dateText: { fontSize: 14, fontWeight: '600', color: COLORS.carbon },
+  clear: { fontSize: 12, fontWeight: '700', color: COLORS.fg2, textDecorationLine: 'underline' },
   zoomBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   zoomImage: { width: '100%', height: '85%' },
 });

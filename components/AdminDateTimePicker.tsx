@@ -12,7 +12,8 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 
 // Admin-only single date+time picker — e.g. for setting a product's earlyAccessUntil
-// deadline. Not shop-hours-constrained (unlike the renter-facing DateRangePicker /
+// deadline. `dateOnly` hides the time list (e.g. residency "Valid until"); `minDaysAhead`
+// greys out earlier days (1 = future dates only, from tomorrow). Not shop-hours-constrained (unlike the renter-facing DateRangePicker /
 // utils/timeSlots.ts, which model pickup/return hours): full day, 30-min increments.
 
 const pad = (n: number) => n.toString().padStart(2, '0');
@@ -60,6 +61,11 @@ export interface AdminDateTimePickerProps {
   initialValue?: Date | null;
   onClose: () => void;
   onConfirm: (value: Date) => void;
+  /** Date only, no time list — onConfirm gets that day at 12:00 (local). */
+  dateOnly?: boolean;
+  /** Earliest selectable day, in days from today (default 0 = today). */
+  minDaysAhead?: number;
+  title?: string;
 }
 
 export default function AdminDateTimePicker({
@@ -67,10 +73,16 @@ export default function AdminDateTimePicker({
   initialValue = null,
   onClose,
   onConfirm,
+  dateOnly = false,
+  minDaysAhead = 0,
+  title = 'Set deadline',
 }: AdminDateTimePickerProps) {
   const insets = useSafeAreaInsets();
 
-  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // First selectable day (today + minDaysAhead, at 00:00).
+  const today = useMemo(() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + minDaysAhead); return d;
+  }, [minDaysAhead]);
 
   const [calYear,  setCalYear]  = useState(() => new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
@@ -98,7 +110,7 @@ export default function AdminDateTimePicker({
     return TIME_SLOTS.filter(slot => slot > threshold);
   }, [selDate]);
 
-  const canConfirm = !!selDate && !!selTime;
+  const canConfirm = !!selDate && (dateOnly || !!selTime);
 
   const prevMonth = () => { if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); } else setCalMonth(m => m - 1); };
   const nextMonth = () => { if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); } else setCalMonth(m => m + 1); };
@@ -110,7 +122,14 @@ export default function AdminDateTimePicker({
   };
 
   const handleConfirm = () => {
-    if (!selDate || !selTime) return;
+    if (!selDate) return;
+    if (dateOnly) {
+      const dt = new Date(selDate);
+      dt.setHours(12, 0, 0, 0);
+      onConfirm(dt);
+      return;
+    }
+    if (!selTime) return;
     const [h, m] = selTime.split(':').map(Number);
     const dt = new Date(selDate);
     dt.setHours(h, m, 0, 0);
@@ -128,7 +147,7 @@ export default function AdminDateTimePicker({
               below always gets a guaranteed, visible share of the sheet's height. */}
           <View>
             <View style={s.header}>
-              <Text style={s.title}>Set deadline</Text>
+              <Text style={s.title}>{title}</Text>
               <TouchableOpacity style={s.closeBtn} onPress={onClose}>
                 <Feather name="x" size={18} color={COLORS.carbon} />
               </TouchableOpacity>
@@ -167,31 +186,33 @@ export default function AdminDateTimePicker({
               })}
             </View>
 
-            <Text style={s.fieldLabel}>Time</Text>
+            {!dateOnly && <Text style={s.fieldLabel}>Time</Text>}
           </View>
 
           {/* Flex-fills whatever space remains under the fixed block above, with a
               minHeight floor so it's never squeezed to invisible. */}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            style={s.timeScroll}
-            contentContainerStyle={s.timeScrollContent}
-          >
-            {availableTimes.map(slot => {
-              const active = selTime === slot;
-              return (
-                <TouchableOpacity
-                  key={slot}
-                  style={[s.timeRow, active && s.timeRowActive]}
-                  onPress={() => setSelTime(slot)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[s.timeRowText, active && s.timeRowTextActive]}>{slot}</Text>
-                  {active && <Feather name="check" size={16} color={COLORS.carbon} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {!dateOnly && (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={s.timeScroll}
+              contentContainerStyle={s.timeScrollContent}
+            >
+              {availableTimes.map(slot => {
+                const active = selTime === slot;
+                return (
+                  <TouchableOpacity
+                    key={slot}
+                    style={[s.timeRow, active && s.timeRowActive]}
+                    onPress={() => setSelTime(slot)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.timeRowText, active && s.timeRowTextActive]}>{slot}</Text>
+                    {active && <Feather name="check" size={16} color={COLORS.carbon} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
 
           <TouchableOpacity
             style={[s.confirmBtn, !canConfirm && s.confirmBtnOff]}
@@ -200,7 +221,9 @@ export default function AdminDateTimePicker({
             activeOpacity={0.85}
           >
             <Text style={[s.confirmBtnText, !canConfirm && s.confirmBtnTextOff]}>
-              {selDate && selTime ? `Confirm — ${fmtFieldDate(selDate)}, ${selTime}` : 'Select a date and time'}
+              {dateOnly
+                ? (selDate ? `Confirm — ${fmtFieldDate(selDate)} ${selDate.getFullYear()}` : 'Select a date')
+                : (selDate && selTime ? `Confirm — ${fmtFieldDate(selDate)}, ${selTime}` : 'Select a date and time')}
             </Text>
           </TouchableOpacity>
         </View>
