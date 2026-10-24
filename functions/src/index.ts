@@ -507,7 +507,7 @@ function creditLoyaltyPoints(
   userSnap: admin.firestore.DocumentSnapshot,
   amount: number,
   cfg: LoyaltyCfg,
-  entry: { source: 'rental' | 'review'; reservationId: string; productName: string },
+  entry: { source: 'rental' | 'review' | 'referral'; reservationId: string; productName: string },
   extraUserFields: Record<string, unknown> = {},
 ): void {
   const userData = userSnap.data() ?? {};
@@ -529,6 +529,10 @@ function creditLoyaltyPoints(
   tx.update(userSnap.ref, {
     loyaltyPoints: newPoints,
     loyaltyTier: newTier,
+    // Tier-up celebration baseline (app/(tabs)/_layout.tsx): an account credited for the
+    // first time since celebrations exist starts from its tier BEFORE this credit, so a
+    // tier crossed now is celebrated once — and older tiers never are.
+    ...(userData.celebratedTier ? {} : { celebratedTier: userData.loyaltyTier ?? 'bronze' }),
     ...extraUserFields,
     ...(newCoupons.length > 0 ? { coupons: [...existingCoupons, ...newCoupons] } : {}),
   });

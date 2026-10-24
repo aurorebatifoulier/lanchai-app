@@ -196,9 +196,13 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
           'whatsapp', 'whatsappSameAsPhone', 'address', 'photoURL', 'emailRemindersOptOut',
-          'btobDocumentUrl', 'updatedAt',
+          'btobDocumentUrl', 'updatedAt', 'celebratedTier',
           'marketingOptIn', 'marketingOptInAt', 'marketingOptOutAt'
         ]) &&
+        // Tier-up celebration seen — a real tier, and only the account's CURRENT tier.
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['celebratedTier']) ||
+          (request.resource.data.celebratedTier in ['silver', 'gold', 'platinum'] &&
+           request.resource.data.celebratedTier == resource.data.get('loyaltyTier', 'bronze'))) &&
         // News & offers consent: a boolean, and its consent timestamps are server time.
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['marketingOptIn']) ||
           request.resource.data.marketingOptIn is bool) &&

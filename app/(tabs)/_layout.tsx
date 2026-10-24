@@ -10,6 +10,7 @@ import { auth } from '@/lib/auth';
 import { requestEmailVerification, requestWelcomeEmail } from '@/lib/authEmails';
 import { db } from '@/lib/firebase';
 import { subscribeToUnreadInboxCount } from '@/lib/chat';
+import { TierUpCelebration } from '@/components/TierUpCelebration';
 
 function TabIcon({ name, color, focused }: { name: string; color: string; focused: boolean }) {
   return (
@@ -145,6 +146,8 @@ export default function TabLayout() {
 
   return (
     <View style={styles.root}>
+      {/* Tier-up celebration — once per tier reached (loyalty) */}
+      <TierUpCelebration />
       <Tabs
         screenOptions={{
           headerShown: false,
