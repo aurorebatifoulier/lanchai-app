@@ -13,6 +13,7 @@ import { nextLateThresholdMs, computeLatePenalty, formatPenaltyDays } from '../s
 import { BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, type BtobRejectionKey } from '../shared/btob';
 import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
 import { buildReceiptSummary } from '../shared/receiptSummary';
+import { RESIDENCY_REJECTION_REASONS, type ResidencyRejectionKey } from '../shared/residency';
 import {
   cancellationOutcome, CANCEL_REASONS, type CancelReason, type CancellationOutcome,
 } from '../shared/cancellation';
@@ -993,6 +994,171 @@ export function emailVerificationEmail(link: string, shop: EmailShop): Rendered 
         sub: 'One last step to finish setting up your LANCHAI account.',
         primary: { label: 'Confirm my email', url: link },
         footnote: 'If you didn’t create an account, you can ignore this email.',
+      },
+    ],
+    shop,
+  );
+}
+
+// ── 9. Identity & residency — never include the documents themselves ─────────────
+// Sent by functions/src/identity.ts (verified / declined) and functions/src/residency.ts
+// (approved / rejected A-B / expired). Links open My ID / Verify my status in the app.
+
+export function idVerifiedEmail(shop: EmailShop, ctx: { firstName: string; idRetentionMonths: number }): Rendered {
+  return build(
+    'Your LANCHAI ID is verified',
+    'Your next pick-ups will be faster',
+    'Your ID is verified',
+    [
+      {
+        type: 'hero',
+        pill: 'Identity verified',
+        pillTone: 'success',
+        title: 'Your ID is verified',
+        sub: `Hi ${ctx.firstName} — we checked your ID with you at pick-up, so your next pick-ups will be faster.`,
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+      },
+      {
+        type: 'card',
+        items: [
+          {
+            type: 'iconNote',
+            icon: { name: 'shield-check', alt: 'Privacy' },
+            title: 'How we keep your ID',
+            text: `We keep your ID document while you have a rental in progress and for ${plural(ctx.idRetentionMonths, 'month')} after your last rental, then delete it automatically. Only you and our staff can see it.`,
+          },
+          { type: 'text', text: 'You can see it or ask us to delete it anytime in the app: Account › My ID.', tone: 'muted', small: true },
+        ],
+      },
+    ],
+    shop,
+  );
+}
+
+export function idDeclinedEmail(shop: EmailShop, ctx: { firstName: string; text: string }): Rendered {
+  const wa = whatsappUrl(shop, 'Hi LANCHAI, about my ID document: ');
+  return build(
+    'Action needed: please add a new ID',
+    'Your ID document couldn\u2019t be accepted',
+    'Please add a new ID',
+    [
+      {
+        type: 'hero',
+        pill: 'Identity',
+        title: 'Please add a new ID',
+        sub: `Hi ${ctx.firstName}`,
+        primary: { label: 'Update my ID', url: appLink('profile/identity') },
+        secondary: wa ? [{ label: 'Message us', url: wa, icon: 'whatsapp' }] : undefined,
+      },
+      {
+        type: 'card',
+        title: 'What we need',
+        items: [
+          { type: 'text', text: ctx.text },
+          { type: 'bullet', text: 'A sharp photo, all four corners visible', icon: { name: 'camera', alt: 'Photo' } },
+          { type: 'text', text: 'New bookings are paused until you add a new ID document.', tone: 'muted', small: true },
+        ],
+      },
+    ],
+    shop,
+  );
+}
+
+export function residencyApprovedEmail(shop: EmailShop, ctx: { firstName: string; validUntilMs: number | null }): Rendered {
+  return build(
+    'You\u2019re verified as a resident',
+    'Your reduced deposit applies to your next bookings',
+    'Resident status approved',
+    [
+      {
+        type: 'hero',
+        pill: 'Resident status approved',
+        pillTone: 'success',
+        title: 'You\u2019re verified as a resident',
+        sub: `Hi ${ctx.firstName} — your reduced deposit applies to your next bookings.`,
+        note: ctx.validUntilMs ? `Valid until ${vteDay(ctx.validUntilMs)} ${new Date(ctx.validUntilMs + 7 * 3_600_000).getUTCFullYear()}` : undefined,
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+      },
+      {
+        type: 'card',
+        items: [
+          { type: 'iconNote', icon: { name: 'shield-check', alt: 'Privacy' }, title: 'Your documents', text: 'We delete your proof of residence shortly after our decision and keep only a short record of the check.' },
+          ...(ctx.validUntilMs ? [{ type: 'text' as const, text: 'Before that date, send updated documents in the app (Account › Verify my status) to keep the reduced deposit.', tone: 'muted' as const, small: true }] : []),
+        ],
+      },
+    ],
+    shop,
+  );
+}
+
+export function residencyRejectedEmail(
+  shop: EmailShop,
+  ctx: { firstName: string; reason: ResidencyRejectionKey | null; text: string | null; fixable: boolean },
+): Rendered {
+  const preset = ctx.reason ? RESIDENCY_REJECTION_REASONS[ctx.reason] : null;
+  const wa = whatsappUrl(shop, 'Hi LANCHAI, about my resident status: ');
+  const message: Button[] = wa ? [{ label: 'Message us', url: wa, icon: 'whatsapp' }] : [];
+  const extra = ctx.text?.trim();
+  const inner: Inner[] = [];
+  if (preset?.text) inner.push({ type: 'text', text: preset.text });
+  if (extra) inner.push({ type: 'text', text: extra, tone: preset?.text ? 'muted' : undefined });
+
+  if (ctx.fixable) {
+    inner.push({ type: 'text', text: 'Until then, the standard deposit applies.', tone: 'muted', small: true });
+    return build(
+      'Action needed: your LANCHAI resident status',
+      'We need one more thing to verify your status',
+      'Your resident status',
+      [
+        {
+          type: 'hero',
+          pill: 'Resident status',
+          title: 'Almost there — we just need one more thing',
+          sub: `Hi ${ctx.firstName}`,
+          primary: { label: 'Update my documents', url: appLink('profile/residency') },
+          secondary: message.length ? message : undefined,
+        },
+        { type: 'card', title: 'What we need', items: inner },
+      ],
+      shop,
+    );
+  }
+  inner.push({ type: 'text', text: 'You can still rent with the standard deposit. If you think this is a mistake, just reply to this email or message us.', tone: 'muted', small: true });
+  return build(
+    'Your LANCHAI resident status',
+    'We couldn\u2019t approve it this time',
+    'Your resident status',
+    [
+      {
+        type: 'hero',
+        pill: 'Resident status',
+        title: 'We couldn\u2019t approve your resident status',
+        sub: `Hi ${ctx.firstName}`,
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+        secondary: message.length ? message : undefined,
+      },
+      { type: 'card', title: 'Reason', items: inner },
+    ],
+    shop,
+  );
+}
+
+export function residencyExpiredEmail(shop: EmailShop, ctx: { firstName: string }): Rendered {
+  return build(
+    'Your LANCHAI resident status has expired',
+    'Update your documents to keep the reduced deposit',
+    'Resident status expired',
+    [
+      {
+        type: 'hero',
+        pill: 'Resident status',
+        title: 'Your resident status has expired',
+        sub: `Hi ${ctx.firstName} — update your documents to keep the reduced deposit on your next bookings.`,
+        primary: { label: 'Update my documents', url: appLink('profile/residency') },
+      },
+      {
+        type: 'card',
+        items: [{ type: 'text', text: 'Until then, the standard deposit applies to new bookings. Bookings you already made keep their deposit.', tone: 'muted' }],
       },
     ],
     shop,

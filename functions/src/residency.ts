@@ -5,6 +5,8 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { FieldValue } from 'firebase-admin/firestore';
 import { validateIdFiles } from './identity';
 import { deleteProofFilesIfAllowed } from './retention';
+import { sendAccountEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail } from './email/triggers';
+import { BREVO_API_KEY } from './email/config';
 import { vteEndOfDayMs, vteDay } from './shared/dates';
 import {
   basisFor, validUntilRequired, isResidencyRejectionKey, RESIDENCY_REJECTION_REASONS,
@@ -121,7 +123,7 @@ function parseValidUntil(v: unknown): number | null {
 // ── reviewResidency — staff decision ─────────────────────────────────────────────
 // { uid, decision: 'approve', validUntil?: 'YYYY-MM-DD' }
 // { uid, decision: 'reject', reason, text?, fixable? (only for 'other') }
-export const reviewResidency = onCall({ region: REGION }, async request => {
+export const reviewResidency = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
   await requireAdmin(request.auth?.uid);
   const d = (request.data ?? {}) as {
     uid?: unknown; decision?: unknown; validUntil?: unknown; reason?: unknown; text?: unknown; fixable?: unknown;
@@ -169,6 +171,7 @@ export const reviewResidency = onCall({ region: REGION }, async request => {
       body: `Your reduced deposit applies to your next bookings${validUntil ? ` — valid until ${vteDay(validUntil.toMillis())}` : ''}.`,
       icon: 'check', iconColor: 'green', deepLink: '/profile/residency',
     });
+    await sendAccountEmail(uid, (shop, r) => residencyApprovedEmail(shop, { firstName: r.firstName, validUntilMs: validUntil?.toMillis() ?? null }), 'residency-approved');
   } else if (d.decision === 'reject') {
     if (!isResidencyRejectionKey(d.reason)) fail('invalid-reason', 'Choose a reason.', 'invalid-argument');
     const preset = RESIDENCY_REJECTION_REASONS[d.reason as keyof typeof RESIDENCY_REJECTION_REASONS];
@@ -188,6 +191,9 @@ export const reviewResidency = onCall({ region: REGION }, async request => {
       body: fixable ? 'Please update your documents — see what we need.' : 'We couldn’t approve your resident status.',
       icon: 'alert', iconColor: 'amber', deepLink: '/profile/residency',
     });
+    await sendAccountEmail(uid, (shop, r) => residencyRejectedEmail(shop, {
+      firstName: r.firstName, reason: d.reason as never, text: text || null, fixable,
+    }), fixable ? 'residency-rejected-fixable' : 'residency-rejected-final');
   } else {
     fail('invalid-request', 'Unknown decision.', 'invalid-argument');
   }
@@ -254,7 +260,7 @@ export const adminLegacyResident = onCall({ region: REGION }, async request => {
 // Equality-only query (no composite index), date filtered in code. In-app notice now;
 // the "expired" email comes with the emails phase. Retention purge joins this job later.
 export const residencyDaily = onSchedule(
-  { schedule: '0 3 * * *', timeZone: 'Asia/Vientiane', region: REGION },
+  { schedule: '0 3 * * *', timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_API_KEY] },
   async () => {
     const now = Date.now();
     const snap = await db().collection('users').where('customerType', '==', 'resident').get();
@@ -269,6 +275,7 @@ export const residencyDaily = onSchedule(
         body: 'Update your documents to keep the reduced deposit on your next bookings.',
         icon: 'alert', iconColor: 'amber', deepLink: '/profile/residency',
       });
+      await sendAccountEmail(u.id, (shop, r) => residencyExpiredEmail(shop, { firstName: r.firstName }), 'residency-expired');
       logger.info('[residency] expired', { uid: u.id });
     }
   },

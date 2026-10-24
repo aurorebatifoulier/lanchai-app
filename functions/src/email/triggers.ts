@@ -17,6 +17,7 @@ import {
   bookingConfirmationEmail, pickupReminderEmail, returnReminderEmail, cancellationEmail,
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
+  idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -360,6 +361,26 @@ export async function sendLateReturnEmail(
   }
 }
 
+// ── 8. Identity / residency — called by identity.ts and residency.ts ────────────
+// Idempotency is the caller's job (ID verified: once per document version). Respects
+// the test/redirect mode like every account email. Never throws.
+export async function sendAccountEmail(
+  uid: string,
+  build: (shop: EmailShop, recipient: Recipient) => Rendered,
+  tag: string,
+): Promise<SendResult | 'opted_out' | 'error'> {
+  try {
+    const result = await deliver(uid, null, (_name, shop, recipient) => build(shop, recipient), tag);
+    if (result !== 'sent') logger.warn('[email] account email not sent', { uid, tag, result });
+    return result;
+  } catch (err) {
+    logger.error('[email] account email failed', { uid, tag, err: String(err) });
+    return 'error';
+  }
+}
+
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail };
+
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
 // to the calling admin's own address, and regardless of live/test mode.
@@ -454,6 +475,12 @@ export const sendTestEmails = onCall(
       // Non-working sample links (oobCode=SAMPLE) — real ones only come from the callables.
       ['auth-password-reset',              passwordResetEmail('https://lanchai-app.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=SAMPLE', shop)],
       ['auth-email-verification',          emailVerificationEmail('https://lanchai-app.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=SAMPLE', shop)],
+      ['id-verified',                      idVerifiedEmail(shop, { firstName: name, idRetentionMonths: 6 })],
+      ['id-declined',                      idDeclinedEmail(shop, { firstName: name, text: 'The photo is blurry or cut off — please add a sharp photo with all four corners visible.' })],
+      ['residency-approved',               residencyApprovedEmail(shop, { firstName: name, validUntilMs: pickupAtMs + 300 * DAY })],
+      ['residency-rejected-A-fixable',     residencyRejectedEmail(shop, { firstName: name, reason: 'proof_missing', text: 'The lease contract isn\u2019t in your name.', fixable: true })],
+      ['residency-rejected-B-final',       residencyRejectedEmail(shop, { firstName: name, reason: 'not_eligible', text: null, fixable: false })],
+      ['residency-expired',                residencyExpiredEmail(shop, { firstName: name })],
       ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', [{ r: late(base, 300000, 2), stage: 'nonReturn' }], shop, lateCtx)],
     ];
     const results: Record<string, SendResult> = {};

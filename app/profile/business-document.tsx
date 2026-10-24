@@ -23,6 +23,7 @@ import { auth } from '@/lib/auth';
 import { storage, functions } from '@/lib/firebase';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
 import { canReplaceBtobDocument } from '@/utils/btob';
+import { useMyIdentity, ID_DOC_TYPES } from '@/lib/identity';
 
 export default function BusinessDocumentScreen() {
   const insets = useSafeAreaInsets();
@@ -46,6 +47,9 @@ export default function BusinessDocumentScreen() {
   const [responsibleName, setResponsibleName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Responsible person's ID (My ID) — required before approval / resubmission.
+  const { identity } = useMyIdentity();
+  const idOnFile = identity?.status === 'on_file';
 
   useEffect(() => {
     const cu = auth.currentUser;
@@ -84,6 +88,7 @@ export default function BusinessDocumentScreen() {
       setSubmitError(
         code === 'missing-fields' ? 'Please fill in every company field.'
         : code === 'document-required' ? 'Please attach your registration document first.'
+        : code === 'id-required' ? 'Please add the responsible person\u2019s ID first (My ID).'
         : code === 'final-rejection' || code === 'not-rejected' ? 'This application can’t be resubmitted. Please message us.'
         : 'Could not resubmit. Please try again.',
       );
@@ -177,7 +182,17 @@ export default function BusinessDocumentScreen() {
           </>
         )}
 
-        <Text style={s.fieldLabel}>Business registration document</Text>
+        <Text style={s.fieldLabel}>Responsible person&apos;s ID</Text>
+        <TouchableOpacity style={s.docPicker} onPress={() => router.push('/profile/identity')} activeOpacity={0.8}>
+          <Feather name={idOnFile ? 'check-circle' : 'credit-card'} size={18} color={idOnFile ? COLORS.success : COLORS.fg3} />
+          <Text style={s.docPickerText}>
+            {idOnFile
+              ? `${ID_DOC_TYPES.find(t => t.key === identity?.docType)?.label ?? 'ID'} on file — tap to see or replace`
+              : 'Required before approval — tap to add a passport or ID card'}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={[s.fieldLabel, { marginTop: 18 }]}>Business registration document</Text>
         <TouchableOpacity style={s.docPicker} onPress={handlePick} activeOpacity={0.8} disabled={uploading || rejection === 'final' || !canReplace}>
           {uploading ? (
             <ActivityIndicator size="small" color={COLORS.carbon} />

@@ -702,7 +702,19 @@ a snapshot indefinitely).
   ID" → `deleteMyIdentityDocument` (now only if the rule allows, else explains until
   when); `withdrawResidency` deletes proofs now unless blocked. Every deletion / blocked
   attempt → `docDeletionLog` (admin read, server write; uid, type, count, reason — never
-  paths). Next phase: business ID + emails.
+  paths). Replaced/declined IDs follow the short (proofRetentionDays) retention.
+- **Identity/residency emails + business ID (phase 5).** Templates `idVerifiedEmail`,
+  `idDeclinedEmail`, `residencyApprovedEmail`, `residencyRejectedEmail` (A fixable / B
+  final), `residencyExpiredEmail` (`email/templates.ts`) — never the documents. Sent via
+  `sendAccountEmail()` (`email/triggers.ts`) from `recordIdCheck` (ID verified, ONCE per
+  document version — `identityChecks.verifiedEmailVersion` claimed in a transaction),
+  `adminIdentityAction` reject, `reviewResidency`, `residencyDaily`; those functions list
+  `BREVO_API_KEY` in `secrets`. Links `profile/identity` / `profile/residency` are in
+  `appLink` + the hosting redirect allow-list. Samples in `sendTestEmails`. Business:
+  the responsible person's ID (optional field at business signup, My ID later) is
+  REQUIRED before approval (admin review shows `<RenterIdCard>`, Approve disabled
+  without it) and before `resubmitBusinessApplication` (`id-required`); reminders on
+  `btob-pending.tsx` and `business-document.tsx`.
 
 ## Security follow-ups
 

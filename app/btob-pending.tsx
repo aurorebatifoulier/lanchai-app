@@ -56,6 +56,20 @@ export default function BtobPendingScreen() {
           </View>
         )}
 
+        {!loading && profile && !profile.idOnFile && (
+          <View style={s.docReminderBox}>
+            <Feather name="alert-circle" size={14} color="#854F0B" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.docReminderText}>
+                We also need the ID (passport or ID card) of the responsible person before we can approve your account.
+              </Text>
+              <TouchableOpacity onPress={() => router.push('/profile/identity')} activeOpacity={0.7} style={{ marginTop: 6 }}>
+                <Text style={s.docReminderLink}>Add the ID</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {loading ? (
           <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />
         ) : profile ? (

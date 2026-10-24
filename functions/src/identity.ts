@@ -2,6 +2,9 @@ import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
+import { sendAccountEmail, idVerifiedEmail, idDeclinedEmail } from './email/triggers';
+import { BREVO_API_KEY } from './email/config';
+import { getRetentionConfig } from './retention';
 import {
   isIdDocType, idDocPrefix, idCheckNeeded, ID_MAX_PAGES, ID_MAX_BYTES, PRE_PICKUP_STATUSES, ID_REJECTION_REASONS,
 } from './shared/identity';
@@ -129,7 +132,7 @@ export const submitIdentityDocument = onCall({ region: REGION }, async request =
 // or no document on file) → registered as a new document (source 'counter') first.
 // Ties the check to the CURRENT document version (idCheckedVersion); idCheckedAt/By
 // stay as history. Clears firstRentalIdCheck on the renter's upcoming pick-ups.
-export const recordIdCheck = onCall({ region: REGION }, async request => {
+export const recordIdCheck = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
   const adminUid = await requireAdmin(request.auth?.uid);
   const d = (request.data ?? {}) as {
     renterId?: unknown; matchesPerson?: unknown; nameMatches?: unknown;
@@ -155,6 +158,18 @@ export const recordIdCheck = onCall({ region: REGION }, async request => {
     idCheckedBy: staffName(request.auth?.token),
   }, { merge: true });
   await syncFirstRentalIdFlags(renterId);
+  // "ID verified" email — once per document version (claimed in a transaction).
+  const idRef = db.collection('identityChecks').doc(renterId);
+  const claimed = await db.runTransaction(async tx => {
+    const snap = await tx.get(idRef);
+    if (snap.get('verifiedEmailVersion') === identity!.version) return false;
+    tx.set(idRef, { verifiedEmailVersion: identity!.version }, { merge: true });
+    return true;
+  });
+  if (claimed) {
+    const { idRetentionMonths } = await getRetentionConfig();
+    await sendAccountEmail(renterId, (shop, r) => idVerifiedEmail(shop, { firstName: r.firstName, idRetentionMonths }), 'id-verified');
+  }
   logger.info('[identity] checked in person', { renterId, version: identity!.version, by: adminUid });
   return { ok: true };
 });
@@ -162,7 +177,7 @@ export const recordIdCheck = onCall({ region: REGION }, async request => {
 // ── adminIdentityAction — staff: add/replace a photo at the counter, or decline ───
 // { renterId, action: 'set', docType, files } | { renterId, action: 'reject', reason, text? }
 // A decline blocks new bookings until a new document is sent (createReservations).
-export const adminIdentityAction = onCall({ region: REGION }, async request => {
+export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
   const adminUid = await requireAdmin(request.auth?.uid);
   const d = (request.data ?? {}) as {
     renterId?: unknown; action?: unknown; docType?: unknown; files?: unknown; reason?: unknown; text?: unknown;
@@ -199,6 +214,7 @@ export const adminIdentityAction = onCall({ region: REGION }, async request => {
       body: `${text} New bookings are paused until then.`,
       deepLink: '/profile/identity', createdAt: FieldValue.serverTimestamp(), readAt: null,
     });
+    await sendAccountEmail(renterId, (shop, r) => idDeclinedEmail(shop, { firstName: r.firstName, text }), 'id-declined');
   } else {
     fail('invalid-request', 'Unknown action.', 'invalid-argument');
   }

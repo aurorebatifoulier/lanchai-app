@@ -13,13 +13,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { sendNotif } from '@/lib/notifications';
 import { BTOB_STATUS_CONFIG } from '@/utils/btob';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import { RenterIdCard } from '@/components/admin/RenterIdCard';
 import {
   BTOB_REJECTION_REASONS, BTOB_REJECTION_KEYS, isBtobRejectionKey, type BtobRejectionKey,
 } from '@/functions/src/shared/btob';
@@ -60,6 +61,12 @@ export default function AdminBusinessAccountDetailScreen() {
   const { uid } = useLocalSearchParams<{ uid: string }>();
 
   const [account, setAccount] = useState<BusinessAccount | null>(null);
+  // The responsible person's ID must be on file before approval (live).
+  const [idOnFile, setIdOnFile] = useState(false);
+  useEffect(() => {
+    if (!uid) return;
+    return onSnapshot(doc(db, 'identityChecks', uid), s => setIdOnFile(s.get('status') === 'on_file'), () => setIdOnFile(false));
+  }, [uid]);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -247,6 +254,9 @@ export default function AdminBusinessAccountDetailScreen() {
           )}
         </View>
 
+        <Text style={d.cardLabel}>Responsible person&apos;s ID</Text>
+        {uid ? <RenterIdCard renterId={uid} /> : null}
+
         {/* ── Actions ────────────────────────────────────────────────────── */}
         <View style={d.actionsCard}>
           <Text style={d.cardLabel}>Actions</Text>
@@ -264,10 +274,12 @@ export default function AdminBusinessAccountDetailScreen() {
 
           {!actioning && confirmAction === 'approve' && (
             <ConfirmBox
-              text={`Approve this business account? This sets their account type to Business (0% deposit applies) and lets them use the app immediately.`}
+              text={idOnFile
+                ? 'Approve this business account? This sets their account type to Business (0% deposit applies) and lets them use the app immediately.'
+                : 'The responsible person\u2019s ID is required before approval — add it (photo at the counter) or ask them to upload it in My ID.'}
               confirmLabel="Approve"
               cancelLabel="Cancel"
-              confirmDisabled={staffName.trim().length === 0}
+              confirmDisabled={staffName.trim().length === 0 || !idOnFile}
               onCancel={() => setConfirmAction(null)}
               onConfirm={handleApprove}
             >

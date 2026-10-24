@@ -33,6 +33,7 @@ export const iconUrl = (name: EmailIcon) => `${PUBLIC_BASE_URL}/email/icons/${na
 /** https link that opens an in-app path (allow-listed in hosting/open/index.html). */
 export function appLink(
   path: 'home' | 'reservations' | 'explore' | 'legal/cancellation' | 'profile/business-document'
+    | 'profile/identity' | 'profile/residency'
     | `rentals/${string}` | `product/${string}` | `category/${string}`,
 ): string {
   return `${PUBLIC_BASE_URL}/open/?to=${encodeURIComponent(path).replace(/%2F/g, '/')}`;

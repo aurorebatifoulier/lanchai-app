@@ -93,6 +93,11 @@ export const resubmitBusinessApplication = onCall({ region: REGION }, async requ
   if (!p.btobDocumentUrl) {
     throw new HttpsError('failed-precondition', 'Please upload your registration document first.', { code: 'document-required' });
   }
+  // The responsible person's ID is required before (re)approval — My ID.
+  const idSnap = await admin.firestore().collection('identityChecks').doc(uid).get();
+  if (idSnap.get('status') !== 'on_file') {
+    throw new HttpsError('failed-precondition', 'Please add the responsible person\u2019s ID first (My ID).', { code: 'id-required' });
+  }
 
   const FieldValue = admin.firestore.FieldValue;
   await userRef.update({

@@ -27,6 +27,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
 import { useFeatureFlags } from '@/lib/features';
 import { requestPasswordReset, requestEmailVerification, AuthEmailRateLimitError } from '@/lib/authEmails';
+import { ID_DOC_TYPES, pickIdPhoto, submitMyIdentityDocument, type IdDocType } from '@/lib/identity';
 import { db, storage } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/firestore';
 
@@ -76,6 +77,9 @@ export default function LoginScreen() {
   const [licenseNumber, setLicenseNumber]     = useState('');
   const [responsibleName, setResponsibleName] = useState('');
   const [docUri, setDocUri]                   = useState<string | null>(null);
+  // Business signup: ID of the responsible person (optional here, required before approval).
+  const [idType, setIdType]                   = useState<IdDocType | null>(null);
+  const [idPhotos, setIdPhotos]               = useState<string[]>([]);
 
   // Forgot-password inline feedback
   const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -111,6 +115,8 @@ export default function LoginScreen() {
     setLicenseNumber('');
     setResponsibleName('');
     setDocUri(null);
+    setIdType(null);
+    setIdPhotos([]);
   };
 
   const switchPath = (p: Path) => {
@@ -241,6 +247,12 @@ export default function LoginScreen() {
             },
             { merge: true },
           );
+          // Responsible person's ID — registered after the account exists; a failure here
+          // never blocks the signup (it can be added from My ID before approval).
+          if (idType && idPhotos.length > 0) {
+            await submitMyIdentityDocument(idType, idPhotos).catch(err =>
+              console.warn('[Login] responsible ID upload failed:', err));
+          }
         } else {
           const displayName = `${firstName.trim()} ${lastName.trim()}`;
           await updateProfile(user, { displayName });
@@ -269,7 +281,7 @@ export default function LoginScreen() {
     }
   }, [
     canSubmit, mode, email, password, firstName, lastName, phone, path, isBtob, businessAccounts,
-    companyName, licenseNumber, responsibleName, docUri, signIn, signOut,
+    companyName, licenseNumber, responsibleName, docUri, idType, idPhotos, signIn, signOut,
   ]);
 
   // Rendered at two different positions in the form depending on path (see below) —
@@ -458,6 +470,47 @@ export default function LoginScreen() {
                   required before you can book.
                 </Text>
               </View>
+              <View style={styles.field}>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={styles.label}>ID of the responsible person</Text>
+                  <Text style={styles.labelOptional}>Optional</Text>
+                </View>
+                <View style={styles.idChips}>
+                  {ID_DOC_TYPES.map(t => (
+                    <TouchableOpacity
+                      key={t.key}
+                      style={[styles.idChip, idType === t.key && styles.idChipOn]}
+                      onPress={() => setIdType(t.key)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.idChipText, idType === t.key && styles.idChipTextOn]}>{t.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.docPicker}
+                  onPress={async () => { const u = await pickIdPhoto('camera'); if (u) setIdPhotos(p => [...p, u].slice(0, 6)); }}
+                  onLongPress={async () => { const u = await pickIdPhoto('gallery'); if (u) setIdPhotos(p => [...p, u].slice(0, 6)); }}
+                  activeOpacity={0.8}
+                >
+                  {idPhotos.length > 0 ? (
+                    <>
+                      <Image source={{ uri: idPhotos[0] }} style={styles.docThumb} />
+                      <Text style={styles.docPickerText}>
+                        {idPhotos.length} photo{idPhotos.length > 1 ? 's' : ''} — tap to add another (long-press: gallery)
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="camera" size={18} color={COLORS.fg3} />
+                      <Text style={styles.docPickerText}>Tap to take a photo of the passport or ID card (long-press: gallery)</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.inputHint}>
+                  Required before we approve your business account — you can also add it later in My ID.
+                </Text>
+              </View>
               {phoneField}
             </>
           )}
@@ -595,6 +648,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  idChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  idChip: { borderRadius: 8, borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white, paddingHorizontal: 10, paddingVertical: 6 },
+  idChipOn: { backgroundColor: COLORS.carbon, borderColor: COLORS.carbon },
+  idChipText: { fontSize: 12, fontWeight: '600', color: COLORS.carbon },
+  idChipTextOn: { color: COLORS.white },
   container: {
     flex: 1,
     backgroundColor: COLORS.porcelain,
