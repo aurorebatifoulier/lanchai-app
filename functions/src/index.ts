@@ -36,6 +36,9 @@ export * from './identity';
 // Residency verification (resident vs tourist deposit) — see residency.ts.
 export * from './residency';
 
+// Retention + automatic deletion of identity / residency documents — see retention.ts.
+export * from './retention';
+
 admin.initializeApp();
 const db = admin.firestore();
 

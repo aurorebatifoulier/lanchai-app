@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 33 Cloud Functions (scheduled, Firestore-triggered and 14 callables, Node 22). The
+  gaps found), 35 Cloud Functions (scheduled, Firestore-triggered and 15 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -683,7 +683,26 @@ a snapshot indefinitely).
   `lib/residency.ts`. Admin: `app/admin/verifications.tsx` (tabs Identity / Residency /
   Business — the old Business accounts list, `business-accounts.tsx` now redirects; detail
   unchanged), `app/admin/residency/[uid].tsx`, `app/admin/identity/[uid].tsx` (folders
-  with no sibling list file). Next phases: retention, business ID + emails.
+  with no sibling list file). "Valid until" uses `AdminDateTimePicker` (`dateOnly`,
+  `minDaysAhead={1}`).
+- **Document retention (phase 4).** Pure rules `functions/src/shared/retention.ts`
+  (`identityPurgeDueMs`, `deletionBlockers`, `rentalInProgress`, `lastRentalEndMs`,
+  `sanitizeRetention`), job + callables `functions/src/retention.ts`. Config
+  `config/residency` {proofRetentionDays 30, idRetentionMonths 6} (Admin → Shop
+  settings → Document retention). Proof of residence: deleted proofRetentionDays after
+  the decision (approved/expired/rejected; a resubmission back to pending stops it),
+  withdrawn → next run; replaced proofs → next run. ID: kept while any rental is
+  pending/confirmed/active, then idRetentionMonths after the last returned/lost rental;
+  never rented → proofRetentionDays after upload; replaced/declined ID files →
+  proofRetentionDays after `supersededAt`. NOTHING is deleted while a blocker exists
+  (active rental, unpaid balance, non-return, unresolved no-show, open/in_review claim)
+  — retried daily. `documentRetentionDaily` (04:00 Vientiane) also writes
+  `identityChecks.purgeDueAt` (shown in My ID). After an ID purge: status none,
+  `idOnFile` false (next booking asks again), `idCheckedVersion` kept. Renter "Delete my
+  ID" → `deleteMyIdentityDocument` (now only if the rule allows, else explains until
+  when); `withdrawResidency` deletes proofs now unless blocked. Every deletion / blocked
+  attempt → `docDeletionLog` (admin read, server write; uid, type, count, reason — never
+  paths). Next phase: business ID + emails.
 
 ## Security follow-ups
 

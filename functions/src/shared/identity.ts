@@ -29,6 +29,8 @@ export interface IdentityRecord {
   /** +1 for every newly registered document — the first-pick-up check is tied to it. */
   version?: number;
   rejection?: { reason: string; text?: string };
+  /** Planned automatic deletion (retention job) — absent while a rental is in progress. */
+  purgeDueAt?: { toMillis: () => number };
 }
 
 /**

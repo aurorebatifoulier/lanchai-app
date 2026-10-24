@@ -4,6 +4,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { FieldValue } from 'firebase-admin/firestore';
 import { validateIdFiles } from './identity';
+import { deleteProofFilesIfAllowed } from './retention';
 import { vteEndOfDayMs, vteDay } from './shared/dates';
 import {
   basisFor, validUntilRequired, isResidencyRejectionKey, RESIDENCY_REJECTION_REASONS,
@@ -39,16 +40,6 @@ async function notify(uid: string, p: { title: string; body: string; icon: strin
 async function notifyAdmins(p: { title: string; body: string; deepLink: string }) {
   const admins = (await db().collection('admins').get()).docs.map(d => d.id);
   await Promise.all(admins.map(uid => notify(uid, { ...p, icon: 'alert', iconColor: 'amber' })));
-}
-
-/** Deletes Storage files (missing ones ignored). Paths only, never logged. */
-export async function deleteStorageFiles(paths: string[]): Promise<number> {
-  const bucket = admin.storage().bucket();
-  let n = 0;
-  for (const p of paths) {
-    try { await bucket.file(p).delete(); n++; } catch { /* already gone */ }
-  }
-  return n;
 }
 
 // ── submitResidencyRequest({ path, proofType?, files? }) — renter ───────────────
@@ -212,15 +203,12 @@ export const withdrawResidency = onCall({ region: REGION }, async request => {
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const reqRef = db().collection('residencyRequests').doc(uid!);
   const [reqSnap, userSnap] = await Promise.all([reqRef.get(), db().collection('users').doc(uid!).get()]);
-  const req = reqSnap.data() ?? {};
-  const files = [...(req.proofFiles ?? []), ...(req.supersededFiles ?? [])] as string[];
-  const deleted = await deleteStorageFiles(files);
+  // Status first; the proof files are deleted now unless a blocker exists (then the
+  // daily retention job deletes them as soon as it's resolved — retention.ts).
   if (reqSnap.exists) {
-    await reqRef.set({
-      status: 'withdrawn', proofFiles: [], supersededFiles: [],
-      proofFilesDeletedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await reqRef.set({ status: 'withdrawn', updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   }
+  const deletedNow = reqSnap.exists ? await deleteProofFilesIfAllowed(uid!, 'renter_request') : true;
   const isResident = userSnap.get('customerType') === 'resident';
   await db().collection('users').doc(uid!).set({
     ...(isResident ? { customerType: 'tourist' } : {}),
@@ -228,8 +216,8 @@ export const withdrawResidency = onCall({ region: REGION }, async request => {
     residencyValidUntil: FieldValue.delete(),
     residencyBasis: FieldValue.delete(),
   }, { merge: true });
-  logger.info('[residency] withdrawn by renter', { uid, filesDeleted: deleted });
-  return { ok: true };
+  logger.info('[residency] withdrawn by renter', { uid, deletedNow });
+  return { ok: true, deletedNow };
 });
 
 // ── adminLegacyResident — staff: residents set before verification existed ──────

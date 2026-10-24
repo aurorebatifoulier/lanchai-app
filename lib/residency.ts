@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { auth } from './auth';
 import { uploadIdPhotos } from './identity';
+import { sanitizeRetention, type RetentionConfig } from '@/functions/src/shared/retention';
 import type { ResidencyPath, ResidencyProofType, ResidencyStatus, ResidencyRejectionKey } from '@/functions/src/shared/residency';
 
 export * from '@/functions/src/shared/residency';
@@ -80,4 +81,19 @@ export async function withdrawMyResidency(): Promise<void> {
   } catch (err) {
     throw callErr(err, 'Could not update. Please try again.');
   }
+}
+
+// ── Retention durations (config/residency — admin only; read by the retention job) ──
+export { RETENTION_DEFAULTS, type RetentionConfig } from '@/functions/src/shared/retention';
+
+export async function getRetentionConfig(): Promise<RetentionConfig> {
+  try {
+    return sanitizeRetention((await getDoc(doc(db, 'config', 'residency'))).data());
+  } catch {
+    return sanitizeRetention(null);
+  }
+}
+
+export async function saveRetentionConfig(cfg: RetentionConfig): Promise<void> {
+  await setDoc(doc(db, 'config', 'residency'), { ...cfg, updatedAt: serverTimestamp() }, { merge: true });
 }

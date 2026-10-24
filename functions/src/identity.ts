@@ -56,6 +56,7 @@ export async function registerIdentityDocument(
     const version = (typeof prev.version === 'number' ? prev.version : 0) + 1;
     const prevFiles: string[] = Array.isArray(prev.files) ? prev.files : [];
     const superseded: string[] = Array.isArray(prev.supersededFiles) ? prev.supersededFiles : [];
+    const newlySuperseded = prevFiles.filter(f => !input.files.includes(f));
     tx.set(ref, {
       status: 'on_file',
       docType: input.docType,
@@ -64,7 +65,11 @@ export async function registerIdentityDocument(
       version,
       uploadedAt: FieldValue.serverTimestamp(),
       rejection: FieldValue.delete(),
-      supersededFiles: [...new Set([...superseded, ...prevFiles.filter(f => !input.files.includes(f))])],
+      supersededFiles: [...new Set([...superseded, ...newlySuperseded])],
+      // Retention clock for replaced files (functions/src/retention.ts).
+      ...(newlySuperseded.length ? { supersededAt: FieldValue.serverTimestamp() } : {}),
+      purgeDueAt: FieldValue.delete(),
+      filesPurgedAt: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.set(db.collection('users').doc(uid), { idOnFile: true, idDocVersion: version }, { merge: true });
@@ -182,6 +187,8 @@ export const adminIdentityAction = onCall({ region: REGION }, async request => {
       rejection: { reason: preset!.key, text },
       files: [],
       supersededFiles: [...new Set([...superseded, ...files])],
+      supersededAt: FieldValue.serverTimestamp(),
+      purgeDueAt: FieldValue.delete(),
       rejectedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });

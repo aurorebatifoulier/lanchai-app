@@ -9,7 +9,8 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { IdUploadPanel } from '@/components/IdUploadPanel';
 import { storage } from '@/lib/firebase';
-import { useMyIdentity, ID_DOC_TYPES } from '@/lib/identity';
+import { useMyIdentity, ID_DOC_TYPES, deleteMyIdentityDocument } from '@/lib/identity';
+import { ConfirmBox } from '@/components/ConfirmBox';
 
 // My ID — the identity document required to rent (passport, ID card or Lao ID card).
 // Also reachable from the booking step and Documents. The renter sees their own photos
@@ -20,6 +21,28 @@ export default function MyIdScreen() {
   const { identity, loading } = useMyIdentity();
   const [replacing, setReplacing] = useState(false);
   const [thumbs, setThumbs] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+
+  // Retention (functions/src/retention.ts): deleted now only if the rule allows it,
+  // otherwise we explain until when it's kept.
+  const requestDelete = async () => {
+    setDeleting(true);
+    setDeleteMsg(null);
+    try {
+      const r = await deleteMyIdentityDocument();
+      setConfirmDelete(false);
+      if (r.deleted) setDeleteMsg('Your ID document has been deleted.');
+      else if (r.reason === 'blocked') setDeleteMsg('We can\u2019t delete it while a rental, a balance or a claim is still open — it will be deleted automatically once resolved.');
+      else if (r.reason === 'rental_in_progress') setDeleteMsg(`We keep it while you have a rental in progress, then ${r.months} months after your last rental, for the security of rentals.`);
+      else setDeleteMsg(`For the security of rentals, it\u2019s kept until ${r.keptUntilMs ? new Date(r.keptUntilMs).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end of the retention period'} — ${r.months} months after your last rental — then deleted automatically.`);
+    } catch (e) {
+      setDeleteMsg((e as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const files = identity?.status === 'on_file' ? identity.files ?? [] : [];
   const filesKey = files.join('|');
@@ -67,13 +90,35 @@ export default function MyIdScreen() {
                   {thumbs.map(u => <Image key={u} source={{ uri: u }} style={s.thumb} />)}
                 </ScrollView>
               )}
+              <Text style={s.retention}>
+                {identity?.purgeDueAt
+                  ? `Deleted automatically on ${new Date(identity.purgeDueAt.toMillis()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, unless you rent again.`
+                  : 'Kept while you have a rental in progress, then deleted automatically some months after your last rental.'}
+              </Text>
               {!replacing && (
-                <TouchableOpacity onPress={() => setReplacing(true)} activeOpacity={0.7}>
-                  <Text style={s.link}>Replace my ID</Text>
-                </TouchableOpacity>
+                <View style={s.linkRow}>
+                  <TouchableOpacity onPress={() => setReplacing(true)} activeOpacity={0.7}>
+                    <Text style={s.link}>Replace my ID</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setConfirmDelete(true)} activeOpacity={0.7}>
+                    <Text style={[s.link, { color: COLORS.danger }]}>Delete my ID</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {confirmDelete && (
+                <ConfirmBox
+                  text="Delete your ID document? You'll need to add it again (or show it at the shop) for your next booking."
+                  confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+                  cancelLabel="Keep"
+                  destructive
+                  confirmDisabled={deleting}
+                  onCancel={() => setConfirmDelete(false)}
+                  onConfirm={requestDelete}
+                />
               )}
             </View>
           )}
+          {deleteMsg && <Text style={s.deleteMsg}>{deleteMsg}</Text>}
 
           {rejected && (
             <View style={[s.card, s.cardWarn]}>
@@ -118,4 +163,7 @@ const s = StyleSheet.create({
   thumbs: { gap: 10, paddingTop: 12 },
   thumb: { width: 84, height: 84, borderRadius: 10, backgroundColor: COLORS.softGray200 },
   link: { fontSize: 13, fontWeight: '800', color: COLORS.carbon, marginTop: 12 },
+  linkRow: { flexDirection: 'row', gap: 20 },
+  retention: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: 17, marginTop: 10 },
+  deleteMsg: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19, marginBottom: 12 },
 });

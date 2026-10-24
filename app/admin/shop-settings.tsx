@@ -30,6 +30,7 @@ import { parseHHMM, buildTimeSlots } from '@/utils/timeSlots';
 import { getGraceHours, saveGraceHours } from '@/lib/latePolicy';
 import EmailSettingsSection from '@/components/EmailSettingsSection';
 import { getFeatureFlags, saveFeatureFlag, FEATURE_DEFAULTS, type FeatureFlags } from '@/lib/features';
+import { getRetentionConfig, saveRetentionConfig, RETENTION_DEFAULTS } from '@/lib/residency';
 
 interface Form {
   name: string;
@@ -166,6 +167,60 @@ function FeatureFlagsSection() {
         </View>
       ))}
       {error && <Text style={s.flagError}>{error}</Text>}
+    </View>
+  );
+}
+
+// Retention of ID / residency documents (config/residency) — read by the daily
+// documentRetentionDaily job. Own Save, independent of the shop form.
+function RetentionSection() {
+  const [days, setDays] = useState(String(RETENTION_DEFAULTS.proofRetentionDays));
+  const [months, setMonths] = useState(String(RETENTION_DEFAULTS.idRetentionMonths));
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    getRetentionConfig().then(c => { setDays(String(c.proofRetentionDays)); setMonths(String(c.idRetentionMonths)); });
+  }, []);
+  const save = async () => {
+    const d = Number(days);
+    const m = Number(months);
+    if (!Number.isInteger(d) || d < 1 || d > 365 || !Number.isInteger(m) || m < 1 || m > 60) {
+      setError('Days: 1 to 365. Months: 1 to 60.');
+      return;
+    }
+    setError(null);
+    setStatus('saving');
+    try {
+      await saveRetentionConfig({ proofRetentionDays: d, idRetentionMonths: m });
+      setStatus('saved');
+    } catch {
+      setStatus('error');
+    }
+  };
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionLabel}>Document retention</Text>
+      <Field
+        label="Proof of residence and declined documents (days)"
+        hint="Deleted this many days after our decision. A never-rented renter's ID follows the same delay after upload."
+        value={days}
+        onChangeText={t => { setDays(t); setStatus('idle'); }}
+        keyboardType="number-pad"
+        editable={status !== 'saving'}
+      />
+      <Field
+        label="ID document after the last rental (months)"
+        hint="Kept while a rental is in progress, then deleted this many months after the last one. Nothing is deleted while a rental, balance, non-return, no-show or claim is open."
+        value={months}
+        onChangeText={t => { setMonths(t); setStatus('idle'); }}
+        keyboardType="number-pad"
+        editable={status !== 'saving'}
+      />
+      {error && <Text style={s.flagError}>{error}</Text>}
+      {status === 'error' && <Text style={s.flagError}>Could not save. Please try again.</Text>}
+      <TouchableOpacity style={s.retentionBtn} onPress={save} disabled={status === 'saving'} activeOpacity={0.85}>
+        <Text style={s.retentionBtnText}>{status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save retention'}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -378,6 +433,8 @@ export default function AdminShopSettingsScreen() {
 
             <FeatureFlagsSection />
 
+            <RetentionSection />
+
             <EmailSettingsSection />
           </>
         )}
@@ -394,6 +451,11 @@ const s = StyleSheet.create({
   },
   flagTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
   flagError: { fontSize: 12, fontWeight: '500', color: COLORS.danger, marginBottom: 8 },
+  retentionBtn: {
+    height: 44, borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.carbon, backgroundColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  retentionBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.carbon },
   root: { flex: 1, backgroundColor: COLORS.porcelain },
 
   header: {

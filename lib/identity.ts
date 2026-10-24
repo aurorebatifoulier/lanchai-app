@@ -69,3 +69,16 @@ export async function submitMyIdentityDocument(docType: IdDocType, uris: string[
     throw new Error((err as { message?: string })?.message || 'Could not save your ID. Please try again.');
   }
 }
+
+/** Renter asks to delete their ID (My ID). Deleted now only when the retention rule
+ *  allows it; otherwise returns when it will be deleted (functions/src/retention.ts). */
+export async function deleteMyIdentityDocument(): Promise<
+  { deleted: true } | { deleted: false; keptUntilMs: number | null; reason: 'blocked' | 'rental_in_progress' | 'retention'; months: number }
+> {
+  try {
+    const res = await httpsCallable(functions, 'deleteMyIdentityDocument')();
+    return res.data as never;
+  } catch (err) {
+    throw new Error((err as { message?: string })?.message || 'Could not delete your ID. Please try again.');
+  }
+}
