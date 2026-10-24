@@ -18,6 +18,7 @@ import {
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
   idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
+  welcomeEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -379,7 +380,7 @@ export async function sendAccountEmail(
   }
 }
 
-export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail };
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail };
 
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
@@ -475,6 +476,7 @@ export const sendTestEmails = onCall(
       // Non-working sample links (oobCode=SAMPLE) — real ones only come from the callables.
       ['auth-password-reset',              passwordResetEmail('https://lanchai-app.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=SAMPLE', shop)],
       ['auth-email-verification',          emailVerificationEmail('https://lanchai-app.firebaseapp.com/__/auth/action?mode=verifyEmail&oobCode=SAMPLE', shop)],
+      ['welcome',                          welcomeEmail(shop, { firstName: name, residentSavingPct: 30 })],
       ['id-verified',                      idVerifiedEmail(shop, { firstName: name, idRetentionMonths: 6 })],
       ['id-declined',                      idDeclinedEmail(shop, { firstName: name, text: 'The photo is blurry or cut off — please add a sharp photo with all four corners visible.' })],
       ['residency-approved',               residencyApprovedEmail(shop, { firstName: name, validUntilMs: pickupAtMs + 300 * DAY })],

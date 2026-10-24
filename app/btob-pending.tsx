@@ -63,7 +63,7 @@ export default function BtobPendingScreen() {
               <Text style={s.docReminderText}>
                 We also need the ID (passport or ID card) of the responsible person before we can approve your account.
               </Text>
-              <TouchableOpacity onPress={() => router.push('/profile/identity')} activeOpacity={0.7} style={{ marginTop: 6 }}>
+              <TouchableOpacity onPress={() => router.push('/profile/id-residency')} activeOpacity={0.7} style={{ marginTop: 6 }}>
                 <Text style={s.docReminderLink}>Add the ID</Text>
               </TouchableOpacity>
             </View>

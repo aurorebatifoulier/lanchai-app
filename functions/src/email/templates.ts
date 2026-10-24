@@ -1002,7 +1002,7 @@ export function emailVerificationEmail(link: string, shop: EmailShop): Rendered 
 
 // ── 9. Identity & residency — never include the documents themselves ─────────────
 // Sent by functions/src/identity.ts (verified / declined) and functions/src/residency.ts
-// (approved / rejected A-B / expired). Links open My ID / Verify my status in the app.
+// (approved / rejected A-B / expired). Links open ID & residency in the app.
 
 export function idVerifiedEmail(shop: EmailShop, ctx: { firstName: string; idRetentionMonths: number }): Rendered {
   return build(
@@ -1027,7 +1027,7 @@ export function idVerifiedEmail(shop: EmailShop, ctx: { firstName: string; idRet
             title: 'How we keep your ID',
             text: `We keep your ID document while you have a rental in progress and for ${plural(ctx.idRetentionMonths, 'month')} after your last rental, then delete it automatically. Only you and our staff can see it.`,
           },
-          { type: 'text', text: 'You can see it or ask us to delete it anytime in the app: Account › My ID.', tone: 'muted', small: true },
+          { type: 'text', text: 'You can see it or ask us to delete it anytime in the app: Account › ID & residency.', tone: 'muted', small: true },
         ],
       },
     ],
@@ -1047,7 +1047,7 @@ export function idDeclinedEmail(shop: EmailShop, ctx: { firstName: string; text:
         pill: 'Identity',
         title: 'Please add a new ID',
         sub: `Hi ${ctx.firstName}`,
-        primary: { label: 'Update my ID', url: appLink('profile/identity') },
+        primary: { label: 'Update my ID', url: appLink('profile/id-residency') },
         secondary: wa ? [{ label: 'Message us', url: wa, icon: 'whatsapp' }] : undefined,
       },
       {
@@ -1083,7 +1083,7 @@ export function residencyApprovedEmail(shop: EmailShop, ctx: { firstName: string
         type: 'card',
         items: [
           { type: 'iconNote', icon: { name: 'shield-check', alt: 'Privacy' }, title: 'Your documents', text: 'We delete your proof of residence shortly after our decision and keep only a short record of the check.' },
-          ...(ctx.validUntilMs ? [{ type: 'text' as const, text: 'Before that date, send updated documents in the app (Account › Verify my status) to keep the reduced deposit.', tone: 'muted' as const, small: true }] : []),
+          ...(ctx.validUntilMs ? [{ type: 'text' as const, text: 'Before that date, send updated documents in the app (Account › ID & residency) to keep the reduced deposit.', tone: 'muted' as const, small: true }] : []),
         ],
       },
     ],
@@ -1115,7 +1115,7 @@ export function residencyRejectedEmail(
           pill: 'Resident status',
           title: 'Almost there — we just need one more thing',
           sub: `Hi ${ctx.firstName}`,
-          primary: { label: 'Update my documents', url: appLink('profile/residency') },
+          primary: { label: 'Update my documents', url: appLink('profile/id-residency') },
           secondary: message.length ? message : undefined,
         },
         { type: 'card', title: 'What we need', items: inner },
@@ -1154,11 +1154,52 @@ export function residencyExpiredEmail(shop: EmailShop, ctx: { firstName: string 
         pill: 'Resident status',
         title: 'Your resident status has expired',
         sub: `Hi ${ctx.firstName} — update your documents to keep the reduced deposit on your next bookings.`,
-        primary: { label: 'Update my documents', url: appLink('profile/residency') },
+        primary: { label: 'Update my documents', url: appLink('profile/id-residency') },
       },
       {
         type: 'card',
         items: [{ type: 'text', text: 'Until then, the standard deposit applies to new bookings. Bookings you already made keep their deposit.', tone: 'muted' }],
+      },
+    ],
+    shop,
+  );
+}
+
+// ── 10. Welcome — once, after the email address is verified (sendWelcomeEmail) ─────
+export function welcomeEmail(shop: EmailShop, ctx: { firstName: string; residentSavingPct: number | null }): Rendered {
+  return build(
+    'Welcome to LANCHAI',
+    'Rent. Return. Repeat. — here\u2019s how it works',
+    'Welcome to LANCHAI',
+    [
+      {
+        type: 'hero',
+        pill: 'Welcome',
+        title: 'Welcome to LANCHAI',
+        sub: `Hi ${ctx.firstName} — why buy it when you can rent it?`,
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+      },
+      {
+        type: 'card',
+        title: 'How it works',
+        items: [
+          { type: 'bullet', text: 'Book in the app — nothing to pay online', icon: { name: 'shopping-bag', alt: 'Book' } },
+          { type: 'bullet', text: 'Pick up at the shop — pay there, bring your ID', icon: { name: 'map-pin', alt: 'Pick up' } },
+          { type: 'bullet', text: 'Return and get your deposit back on the spot', icon: { name: 'check-circle', alt: 'Return' } },
+        ],
+      },
+      {
+        type: 'card',
+        title: 'Live in Vientiane? Get a lower deposit',
+        items: [
+          {
+            type: 'text',
+            text: ctx.residentSavingPct
+              ? `Residents pay a ${ctx.residentSavingPct}% lower deposit. Verify your status once in the app.`
+              : 'Residents pay a lower deposit. Verify your status once in the app.',
+          },
+          { type: 'button', label: 'Verify my status', url: appLink('profile/id-residency') },
+        ],
       },
     ],
     shop,

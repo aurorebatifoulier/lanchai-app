@@ -3,7 +3,7 @@
 // daily expiry, emails). Dependency-free (see latePenalty.ts).
 //
 // Two paths:
-//   lao_national → the Lao ID card ON FILE as the identity document (My ID) is enough.
+//   lao_national → the Lao ID card ON FILE as the identity document (ID & residency) is enough.
 //   foreign      → an identity document on file (any type) + a proof of residence:
 //                  visa / residence permit, or a lease contract (photos, idDocs/{uid}/).
 // Data: residencyRequests/{uid} (server-written; owner + admin read); decision fields on
@@ -55,3 +55,19 @@ export const isResidencyRejectionKey = (v: unknown): v is ResidencyRejectionKey 
 
 /** Days of grace given to legacy residents (resident without any verification). */
 export const LEGACY_RESIDENT_GRACE_DAYS = 30;
+
+/**
+ * Resident vs tourist deposit difference, in points of %, from
+ * config/loyalty.depositPercentByType (e.g. tourist 100 / resident 70 → 30) — the
+ * "pay a 30% lower deposit" promo (app + welcome email). null when not configured or
+ * not lower, so the promo is hidden rather than wrong.
+ */
+export function residentDepositSavingPercent(
+  config: { depositPercentByType?: { tourist?: unknown; resident?: unknown } } | null | undefined,
+): number | null {
+  const t = config?.depositPercentByType?.tourist;
+  const r = config?.depositPercentByType?.resident;
+  if (typeof t !== 'number' || typeof r !== 'number') return null;
+  const diff = Math.round(t - r);
+  return diff > 0 ? diff : null;
+}

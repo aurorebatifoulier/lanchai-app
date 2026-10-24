@@ -28,6 +28,7 @@ import CropScreen from '@/components/CropScreen';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
 import { TIER_LABELS } from '@/lib/loyalty';
+import { ResidentPromoCard } from '@/components/ResidentPromo';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -272,20 +273,31 @@ export default function AccountScreen() {
         <View style={styles.profileInfo}>
           <Text style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit>{headerName}</Text>
 
-          {/* Account type badge — BtoB shows verification status instead */}
+          {/* Account type badge — BtoB shows verification status instead. Tappable:
+              business → business document; everyone else → ID & residency. */}
           {btobBadge ? (
-            <View style={[styles.btobStatusBadge, { backgroundColor: btobBadge.bg, borderColor: btobBadge.border }]}>
+            <TouchableOpacity
+              style={[styles.btobStatusBadge, { backgroundColor: btobBadge.bg, borderColor: btobBadge.border }]}
+              onPress={() => router.push('/profile/business-document')}
+              activeOpacity={0.75}
+            >
               <Feather name={btobBadge.icon} size={11} color={btobBadge.text} />
               <Text style={[styles.typeBadgeText, { color: btobBadge.text }]}>
                 {btobBadge.label}
               </Text>
-            </View>
+              <Feather name="chevron-right" size={11} color={btobBadge.text} />
+            </TouchableOpacity>
           ) : (
-            <View style={[styles.typeBadge, { backgroundColor: ctConfig.badgeBg }]}>
+            <TouchableOpacity
+              style={[styles.typeBadge, styles.typeBadgeRow, { backgroundColor: ctConfig.badgeBg }]}
+              onPress={() => router.push(profile?.customerType === 'business' ? '/profile/business-document' : '/profile/id-residency')}
+              activeOpacity={0.75}
+            >
               <Text style={[styles.typeBadgeText, { color: ctConfig.badgeText }]}>
                 {ctConfig.label}
               </Text>
-            </View>
+              <Feather name="chevron-right" size={11} color={ctConfig.badgeText} />
+            </TouchableOpacity>
           )}
 
           {/* Location / member since */}
@@ -363,6 +375,9 @@ export default function AccountScreen() {
           </ProfileSection>
         )}
 
+        {/* ── Resident promo (unverified tourists, dismissible) ── */}
+        <ResidentPromoCard style={{ marginTop: 18 }} />
+
         {/* ── Account section ── */}
         <ProfileSection title="Account">
           <ProfileRow
@@ -381,19 +396,14 @@ export default function AccountScreen() {
               onPress={() => router.push('/profile/business-document')}
             />
           )}
-          {profile?.customerType !== 'business' && (
-            <ProfileRow
-              icon="home"
-              title="Verify my status"
-              sub={profile?.customerType === 'resident' ? 'Resident' : 'Tourist · residents pay a reduced deposit'}
-              onPress={() => router.push('/profile/residency')}
-            />
-          )}
           <ProfileRow
             icon="credit-card"
-            title="My ID"
-            sub={profile?.idOnFile ? 'On file' : 'Needed to rent'}
-            onPress={() => router.push('/profile/identity')}
+            title="ID & residency"
+            sub={[
+              profile?.idOnFile ? 'ID on file' : 'ID needed to rent',
+              profile?.customerType === 'business' ? null : profile?.customerType === 'resident' ? 'Resident' : 'Tourist',
+            ].filter(Boolean).join(' · ')}
+            onPress={() => router.push('/profile/id-residency')}
           />
           <ProfileRow
             icon="map-pin"
@@ -637,6 +647,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     color: COLORS.porcelain,
   },
+  typeBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   typeBadge: {
     alignSelf: 'flex-start',
     borderRadius: 6,

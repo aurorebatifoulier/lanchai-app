@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useLoyaltyConfig } from './loyalty';
 import { doc, getDoc, onSnapshot, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { auth } from './auth';
 import { uploadIdPhotos } from './identity';
 import { sanitizeRetention, type RetentionConfig } from '@/functions/src/shared/retention';
-import type { ResidencyPath, ResidencyProofType, ResidencyStatus, ResidencyRejectionKey } from '@/functions/src/shared/residency';
+import { residentDepositSavingPercent, type ResidencyPath, type ResidencyProofType, type ResidencyStatus, type ResidencyRejectionKey } from '@/functions/src/shared/residency';
 
 export * from '@/functions/src/shared/residency';
 
@@ -96,4 +97,25 @@ export async function getRetentionConfig(): Promise<RetentionConfig> {
 
 export async function saveRetentionConfig(cfg: RetentionConfig): Promise<void> {
   await setDoc(doc(db, 'config', 'residency'), { ...cfg, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * "Live in Laos? Residents pay a {X}% lower deposit" — X, or null to HIDE the promo:
+ * residents, business accounts, a pending residency request, signed out, or no deposit
+ * difference configured. Live (users doc + request), so it disappears as soon as a
+ * request is sent.
+ */
+export function useResidentPromo(): number | null {
+  const config = useLoyaltyConfig();
+  const { loading, request, customerType } = useMyResidency();
+  const [accountType, setAccountType] = useState<string | null>(null);
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    return onSnapshot(doc(db, 'users', uid), s => setAccountType((s.get('accountType') as string) ?? null), () => {});
+  }, []);
+  if (loading || !auth.currentUser) return null;
+  if (customerType === 'resident' || customerType === 'business' || accountType === 'btob') return null;
+  if (request?.status === 'pending') return null;
+  return residentDepositSavingPercent(config);
 }

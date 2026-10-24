@@ -6,6 +6,9 @@ import { BREVO_API_KEY, REGION } from './email/config';
 import { sendEmail } from './email/send';
 import { getEmailShop } from './email/context';
 import { passwordResetEmail, emailVerificationEmail } from './email/templates';
+import { sendAccountEmail, welcomeEmail } from './email/triggers';
+import { residentDepositSavingPercent } from './shared/residency';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Branded password-reset / email-verification emails. The Firebase action links are
 // generated with the Admin SDK (default action page, lanchai-app.firebaseapp.com/__/auth/
@@ -119,4 +122,29 @@ export const requestEmailVerification = onCall({ region: REGION, secrets: [BREVO
     throw new HttpsError('unavailable', 'Could not send the email. Please try again.', { code: 'send-failed' });
   }
   return { ok: true };
+});
+
+// ── sendWelcomeEmail() — once, after the email address is verified ──────────────
+// There's no server-side event when Firebase Auth flips emailVerified, so the app calls
+// this when it sees the account verified (app/(tabs)/_layout.tsx); the server re-checks
+// emailVerified in Auth and claims users.welcomeEmailSentAt in a transaction (once).
+// Business (BtoB) accounts are skipped — they get the business approval email.
+export const sendWelcomeEmail = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
+  const authUser = await admin.auth().getUser(uid);
+  if (!authUser.emailVerified) return { sent: false, reason: 'not-verified' };
+  const userRef = db().collection('users').doc(uid);
+  const claimed = await db().runTransaction(async tx => {
+    const snap = await tx.get(userRef);
+    if (snap.get('welcomeEmailSentAt') || snap.get('accountType') === 'btob') return false;
+    tx.set(userRef, { welcomeEmailSentAt: FieldValue.serverTimestamp() }, { merge: true });
+    return true;
+  });
+  if (!claimed) return { sent: false, reason: 'already-sent' };
+  const loyalty = (await db().collection('config').doc('loyalty').get()).data();
+  const pct = residentDepositSavingPercent(loyalty as never);
+  const result = await sendAccountEmail(uid, (shop, r) => welcomeEmail(shop, { firstName: r.firstName, residentSavingPct: pct }), 'welcome');
+  logger.info('[authEmails] welcome', { uid, result });
+  return { sent: result === 'sent' };
 });

@@ -7,7 +7,7 @@ import { COLORS } from '@/constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
-import { requestEmailVerification } from '@/lib/authEmails';
+import { requestEmailVerification, requestWelcomeEmail } from '@/lib/authEmails';
 import { db } from '@/lib/firebase';
 import { subscribeToUnreadInboxCount } from '@/lib/chat';
 
@@ -109,6 +109,13 @@ export default function TabLayout() {
     }
     prevEmailVerifiedRef.current = emailVerified;
   }, [emailVerified, sendVerificationNotif]);
+
+  // Welcome email once the address is verified — also covers a verification done while
+  // the app was closed (no flip seen). Idempotent server-side (users.welcomeEmailSentAt).
+  useEffect(() => {
+    const cu = auth.currentUser;
+    if (emailVerified && cu) requestWelcomeEmail(cu.uid);
+  }, [emailVerified]);
 
   const handleResend = useCallback(async () => {
     const cu = auth.currentUser;

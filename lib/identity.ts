@@ -70,7 +70,7 @@ export async function submitMyIdentityDocument(docType: IdDocType, uris: string[
   }
 }
 
-/** Renter asks to delete their ID (My ID). Deleted now only when the retention rule
+/** Renter asks to delete their ID (ID & residency). Deleted now only when the retention rule
  *  allows it; otherwise returns when it will be deleted (functions/src/retention.ts). */
 export async function deleteMyIdentityDocument(): Promise<
   { deleted: true } | { deleted: false; keptUntilMs: number | null; reason: 'blocked' | 'rental_in_progress' | 'retention'; months: number }

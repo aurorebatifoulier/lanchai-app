@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 35 Cloud Functions (scheduled, Firestore-triggered and 15 callables, Node 22). The
+  gaps found), 36 Cloud Functions (scheduled, Firestore-triggered and 16 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -715,6 +715,22 @@ a snapshot indefinitely).
   REQUIRED before approval (admin review shows `<RenterIdCard>`, Approve disabled
   without it) and before `resubmitBusinessApplication` (`id-required`); reminders on
   `btob-pending.tsx` and `business-document.tsx`.
+
+- **ID & residency — one screen + resident promo (2026-10-24).** `app/profile/id-residency.tsx`
+  = `<IdentitySection>` + `<ResidencySection>` (`components/profile/`). The ONLY entry is
+  Account → "ID & residency" (+ the header badge: Tourist/Resident → this screen,
+  business → business document). `/profile/identity` and `/profile/residency` are
+  redirects (old emails/notifications); emails/notifications link `profile/id-residency`
+  (hosting allow-list keeps the old paths too). Documents = rentals + legal only.
+  Promo "Residents pay a X% lower deposit": X = `residentDepositSavingPercent()`
+  (`shared/residency.ts`, tourist − resident from config/loyalty); `useResidentPromo()`
+  hides it for residents, business/BtoB, pending requests, or no difference.
+  `<ResidentPromoHint>` under the deposit in booking summary + bag checkout,
+  `<ResidentPromoCard>` on Account (dismissal per user in AsyncStorage — no Firestore
+  field). Welcome email `welcomeEmail` via the `sendWelcomeEmail` callable: the app calls
+  it when it sees the email verified (`(tabs)/_layout.tsx`, once per device), the server
+  re-checks Auth `emailVerified` and claims `users.welcomeEmailSentAt` (once; BtoB
+  skipped) — there is no server-side event for email verification.
 
 ## Security follow-ups
 

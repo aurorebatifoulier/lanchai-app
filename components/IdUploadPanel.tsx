@@ -7,7 +7,7 @@ import {
 } from '@/lib/identity';
 
 // Identity document upload: document type, one or more pages (camera or gallery),
-// then "Save my ID". Used by My ID (app/profile/identity.tsx) and the booking step
+// then "Save my ID". Used by the ID & residency screen (components/profile/IdentitySection.tsx) and the booking step
 // (components/IdRequirementStep.tsx). Photos never leave this flow except to Storage.
 export function IdUploadPanel({ onDone, submitLabel = 'Save my ID' }: { onDone: () => void; submitLabel?: string }) {
   const [docType, setDocType] = useState<IdDocType | null>(null);

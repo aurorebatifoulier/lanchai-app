@@ -248,7 +248,7 @@ export default function LoginScreen() {
             { merge: true },
           );
           // Responsible person's ID — registered after the account exists; a failure here
-          // never blocks the signup (it can be added from My ID before approval).
+          // never blocks the signup (it can be added from ID & residency before approval).
           if (idType && idPhotos.length > 0) {
             await submitMyIdentityDocument(idType, idPhotos).catch(err =>
               console.warn('[Login] responsible ID upload failed:', err));
@@ -508,7 +508,7 @@ export default function LoginScreen() {
                   )}
                 </TouchableOpacity>
                 <Text style={styles.inputHint}>
-                  Required before we approve your business account — you can also add it later in My ID.
+                  Required before we approve your business account — you can also add it later in Account › ID & residency.
                 </Text>
               </View>
               {phoneField}

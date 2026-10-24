@@ -1,4 +1,4 @@
-// Identity document required to rent — shared by the app (My ID, booking step, admin)
+// Identity document required to rent — shared by the app (ID & residency, booking step, admin)
 // and the Cloud Functions (submitIdentityDocument, createReservations). Dependency-free
 // (see latePenalty.ts). Data: identityChecks/{uid} (server-written; owner + admin read)
 // + users/{uid}.idOnFile / idDocVersion (server-written, outside the users allow-list).

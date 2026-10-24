@@ -61,9 +61,9 @@ export const submitResidencyRequest = onCall({ region: REGION }, async request =
   if (user.customerType === 'business' || user.accountType === 'btob') {
     fail('business-account', 'Business accounts don’t need resident status.');
   }
-  if (idSnap.get('status') !== 'on_file') fail('id-required', 'Add your ID document first (My ID).');
+  if (idSnap.get('status') !== 'on_file') fail('id-required', 'Add your ID document first (ID document card above).');
   if (path === 'lao_national' && idSnap.get('docType') !== 'lao_id') {
-    fail('lao-id-required', 'Add your Lao ID card as your ID document first (My ID).');
+    fail('lao-id-required', 'Add your Lao ID card as your ID document first (ID document card above).');
   }
   const prev = reqSnap.data() ?? {};
   if (prev.status === 'pending') fail('already-pending', 'Your request is already being reviewed.');
@@ -169,7 +169,7 @@ export const reviewResidency = onCall({ region: REGION, secrets: [BREVO_API_KEY]
     await notify(uid, {
       title: 'You’re verified as a resident',
       body: `Your reduced deposit applies to your next bookings${validUntil ? ` — valid until ${vteDay(validUntil.toMillis())}` : ''}.`,
-      icon: 'check', iconColor: 'green', deepLink: '/profile/residency',
+      icon: 'check', iconColor: 'green', deepLink: '/profile/id-residency',
     });
     await sendAccountEmail(uid, (shop, r) => residencyApprovedEmail(shop, { firstName: r.firstName, validUntilMs: validUntil?.toMillis() ?? null }), 'residency-approved');
   } else if (d.decision === 'reject') {
@@ -189,7 +189,7 @@ export const reviewResidency = onCall({ region: REGION, secrets: [BREVO_API_KEY]
     await notify(uid, {
       title: fixable ? 'Resident status: one more thing' : 'Resident status not approved',
       body: fixable ? 'Please update your documents — see what we need.' : 'We couldn’t approve your resident status.',
-      icon: 'alert', iconColor: 'amber', deepLink: '/profile/residency',
+      icon: 'alert', iconColor: 'amber', deepLink: '/profile/id-residency',
     });
     await sendAccountEmail(uid, (shop, r) => residencyRejectedEmail(shop, {
       firstName: r.firstName, reason: d.reason as never, text: text || null, fixable,
@@ -242,7 +242,7 @@ export const adminLegacyResident = onCall({ region: REGION }, async request => {
     await notify(uid, {
       title: 'Please verify your resident status',
       body: `Send your documents by ${vteDay(until.toMillis())} to keep your reduced deposit.`,
-      icon: 'alert', iconColor: 'amber', deepLink: '/profile/residency',
+      icon: 'alert', iconColor: 'amber', deepLink: '/profile/id-residency',
     });
   } else if (d.action === 'tourist') {
     await ref.set({
@@ -273,7 +273,7 @@ export const residencyDaily = onSchedule(
       await notify(u.id, {
         title: 'Your resident status has expired',
         body: 'Update your documents to keep the reduced deposit on your next bookings.',
-        icon: 'alert', iconColor: 'amber', deepLink: '/profile/residency',
+        icon: 'alert', iconColor: 'amber', deepLink: '/profile/id-residency',
       });
       await sendAccountEmail(u.id, (shop, r) => residencyExpiredEmail(shop, { firstName: r.firstName }), 'residency-expired');
       logger.info('[residency] expired', { uid: u.id });

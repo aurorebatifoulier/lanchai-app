@@ -276,7 +276,7 @@ export default function AdminBusinessAccountDetailScreen() {
             <ConfirmBox
               text={idOnFile
                 ? 'Approve this business account? This sets their account type to Business (0% deposit applies) and lets them use the app immediately.'
-                : 'The responsible person\u2019s ID is required before approval — add it (photo at the counter) or ask them to upload it in My ID.'}
+                : 'The responsible person\u2019s ID is required before approval — add it (photo at the counter) or ask them to upload it in ID & residency.'}
               confirmLabel="Approve"
               cancelLabel="Cancel"
               confirmDisabled={staffName.trim().length === 0 || !idOnFile}

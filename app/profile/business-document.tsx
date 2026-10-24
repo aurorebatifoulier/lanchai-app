@@ -47,7 +47,7 @@ export default function BusinessDocumentScreen() {
   const [responsibleName, setResponsibleName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  // Responsible person's ID (My ID) — required before approval / resubmission.
+  // Responsible person's ID (ID & residency) — required before approval / resubmission.
   const { identity } = useMyIdentity();
   const idOnFile = identity?.status === 'on_file';
 
@@ -88,7 +88,7 @@ export default function BusinessDocumentScreen() {
       setSubmitError(
         code === 'missing-fields' ? 'Please fill in every company field.'
         : code === 'document-required' ? 'Please attach your registration document first.'
-        : code === 'id-required' ? 'Please add the responsible person\u2019s ID first (My ID).'
+        : code === 'id-required' ? 'Please add the responsible person\u2019s ID first (Account › ID & residency).'
         : code === 'final-rejection' || code === 'not-rejected' ? 'This application can’t be resubmitted. Please message us.'
         : 'Could not resubmit. Please try again.',
       );
@@ -183,7 +183,7 @@ export default function BusinessDocumentScreen() {
         )}
 
         <Text style={s.fieldLabel}>Responsible person&apos;s ID</Text>
-        <TouchableOpacity style={s.docPicker} onPress={() => router.push('/profile/identity')} activeOpacity={0.8}>
+        <TouchableOpacity style={s.docPicker} onPress={() => router.push('/profile/id-residency')} activeOpacity={0.8}>
           <Feather name={idOnFile ? 'check-circle' : 'credit-card'} size={18} color={idOnFile ? COLORS.success : COLORS.fg3} />
           <Text style={s.docPickerText}>
             {idOnFile

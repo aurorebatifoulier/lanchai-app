@@ -1,5 +1,5 @@
 // Retention of identity and residency documents — pure rules shared by the daily job
-// and the renter-facing callables (functions/src/retention.ts) and the app (My ID shows
+// and the renter-facing callables (functions/src/retention.ts) and the app (ID & residency shows
 // the planned deletion date). Dependency-free (see latePenalty.ts).
 //
 //   Proof of residence (visa, permit, lease): deleted proofRetentionDays after the

@@ -89,7 +89,7 @@ export async function deleteProofFilesIfAllowed(uid: string, reason: DeletionRea
 
 // ── documentRetentionDaily — 04:00 Vientiane ─────────────────────────────────────
 // Equality-free collection scans (small collections) + per-renter equality queries —
-// no composite index. Also refreshes identityChecks.purgeDueAt (shown in My ID).
+// no composite index. Also refreshes identityChecks.purgeDueAt (shown in ID & residency).
 export const documentRetentionDaily = onSchedule(
   { schedule: '0 4 * * *', timeZone: 'Asia/Vientiane', region: REGION },
   async () => {
@@ -170,7 +170,7 @@ export const documentRetentionDaily = onSchedule(
   },
 );
 
-// ── deleteMyIdentityDocument() — renter asks to delete their ID (My ID) ──────────
+// ── deleteMyIdentityDocument() — renter asks to delete their ID (ID & residency) ──────────
 // Deleted now only when the retention rule already allows it and nothing blocks it;
 // otherwise returns the planned date (or "kept while a rental is in progress").
 export const deleteMyIdentityDocument = onCall({ region: REGION }, async request => {

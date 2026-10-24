@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import { sendPasswordResetEmail, sendEmailVerification, type User } from 'firebase/auth';
 import { auth } from '@/lib/auth';
 import { functions } from '@/lib/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Branded account-security emails, sent server-side (functions/src/authEmails.ts).
 // If the callable can't do it (unreachable, send failure), fall back to Firebase Auth's
@@ -38,5 +39,20 @@ export async function requestEmailVerification(user: User): Promise<void> {
   } catch (err) {
     if (isRateLimited(err)) throw new AuthEmailRateLimitError();
     await sendEmailVerification(user);
+  }
+}
+
+/**
+ * Welcome email, once the email address is verified. Asked once per device and user
+ * (AsyncStorage) — the server re-checks emailVerified and sends it only once per account.
+ */
+export async function requestWelcomeEmail(uid: string): Promise<void> {
+  const key = `welcomeEmailRequested:${uid}`;
+  try {
+    if ((await AsyncStorage.getItem(key)) === '1') return;
+    await httpsCallable(functions, 'sendWelcomeEmail')();
+    await AsyncStorage.setItem(key, '1');
+  } catch {
+    /* retried at the next launch */
   }
 }

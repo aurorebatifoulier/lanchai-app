@@ -212,7 +212,7 @@ export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_
       type: 'account', icon: 'alert', iconColor: 'coral',
       title: 'Please add a new ID',
       body: `${text} New bookings are paused until then.`,
-      deepLink: '/profile/identity', createdAt: FieldValue.serverTimestamp(), readAt: null,
+      deepLink: '/profile/id-residency', createdAt: FieldValue.serverTimestamp(), readAt: null,
     });
     await sendAccountEmail(renterId, (shop, r) => idDeclinedEmail(shop, { firstName: r.firstName, text }), 'id-declined');
   } else {
