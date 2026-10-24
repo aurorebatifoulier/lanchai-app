@@ -27,8 +27,8 @@ import { storage } from '@/lib/firebase';
 import CropScreen from '@/components/CropScreen';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
-import { TIER_LABELS } from '@/lib/loyalty';
 import { ResidentPromoCard } from '@/components/ResidentPromo';
+import { LoyaltyCard } from '@/components/LoyaltyCard';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -331,19 +331,6 @@ export default function AccountScreen() {
               </Text>
             </View>
 
-            {/* TIER — loyalty status; BtoB accounts don't participate, regardless of
-                approval status (isBusinessAccount only becomes true once approved) */}
-            {!isBtob && (
-              <View style={[styles.statCard, { flex: 1 }]}>
-                <Text style={styles.statEye}>Tier</Text>
-                <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>
-                  {TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
-                </Text>
-                <Text style={styles.statSub}>
-                  {profile?.loyaltyPoints ? `${profile.loyaltyPoints} pts` : 'Rent to earn points'}
-                </Text>
-              </View>
-            )}
           </View>
 
           {/* SAVED — computed from rentals vs. retail price; full-width row of its own
@@ -361,19 +348,9 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        {/* ── Loyalty section — hidden entirely for BtoB accounts ── */}
-        {!isBtob && (
-          <ProfileSection title="Loyalty">
-            <ProfileRow
-              icon="award"
-              title={`${TIER_LABELS[profile?.loyaltyTier ?? 'bronze']} tier`}
-              sub={profile?.loyaltyPoints ? `${profile.loyaltyPoints} points` : 'Rent to start earning'}
-              iconBg={COLORS.amber}
-              iconColor={COLORS.carbon}
-              onPress={() => router.push('/profile/loyalty')}
-            />
-          </ProfileSection>
-        )}
+        {/* ── Loyalty card (replaces the old Tier tile + Loyalty row) — hidden for
+            excluded / business accounts inside the component ── */}
+        <LoyaltyCard />
 
         {/* ── Resident promo (unverified tourists, dismissible) ── */}
         <ResidentPromoCard style={{ marginTop: 18 }} />

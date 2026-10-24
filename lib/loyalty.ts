@@ -8,6 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 // the receipt email) — re-exported here so app imports stay unchanged.
 export {
   TIER_ORDER, TIER_LABELS, pointsToNextTier, nextTierName, isLoyaltyExcluded, DEFAULT_REVIEW_REWARD_POINTS,
+  DEFAULT_TYPICAL_RENTAL_POINTS, DEFAULT_REFERRAL_REWARD_POINTS, tierForPoints, tierProgress,
+  defaultTierPerks, tierPerksText, loyaltyPointsFor, type TierProgress, type LoyaltyTierKey, type PaidTier,
 } from '@/functions/src/shared/loyalty';
 
 export interface LoyaltyConfig {
@@ -21,6 +23,10 @@ export interface LoyaltyConfig {
   };
   damagedChargePercent?: number; // default % of replacement value charged for "Damaged" severity — admin-adjustable; "Unusable" is always a fixed 100%, not configurable
   reviewRewardPoints?: number;   // points per review (any rating), credited server-side by applyReviewReward — default DEFAULT_REVIEW_REWARD_POINTS
+  typicalRentalPoints?: number;  // fallback points of one rental for new renters (loyalty card copy) — default 20
+  perksTextByTier?: { silver?: string; gold?: string; platinum?: string }; // optional custom "Unlocks …" line per tier
+  referralRewardPoints?: number; // points for both sides after the referred renter's first returned rental — default 50
+  referralMonthlyCap?: number;   // max credited referrals per referrer per month (0 / unset = no cap)
   updatedAt?: Timestamp;
 }
 

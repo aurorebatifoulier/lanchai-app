@@ -76,3 +76,72 @@ export function applyLoyaltyPointsChange(
   const newTier: LoyaltyTierKey = [...order].reverse().find(t => newPoints >= t.threshold)?.tier ?? 'bronze';
   return { newPoints, newTier, crossed };
 }
+
+// ── Progress, perks and defaults for the loyalty UI (My Account card, tier-up modal,
+// booking reminder, Loyalty screen). Pure — shared by the app and the functions.
+
+/** Fallback points of a typical rental (new renters) — config/loyalty.typicalRentalPoints. */
+export const DEFAULT_TYPICAL_RENTAL_POINTS = 20;
+/** Points for both sides when a referred renter's first rental is returned. */
+export const DEFAULT_REFERRAL_REWARD_POINTS = 50;
+
+export function tierForPoints(points: number, thresholds: TierThresholds | null | undefined): LoyaltyTierKey {
+  if (!thresholds) return 'bronze';
+  if (points >= thresholds.platinum) return 'platinum';
+  if (points >= thresholds.gold) return 'gold';
+  if (points >= thresholds.silver) return 'silver';
+  return 'bronze';
+}
+
+const tierFloor = (tier: LoyaltyTierKey, t: TierThresholds) =>
+  tier === 'bronze' ? 0 : t[tier];
+
+export interface TierProgress {
+  current: LoyaltyTierKey;
+  next: LoyaltyTierKey | null;
+  /** Points to reach `next` (null at the top tier). */
+  remaining: number | null;
+  /** 0..1 of the way from the current tier's threshold to the next one (1 at the top). */
+  fraction: number;
+}
+
+export function tierProgress(points: number, config: { thresholds?: TierThresholds } | null | undefined): TierProgress | null {
+  const t = config?.thresholds;
+  if (!t) return null;
+  const current = tierForPoints(points, t);
+  const next = TIER_ORDER[TIER_ORDER.indexOf(current) + 1] ?? null;
+  if (!next) return { current, next: null, remaining: null, fraction: 1 };
+  const floor = tierFloor(current, t);
+  const ceiling = t[next as PaidTier];
+  const span = Math.max(1, ceiling - floor);
+  return { current, next, remaining: Math.max(0, ceiling - points), fraction: Math.min(1, Math.max(0, (points - floor) / span)) };
+}
+
+export interface PerksConfig extends LoyaltyChangeConfig {
+  depositPercentByType?: { resident?: number; residentPlatinum?: number };
+  /** Admin-editable perks line per tier (Loyalty settings) — overrides the default. */
+  perksTextByTier?: Partial<Record<PaidTier, string>>;
+}
+
+/**
+ * Default "what this tier unlocks", built ONLY from the real config: the tier coupon %,
+ * plus a lower deposit for Platinum residents (only shown to residents, and only if
+ * residentPlatinum < resident). Never mentions early access — that's per product.
+ */
+export function defaultTierPerks(tier: PaidTier, cfg: PerksConfig | null | undefined, isResident: boolean): string {
+  const parts: string[] = [];
+  const pct = cfg?.couponPercentByTier?.[tier];
+  if (typeof pct === 'number' && pct > 0) parts.push(`a ${pct}% coupon`);
+  const dep = cfg?.depositPercentByType;
+  if (tier === 'platinum' && isResident && typeof dep?.residentPlatinum === 'number'
+    && typeof dep?.resident === 'number' && dep.residentPlatinum < dep.resident) {
+    parts.push('a lower deposit');
+  }
+  return parts.length ? `Unlocks ${parts.join(' and ')}` : `Unlocks ${TIER_LABELS[tier]} status`;
+}
+
+/** The perks line shown for a tier: the admin's text when set, else the default. */
+export function tierPerksText(tier: PaidTier, cfg: PerksConfig | null | undefined, isResident: boolean): string {
+  const custom = cfg?.perksTextByTier?.[tier]?.trim();
+  return custom || defaultTierPerks(tier, cfg, isResident);
+}

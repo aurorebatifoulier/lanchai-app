@@ -16,7 +16,7 @@ import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firest
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { DEFAULT_REVIEW_REWARD_POINTS, type LoyaltyConfig } from '@/lib/loyalty';
+import { DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_TYPICAL_RENTAL_POINTS, defaultTierPerks, type LoyaltyConfig } from '@/lib/loyalty';
 
 function fmtDate(ts: Timestamp | undefined): string {
   if (!ts) return '—';
@@ -44,6 +44,11 @@ export default function AdminLoyaltyScreen() {
   const [touristDeposit,           setTouristDeposit]           = useState('');
   const [damagedChargePercent,     setDamagedChargePercent]     = useState('');
   const [reviewRewardPoints,       setReviewRewardPoints]       = useState(String(DEFAULT_REVIEW_REWARD_POINTS));
+  const [typicalRentalPoints,      setTypicalRentalPoints]      = useState(String(DEFAULT_TYPICAL_RENTAL_POINTS));
+  // Optional custom "Unlocks …" line per tier (empty = default built from the config).
+  const [perkSilver,   setPerkSilver]   = useState('');
+  const [perkGold,     setPerkGold]     = useState('');
+  const [perkPlatinum, setPerkPlatinum] = useState('');
 
   const [saving,   setSaving]   = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -67,6 +72,10 @@ export default function AdminLoyaltyScreen() {
           setTouristDeposit(String(data.depositPercentByType.tourist));
           setDamagedChargePercent(String(data.damagedChargePercent ?? 60));
           setReviewRewardPoints(String(data.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS));
+          setTypicalRentalPoints(String(data.typicalRentalPoints ?? DEFAULT_TYPICAL_RENTAL_POINTS));
+          setPerkSilver(data.perksTextByTier?.silver ?? '');
+          setPerkGold(data.perksTextByTier?.gold ?? '');
+          setPerkPlatinum(data.perksTextByTier?.platinum ?? '');
         }
       })
       .catch(() => {})
@@ -77,7 +86,7 @@ export default function AdminLoyaltyScreen() {
     silverThreshold, goldThreshold, platinumThreshold,
     silverPercent, goldPercent, platinumPercent,
     businessDeposit, residentDeposit, residentPlatinumDeposit, touristDeposit,
-    damagedChargePercent, reviewRewardPoints,
+    damagedChargePercent, reviewRewardPoints, typicalRentalPoints,
   ].map(v => parseFloat(v));
   const allValid = nums.every(n => !isNaN(n) && n >= 0);
   const thresholdsOrdered =
@@ -114,6 +123,8 @@ export default function AdminLoyaltyScreen() {
         },
         damagedChargePercent: parseFloat(damagedChargePercent),
         reviewRewardPoints: Math.floor(parseFloat(reviewRewardPoints)),
+        typicalRentalPoints: Math.max(1, Math.floor(parseFloat(typicalRentalPoints))),
+        perksTextByTier: { silver: perkSilver.trim(), gold: perkGold.trim(), platinum: perkPlatinum.trim() },
       };
       await setDoc(doc(db, 'config', 'loyalty'), { ...newConfig, updatedAt: serverTimestamp() }, { merge: true });
       // Omit updatedAt locally — serverTimestamp() is an unresolved sentinel here, not a
@@ -130,7 +141,7 @@ export default function AdminLoyaltyScreen() {
     allValid, thresholdsOrdered, silverThreshold, goldThreshold, platinumThreshold,
     silverPercent, goldPercent, platinumPercent,
     businessDeposit, residentDeposit, residentPlatinumDeposit, touristDeposit,
-    damagedChargePercent, reviewRewardPoints,
+    damagedChargePercent, reviewRewardPoints, typicalRentalPoints, perkSilver, perkGold, perkPlatinum,
   ]);
 
   return (
@@ -233,6 +244,25 @@ export default function AdminLoyaltyScreen() {
               style={s.input} value={reviewRewardPoints} onChangeText={t => { setReviewRewardPoints(t); setSaveError(null); }}
               placeholder={`e.g. ${DEFAULT_REVIEW_REWARD_POINTS}`} placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
             />
+
+            <Text style={s.sectionLabel}>Loyalty card</Text>
+            <Text style={s.fieldLabel}>Typical points per rental (new renters)</Text>
+            <TextInput
+              style={s.input} value={typicalRentalPoints} onChangeText={t => { setTypicalRentalPoints(t); setSaveError(null); }}
+              placeholder={`e.g. ${DEFAULT_TYPICAL_RENTAL_POINTS}`} placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
+            />
+            <Text style={s.fieldLabel}>Perks text per tier (optional — empty = built from the config)</Text>
+            {([['Silver', perkSilver, setPerkSilver, 'silver'], ['Gold', perkGold, setPerkGold, 'gold'], ['Platinum', perkPlatinum, setPerkPlatinum, 'platinum']] as const).map(([label, value, set, key]) => (
+              <TextInput
+                key={label}
+                style={s.input}
+                value={value}
+                onChangeText={t => { set(t); setSaveError(null); }}
+                placeholder={`${label}: ${config ? defaultTierPerks(key, config, true) : 'e.g. Unlocks a 10% coupon'}`}
+                placeholderTextColor={COLORS.fg3}
+              />
+            ))}
+            <Text style={s.updatedNote}>Only mention early access in a tier&apos;s text if that tier really gets it. The default never does; the resident deposit part only shows to residents.</Text>
 
             {config && <Text style={s.updatedNote}>Updated {fmtDate(config.updatedAt)}</Text>}
 
