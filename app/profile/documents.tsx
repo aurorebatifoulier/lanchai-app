@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,22 +8,17 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { RentalDocCard } from '@/components/RentalDocCard';
 import { auth } from '@/lib/auth';
-import { getMyReservations, getUserProfile, type RentalDoc, type UserProfile } from '@/lib/firestore';
-import { canReplaceBtobDocument } from '@/utils/btob';
+import { getMyReservations, type RentalDoc } from '@/lib/firestore';
 import { rentalsWithDocuments } from '@/utils/rentalDocs';
 
-// Renter's documents in one place (validated mockup): "Your rentals" — the 3 most
-// recent finished/ongoing rentals with at least one document (receipt, pick-up or
-// return report), then "See all" → app/profile/rentals.tsx — business document (BtoB)
-// and legal links. One equality query (getMyReservations), filtered/sorted in code.
+// Receipts & reports (validated mockup): "Your rentals" — the 3 most recent finished/
+// ongoing rentals with at least one document (receipt, pick-up or return report), then
+// "See all" → app/profile/rentals.tsx. Legal texts live in Account → Legal, the business
+// document in Account → Business document. One equality query (getMyReservations),
+// filtered/sorted in code.
 
 const PREVIEW_COUNT = 3;
 
-const LEGAL = [
-  { title: 'Terms and conditions', route: '/legal/terms' },
-  { title: 'Privacy policy', route: '/legal/privacy' },
-  { title: 'Cancellation policy', route: '/legal/cancellation' },
-] as const;
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
@@ -32,26 +27,24 @@ export default function DocumentsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [rentals, setRentals] = useState<RentalDoc[]>([]);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const cu = auth.currentUser;
     if (!cu) { setLoading(false); return; }
-    Promise.all([getMyReservations(cu.uid), getUserProfile(cu.uid)])
-      .then(([r, p]) => { setRentals(r); setProfile(p); })
+    getMyReservations(cu.uid)
+      .then(setRentals)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
   const withDocs = useMemo(() => rentalsWithDocuments(rentals), [rentals]);
-  const isBtob = profile?.accountType === 'btob';
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>Documents</Text>
+        <Text style={s.headerTitle}>Receipts &amp; reports</Text>
       </View>
 
       {loading ? (
@@ -80,53 +73,6 @@ export default function DocumentsScreen() {
             </>
           )}
 
-          {/* ── Business document (BtoB only) ── */}
-          {isBtob && (
-            <>
-              <Text style={s.sectionTitle}>Business document</Text>
-              <View style={[s.card, s.bizCard]}>
-                {profile?.btobDocumentUrl ? (
-                  <Image source={{ uri: profile.btobDocumentUrl }} style={s.docThumb} />
-                ) : (
-                  <View style={[s.docThumb, s.docThumbEmpty]}>
-                    <Feather name="file" size={18} color={COLORS.fg3} />
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={s.rowTitle}>Registration document</Text>
-                  <Text style={s.rowSub}>{profile?.btobDocumentUrl ? 'On file' : 'Not uploaded yet'}</Text>
-                </View>
-                {canReplaceBtobDocument(profile) && (
-                  <TouchableOpacity
-                    style={s.updateBtn}
-                    onPress={() => router.push('/profile/business-document')}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={s.updateBtnText}>{profile?.btobDocumentUrl ? 'Update' : 'Upload'}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              {!canReplaceBtobDocument(profile) && (
-                <Text style={s.empty}>Your account is approved — contact us if your registration document changes.</Text>
-              )}
-            </>
-          )}
-
-          {/* ── Legal ── */}
-          <Text style={s.sectionTitle}>Legal</Text>
-          <View style={s.card}>
-            {LEGAL.map((l, i) => (
-              <TouchableOpacity
-                key={l.route}
-                style={[s.row, i > 0 && s.rowBorder]}
-                onPress={() => router.push(l.route)}
-                activeOpacity={0.75}
-              >
-                <Text style={[s.rowTitle, { flex: 1 }]}>{l.title}</Text>
-                <Feather name="chevron-right" size={16} color={COLORS.fg3} />
-              </TouchableOpacity>
-            ))}
-          </View>
         </ScrollView>
       )}
     </View>

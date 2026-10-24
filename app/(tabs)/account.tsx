@@ -419,8 +419,8 @@ export default function AccountScreen() {
           />
           <ProfileRow
             icon="file-text"
-            title="Documents"
-            sub="Receipts, condition reports, legal"
+            title="Receipts & reports"
+            sub="Receipts and pick-up / return reports"
             onPress={() => router.push('/profile/documents')}
           />
         </ProfileSection>

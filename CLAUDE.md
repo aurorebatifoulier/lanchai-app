@@ -348,19 +348,20 @@ a snapshot indefinitely).
     re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane,
     skipped when `users/{uid}.emailRemindersOptOut` (Personal info toggle). Dates in
     emails are the stored `pickupLabel`/`returnLabel` — functions run in UTC.
-- **Account → Notifications / Documents.** `app/profile/notifications.tsx` is the ONE
+- **Account → Notifications / Receipts & reports.** `app/profile/notifications.tsx` is the ONE
   place for email preferences: `emailRemindersOptOut` (pick-up/return reminders + review
   follow-up; Personal info only links here) and the news & offers consent
   `marketingOptIn` + `marketingOptInAt`/`marketingOptOutAt` (`setMarketingOptIn()`,
   server time — the users rule requires `== request.time`; OFF by default; stored only,
   NOT synced to Brevo yet — that needs a contacts-capable key, a list, a users trigger,
   an unsubscribe webhook and a Privacy policy update). `app/profile/documents.tsx`
-  (validated mockup): "Your rentals" — the 3 most recent rentals with a document,
+  = "Receipts & reports" (Account row, same route; validated mockup): "Your rentals" — the 3 most recent rentals with a document,
   `<RentalDocCard>` with Receipt / Pick-up / Return buttons (greyed when missing;
   reports open `app/rentals/[id]/report.tsx?type=pickup|return`, `ChecklistSummary
   audience="renter"`: "Confirmed by you on …", never a name) — "See all" →
   `app/profile/rentals.tsx` (search, period chips, 10 per page "Load more" rendered
-  client-side), BtoB document, legal links. One `getMyReservations` query (renterId ==,
+  client-side) — nothing else: legal texts are in Account → Legal, the business document
+  in Account → Business document. One `getMyReservations` query (renterId ==,
   no orderBy), filtered/sorted/paged in code (`utils/rentalDocs.ts`) — no composite index. `canReplaceBtobDocument()`
   (`utils/btob.ts`) mirrors the rule: no document replacement once approved.
 - **Password reset / email verification emails are ours, not Firebase's.**
@@ -648,7 +649,7 @@ a snapshot indefinitely).
   always after a rejection (`id-required` / `id-rejected`); admins exempt; each line
   stores `idCheckAtCounter`. App: `lib/identity.ts`, `<IdUploadPanel>`,
   `<IdRequirementStep>` (modal on Confirm in `booking/summary.tsx` and `bag/checkout.tsx`,
-  booking kept), `app/profile/identity.tsx` ("My ID", from Account and Documents).
+  booking kept), `app/profile/identity.tsx` (now part of ID & residency).
   NEVER show these photos anywhere else or put them in emails.
 - **First-pick-up ID double check (phase 2).** Tied to the CURRENT document version:
   `idCheckNeeded(user)` (`shared/identity.ts`) = no ID on file, or
@@ -679,7 +680,7 @@ a snapshot indefinitely).
   with basis 'legacy', or tourist now), `residencyDaily` (03:00 Vientiane: expired →
   tourist + in-app notice). `residencyRequests/{uid}` server-written, owner + admin read;
   `config/residency` not renter-readable. Deposits change only for NEW bookings (frozen).
-  App: `app/profile/residency.tsx` ("Verify my status", Account + Documents),
+  App: `app/profile/residency.tsx` (now part of ID & residency),
   `lib/residency.ts`. Admin: `app/admin/verifications.tsx` (tabs Identity / Residency /
   Business — the old Business accounts list, `business-accounts.tsx` now redirects; detail
   unchanged), `app/admin/residency/[uid].tsx`, `app/admin/identity/[uid].tsx` (folders
@@ -721,7 +722,7 @@ a snapshot indefinitely).
   Account → "ID & residency" (+ the header badge: Tourist/Resident → this screen,
   business → business document). `/profile/identity` and `/profile/residency` are
   redirects (old emails/notifications); emails/notifications link `profile/id-residency`
-  (hosting allow-list keeps the old paths too). Documents = rentals + legal only.
+  (hosting allow-list keeps the old paths too). Receipts & reports (`app/profile/documents.tsx`) = rentals documents only.
   Promo "Residents pay a X% lower deposit": X = `residentDepositSavingPercent()`
   (`shared/residency.ts`, tourist − resident from config/loyalty); `useResidentPromo()`
   hides it for residents, business/BtoB, pending requests, or no difference.

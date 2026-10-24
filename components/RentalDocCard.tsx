@@ -11,7 +11,7 @@ import {
 
 // One rental with its documents (validated mockup): name (one line) + amount, a grey
 // "Returned … · LNC-…" line, and Receipt / Pick-up / Return buttons — greyed when that
-// document doesn't exist yet. Used by app/profile/documents.tsx and app/profile/rentals.tsx.
+// document doesn't exist yet. Used by app/profile/documents.tsx (Receipts & reports) and app/profile/rentals.tsx.
 export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; icons?: boolean }) {
   const router = useRouter();
   const receipt = hasReceipt(r);

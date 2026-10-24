@@ -11,7 +11,7 @@ import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { displayOrderId, fmtDay } from '@/utils/rentalDocs';
 
 // Read-only condition report (pick-up or return checklist) for the renter — opened from
-// the Documents / All rentals cards. Renter mode: no staff or typed names.
+// the Receipts & reports / All rentals cards. Renter mode: no staff or typed names.
 export default function RentalReportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();

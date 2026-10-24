@@ -13,7 +13,7 @@ import { auth } from '@/lib/auth';
 import { getMyReservations, type RentalDoc } from '@/lib/firestore';
 import { rentalsWithDocuments, inPeriod, type RentalPeriod } from '@/utils/rentalDocs';
 
-// "All rentals" (from Documents › See all): every rental with at least one document,
+// "All rentals" (from Receipts & reports › See all): every rental with at least one document,
 // newest first, with search, period chips and "Load more" (10 per page).
 // Pagination is client-side on purpose: ONE equality query (renterId ==, no orderBy),
 // then filter/sort/slice in code. Server-side pages would need where(renterId) +
