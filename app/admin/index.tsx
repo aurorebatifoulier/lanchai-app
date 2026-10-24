@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/business-accounts' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings';
 }
 
 const CARDS: HubCard[] = [
@@ -76,11 +76,11 @@ const CARDS: HubCard[] = [
     route: '/admin/loyalty',
   },
   {
-    icon: 'briefcase',
+    icon: 'shield',
     iconBg: COLORS.warmBeige,
-    title: 'Business accounts',
-    sub: 'Review and approve BtoB signups',
-    route: '/admin/business-accounts',
+    title: 'Verifications',
+    sub: 'ID documents, residency and business accounts',
+    route: '/admin/verifications',
   },
   {
     icon: 'flag',
@@ -118,9 +118,11 @@ export default function AdminHomeScreen() {
         })
         .catch(() => {});
 
-      getDocs(query(collection(db, 'users'), where('btobStatus', '==', 'pending_approval')))
-        .then(snap => setPendingBtobCount(snap.size))
-        .catch(() => {});
+      // Verifications badge: pending business accounts + pending residency requests.
+      Promise.all([
+        getDocs(query(collection(db, 'users'), where('btobStatus', '==', 'pending_approval'))).then(s => s.size).catch(() => 0),
+        getDocs(query(collection(db, 'residencyRequests'), where('status', '==', 'pending'))).then(s => s.size).catch(() => 0),
+      ]).then(([btob, residency]) => setPendingBtobCount(btob + residency));
 
       // Single equality-adjacent filter — where('status','in',[...]) needs no composite
       // index on its own.
@@ -163,7 +165,7 @@ export default function AdminHomeScreen() {
                 <Text style={s.overdueBadgeText}>{overdueCount > 9 ? '9+' : overdueCount}</Text>
               </View>
             )}
-            {card.route === '/admin/business-accounts' && pendingBtobCount > 0 && (
+            {card.route === '/admin/verifications' && pendingBtobCount > 0 && (
               <View style={s.overdueBadge}>
                 <Text style={s.overdueBadgeText}>{pendingBtobCount > 9 ? '9+' : pendingBtobCount}</Text>
               </View>

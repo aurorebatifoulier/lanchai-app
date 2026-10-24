@@ -381,6 +381,14 @@ export default function AccountScreen() {
               onPress={() => router.push('/profile/business-document')}
             />
           )}
+          {profile?.customerType !== 'business' && (
+            <ProfileRow
+              icon="home"
+              title="Verify my status"
+              sub={profile?.customerType === 'resident' ? 'Resident' : 'Tourist · residents pay a reduced deposit'}
+              onPress={() => router.push('/profile/residency')}
+            />
+          )}
           <ProfileRow
             icon="credit-card"
             title="My ID"

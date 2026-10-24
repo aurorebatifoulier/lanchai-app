@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 28 Cloud Functions (scheduled, Firestore-triggered and 10 callables, Node 22). The
+  gaps found), 33 Cloud Functions (scheduled, Firestore-triggered and 14 callables, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a
@@ -667,8 +667,23 @@ a snapshot indefinitely).
   Auth via the `adminRenterProfile` callable) with "Edit name" (inline confirm,
   `nameEditedAt/By`, also Auth displayName + renterName on upcoming pick-ups). Once
   `users.idCheckedVersion` is set the renter can't change first/last/displayName
-  (Personal info read-only + users update rule) — staff can. Next phases: residency,
-  retention, business + emails (incl. "ID verified" email).
+  (Personal info read-only + users update rule) — staff can.
+- **Residency verification (phase 3).** `functions/src/shared/residency.ts` (paths,
+  proof types, `RESIDENCY_REJECTION_REASONS`, `validUntilRequired`, `basisFor`) +
+  `functions/src/residency.ts`: `submitResidencyRequest` (Lao national = Lao ID card on
+  file as identity; foreign = ID on file + visa/permit or lease photos; notifies admins),
+  `reviewResidency` (approve: customerType 'resident', residencyValidUntil — mandatory
+  for foreigners —, residencyBasis, residencyVerifiedAt/By + `record`; reject: presets,
+  fixable/final), `withdrawResidency` (renter: proof deleted now, back to tourist),
+  `adminLegacyResident` (residents without verification: ask to verify = 30-day grace
+  with basis 'legacy', or tourist now), `residencyDaily` (03:00 Vientiane: expired →
+  tourist + in-app notice). `residencyRequests/{uid}` server-written, owner + admin read;
+  `config/residency` not renter-readable. Deposits change only for NEW bookings (frozen).
+  App: `app/profile/residency.tsx` ("Verify my status", Account + Documents),
+  `lib/residency.ts`. Admin: `app/admin/verifications.tsx` (tabs Identity / Residency /
+  Business — the old Business accounts list, `business-accounts.tsx` now redirects; detail
+  unchanged), `app/admin/residency/[uid].tsx`, `app/admin/identity/[uid].tsx` (folders
+  with no sibling list file). Next phases: retention, business ID + emails.
 
 ## Security follow-ups
 

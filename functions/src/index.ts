@@ -33,6 +33,9 @@ export * from './authEmails';
 // Identity document required to rent — see identity.ts.
 export * from './identity';
 
+// Residency verification (resident vs tourist deposit) — see residency.ts.
+export * from './residency';
+
 admin.initializeApp();
 const db = admin.firestore();
 

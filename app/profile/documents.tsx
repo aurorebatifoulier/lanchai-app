@@ -91,6 +91,21 @@ export default function DocumentsScreen() {
             <Feather name="chevron-right" size={16} color={COLORS.fg3} />
           </TouchableOpacity>
 
+          {/* ── Residency status (not for business accounts) ── */}
+          {profile?.customerType !== 'business' && (
+            <>
+              <Text style={s.sectionTitle}>Residency status</Text>
+              <TouchableOpacity style={[s.card, s.row]} onPress={() => router.push('/profile/residency')} activeOpacity={0.75}>
+                <Feather name="home" size={16} color={COLORS.carbon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rowTitle}>{profile?.customerType === 'resident' ? 'Resident' : 'Tourist'}</Text>
+                  <Text style={s.rowSub}>Residents pay a reduced deposit — verify my status</Text>
+                </View>
+                <Feather name="chevron-right" size={16} color={COLORS.fg3} />
+              </TouchableOpacity>
+            </>
+          )}
+
           {/* ── Business document (BtoB only) ── */}
           {isBtob && (
             <>

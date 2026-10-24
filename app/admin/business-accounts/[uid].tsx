@@ -18,7 +18,7 @@ import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { sendNotif } from '@/lib/notifications';
-import { BTOB_STATUS_CONFIG } from '../business-accounts';
+import { BTOB_STATUS_CONFIG } from '@/utils/btob';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import {
   BTOB_REJECTION_REASONS, BTOB_REJECTION_KEYS, isBtobRejectionKey, type BtobRejectionKey,

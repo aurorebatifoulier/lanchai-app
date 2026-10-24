@@ -15,3 +15,11 @@ export function canReplaceBtobDocument(profile: Pick<UserProfile, 'accountType' 
   return profile?.accountType === 'btob'
     && (profile.btobStatus !== 'approved' || !profile.btobDocumentUrl);
 }
+
+export type BtobStatus = 'pending_approval' | 'approved' | 'rejected';
+
+export const BTOB_STATUS_CONFIG: Record<BtobStatus, { label: string; bg: string; fg: string }> = {
+  pending_approval: { label: 'Pending',  bg: '#FEF9E5', fg: '#92400E' },
+  approved:         { label: 'Approved', bg: '#D1FAE5', fg: '#065F46' },
+  rejected:         { label: 'Rejected', bg: '#FEE2E2', fg: '#B91C1C' },
+};

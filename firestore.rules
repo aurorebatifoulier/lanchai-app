@@ -352,11 +352,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── residencyRequests/{uid} — resident status requests (paths only) ─────────
+    // Written ONLY by Cloud Functions (submitResidencyRequest, reviewResidency,
+    // withdrawResidency, residencyDaily). The renter reads their own; admins read all.
+    match /residencyRequests/{uid} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow write: if false;
+    }
+
     match /config/{docId} {
       // config/features (launch flags: businessAccounts, newsletter) is read before
       // sign-in by the signup screen — non-sensitive booleans only.
       allow read:  if docId == 'features'
-                    || (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth']))
+                    || (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth', 'residency']))
                     || isAdmin();
       allow write: if isAdmin();
     }
