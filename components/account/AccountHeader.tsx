@@ -52,7 +52,34 @@ export function useReduceMotion(): boolean {
 /** One text line (greeting, name, chips) in header coordinates, from onLayout. */
 interface Box { left: number; top: number; right: number; bottom: number }
 const MARGIN = 8;
-const BIKE = BUBBLES.find(b => b.icon === 'bike')!;
+const BIKE = BUBBLES.find(b => b.icon === 'bike');
+
+type Rect = { x: number; y: number; w: number; h: number };
+const isNum = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+const validRect = (r: Rect | null | undefined): r is Rect => !!r && isNum(r.x) && isNum(r.y) && isNum(r.w) && isNum(r.h);
+
+/**
+ * Text lines in header coordinates, or null until EVERY measurement exists (text column,
+ * greeting, name, chips) — no bubbles and no overlap computation before that.
+ */
+function measureLines(col: { x: number; y: number } | null, rects: Record<string, Rect>): { lines: Box[]; chips: Box } | null {
+  if (!col || !isNum(col.x) || !isNum(col.y)) return null;
+  const { greeting, name, chips } = rects;
+  if (!validRect(greeting) || !validRect(name) || !validRect(chips)) return null;
+  const toBox = (r: Rect): Box => ({
+    left: PAD_X + col.x + r.x, top: PAD_TOP + col.y + r.y,
+    right: PAD_X + col.x + r.x + r.w, bottom: PAD_TOP + col.y + r.y + r.h,
+  });
+  return { lines: [greeting, name, chips].map(r => toBox(r)), chips: toBox(chips) };
+}
+
+/** Safety net: a decoration bug renders nothing instead of crashing My Account. */
+class DecorBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(e: unknown) { console.warn('[AccountHeader] decor hidden after an error', e); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 /**
  * Previous decor (dashed path to the amber hexagon + 4 bubbles), drawn BEHIND the text.
@@ -80,15 +107,16 @@ function Decor({ headerWidth, lines, chips }: { headerWidth: number; lines: Box[
   const decorLeft = headerWidth - DECOR_W - DECOR_RIGHT;
   const place = (b: typeof BUBBLES[number]): { left: number; top: number } | null => {
     if (b.x != null && b.y != null) return { left: decorLeft + b.x, top: DECOR_TOP + b.y };
-    if (!chips) return null;
+    if (!chips || BIKE?.x == null) return null;
     // Centred in the gap between the chips and the bike, level with the chips.
-    const gapL = chips.right + MARGIN, gapR = decorLeft + BIKE.x! - MARGIN;
+    const gapL = chips.right + MARGIN, gapR = decorLeft + BIKE.x - MARGIN;
     if (gapR - gapL < BUBBLE) return null;
     return { left: (gapL + gapR - BUBBLE) / 2, top: (chips.top + chips.bottom - BUBBLE) / 2 };
   };
   const clear = (pos: { left: number; top: number }) => {
+    if (!lines) return false;
     const l = pos.left, t = pos.top, r = l + BUBBLE, btm = t + BUBBLE;
-    return lines!.every(x => r < x.left - MARGIN || l > x.right + MARGIN || btm < x.top - MARGIN || t > x.bottom + MARGIN);
+    return lines.every(x => r < x.left - MARGIN || l > x.right + MARGIN || btm < x.top - MARGIN || t > x.bottom + MARGIN);
   };
   const ready = !!lines && headerWidth > 0;
 
@@ -149,7 +177,7 @@ export function AccountHeader(p: AccountHeaderProps) {
   const [headerWidth, setHeaderWidth] = useState(0);
   // Text column position (relative to the row) + each line's box inside it.
   const [col, setCol] = useState<{ x: number; y: number } | null>(null);
-  const [rects, setRects] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  const [rects, setRects] = useState<Record<string, Rect>>({});
   const onLine = (key: string) => (e: LayoutChangeEvent) => {
     const { x, y, width: w, height: h } = e.nativeEvent.layout;
     setRects(prev => {
@@ -157,13 +185,7 @@ export function AccountHeader(p: AccountHeaderProps) {
       return o && o.x === x && o.y === y && o.w === w && o.h === h ? prev : { ...prev, [key]: { x, y, w, h } };
     });
   };
-  const toBox = (r: { x: number; y: number; w: number; h: number }): Box => ({
-    left: PAD_X + col!.x + r.x, top: PAD_TOP + col!.y + r.y,
-    right: PAD_X + col!.x + r.x + r.w, bottom: PAD_TOP + col!.y + r.y + r.h,
-  });
-  const measured = col && rects.greeting && rects.name && rects.chips;
-  const lines = measured ? [rects.greeting, rects.name, rects.chips].map(toBox) : null;
-  const chipsBox = measured ? toBox(rects.chips) : null;
+  const measured = measureLines(col, rects);
 
   return (
     <View
@@ -171,7 +193,9 @@ export function AccountHeader(p: AccountHeaderProps) {
       onLayout={e => { setHeaderWidth(e.nativeEvent.layout.width); p.onHeight?.(e.nativeEvent.layout.height); }}
     >
       {/* Decor first → behind the text (and zIndex below it). */}
-      <Decor headerWidth={headerWidth} lines={lines} chips={chipsBox} />
+      <DecorBoundary>
+        <Decor headerWidth={headerWidth} lines={measured?.lines ?? null} chips={measured?.chips ?? null} />
+      </DecorBoundary>
       <View style={s.row}>
         <TouchableOpacity onPress={p.onAvatarPress} activeOpacity={0.85} style={s.ring}>
           {p.uploading ? (
