@@ -5,45 +5,36 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { COLORS } from '@/constants/Colors';
 import LanchaiMark from '@/components/LanchaiMark';
 import { useAuth } from '@/contexts/AuthContext';
-import { auth } from '@/lib/auth';
 import { getUserProfile, getMyReservations, getProducts, saveUserProfile, UserProfile } from '@/lib/firestore';
 import { getCustomerTypeConfig } from '@/utils/customerType';
 import { useShopInfo } from '@/lib/shop';
 import WhatsAppButton from '@/components/WhatsAppButton';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import CropScreen from '@/components/CropScreen';
 import { useExchangeRate } from '@/lib/exchangeRate';
-import { toLak } from '@/utils/currency';
 import { ResidentPromoCard } from '@/components/ResidentPromo';
 import { LoyaltyCard } from '@/components/LoyaltyCard';
+import { AccountHeader } from '@/components/account/AccountHeader';
+import { AccountStats } from '@/components/account/AccountStats';
+import { AccountStickers } from '@/components/account/AccountStickers';
+import { computeAccountStats, type AccountStats as AccountStatsData } from '@/lib/accountStats';
+import { TIER_LABELS, isLoyaltyExcluded } from '@/lib/loyalty';
+import { ACCOUNT_COPY } from '@/constants/accountCopy';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatLAK(amount: number): string {
-  return `${amount.toLocaleString('en-US')} LAK`;
-}
 
-function formatMemberSince(isoString: string | undefined): string | null {
-  if (!isoString) return null;
-  try {
-    return new Date(isoString).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  } catch {
-    return null;
-  }
-}
 
 // BtoB accounts show a verification-status badge in place of the customerType badge —
 // keyed by btobStatus, with an 'unverified' fallback for missing/unrecognized status.
@@ -123,11 +114,11 @@ export default function AccountScreen() {
 
   const displayName = user?.displayName || user?.email || 'Account';
 
-  const memberSince = formatMemberSince(auth.currentUser?.metadata?.creationTime);
+  const insets = useSafeAreaInsets();
 
   const [profile,     setProfile]     = useState<UserProfile | null>(null);
   const [rentalCount, setRentalCount] = useState<number | null>(null);
-  const [savedAmount, setSavedAmount] = useState<number | null>(null);
+  const [stats,       setStats]       = useState<AccountStatsData | null>(null);
 
   const [avatarUri,          setAvatarUri]          = useState<string | null>(null);
   const [uploading,          setUploading]          = useState(false);
@@ -149,18 +140,7 @@ export default function AccountScreen() {
       setProfile(prof);
       setAvatarUri(prof?.photoURL ?? null);
       setRentalCount(rentals.length);
-      const productMap = new Map(products.map(p => [p.id, p]));
-      let savedTotal = 0;
-      for (const rental of rentals) {
-        const product = productMap.get(rental.productId);
-        // product.retailPrice is USD; rental.subtotal is a frozen LAK reservation amount —
-        // convert before comparing.
-        if (product?.retailPrice && exchangeRate != null) {
-          const retailPriceLak = toLak(product.retailPrice, exchangeRate);
-          savedTotal += Math.max(0, retailPriceLak - rental.subtotal);
-        }
-      }
-      setSavedAmount(savedTotal > 0 ? savedTotal : null);
+      setStats(computeAccountStats(rentals, products, exchangeRate));
     });
   }, [user, exchangeRate]);
 
@@ -235,9 +215,6 @@ export default function AccountScreen() {
   const shop      = useShopInfo();
   const nameSub   = profile?.displayName ?? user?.displayName;
   const appVersion = Constants.expoConfig?.version;
-  // Business accounts are excluded from the loyalty program entirely — no tier
-  // badge, no points, no coupons/loyalty section, anywhere on this screen.
-  const isBusinessAccount = profile?.customerType === 'business';
 
   // BtoB accounts don't have first/last name — btobCompanyName (not the generic
   // displayName mirror set at signup) is the authoritative header name. Falls back to
@@ -245,112 +222,52 @@ export default function AccountScreen() {
   const isBtob = profile?.accountType === 'btob';
   const headerName = isBtob ? (profile?.btobCompanyName || displayName) : displayName;
   const headerInitial = headerName.charAt(0).toUpperCase();
+  const headerFirstName = isBtob
+    ? (profile?.btobCompanyName || headerName)
+    : (profile?.firstName || headerName.split(' ')[0] || headerName);
+  // Status chip: business → "Business" (or the BtoB review status), else Tourist/Resident.
+  const isBusinessStatus = isBtob || profile?.customerType === 'business';
   const btobBadge = isBtob
     ? (profile?.btobStatus ? BTOB_STATUS_BADGE[profile.btobStatus] : undefined) ?? BTOB_STATUS_BADGE.unverified
     : null;
+  const statusLabel = isBusinessStatus
+    ? (!isBtob || profile?.btobStatus === 'approved' ? ACCOUNT_COPY.businessChip : btobBadge?.label ?? ACCOUNT_COPY.businessChip)
+    : ctConfig.label;
 
   return (
-    <SafeAreaView style={styles.container}>
-
-      {/* ── Profile card ── */}
-      <View style={styles.profileCard}>
-        <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.85} style={styles.avatarWrap}>
-          {uploading ? (
-            <View style={styles.avatar}>
-              <ActivityIndicator size="small" color={COLORS.carbon} />
-            </View>
-          ) : avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatarPhoto} contentFit="cover" />
-          ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{headerInitial}</Text>
-            </View>
-          )}
-          <View style={styles.avatarEditBadge}>
-            <Feather name="camera" size={9} color={COLORS.carbon} />
-          </View>
-        </TouchableOpacity>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit>{headerName}</Text>
-
-          {/* Account type badge — BtoB shows verification status instead. Tappable:
-              business → business document; everyone else → ID & residency. */}
-          {btobBadge ? (
-            <TouchableOpacity
-              style={[styles.btobStatusBadge, { backgroundColor: btobBadge.bg, borderColor: btobBadge.border }]}
-              onPress={() => router.push('/profile/business-document')}
-              activeOpacity={0.75}
-            >
-              <Feather name={btobBadge.icon} size={11} color={btobBadge.text} />
-              <Text style={[styles.typeBadgeText, { color: btobBadge.text }]}>
-                {btobBadge.label}
-              </Text>
-              <Feather name="chevron-right" size={11} color={btobBadge.text} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.typeBadge, styles.typeBadgeRow, { backgroundColor: ctConfig.badgeBg }]}
-              onPress={() => router.push(profile?.customerType === 'business' ? '/profile/business-document' : '/profile/id-residency')}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.typeBadgeText, { color: ctConfig.badgeText }]}>
-                {ctConfig.label}
-              </Text>
-              <Feather name="chevron-right" size={11} color={ctConfig.badgeText} />
-            </TouchableOpacity>
-          )}
-
-          {/* Location / member since */}
-          <View style={styles.profileMeta}>
-            <Feather name="map-pin" size={12} color="rgba(250,250,247,0.6)" />
-            <Text style={styles.profileMetaSub}>
-              {'Vientiane'}
-              {memberSince ? ` · member since ${memberSince}` : ''}
-            </Text>
-          </View>
-        </View>
-      </View>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
 
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-
-        {/* ── Stats ── */}
-        <View style={styles.statsWrap}>
-          <View style={styles.statsRow}>
-            {/* RENTALS — real count */}
-            <View style={[styles.statCard, { flex: 1 }]}>
-              <Text style={styles.statEye}>Rentals</Text>
-              <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>
-                {rentalCount === null ? '—' : String(rentalCount)}
-              </Text>
-              <Text style={styles.statSub}>
-                no clutter added
-              </Text>
-            </View>
-
-          </View>
-
-          {/* SAVED — computed from rentals vs. retail price; full-width row of its own
-              since it can display large LAK figures (e.g. "171,367,040 LAK") */}
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, styles.statCardAmber, { flex: 1 }]}>
-              <Text style={[styles.statEye, { color: 'rgba(30,30,30,0.55)' }]}>Saved</Text>
-              <Text style={[styles.statVal, { color: COLORS.carbon }]} numberOfLines={1} adjustsFontSizeToFit>
-                {savedAmount ? formatLAK(savedAmount) : '—'}
-              </Text>
-              <Text style={[styles.statSub, { color: 'rgba(30,30,30,0.55)' }]}>
-                {savedAmount ? 'not collecting dust' : 'Rent to start saving'}
-              </Text>
-            </View>
+        {/* ── Header (validated mockup) — scrolls with the page; the top inset is
+            applied inside it so the white band reaches the status bar ── */}
+        <View style={{ paddingTop: insets.top, backgroundColor: '#FFFFFF', marginHorizontal: -16 }}>
+          <View style={{ marginHorizontal: 16 }}>
+            <AccountHeader
+              firstName={headerFirstName}
+              initial={headerInitial}
+              avatarUri={avatarUri}
+              uploading={uploading}
+              onAvatarPress={handleAvatarPress}
+              tierLabel={isLoyaltyExcluded(profile ?? {}) ? null : TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
+              statusLabel={statusLabel}
+              onStatusPress={() => router.push(isBusinessStatus ? '/profile/business-document' : '/profile/id-residency')}
+            />
           </View>
         </View>
+
+        {/* ── Stats (round trips · not in your closet · LAK not spent) ── */}
+        <AccountStats stats={stats} />
 
         {/* ── Loyalty card (replaces the old Tier tile + Loyalty row) — hidden for
             excluded / business accounts inside the component ── */}
         <LoyaltyCard />
+
+        {/* ── Stickers (one per category rented and returned) ── */}
+        {stats && <AccountStickers stickers={stats.stickers} next={stats.nextSticker} />}
 
         {/* ── Resident promo (unverified tourists, dismissible) ── */}
         <ResidentPromoCard style={{ marginTop: 18 }} />

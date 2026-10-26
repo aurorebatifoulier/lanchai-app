@@ -759,6 +759,22 @@ a snapshot indefinitely).
   transferable, may change/end, abuse → cancelled, lost on account deletion) and the
   referral mention in the Privacy policy — proposals only, legal texts unchanged.
 
+- **My Account top (validated mockup, 2026-10-26) — brand shades only**
+  (`constants/brandShades.ts`; no green/red here). Strings: `constants/accountCopy.ts`
+  (greetings by Vientiane hour, stats, empty state, sticker names, promo) +
+  `constants/loyaltyCopy.ts` (card lines). `components/account/AccountHeader.tsx` (white
+  band inside the ScrollView — top inset applied in it; SVG dashed path drawn via a
+  mask + hexagon, 4 floating MaterialCommunityIcons bubbles; all motion skipped when
+  "reduce motion" is on; tier chip hidden for excluded accounts; status chip → ID &
+  residency, or business document for business/BtoB). `AccountStats.tsx` +
+  `lib/accountStats.ts` (`computeAccountStats`, `compactLak`): round trips = returned;
+  distinct products + "LAK not spent" = ongoing + returned (LOST excluded), value =
+  retailPrice (USD→LAK) once per product, "+" if some have none, hidden if none; no
+  picked-up rental → "Your first rental is waiting." card. `AccountStickers.tsx`: one per
+  category with a returned rental (catalogue order) + one locked next category; hidden
+  with no returned rental. `<LoyaltyCard>` is the LIGHT card everywhere (My Account +
+  Loyalty screen). `<ResidentPromoCard>` restyled (white, light amber home circle).
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

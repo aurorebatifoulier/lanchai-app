@@ -77,7 +77,7 @@ export function loyaltyCardSubline(progress: TierProgress, avgPoints: number | n
   const review = config?.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS;
   const perRental = avgPoints ?? config?.typicalRentalPoints ?? DEFAULT_TYPICAL_RENTAL_POINTS;
   if (n <= review) return LOYALTY_COPY.almostReview(n);
-  if (n <= perRental) return LOYALTY_COPY.almostRental(n);
+  if (n <= perRental) return LOYALTY_COPY.almostRental;
   if (progress.fraction < 0.1) return LOYALTY_COPY.justStarted;
   return LOYALTY_COPY.middle(Math.max(1, Math.ceil(n / Math.max(1, perRental))));
 }

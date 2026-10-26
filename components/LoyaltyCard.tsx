@@ -2,15 +2,15 @@ import React, { useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
-import { TIER_LABELS, tierPerksText, type PaidTier } from '@/lib/loyalty';
+import { TIER_LABELS } from '@/lib/loyalty';
 import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
 
-// My Account loyalty card (validated mockup): carbon card, "LANCHAI member" + points,
-// a gauge from the CURRENT tier to the NEXT one only (amber badge left, dashed lock
-// right, fill animated on screen focus), "{n} points to {next}.", a playful sub-line
-// and the next tier's perks. Platinum: full badge, no gauge. Tap → Loyalty screen.
+// Loyalty card — light version (validated mockup), the SAME component on My Account and
+// the Loyalty screen: "LANCHAI member" + points, carbon badge → gauge (light amber track,
+// amber fill animated on focus) → dashed lock, current / next tier labels, then ONE line:
+// "{n} points to {next}." (bold) + one playful sub-line. Platinum: badge, no gauge.
 // Hidden for excluded / business accounts and before the loyalty config exists.
 export function LoyaltyCard({ interactive = true }: { interactive?: boolean }) {
   const router = useRouter();
@@ -25,7 +25,7 @@ export function LoyaltyCard({ interactive = true }: { interactive?: boolean }) {
   }, [fill, target]));
 
   if (loyalty.loading || loyalty.excluded || !loyalty.progress) return null;
-  const { progress, points, config, isResident } = loyalty;
+  const { progress, points, config } = loyalty;
   const current = TIER_LABELS[progress.current];
   const next = progress.next ? TIER_LABELS[progress.next] : null;
 
@@ -33,65 +33,62 @@ export function LoyaltyCard({ interactive = true }: { interactive?: boolean }) {
     <TouchableOpacity style={s.card} onPress={() => router.push('/profile/loyalty')} activeOpacity={0.9} disabled={!interactive}>
       <View style={s.topRow}>
         <Text style={s.member}>{LOYALTY_COPY.memberLabel}</Text>
-        <Text style={s.points}>{LOYALTY_COPY.points(points)}</Text>
+        <Text style={s.points}>
+          {points.toLocaleString('en-US')}<Text style={s.pts}> pts</Text>
+        </Text>
       </View>
 
-      {next ? (
-        <View style={s.gaugeRow}>
-          <View style={s.tierCol}>
-            <View style={s.badge}><Feather name="award" size={26} color={COLORS.carbon} /></View>
-            <Text style={s.tierLabel}>{current}</Text>
-          </View>
-          <View style={s.track}>
-            <Animated.View style={[s.fill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
-          </View>
-          <View style={s.tierCol}>
-            <View style={s.locked}><Feather name="lock" size={20} color="rgba(250,250,247,0.55)" /></View>
-            <Text style={[s.tierLabel, s.tierLabelMuted]}>{next}</Text>
-          </View>
-        </View>
-      ) : (
-        <View style={s.topTierRow}>
-          <View style={[s.badge, s.badgeBig]}><Feather name="award" size={32} color={COLORS.carbon} /></View>
-          <Text style={s.topTierName}>{current}</Text>
-        </View>
-      )}
+      <View style={s.gaugeRow}>
+        <View style={s.badge}><Feather name="award" size={22} color={SHADES.amber} /></View>
+        {next ? (
+          <>
+            <View style={{ flex: 1 }}>
+              <View style={s.track}>
+                <Animated.View style={[s.fill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+              </View>
+              <View style={s.labels}>
+                <Text style={s.tierLabel}>{current}</Text>
+                <Text style={s.tierLabel}>{next}</Text>
+              </View>
+            </View>
+            <View style={s.lock}><Feather name="lock" size={17} color={SHADES.carbonFaint} /></View>
+          </>
+        ) : (
+          <Text style={s.topTier}>{current}</Text>
+        )}
+      </View>
 
-      {next && progress.remaining != null && (
-        <Text style={s.main}>{LOYALTY_COPY.pointsToNext(progress.remaining, next)}</Text>
-      )}
-      <Text style={s.sub}>{loyaltyCardSubline(progress, avg, config)}</Text>
-      {progress.next && (
-        <View style={s.perkRow}>
-          <Feather name="gift" size={14} color={COLORS.amber} />
-          <Text style={s.perk}>{tierPerksText(progress.next as PaidTier, config, isResident)}</Text>
-        </View>
-      )}
+      <Text style={s.line}>
+        {next && progress.remaining != null
+          ? <Text style={s.lineBold}>{LOYALTY_COPY.pointsToNext(progress.remaining, next)} </Text>
+          : null}
+        <Text style={s.lineSub}>{loyaltyCardSubline(progress, avg, config)}</Text>
+      </Text>
     </TouchableOpacity>
   );
 }
 
 const s = StyleSheet.create({
-  card: { backgroundColor: COLORS.carbon, borderRadius: 22, padding: 20, marginTop: 14 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  member: { fontSize: 14, fontWeight: '600', color: 'rgba(250,250,247,0.7)', letterSpacing: 0.3 },
-  points: { fontSize: 16, fontWeight: '800', color: COLORS.amber },
-  gaugeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 16 },
-  tierCol: { alignItems: 'center', gap: 6, width: 64 },
-  badge: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.amber, alignItems: 'center', justifyContent: 'center' },
-  badgeBig: { width: 72, height: 72, borderRadius: 36 },
-  locked: {
-    width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderStyle: 'dashed',
-    borderColor: 'rgba(250,250,247,0.4)', alignItems: 'center', justifyContent: 'center',
+  card: {
+    backgroundColor: SHADES.white, borderRadius: 20, borderWidth: 1, borderColor: SHADES.border,
+    padding: 16, marginTop: 14,
   },
-  tierLabel: { fontSize: 14, fontWeight: '800', color: COLORS.porcelain },
-  tierLabelMuted: { fontWeight: '600', color: 'rgba(250,250,247,0.7)' },
-  track: { flex: 1, height: 12, borderRadius: 6, backgroundColor: '#3A3A3A', marginTop: 22, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 6, backgroundColor: COLORS.amber },
-  topTierRow: { alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 4 },
-  topTierName: { fontSize: 16, fontWeight: '800', color: COLORS.porcelain },
-  main: { fontSize: 19, fontWeight: '800', color: COLORS.porcelain, marginTop: 18, letterSpacing: -0.3 },
-  sub: { fontSize: 14, fontWeight: '500', color: 'rgba(250,250,247,0.7)', marginTop: 4, lineHeight: 20 },
-  perkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
-  perk: { flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.amber },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  member: { fontSize: 16, fontWeight: '700', color: SHADES.carbon },
+  points: { fontSize: 16, fontWeight: '800', color: SHADES.carbon },
+  pts: { fontWeight: '500', color: SHADES.carbonMuted },
+  gaugeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
+  badge: { width: 46, height: 46, borderRadius: 23, backgroundColor: SHADES.carbon, alignItems: 'center', justifyContent: 'center' },
+  track: { height: 12, borderRadius: 6, backgroundColor: SHADES.amberLight, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 6, backgroundColor: SHADES.amber },
+  labels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  tierLabel: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
+  lock: {
+    width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderStyle: 'dashed', borderColor: SHADES.carbonFaint,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  topTier: { fontSize: 16, fontWeight: '800', color: SHADES.carbon },
+  line: { marginTop: 14, fontSize: 15, lineHeight: 21 },
+  lineBold: { fontWeight: '800', color: SHADES.carbon },
+  lineSub: { fontWeight: '500', color: SHADES.carbonMuted },
 });

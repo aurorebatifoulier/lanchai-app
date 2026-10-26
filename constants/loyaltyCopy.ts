@@ -10,9 +10,9 @@ export const LOYALTY_COPY = {
   points: (n: number) => `${n.toLocaleString('en-US')} pts`,
   pointsToNext: (n: number, tier: string) => `${plural(n, 'point')} to ${tier}.`,
   justStarted: 'Everyone starts somewhere. Even tents.',
-  middle: (k: number) => `About ${plural(k, 'more rental')}. Just saying.`,
+  middle: (k: number) => `About ${k} more ${k === 1 ? 'trip' : 'trips'}. Your closet will thank you.`,
   almostReview: (n: number) => `${plural(n, 'point')} to go. One review would do it. Hint, hint.`,
-  almostRental: (n: number) => `${plural(n, 'point')} to go. One more rental should do it.`,
+  almostRental: 'One more trip. Your closet is already celebrating.',
   topTier: 'Top tier. You now own nothing and rent everything.',
 
   // ── Tier-up celebration ──
