@@ -782,6 +782,13 @@ a snapshot indefinitely).
   contact or action needed (chat, WhatsApp, missing ID / business document, invite
   code), GREY = everything else, CARBON = staff (admin). WhatsApp is a palette row (no
   green button). Profile sub-screens still use the old style (to decide).
+  Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
+  status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
+  first name, tier chip) fades/slides in below the safe area once the header is scrolled
+  past (threshold = header height − 52; instant with reduce motion). The header decor
+  has its OWN right column (26% of width, 84–130px, path/bubbles scaled) so it never
+  overlaps the text; chips wrap on narrow phones. Other tab screens apply the top inset
+  on a non-scrolling root — not affected.
 
 ## Security follow-ups
 

@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Modal,
   Linking,
+  Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,13 +25,13 @@ import CropScreen from '@/components/CropScreen';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { ResidentPromoCard } from '@/components/ResidentPromo';
 import { LoyaltyCard } from '@/components/LoyaltyCard';
-import { AccountHeader } from '@/components/account/AccountHeader';
+import { AccountHeader, AccountCompactBar } from '@/components/account/AccountHeader';
 import { AccountStats } from '@/components/account/AccountStats';
 import { AccountStickers } from '@/components/account/AccountStickers';
 import { computeAccountStats, type AccountStats as AccountStatsData } from '@/lib/accountStats';
 import { TIER_LABELS, isLoyaltyExcluded } from '@/lib/loyalty';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
-import { Row, RowGroup, SectionTitle, type IconTone } from '@/components/account/ui';
+import { Row, RowGroup, SectionTitle, type IconTone, type AnyIcon } from '@/components/account/ui';
 import { SHADES } from '@/constants/brandShades';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -56,14 +56,16 @@ const BTOB_STATUS_BADGE: Record<string, {
 // white card groups, round icon circles (amber = contact / action needed, grey = the
 // rest, carbon = staff), "Soon" as the same grey chip as "Tourist ›".
 function ProfileRow(p: {
-  icon: React.ComponentProps<typeof Feather>['name'];
+  icon: React.ComponentProps<typeof Feather>['name'] | AnyIcon;
   title: string;
   sub?: string;
+  subLines?: number;
   tone?: IconTone;
   onPress?: () => void;
   comingSoon?: boolean;
 }) {
-  return <Row icon={{ name: p.icon }} tone={p.tone} title={p.title} sub={p.sub} onPress={p.onPress} soon={p.comingSoon} />;
+  const icon: AnyIcon = typeof p.icon === 'string' ? { name: p.icon } : p.icon;
+  return <Row icon={icon} tone={p.tone} title={p.title} sub={p.sub} subLines={p.subLines} onPress={p.onPress} soon={p.comingSoon} />;
 }
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -85,6 +87,9 @@ export default function AccountScreen() {
   const displayName = user?.displayName || user?.email || 'Account';
 
   const insets = useSafeAreaInsets();
+  // Collapsing header: the compact bar fades in once the full header has scrolled away.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [headerHeight, setHeaderHeight] = useState(200);
 
   const [profile,     setProfile]     = useState<UserProfile | null>(null);
   const [rentalCount, setRentalCount] = useState<number | null>(null);
@@ -211,10 +216,12 @@ export default function AccountScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
 
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        scrollEventThrottle={16}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
       >
         {/* ── Header (validated mockup) — scrolls with the page; the top inset is
             applied inside it so the white band reaches the status bar ── */}
@@ -229,6 +236,7 @@ export default function AccountScreen() {
               tierLabel={isLoyaltyExcluded(profile ?? {}) ? null : TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
               statusLabel={statusLabel}
               onStatusPress={() => router.push(isBusinessStatus ? '/profile/business-document' : '/profile/id-residency')}
+              onHeight={setHeaderHeight}
             />
           </View>
         </View>
@@ -274,7 +282,7 @@ export default function AccountScreen() {
             />
           )}
           <ProfileRow
-            icon="credit-card"
+            icon={{ set: 'mci', name: 'card-account-details-outline' }}
             title="ID & residency"
             sub={[
               profile?.idOnFile ? 'ID on file' : 'ID needed to rent',
@@ -287,6 +295,7 @@ export default function AccountScreen() {
             icon="map-pin"
             title="Pick-up location"
             sub={`${shop.addressLine}, ${shop.city}`}
+            subLines={1}
             onPress={() => router.push('/profile/pickup-location')}
           />
           <ProfileRow
@@ -383,7 +392,7 @@ export default function AccountScreen() {
             onPress={() => router.push('/legal/privacy')}
           />
           <ProfileRow
-            icon="x-circle"
+            icon="rotate-ccw"
             title="Cancellation policy"
             onPress={() => router.push('/legal/cancellation')}
           />
@@ -412,7 +421,21 @@ export default function AccountScreen() {
             {appVersion ? `v${appVersion} · ` : ''}Made with care in Vientiane
           </Text>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Fixed status-bar background (white, like the header) — content scrolls cleanly
+          under it instead of under the clock / battery. */}
+      <View pointerEvents="none" style={[styles.statusBarBg, { height: insets.top }]} />
+      {/* Compact sticky bar, pinned below the safe area once the header is gone. */}
+      <AccountCompactBar
+        scrollY={scrollY}
+        threshold={headerHeight - 52}
+        top={insets.top}
+        firstName={headerFirstName}
+        initial={headerInitial}
+        avatarUri={avatarUri}
+        tierLabel={isLoyaltyExcluded(profile ?? {}) ? null : TIER_LABELS[profile?.loyaltyTier ?? 'bronze']}
+      />
 
       {/* Logout error */}
       {logoutErr && (
@@ -493,6 +516,7 @@ export default function AccountScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  statusBarBg: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#FFFFFF' },
   container: {
     flex: 1,
     backgroundColor: COLORS.porcelain,

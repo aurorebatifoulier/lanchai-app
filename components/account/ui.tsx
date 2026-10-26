@@ -80,12 +80,14 @@ export function RowGroup({ children }: { children: React.ReactNode }) {
 }
 
 export function Row({
-  icon, tone = 'grey', title, sub, onPress, soon, danger,
+  icon, tone = 'grey', title, sub, subLines, onPress, soon, danger,
 }: {
   icon?: AnyIcon;
   tone?: IconTone;
   title: string;
   sub?: string;
+  /** Clamp the subtitle (e.g. 1 = one line with an ellipsis). */
+  subLines?: number;
   onPress?: () => void;
   /** Not available yet: muted, no chevron, a "Soon" chip (same chip as "Tourist ›"). */
   soon?: boolean;
@@ -97,7 +99,7 @@ export function Row({
       {icon && <IconCircle icon={icon} tone={soon ? 'grey' : tone} />}
       <View style={{ flex: 1 }}>
         <Text style={[UI.title, soon && { color: SHADES.carbonMuted }, danger && s.danger]}>{title}</Text>
-        {!!sub && <Text style={UI.subtitle}>{sub}</Text>}
+        {!!sub && <Text style={UI.subtitle} numberOfLines={subLines}>{sub}</Text>}
       </View>
       {soon ? <Chip label="Soon" small /> : onPress ? <Feather name="chevron-right" size={16} color={SHADES.carbonFaint} /> : null}
     </>
