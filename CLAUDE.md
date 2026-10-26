@@ -781,13 +781,23 @@ a snapshot indefinitely).
   app's `COLORS.danger` text only), `IconCircle`, `Chip`). Icon rule: AMBER = main
   contact or action needed (chat, WhatsApp, missing ID / business document, invite
   code), GREY = everything else, CARBON = staff (admin). WhatsApp is a palette row (no
-  green button). Profile sub-screens still use the old style (to decide).
+  green button). **Profile sub-screens** use the same `ui.tsx` tokens (`UI.screenContent`
+  padding 16, `SectionTitle` + `UI.card`, `UI.btnPrimary` amber / `UI.btnSecondary` white
+  + carbon outline / `UI.dangerText`, `UI.input`, `UI.choice` chips, `StatusBlock`,
+  `<StatusChip>` — the ONLY place green/red appear, small —, `<CheckLine>` for
+  successes, never coloured banners). Done: Loyalty (+ `ReferralCard`), ID & residency
+  (+ `IdUploadPanel`, also used by the booking ID step), Personal info. Still old style:
+  see batches 2–3 (Receipts & reports, All rentals, Notifications, Pick-up location,
+  Security, Delete account, Invite code, Business document, FAQ / legal, chat).
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled
-  past (threshold = header height − 52; instant with reduce motion). The header decor
-  has its OWN right column (26% of width, 84–130px, path/bubbles scaled) so it never
-  overlaps the text; chips wrap on narrow phones. Other tab screens apply the top inset
+  past (threshold = header height − 52; instant with reduce motion), with the points +
+  a 26px progress ring (tierProgress) on the right → Loyalty (nothing for excluded
+  accounts). The header decor (250×170, top-right) is drawn BEHIND the text; each text
+  line (greeting, name, stacked chips) is measured and any bubble that would touch one is
+  hidden (never shrunk). The tent bubble is placed in the gap right of the chips, before
+  the bike. Other tab screens apply the top inset
   on a non-scrolling root — not affected.
 
 ## Security follow-ups

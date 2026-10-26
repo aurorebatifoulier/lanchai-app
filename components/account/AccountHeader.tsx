@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated, Easing, AccessibilityInfo, ActivityIndicator,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -29,8 +30,10 @@ const BUBBLE = 36;
 const PATH = 'M 18 150 C 60 150, 40 95, 80 82 S 120 30, 160 40 S 210 70, 236 22';
 const PATH_LEN = 420; // ≥ the path's length — only drives the drawing speed
 
-const BUBBLES: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; x: number; y: number; bg: string; fg: string; rot: string }[] = [
-  { icon: 'tent', x: 60, y: 92, bg: SHADES.amberLight, fg: SHADES.amberDeep, rot: '-8deg' },
+// x / y in decor coordinates. The tent has none: it sits in the gap right of the stacked
+// chips, between them and the bike (computed from the measured chips, see Decor).
+const BUBBLES: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; x?: number; y?: number; bg: string; fg: string; rot: string }[] = [
+  { icon: 'tent', bg: SHADES.amberLight, fg: SHADES.amberDeep, rot: '-8deg' },
   { icon: 'speaker', x: 92, y: 24, bg: SHADES.carbonLight, fg: SHADES.carbon, rot: '6deg' },
   { icon: 'hammer-wrench', x: 198, y: 68, bg: SHADES.amberMid, fg: SHADES.carbon, rot: '-6deg' },
   { icon: 'bike', x: 184, y: 128, bg: SHADES.carbon, fg: SHADES.amber, rot: '5deg' },
@@ -46,16 +49,18 @@ export function useReduceMotion(): boolean {
   return reduce;
 }
 
-/** Text block (greeting + name + chips) in header coordinates, from onLayout. */
+/** One text line (greeting, name, chips) in header coordinates, from onLayout. */
 interface Box { left: number; top: number; right: number; bottom: number }
 const MARGIN = 8;
+const BIKE = BUBBLES.find(b => b.icon === 'bike')!;
 
 /**
  * Previous decor (dashed path to the amber hexagon + 4 bubbles), drawn BEHIND the text.
- * A bubble whose box would touch the measured text block (+ margin) is hidden — narrow
- * screens lose bubbles rather than shrinking everything. Bubbles wait for the measure.
+ * Bubbles are laid out in header coordinates; any bubble whose box would touch a measured
+ * text line (+ margin) is hidden — narrow screens lose bubbles rather than shrinking
+ * everything. Bubbles wait for the measure.
  */
-function Decor({ headerWidth, text }: { headerWidth: number; text: Box | null }) {
+function Decor({ headerWidth, lines, chips }: { headerWidth: number; lines: Box[] | null; chips: Box | null }) {
   const reduce = useReduceMotion();
   const draw = useRef(new Animated.Value(PATH_LEN)).current;
   const floats = useMemo(() => BUBBLES.map(() => new Animated.Value(0)), []);
@@ -73,37 +78,51 @@ function Decor({ headerWidth, text }: { headerWidth: number; text: Box | null })
   }, [reduce, draw, floats]);
 
   const decorLeft = headerWidth - DECOR_W - DECOR_RIGHT;
-  const clear = (b: { x: number; y: number }) => {
-    if (!text || !headerWidth) return false;
-    const l = decorLeft + b.x, t = DECOR_TOP + b.y, r = l + BUBBLE, btm = t + BUBBLE;
-    return r < text.left - MARGIN || l > text.right + MARGIN || btm < text.top - MARGIN || t > text.bottom + MARGIN;
+  const place = (b: typeof BUBBLES[number]): { left: number; top: number } | null => {
+    if (b.x != null && b.y != null) return { left: decorLeft + b.x, top: DECOR_TOP + b.y };
+    if (!chips) return null;
+    // Centred in the gap between the chips and the bike, level with the chips.
+    const gapL = chips.right + MARGIN, gapR = decorLeft + BIKE.x! - MARGIN;
+    if (gapR - gapL < BUBBLE) return null;
+    return { left: (gapL + gapR - BUBBLE) / 2, top: (chips.top + chips.bottom - BUBBLE) / 2 };
   };
+  const clear = (pos: { left: number; top: number }) => {
+    const l = pos.left, t = pos.top, r = l + BUBBLE, btm = t + BUBBLE;
+    return lines!.every(x => r < x.left - MARGIN || l > x.right + MARGIN || btm < x.top - MARGIN || t > x.bottom + MARGIN);
+  };
+  const ready = !!lines && headerWidth > 0;
 
   return (
-    <View pointerEvents="none" style={s.decor}>
-      <Svg width={DECOR_W} height={DECOR_H} viewBox={`0 0 ${DECOR_W} ${DECOR_H}`}>
-        <Defs>
-          <Mask id="reveal">
-            <AnimatedPath d={PATH} stroke="#fff" strokeWidth={8} fill="none" strokeDasharray={[PATH_LEN, PATH_LEN]} strokeDashoffset={draw} />
-          </Mask>
-        </Defs>
-        <Path d={PATH} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={[4, 6]} strokeLinecap="round" fill="none" mask="url(#reveal)" />
-        <Polygon points="236,12 245,17 245,27 236,32 227,27 227,17" fill={SHADES.amber} />
-      </Svg>
-      {BUBBLES.map((b, i) => clear(b) && (
-        <Animated.View
-          key={b.icon}
-          style={[s.bubble, {
-            left: b.x, top: b.y, backgroundColor: b.bg,
-            transform: [
-              { rotate: b.rot },
-              { translateY: floats[i].interpolate({ inputRange: [0, 1], outputRange: [0, i % 2 ? 3 : -3] }) },
-            ],
-          }]}
-        >
-          <MaterialCommunityIcons name={b.icon} size={17} color={b.fg} />
-        </Animated.View>
-      ))}
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={s.decor}>
+        <Svg width={DECOR_W} height={DECOR_H} viewBox={`0 0 ${DECOR_W} ${DECOR_H}`}>
+          <Defs>
+            <Mask id="reveal">
+              <AnimatedPath d={PATH} stroke="#fff" strokeWidth={8} fill="none" strokeDasharray={[PATH_LEN, PATH_LEN]} strokeDashoffset={draw} />
+            </Mask>
+          </Defs>
+          <Path d={PATH} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={[4, 6]} strokeLinecap="round" fill="none" mask="url(#reveal)" />
+          <Polygon points="236,12 245,17 245,27 236,32 227,27 227,17" fill={SHADES.amber} />
+        </Svg>
+      </View>
+      {ready && BUBBLES.map((b, i) => {
+        const pos = place(b);
+        if (!pos || !clear(pos)) return null;
+        return (
+          <Animated.View
+            key={b.icon}
+            style={[s.bubble, {
+              left: pos.left, top: pos.top, backgroundColor: b.bg,
+              transform: [
+                { rotate: b.rot },
+                { translateY: floats[i].interpolate({ inputRange: [0, 1], outputRange: [0, i % 2 ? 3 : -3] }) },
+              ],
+            }]}
+          >
+            <MaterialCommunityIcons name={b.icon} size={17} color={b.fg} />
+          </Animated.View>
+        );
+      })}
     </View>
   );
 }
@@ -128,17 +147,23 @@ const PAD_TOP = 22;
 export function AccountHeader(p: AccountHeaderProps) {
   const hour = Math.floor(vteMinutesOfDay(Date.now()) / 60);
   const [headerWidth, setHeaderWidth] = useState(0);
-  // Text column position (relative to the row) + the widest of its lines.
-  const [col, setCol] = useState<{ x: number; y: number; h: number } | null>(null);
-  const [lineW, setLineW] = useState<Record<string, number>>({});
-  const onLine = (key: string) => (e: { nativeEvent: { layout: { width: number } } }) => {
-    const w = e.nativeEvent.layout.width;
-    setLineW(prev => (prev[key] === w ? prev : { ...prev, [key]: w }));
+  // Text column position (relative to the row) + each line's box inside it.
+  const [col, setCol] = useState<{ x: number; y: number } | null>(null);
+  const [rects, setRects] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
+  const onLine = (key: string) => (e: LayoutChangeEvent) => {
+    const { x, y, width: w, height: h } = e.nativeEvent.layout;
+    setRects(prev => {
+      const o = prev[key];
+      return o && o.x === x && o.y === y && o.w === w && o.h === h ? prev : { ...prev, [key]: { x, y, w, h } };
+    });
   };
-  const maxW = Math.max(0, ...Object.values(lineW));
-  const text: Box | null = col && maxW
-    ? { left: PAD_X + col.x, top: PAD_TOP + col.y, right: PAD_X + col.x + maxW, bottom: PAD_TOP + col.y + col.h }
-    : null;
+  const toBox = (r: { x: number; y: number; w: number; h: number }): Box => ({
+    left: PAD_X + col!.x + r.x, top: PAD_TOP + col!.y + r.y,
+    right: PAD_X + col!.x + r.x + r.w, bottom: PAD_TOP + col!.y + r.y + r.h,
+  });
+  const measured = col && rects.greeting && rects.name && rects.chips;
+  const lines = measured ? [rects.greeting, rects.name, rects.chips].map(toBox) : null;
+  const chipsBox = measured ? toBox(rects.chips) : null;
 
   return (
     <View
@@ -146,7 +171,7 @@ export function AccountHeader(p: AccountHeaderProps) {
       onLayout={e => { setHeaderWidth(e.nativeEvent.layout.width); p.onHeight?.(e.nativeEvent.layout.height); }}
     >
       {/* Decor first → behind the text (and zIndex below it). */}
-      <Decor headerWidth={headerWidth} text={text} />
+      <Decor headerWidth={headerWidth} lines={lines} chips={chipsBox} />
       <View style={s.row}>
         <TouchableOpacity onPress={p.onAvatarPress} activeOpacity={0.85} style={s.ring}>
           {p.uploading ? (
@@ -158,7 +183,7 @@ export function AccountHeader(p: AccountHeaderProps) {
           )}
           <View style={s.camera}><Feather name="camera" size={10} color={SHADES.carbon} /></View>
         </TouchableOpacity>
-        <View style={s.info} onLayout={e => { const { x, y, height } = e.nativeEvent.layout; setCol({ x, y, h: height }); }}>
+        <View style={s.info} onLayout={e => { const { x, y } = e.nativeEvent.layout; setCol(c => (c && c.x === x && c.y === y ? c : { x, y })); }}>
           <Text style={[s.greeting, s.fit]} numberOfLines={1} onLayout={onLine('greeting')}>{ACCOUNT_COPY.greeting(hour)}</Text>
           <Text style={[s.name, s.fit]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} onLayout={onLine('name')}>
             {ACCOUNT_COPY.name(p.firstName)}

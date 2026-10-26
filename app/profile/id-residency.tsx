@@ -7,6 +7,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { IdentitySection } from '@/components/profile/IdentitySection';
 import { ResidencySection } from '@/components/profile/ResidencySection';
+import { UI } from '@/components/account/ui';
 
 // ID & residency — ONE screen (Account → ID & residency, the header badge, emails,
 // notifications): the ID document required to rent (status, planned deletion, upload /
@@ -26,10 +27,11 @@ export default function IdResidencyScreen() {
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
       >
-        <View style={s.card}><IdentitySection /></View>
-        <View style={s.card}><ResidencySection /></View>
+        {/* Each section renders its own section title + card (My Account style). */}
+        <IdentitySection />
+        <ResidencySection />
       </ScrollView>
     </View>
   );
@@ -45,6 +47,4 @@ const s = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, textAlign: 'center',
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
-  content: { paddingHorizontal: 20, paddingTop: 16, gap: 14 },
-  card: { backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1, borderColor: COLORS.softGray200, padding: 16 },
 });

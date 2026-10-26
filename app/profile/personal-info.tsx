@@ -17,6 +17,8 @@ import { Feather } from '@expo/vector-icons';
 import { updateProfile } from 'firebase/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, SectionTitle, RowGroup, Row, StatusChip, CheckLine } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
 import { getCustomerTypeConfig } from '@/utils/customerType';
@@ -180,7 +182,7 @@ export default function PersonalInfoScreen() {
       <View style={[s.root, { paddingTop: insets.top }]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
       </View>
     );
   }
@@ -198,197 +200,189 @@ export default function PersonalInfoScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Email — read-only */}
-        <Text style={s.fieldLabel}>Email</Text>
-        <View style={s.readonlyField}>
-          <Text style={s.readonlyValue}>{auth.currentUser?.email ?? '—'}</Text>
-        </View>
-        <Text style={s.fieldNote}>Contact us to change your email.</Text>
-
-        {/* Account type — read-only, admin-controlled */}
-        {(() => {
-          const ctc = getCustomerTypeConfig(customerType);
-          return (
-            <>
-              <Text style={s.fieldLabel}>Account type</Text>
-              <View style={[s.readonlyField, s.readonlyFieldRow]}>
-                <Text style={s.readonlyValue}>{ctc.label}</Text>
-                {ctc.depositMessage && (
-                  <View style={[s.ctBadge, { backgroundColor: ctc.badgeBg }]}>
-                    <Text style={[s.ctBadgeText, { color: ctc.badgeText }]}>
-                      {ctc.depositMessage}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text style={s.fieldNote}>
-                {'Set by LANCHAI · affects your deposit. '}
-                <Text style={s.fieldNoteLink} onPress={() => router.push('/chat')}>
-                  Contact us to update.
-                </Text>
-              </Text>
-            </>
-          );
-        })()}
-
-        {/* Name — read-only once an ID has been checked in person (firestore.rules
-            enforces it too); staff can correct it from the ID check. */}
-        {nameLocked ? (
-          <>
-            <Text style={s.fieldLabel}>Name</Text>
-            <View style={s.readonlyField}>
-              <Text style={s.readonlyValue}>{`${firstName} ${lastName}`.trim() || '—'}</Text>
-            </View>
-            <Text style={s.fieldNote}>Your name was checked against your ID. Contact us to change your name.</Text>
-          </>
-        ) : (
-          <>
-            {/* First name */}
-            <Text style={s.fieldLabel}>First name</Text>
-            <TextInput
-              style={[s.input, touched.firstName && !!errors.firstName && s.inputError]}
-              value={firstName}
-              onChangeText={setFirstName}
-              onBlur={() => touch('firstName')}
-              onSubmitEditing={() => lastNameRef.current?.focus()}
-              placeholder="e.g. Aurore"
-              placeholderTextColor={COLORS.fg3}
-              autoCapitalize="words"
-              returnKeyType="next"
-              blurOnSubmit={false}
-            />
-            <Text style={s.errorText}>{touched.firstName ? errors.firstName : ''}</Text>
-
-            {/* Last name */}
-            <Text style={s.fieldLabel}>Last name</Text>
-            <TextInput
-              ref={lastNameRef}
-              style={[s.input, touched.lastName && !!errors.lastName && s.inputError]}
-              value={lastName}
-              onChangeText={setLastName}
-              onBlur={() => touch('lastName')}
-              onSubmitEditing={() => phoneRef.current?.focus()}
-              placeholder="e.g. Batifoulier"
-              placeholderTextColor={COLORS.fg3}
-              autoCapitalize="words"
-              returnKeyType="next"
-              blurOnSubmit={false}
-            />
-            <Text style={s.errorText}>{touched.lastName ? errors.lastName : ''}</Text>
-          </>
-        )}
-
-        {/* Phone */}
-        <Text style={s.fieldLabel}>Phone</Text>
-        <TextInput
-          ref={phoneRef}
-          style={[s.input, touched.phone && !!errors.phone && s.inputError]}
-          value={phone}
-          onChangeText={setPhone}
-          onBlur={() => touch('phone')}
-          onSubmitEditing={sameAsPhone ? handleSave : () => whatsappRef.current?.focus()}
-          placeholder="+856 20 ..."
-          placeholderTextColor={COLORS.fg3}
-          keyboardType="phone-pad"
-          returnKeyType={sameAsPhone ? 'done' : 'next'}
-          blurOnSubmit={false}
-        />
-        <Text style={s.errorText}>{touched.phone ? errors.phone : ''}</Text>
-
-        {/* WhatsApp number */}
-        <View style={s.fieldLabelRow}>
-          <Text style={s.fieldLabel}>WhatsApp number</Text>
-          <Text style={s.fieldLabelOptional}>Optional</Text>
-        </View>
-        <TextInput
-          ref={whatsappRef}
-          style={[
-            s.input,
-            sameAsPhone && s.inputDisabled,
-            !sameAsPhone && touched.whatsapp && !!errors.whatsapp && s.inputError,
-          ]}
-          value={whatsappDisplayed}
-          onChangeText={v => { if (!sameAsPhone) setWhatsapp(v); }}
-          onBlur={() => { if (!sameAsPhone) touch('whatsapp'); }}
-          onSubmitEditing={() => addressRef.current?.focus()}
-          editable={!sameAsPhone}
-          placeholder="+856 20 ..."
-          placeholderTextColor={COLORS.fg3}
-          keyboardType="phone-pad"
-          returnKeyType="next"
-        />
-        <Text style={s.errorText}>
-          {!sameAsPhone && touched.whatsapp ? errors.whatsapp : ''}
-        </Text>
-
-        {/* Same as phone checkbox */}
-        <TouchableOpacity
-          style={s.checkbox}
-          onPress={handleToggleSameAsPhone}
-          activeOpacity={0.7}
-        >
-          <View style={[s.checkboxBox, sameAsPhone && s.checkboxBoxChecked]}>
-            {sameAsPhone && <Feather name="check" size={13} color={COLORS.white} />}
+        {/* ── Account (read-only) ── */}
+        <SectionTitle style={{ marginTop: 16 }}>Account</SectionTitle>
+        <View style={[UI.card, UI.cardPadded]}>
+          <Text style={UI.fieldLabel}>Email</Text>
+          <View style={[UI.input, UI.inputReadonly]}>
+            <Text style={UI.inputReadonlyText}>{auth.currentUser?.email ?? '—'}</Text>
           </View>
-          <Text style={s.checkboxLabel}>Same as phone number</Text>
-        </TouchableOpacity>
+          <Text style={[UI.small, s.note]}>Contact us to change your email.</Text>
 
-        {/* Address */}
-        <View style={s.fieldLabelRow}>
-          <Text style={s.fieldLabel}>Address</Text>
-          <Text style={s.fieldLabelOptional}>Optional</Text>
+          {/* Account type — read-only, admin-controlled */}
+          {(() => {
+            const ctc = getCustomerTypeConfig(customerType);
+            return (
+              <>
+                <Text style={[UI.fieldLabel, { marginTop: 16 }]}>Account type</Text>
+                <View style={[UI.input, UI.inputReadonly, s.readonlyRow]}>
+                  <Text style={UI.inputReadonlyText}>{ctc.label}</Text>
+                  {ctc.depositMessage && <StatusChip label={ctc.depositMessage} tone="amber" />}
+                </View>
+                <Text style={[UI.small, s.note]}>
+                  {'Set by LANCHAI · affects your deposit. '}
+                  <Text style={s.noteLink} onPress={() => router.push('/chat')}>
+                    Contact us to update.
+                  </Text>
+                </Text>
+              </>
+            );
+          })()}
         </View>
-        <TextInput
-          ref={addressRef}
-          style={s.input}
-          value={address}
-          onChangeText={setAddress}
-          onSubmitEditing={handleSave}
-          placeholder="Street, city…"
-          placeholderTextColor={COLORS.fg3}
-          returnKeyType="done"
-          maxLength={200}
-        />
-        <Text style={s.errorText} />
+
+        {/* ── Your details ── */}
+        <SectionTitle>Your details</SectionTitle>
+        <View style={[UI.card, UI.cardPadded]}>
+          {/* Name — read-only once an ID has been checked in person (firestore.rules
+              enforces it too); staff can correct it from the ID check. */}
+          {nameLocked ? (
+            <>
+              <Text style={UI.fieldLabel}>Name</Text>
+              <View style={[UI.input, UI.inputReadonly]}>
+                <Text style={UI.inputReadonlyText}>{`${firstName} ${lastName}`.trim() || '—'}</Text>
+              </View>
+              <Text style={[UI.small, s.note, { marginBottom: 16 }]}>Your name was checked against your ID. Contact us to change your name.</Text>
+            </>
+          ) : (
+            <>
+              {/* First name */}
+              <Text style={UI.fieldLabel}>First name</Text>
+              <TextInput
+                style={[UI.input, touched.firstName && !!errors.firstName && s.inputError]}
+                value={firstName}
+                onChangeText={setFirstName}
+                onBlur={() => touch('firstName')}
+                onSubmitEditing={() => lastNameRef.current?.focus()}
+                placeholder="e.g. Aurore"
+                placeholderTextColor={SHADES.carbonFaint}
+                autoCapitalize="words"
+                returnKeyType="next"
+                blurOnSubmit={false}
+              />
+              <Text style={[UI.errorText, s.fieldError]}>{touched.firstName ? errors.firstName : ''}</Text>
+
+              {/* Last name */}
+              <Text style={UI.fieldLabel}>Last name</Text>
+              <TextInput
+                ref={lastNameRef}
+                style={[UI.input, touched.lastName && !!errors.lastName && s.inputError]}
+                value={lastName}
+                onChangeText={setLastName}
+                onBlur={() => touch('lastName')}
+                onSubmitEditing={() => phoneRef.current?.focus()}
+                placeholder="e.g. Batifoulier"
+                placeholderTextColor={SHADES.carbonFaint}
+                autoCapitalize="words"
+                returnKeyType="next"
+                blurOnSubmit={false}
+              />
+              <Text style={[UI.errorText, s.fieldError]}>{touched.lastName ? errors.lastName : ''}</Text>
+            </>
+          )}
+
+          {/* Phone */}
+          <Text style={UI.fieldLabel}>Phone</Text>
+          <TextInput
+            ref={phoneRef}
+            style={[UI.input, touched.phone && !!errors.phone && s.inputError]}
+            value={phone}
+            onChangeText={setPhone}
+            onBlur={() => touch('phone')}
+            onSubmitEditing={sameAsPhone ? handleSave : () => whatsappRef.current?.focus()}
+            placeholder="+856 20 ..."
+            placeholderTextColor={SHADES.carbonFaint}
+            keyboardType="phone-pad"
+            returnKeyType={sameAsPhone ? 'done' : 'next'}
+            blurOnSubmit={false}
+          />
+          <Text style={[UI.errorText, s.fieldError]}>{touched.phone ? errors.phone : ''}</Text>
+
+          {/* WhatsApp number */}
+          <View style={s.labelRow}>
+            <Text style={[UI.fieldLabel, { marginBottom: 0 }]}>WhatsApp number</Text>
+            <Text style={UI.small}>Optional</Text>
+          </View>
+          <TextInput
+            ref={whatsappRef}
+            style={[
+              UI.input,
+              sameAsPhone && s.inputDisabled,
+              !sameAsPhone && touched.whatsapp && !!errors.whatsapp && s.inputError,
+            ]}
+            value={whatsappDisplayed}
+            onChangeText={v => { if (!sameAsPhone) setWhatsapp(v); }}
+            onBlur={() => { if (!sameAsPhone) touch('whatsapp'); }}
+            onSubmitEditing={() => addressRef.current?.focus()}
+            editable={!sameAsPhone}
+            placeholder="+856 20 ..."
+            placeholderTextColor={SHADES.carbonFaint}
+            keyboardType="phone-pad"
+            returnKeyType="next"
+          />
+          <Text style={[UI.errorText, s.fieldError]}>
+            {!sameAsPhone && touched.whatsapp ? errors.whatsapp : ''}
+          </Text>
+
+          {/* Same as phone checkbox */}
+          <TouchableOpacity
+            style={s.checkbox}
+            onPress={handleToggleSameAsPhone}
+            activeOpacity={0.7}
+          >
+            <View style={[s.checkboxBox, sameAsPhone && s.checkboxBoxChecked]}>
+              {sameAsPhone && <Feather name="check" size={13} color={SHADES.cream} />}
+            </View>
+            <Text style={[UI.body, { color: SHADES.carbon }]}>Same as phone number</Text>
+          </TouchableOpacity>
+
+          {/* Address */}
+          <View style={s.labelRow}>
+            <Text style={[UI.fieldLabel, { marginBottom: 0 }]}>Address</Text>
+            <Text style={UI.small}>Optional</Text>
+          </View>
+          <TextInput
+            ref={addressRef}
+            style={UI.input}
+            value={address}
+            onChangeText={setAddress}
+            onSubmitEditing={handleSave}
+            placeholder="Street, city…"
+            placeholderTextColor={SHADES.carbonFaint}
+            returnKeyType="done"
+            maxLength={200}
+          />
+        </View>
 
         {/* Email reminders now live in Notifications (app/profile/notifications.tsx). */}
-        <TouchableOpacity style={s.notifLink} onPress={() => router.push('/profile/notifications')} activeOpacity={0.7}>
-          <Feather name="bell" size={14} color={COLORS.fg2} />
-          <Text style={s.notifLinkText}>Notification settings</Text>
-          <Feather name="chevron-right" size={14} color={COLORS.fg3} />
-        </TouchableOpacity>
+        <View style={{ marginTop: 16 }}>
+          <RowGroup>
+            <Row icon={{ name: 'bell' }} title="Notification settings" onPress={() => router.push('/profile/notifications')} />
+          </RowGroup>
+        </View>
 
-        {/* Status banner — shown directly above the Save button */}
-        {saveStatus === 'success' && (
-          <View style={s.bannerSuccess}>
-            <Feather name="check-circle" size={16} color="#0F6E56" />
-            <Text style={s.bannerSuccessText}>Your profile has been updated.</Text>
-          </View>
-        )}
-        {saveStatus === 'error' && (
-          <View style={s.bannerError}>
-            <Feather name="alert-circle" size={16} color="#B91C1C" />
-            <Text style={s.bannerErrorText}>Could not save. Please try again.</Text>
-          </View>
-        )}
+        {/* Save status — a subtle check line / one-line error, right above Save */}
+        <View style={s.status}>
+          {saveStatus === 'success' && <CheckLine text="Your profile has been updated." />}
+          {saveStatus === 'error' && <Text style={UI.errorText}>Could not save. Please try again.</Text>}
+        </View>
 
         {/* Save */}
         <TouchableOpacity
-          style={[s.saveBtn, (!isValid || saving) && s.saveBtnOff]}
+          style={[UI.btnPrimary, (!isValid || saving) && UI.btnDisabled]}
           onPress={handleSave}
           disabled={!isValid || saving}
           activeOpacity={0.85}
         >
           {saving ? (
             <>
-              <ActivityIndicator size="small" color={COLORS.carbon} />
-              <Text style={s.saveBtnText}>Saving…</Text>
+              <ActivityIndicator size="small" color={SHADES.carbon} />
+              <Text style={UI.btnPrimaryText}>Saving…</Text>
             </>
           ) : (
-            <Text style={s.saveBtnText}>Save</Text>
+            <Text style={UI.btnPrimaryText}>Save</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -410,8 +404,6 @@ function Header({ onBack }: { onBack: () => void }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  notifLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 12 },
-  notifLinkText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
   root: {
     flex: 1,
     backgroundColor: COLORS.porcelain,
@@ -436,177 +428,21 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-  },
+  note: { marginTop: 6 },
+  noteLink: { color: SHADES.carbon, fontWeight: '700', textDecorationLine: 'underline' },
+  readonlyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  labelRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 8 },
+  inputError: { borderColor: COLORS.danger },
+  inputDisabled: { backgroundColor: SHADES.carbonLight, color: SHADES.carbonMuted },
+  // Reserved height so an error never shifts the form.
+  fieldError: { minHeight: 18, marginTop: 4, marginBottom: 10, paddingHorizontal: 2 },
 
-  fieldLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    marginBottom: 8,
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-  },
-  fieldLabelOptional: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    letterSpacing: 0.2,
-    opacity: 0.7,
-  },
-
-  input: {
-    height: 50,
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.carbon,
-    marginBottom: 4,
-  },
-  inputError: {
-    borderColor: COLORS.danger,
-  },
-  inputDisabled: {
-    backgroundColor: COLORS.warmBeige,
-    color: COLORS.fg2,
-  },
-  errorText: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.danger,
-    minHeight: 18,
-    marginBottom: 12,
-    paddingHorizontal: 2,
-  },
-
-  readonlyField: {
-    height: 50,
-    backgroundColor: COLORS.warmBeige,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  readonlyValue: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.fg2,
-  },
-  fieldNote: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    marginBottom: 20,
-  },
-  fieldNoteLink: {
-    color: COLORS.carbon,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  readonlyFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  ctBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  ctBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-
-  checkbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: -4,
-    marginBottom: 24,
-  },
+  checkbox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: -2, marginBottom: 18 },
   checkboxBox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: SHADES.carbonFaint,
+    backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
   },
-  checkboxBoxChecked: {
-    backgroundColor: COLORS.carbon,
-    borderColor: COLORS.carbon,
-  },
-  checkboxLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg2,
-  },
+  checkboxBoxChecked: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
 
-  bannerSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#E1F5EE',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-  },
-  bannerSuccessText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F6E56',
-  },
-  bannerError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-  },
-  bannerErrorText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#B91C1C',
-  },
-
-  saveBtn: {
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  saveBtnOff: {
-    opacity: 0.45,
-  },
-  saveBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
+  status: { minHeight: 24, justifyContent: 'center', marginTop: 12, marginBottom: 8 },
 });

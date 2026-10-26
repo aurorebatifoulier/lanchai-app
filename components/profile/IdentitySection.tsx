@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
-import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, SectionTitle, StatusBlock, StatusChip, CheckLine } from '@/components/account/ui';
 import { IdUploadPanel } from '@/components/IdUploadPanel';
 import { storage } from '@/lib/firebase';
 import { useMyIdentity, ID_DOC_TYPES, deleteMyIdentityDocument } from '@/lib/identity';
@@ -18,16 +19,18 @@ export function IdentitySection() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState(false); // shown as a check line, not a banner
 
   // Retention (functions/src/retention.ts): deleted now only if the rule allows it,
   // otherwise we explain until when it's kept.
   const requestDelete = async () => {
     setDeleting(true);
     setDeleteMsg(null);
+    setDeleted(false);
     try {
       const r = await deleteMyIdentityDocument();
       setConfirmDelete(false);
-      if (r.deleted) setDeleteMsg('Your ID document has been deleted.');
+      if (r.deleted) { setDeleted(true); setDeleteMsg('Your ID document has been deleted.'); }
       else if (r.reason === 'blocked') setDeleteMsg('We can\u2019t delete it while a rental, a balance or a claim is still open — it will be deleted automatically once resolved.');
       else if (r.reason === 'rental_in_progress') setDeleteMsg(`We keep it while you have a rental in progress, then ${r.months} months after your last rental, for the security of rentals.`);
       else setDeleteMsg(`For the security of rentals, it\u2019s kept until ${r.keptUntilMs ? new Date(r.keptUntilMs).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'the end of the retention period'} — ${r.months} months after your last rental — then deleted automatically.`);
@@ -54,101 +57,89 @@ export function IdentitySection() {
 
   return (
     <View>
-      <Text style={s.sectionTitle}>ID document</Text>
-      {loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 16 }} />
-      ) : (
-        <View>
-          <Text style={s.intro}>
-            An ID document (passport, national ID card or Lao ID card) is needed to rent. We check it with you at your first pick-up.
-          </Text>
+      <SectionTitle style={{ marginTop: 16 }}>ID document</SectionTitle>
+      <View style={[UI.card, UI.cardPadded]}>
+        {loading ? (
+          <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 16 }} />
+        ) : (
+          <View>
+            {/* Icon rule: amber = action needed (no ID / declined), grey = done (on file). */}
+            {onFile ? (
+              <StatusBlock icon={ID_ICON} title={typeLabel} chip={<StatusChip label="On file" tone="success" />} />
+            ) : rejected ? (
+              <StatusBlock icon={{ name: 'alert-circle' }} tone="amber" title="Your ID was declined" chip={<StatusChip label="Declined" tone="danger" />}>
+                {!!identity?.rejection?.text && <Text style={UI.body}>{identity.rejection.text}</Text>}
+                <Text style={UI.body}>Please add a new photo — new bookings are paused until then.</Text>
+              </StatusBlock>
+            ) : (
+              <StatusBlock icon={ID_ICON} tone="amber" title="Add your ID document" />
+            )}
 
-          {onFile && (
-            <View style={s.card}>
-              <View style={s.statusRow}>
-                <Feather name="check-circle" size={16} color={COLORS.success} />
-                <Text style={s.statusText}>{typeLabel} on file</Text>
+            <Text style={[UI.body, { marginTop: 12 }]}>
+              An ID document (passport, national ID card or Lao ID card) is needed to rent. We check it with you at your first pick-up.
+            </Text>
+
+            {onFile && (
+              <>
+                {thumbs.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.thumbs}>
+                    {thumbs.map(u => <Image key={u} source={{ uri: u }} style={s.thumb} />)}
+                  </ScrollView>
+                )}
+                <Text style={[UI.small, { marginTop: 10 }]}>
+                  {identity?.purgeDueAt
+                    ? `Deleted automatically on ${new Date(identity.purgeDueAt.toMillis()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, unless you rent again.`
+                    : 'Kept while you have a rental in progress, then deleted automatically some months after your last rental.'}
+                </Text>
+                {!replacing && !confirmDelete && (
+                  <View style={s.actions}>
+                    <TouchableOpacity style={UI.btnSecondary} onPress={() => setReplacing(true)} activeOpacity={0.7}>
+                      <Feather name="refresh-cw" size={14} color={SHADES.carbon} />
+                      <Text style={UI.btnSecondaryText}>Replace my ID</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setConfirmDelete(true)} activeOpacity={0.7} hitSlop={8}>
+                      <Text style={UI.dangerText}>Delete my ID</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                {confirmDelete && (
+                  <View style={{ marginTop: 14 }}>
+                    <ConfirmBox
+                      text="Delete your ID document? You'll need to add it again (or show it at the shop) for your next booking."
+                      confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+                      cancelLabel="Keep"
+                      destructive
+                      confirmDisabled={deleting}
+                      onCancel={() => setConfirmDelete(false)}
+                      onConfirm={requestDelete}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+            {deleteMsg && (
+              <View style={{ marginTop: 12 }}>
+                {deleted ? <CheckLine text={deleteMsg} /> : <Text style={UI.body}>{deleteMsg}</Text>}
               </View>
-              {thumbs.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.thumbs}>
-                  {thumbs.map(u => <Image key={u} source={{ uri: u }} style={s.thumb} />)}
-                </ScrollView>
-              )}
-              <Text style={s.retention}>
-                {identity?.purgeDueAt
-                  ? `Deleted automatically on ${new Date(identity.purgeDueAt.toMillis()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, unless you rent again.`
-                  : 'Kept while you have a rental in progress, then deleted automatically some months after your last rental.'}
-              </Text>
-              {!replacing && (
-                <View style={s.linkRow}>
-                  <TouchableOpacity onPress={() => setReplacing(true)} activeOpacity={0.7}>
-                    <Text style={s.link}>Replace my ID</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setConfirmDelete(true)} activeOpacity={0.7}>
-                    <Text style={[s.link, { color: COLORS.danger }]}>Delete my ID</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {confirmDelete && (
-                <ConfirmBox
-                  text="Delete your ID document? You'll need to add it again (or show it at the shop) for your next booking."
-                  confirmLabel={deleting ? 'Deleting…' : 'Delete'}
-                  cancelLabel="Keep"
-                  destructive
-                  confirmDisabled={deleting}
-                  onCancel={() => setConfirmDelete(false)}
-                  onConfirm={requestDelete}
-                />
-              )}
-            </View>
-          )}
-          {deleteMsg && <Text style={s.deleteMsg}>{deleteMsg}</Text>}
+            )}
 
-          {rejected && (
-            <View style={[s.card, s.cardWarn]}>
-              <View style={s.statusRow}>
-                <Feather name="alert-circle" size={16} color={COLORS.danger} />
-                <Text style={s.statusText}>Your ID was declined</Text>
-              </View>
-              {!!identity?.rejection?.text && <Text style={s.body}>{identity.rejection.text}</Text>}
-              <Text style={s.body}>Please add a new photo — new bookings are paused until then.</Text>
-            </View>
-          )}
-
-          {(!onFile || replacing) && (
-            <IdUploadPanel onDone={() => setReplacing(false)} submitLabel={onFile ? 'Save my new ID' : 'Save my ID'} />
-          )}
-        </View>
-      )}
+            {(!onFile || replacing) && (
+              <>
+                <View style={UI.divider} />
+                <IdUploadPanel onDone={() => setReplacing(false)} submitLabel={onFile ? 'Save my new ID' : 'Save my ID'} />
+              </>
+            )}
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
+const ID_ICON = { set: 'mci', name: 'card-account-details-outline' } as const;
+
 const s = StyleSheet.create({
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.carbon, marginBottom: 8 },
-  root: { flex: 1, backgroundColor: COLORS.porcelain },
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
-  },
-  headerTitle: {
-    position: 'absolute', left: 0, right: 0, textAlign: 'center',
-    fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
-  },
-  content: { paddingHorizontal: 20, paddingTop: 20 },
-  intro: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19, marginBottom: 14 },
-  card: {
-    backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, borderColor: COLORS.softGray200,
-    padding: 14, marginBottom: 6,
-  },
-  cardWarn: { backgroundColor: '#FFF8F8', borderColor: '#FCA5A5' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  statusText: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
-  body: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19, marginTop: 6 },
   thumbs: { gap: 10, paddingTop: 12 },
-  thumb: { width: 84, height: 84, borderRadius: 10, backgroundColor: COLORS.softGray200 },
-  link: { fontSize: 13, fontWeight: '800', color: COLORS.carbon, marginTop: 12 },
-  linkRow: { flexDirection: 'row', gap: 20 },
-  retention: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: 17, marginTop: 10 },
-  deleteMsg: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19, marginBottom: 12 },
+  thumb: { width: 84, height: 84, borderRadius: 12, backgroundColor: SHADES.carbonLight },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 14 },
 });

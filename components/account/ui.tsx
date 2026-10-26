@@ -12,6 +12,12 @@ import { COLORS } from '@/constants/Colors';
 // main contact with us or need an action from you (chat / WhatsApp, a missing ID or
 // business document, an invite code to enter); GREY (light grey circle + carbon icon)
 // for everything else. Staff entries use CARBON (carbon circle + amber icon).
+//
+// Also used by the profile sub-screens (Loyalty, ID & residency, Personal info): same
+// cards, section titles, text sizes and spacing (screen content padding 16). Buttons:
+// primary = amber, secondary = white with a carbon outline, destructive = text only in
+// COLORS.danger. Green / red only as SMALL status signals (<StatusChip>, a one-line
+// error) — never banners or backgrounds; a success is a <CheckLine>.
 
 export const UI = StyleSheet.create({
   card: {
@@ -26,6 +32,37 @@ export const UI = StyleSheet.create({
   chipCarbon: { backgroundColor: SHADES.carbon },
   chipText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
   chipTextSmall: { fontSize: 12, fontWeight: '700', color: SHADES.carbonMuted },
+
+  // Profile sub-screens
+  screenContent: { paddingHorizontal: 16, paddingTop: 4 },
+  body: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
+  small: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 17 },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbon, marginBottom: 8 },
+  input: {
+    height: 50, borderRadius: 12, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.cream,
+    paddingHorizontal: 14, fontSize: 15, fontWeight: '500', color: SHADES.carbon,
+  },
+  inputReadonly: { backgroundColor: SHADES.carbonLight, borderColor: SHADES.carbonLight, justifyContent: 'center' },
+  inputReadonlyText: { fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted },
+  btnPrimary: {
+    height: 50, borderRadius: 14, backgroundColor: SHADES.amber,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
+  btnPrimaryText: { fontSize: 15, fontWeight: '800', color: SHADES.carbon },
+  btnSecondary: {
+    height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14,
+  },
+  btnSecondaryText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
+  btnDisabled: { opacity: 0.45 },
+  dangerText: { fontSize: 14, fontWeight: '700', color: COLORS.danger },
+  errorText: { fontSize: 12, fontWeight: '500', color: COLORS.danger, lineHeight: 17 },
+  /** Choice chips (forms): grey, carbon when selected. */
+  choice: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: SHADES.carbonLight },
+  choiceOn: { backgroundColor: SHADES.carbon },
+  choiceText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  choiceTextOn: { color: SHADES.cream },
+  divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 14 },
 });
 
 export type IconTone = 'amber' | 'grey' | 'carbon';
@@ -60,6 +97,54 @@ export function Chip({ label, tone = 'grey', chevron, small }: { label: string; 
     <View style={[UI.chip, tone === 'carbon' ? UI.chipCarbon : UI.chipGrey, small && s.chipSmall]}>
       <Text style={[small ? UI.chipTextSmall : UI.chipText, tone === 'carbon' && { color: SHADES.cream }]}>{label}</Text>
       {chevron && <Feather name="chevron-right" size={13} color={SHADES.carbonMuted} />}
+    </View>
+  );
+}
+
+/** Small status signal — the ONLY place green / red appear on these screens. */
+export function StatusChip({ label, tone }: { label: string; tone: 'success' | 'danger' | 'grey' | 'amber' }) {
+  const t = STATUS_TONES[tone];
+  return (
+    <View style={[s.status, { backgroundColor: t.bg }]}>
+      <Text style={[s.statusText, { color: t.fg }]}>{label}</Text>
+    </View>
+  );
+}
+const STATUS_TONES = {
+  success: { bg: '#E7F3EC', fg: COLORS.success },
+  danger: { bg: '#F9E7E3', fg: COLORS.danger },
+  grey: { bg: SHADES.carbonLight, fg: SHADES.carbonMuted },
+  amber: { bg: SHADES.amberLight, fg: SHADES.amberDeep },
+} as const;
+
+/** Subtle success confirmation (replaces green banners): amber check + carbon text. */
+export function CheckLine({ text }: { text: string }) {
+  return (
+    <View style={s.checkLine}>
+      <Feather name="check-circle" size={15} color={SHADES.amber} />
+      <Text style={s.checkLineText}>{text}</Text>
+    </View>
+  );
+}
+
+/** Status heading inside a card: icon circle + title (+ optional status chip), body below. */
+export function StatusBlock({
+  icon, tone = 'grey', title, chip, children,
+}: {
+  icon: AnyIcon;
+  tone?: IconTone;
+  title: string;
+  chip?: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View>
+      <View style={s.statusHead}>
+        <IconCircle icon={icon} tone={tone} />
+        <Text style={[UI.title, { flex: 1 }]}>{title}</Text>
+        {chip}
+      </View>
+      {children ? <View style={{ marginTop: 8 }}>{children}</View> : null}
     </View>
   );
 }
@@ -113,4 +198,9 @@ const s = StyleSheet.create({
   separator: { height: 0.5, backgroundColor: SHADES.border, marginLeft: 62 },
   chipSmall: { paddingHorizontal: 9, paddingVertical: 4 },
   danger: { color: COLORS.danger }, // the app's existing destructive colour
+  status: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3 },
+  statusText: { fontSize: 12, fontWeight: '700' },
+  checkLine: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  checkLineText: { flex: 1, fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  statusHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

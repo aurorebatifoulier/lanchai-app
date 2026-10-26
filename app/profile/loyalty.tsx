@@ -16,6 +16,8 @@ import {
   type PaidTier,
 } from '@/lib/loyalty';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
+import { SHADES } from '@/constants/brandShades';
+import { UI, SectionTitle, RowGroup, Row, IconCircle, Chip } from '@/components/account/ui';
 
 // Loyalty screen (validated mockup): the loyalty card, "Your path" (every tier: reached
 // ✓ with its coupon used / ready, current "You're here", locked with required points and
@@ -55,15 +57,15 @@ export default function LoyaltyScreen() {
       </View>
 
       {loyalty.loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} />
       ) : loyalty.excluded ? (
-        <View style={[s.card, { margin: 20 }]}>
-          <Text style={s.muted}>Business accounts aren&apos;t part of the loyalty programme.</Text>
+        <View style={[UI.card, UI.cardPadded, { margin: 16 }]}>
+          <Text style={UI.body}>Business accounts aren&apos;t part of the loyalty programme.</Text>
         </View>
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
           <LoyaltyCard interactive={false} />
@@ -71,24 +73,28 @@ export default function LoyaltyScreen() {
           {/* ── Your path ── */}
           {config && (
             <>
-              <Text style={s.section}>Your path</Text>
-              <View style={s.card}>
+              <SectionTitle>Your path</SectionTitle>
+              <RowGroup>
                 {TIER_ORDER.map((t, i) => {
                   const reached = i <= currentRank;
                   const isCurrent = i === currentRank;
                   const threshold = t === 'bronze' ? 0 : config.thresholds[t as PaidTier];
                   const coupon = t === 'bronze' ? null : coupons.find(c => c.tier === t);
+                  // Icon rule: amber = something to do (a coupon ready to use), grey = done.
+                  const couponReady = reached && !!coupon && !coupon.used;
                   return (
-                    <View key={t} style={[s.pathRow, i > 0 && s.pathBorder]}>
-                      <View style={[s.dot, reached ? s.dotOn : s.dotOff]}>
-                        <Feather name={reached ? 'check' : 'lock'} size={14} color={reached ? COLORS.carbon : COLORS.fg3} />
-                      </View>
+                    <View key={t} style={s.pathRow}>
+                      {reached ? (
+                        <IconCircle icon={{ name: couponReady ? 'tag' : 'check' }} tone={couponReady ? 'amber' : 'grey'} />
+                      ) : (
+                        <View style={s.locked}><Feather name="lock" size={15} color={SHADES.carbonFaint} /></View>
+                      )}
                       <View style={{ flex: 1 }}>
                         <View style={s.pathTitleRow}>
-                          <Text style={[s.pathTitle, !reached && s.pathTitleOff]}>{TIER_LABELS[t]}</Text>
-                          {isCurrent && <Text style={s.here}>You&apos;re here</Text>}
+                          <Text style={[UI.title, !reached && { color: SHADES.carbonMuted }]}>{TIER_LABELS[t]}</Text>
+                          {isCurrent && <Chip label="You're here" tone="carbon" small />}
                         </View>
-                        <Text style={s.pathSub}>
+                        <Text style={UI.subtitle}>
                           {t === 'bronze'
                             ? 'Where everyone starts.'
                             : reached
@@ -101,27 +107,19 @@ export default function LoyaltyScreen() {
                     </View>
                   );
                 })}
-              </View>
+              </RowGroup>
             </>
           )}
 
           {/* ── Earn more points ── */}
-          <Text style={s.section}>Earn more points</Text>
-          <View style={s.card}>
+          <SectionTitle>Earn more points</SectionTitle>
+          <RowGroup>
             {[
               { icon: 'shopping-bag' as const, title: 'Rent', sub: '1 point per 10,000 LAK of rental fees, once the rental is returned.' },
               { icon: 'star' as const, title: `Review · +${reviewPts}`, sub: 'For each review of a returned rental — whatever your rating.' },
               { icon: 'users' as const, title: `Invite a friend · +${referralPts}`, sub: 'For you and your friend, after their first rental.' },
-            ].map((e, i) => (
-              <View key={e.title} style={[s.pathRow, i > 0 && s.pathBorder]}>
-                <View style={[s.dot, s.dotSoft]}><Feather name={e.icon} size={14} color="#B07A12" /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.pathTitle}>{e.title}</Text>
-                  <Text style={s.pathSub}>{e.sub}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
+            ].map(e => <Row key={e.title} icon={{ name: e.icon }} title={e.title} sub={e.sub} />)}
+          </RowGroup>
 
           {/* ── Referral ── */}
           <ReferralCard points={referralPts} />
@@ -129,21 +127,22 @@ export default function LoyaltyScreen() {
           {/* ── Recent points ── */}
           {history.length > 0 && (
             <>
-              <Text style={s.section}>Recent points</Text>
-              <View style={s.card}>
+              <SectionTitle>Recent points</SectionTitle>
+              <RowGroup>
                 {history.map(h => (
                   <View key={h.id} style={s.historyRow}>
+                    <Text style={s.historyAmount}>+{h.amount}</Text>
                     <Text style={s.historyText} numberOfLines={1}>
-                      {`+${h.amount} · ${SOURCE_LABEL[h.source] ?? 'Points'}${h.productName ? ` — ${h.productName}` : ''}`}
+                      {`${SOURCE_LABEL[h.source] ?? 'Points'}${h.productName ? ` — ${h.productName}` : ''}`}
                     </Text>
-                    {h.createdAt && <Text style={s.historyDate}>{fmtDate(h.createdAt)}</Text>}
+                    {h.createdAt && <Text style={UI.small}>{fmtDate(h.createdAt)}</Text>}
                   </View>
                 ))}
-              </View>
+              </RowGroup>
             </>
           )}
 
-          <Text style={s.footnote}>
+          <Text style={[UI.small, s.footnote]}>
             Points never expire. Each tier&apos;s coupon is one-time. Points have no cash value.{points > 0 ? '' : ' Your first rental gets you started.'}
           </Text>
         </ScrollView>
@@ -162,26 +161,14 @@ const s = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, textAlign: 'center',
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
-  content: { paddingHorizontal: 20 },
-  section: { fontSize: 15, fontWeight: '800', color: COLORS.carbon, marginTop: 22, marginBottom: 10 },
-  card: { backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1, borderColor: COLORS.softGray200, paddingHorizontal: 14 },
-  muted: { fontSize: 14, color: COLORS.fg3, paddingVertical: 14 },
-  pathRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12 },
-  pathBorder: { borderTopWidth: 1, borderTopColor: COLORS.softGray200 },
-  dot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  dotOn: { backgroundColor: COLORS.amber },
-  dotOff: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: COLORS.softGray },
-  dotSoft: { backgroundColor: '#F7ECD9' },
-  pathTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pathTitle: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
-  pathTitleOff: { color: COLORS.fg3 },
-  here: {
-    fontSize: 11, fontWeight: '800', color: '#7A5500', backgroundColor: '#FDF0C4',
-    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
+  pathRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 },
+  locked: {
+    width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: SHADES.carbonFaint,
+    alignItems: 'center', justifyContent: 'center',
   },
-  pathSub: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, marginTop: 2, lineHeight: 18 },
-  historyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10 },
-  historyText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.carbon },
-  historyDate: { fontSize: 12, fontWeight: '500', color: COLORS.fg3 },
-  footnote: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: 17, marginTop: 18, textAlign: 'center' },
+  pathTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  historyAmount: { minWidth: 38, fontSize: 14, fontWeight: '800', color: SHADES.amberDeep },
+  historyText: { flex: 1, fontSize: 14, fontWeight: '600', color: SHADES.carbon },
+  footnote: { marginTop: 18, textAlign: 'center' },
 });
