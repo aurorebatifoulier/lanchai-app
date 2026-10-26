@@ -4,6 +4,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import Svg, { Defs, Mask, Path, Polygon } from 'react-native-svg';
 import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { vteMinutesOfDay } from '@/functions/src/shared/dates';
 
@@ -151,9 +152,10 @@ const s = StyleSheet.create({
   greeting: { fontSize: 16, fontWeight: '500', color: SHADES.carbonMuted },
   name: { fontSize: 32, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.8, marginTop: 1 },
   chips: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 6 },
-  chipTier: { backgroundColor: SHADES.carbon },
+  // Same chip tokens as the rest of the screen (components/account/ui.tsx).
+  chip: UI.chip,
+  chipTier: UI.chipCarbon,
   chipTierText: { color: SHADES.cream },
-  chipStatus: { backgroundColor: SHADES.carbonLight },
-  chipText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
+  chipStatus: UI.chipGrey,
+  chipText: UI.chipText,
 });

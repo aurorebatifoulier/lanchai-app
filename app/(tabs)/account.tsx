@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
+  Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -16,8 +17,7 @@ import LanchaiMark from '@/components/LanchaiMark';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, getMyReservations, getProducts, saveUserProfile, UserProfile } from '@/lib/firestore';
 import { getCustomerTypeConfig } from '@/utils/customerType';
-import { useShopInfo } from '@/lib/shop';
-import WhatsAppButton from '@/components/WhatsAppButton';
+import { useShopInfo, buildWhatsappUrl, normalizeWhatsappNumber, isValidWhatsappNumber } from '@/lib/shop';
 import * as ImagePicker from 'expo-image-picker';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
@@ -31,6 +31,8 @@ import { AccountStickers } from '@/components/account/AccountStickers';
 import { computeAccountStats, type AccountStats as AccountStatsData } from '@/lib/accountStats';
 import { TIER_LABELS, isLoyaltyExcluded } from '@/lib/loyalty';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
+import { Row, RowGroup, SectionTitle, type IconTone } from '@/components/account/ui';
+import { SHADES } from '@/constants/brandShades';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,57 +52,25 @@ const BTOB_STATUS_BADGE: Record<string, {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-interface ProfileRowProps {
-  icon: string;
+// Rows and sections use the shared My Account design (components/account/ui.tsx):
+// white card groups, round icon circles (amber = contact / action needed, grey = the
+// rest, carbon = staff), "Soon" as the same grey chip as "Tourist ›".
+function ProfileRow(p: {
+  icon: React.ComponentProps<typeof Feather>['name'];
   title: string;
   sub?: string;
-  meta?: string;
-  iconBg?: string;
-  iconColor?: string;
+  tone?: IconTone;
   onPress?: () => void;
   comingSoon?: boolean;
-}
-
-function ProfileRow({ icon, title, sub, meta, iconBg, iconColor, onPress, comingSoon }: ProfileRowProps) {
-  if (comingSoon) {
-    return (
-      <View style={[styles.prow, styles.prowDisabled]}>
-        <View style={[styles.prowIcon, iconBg ? { backgroundColor: iconBg } : undefined]}>
-          <Feather name={icon as never} size={18} color={COLORS.fg3} />
-        </View>
-        <View style={styles.prowText}>
-          <Text style={[styles.prowTitle, { color: COLORS.fg3 }]}>{title}</Text>
-          {sub && <Text style={styles.prowSub}>{sub}</Text>}
-        </View>
-        <View style={styles.soonBadge}>
-          <Text style={styles.soonBadgeText}>Soon</Text>
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <TouchableOpacity style={styles.prow} activeOpacity={0.7} onPress={onPress}>
-      <View style={[styles.prowIcon, iconBg ? { backgroundColor: iconBg } : undefined]}>
-        <Feather name={icon as never} size={18} color={iconColor ?? COLORS.carbon} />
-      </View>
-      <View style={styles.prowText}>
-        <Text style={styles.prowTitle}>{title}</Text>
-        {sub && <Text style={styles.prowSub}>{sub}</Text>}
-      </View>
-      <View style={styles.prowMeta}>
-        {meta && <Text style={styles.prowMetaText}>{meta}</Text>}
-        <Feather name="chevron-right" size={16} color={COLORS.fg3} />
-      </View>
-    </TouchableOpacity>
-  );
+}) {
+  return <Row icon={{ name: p.icon }} tone={p.tone} title={p.title} sub={p.sub} onPress={p.onPress} soon={p.comingSoon} />;
 }
 
 function ProfileSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.rowGroup}>{children}</View>
+    <View>
+      <SectionTitle>{title}</SectionTitle>
+      <RowGroup>{children}</RowGroup>
     </View>
   );
 }
@@ -215,6 +185,10 @@ export default function AccountScreen() {
   const shop      = useShopInfo();
   const nameSub   = profile?.displayName ?? user?.displayName;
   const appVersion = Constants.expoConfig?.version;
+  // WhatsApp row (brand palette — replaces the green WhatsApp button); hidden without a
+  // valid number in Shop settings, like everywhere else.
+  const waNumber = normalizeWhatsappNumber(shop.whatsappNumber ?? '');
+  const waUrl = isValidWhatsappNumber(waNumber) ? buildWhatsappUrl(waNumber, 'Hi LANCHAI, I have a question.') : null;
 
   // BtoB accounts don't have first/last name — btobCompanyName (not the generic
   // displayName mirror set at signup) is the authoritative header name. Falls back to
@@ -270,7 +244,7 @@ export default function AccountScreen() {
         {stats && <AccountStickers stickers={stats.stickers} next={stats.nextSticker} />}
 
         {/* ── Resident promo (unverified tourists, dismissible) ── */}
-        <ResidentPromoCard style={{ marginTop: 18 }} />
+        <ResidentPromoCard style={{ marginTop: 24 }} />
 
         {/* ── Account section ── */}
         <ProfileSection title="Account">
@@ -285,8 +259,7 @@ export default function AccountScreen() {
               icon="file-text"
               title="Business document"
               sub={profile?.btobDocumentUrl ? 'Uploaded' : 'Required before booking'}
-              iconBg={profile?.btobDocumentUrl ? undefined : COLORS.amber}
-              iconColor={profile?.btobDocumentUrl ? undefined : COLORS.carbon}
+              tone={profile?.btobDocumentUrl ? 'grey' : 'amber'}
               onPress={() => router.push('/profile/business-document')}
             />
           )}
@@ -296,6 +269,7 @@ export default function AccountScreen() {
               icon="users"
               title="Have an invite code?"
               sub="Enter a friend's code before your first booking"
+              tone="amber"
               onPress={() => router.push('/profile/invite-code')}
             />
           )}
@@ -306,6 +280,7 @@ export default function AccountScreen() {
               profile?.idOnFile ? 'ID on file' : 'ID needed to rent',
               profile?.customerType === 'business' ? null : profile?.customerType === 'resident' ? 'Resident' : 'Tourist',
             ].filter(Boolean).join(' · ')}
+            tone={profile?.idOnFile ? 'grey' : 'amber'}
             onPress={() => router.push('/profile/id-residency')}
           />
           <ProfileRow
@@ -356,14 +331,18 @@ export default function AccountScreen() {
             icon="message-circle"
             title="Chat with us"
             sub="We usually reply within a few hours"
-            iconBg={COLORS.amber}
-            iconColor={COLORS.carbon}
+            tone="amber"
             onPress={() => router.push('/chat')}
           />
-          <WhatsAppButton
-            message="Hi LANCHAI, I have a question."
-            style={styles.whatsappInset}
-          />
+          {waUrl && (
+            <Row
+              icon={{ set: 'mci', name: 'whatsapp' }}
+              tone="amber"
+              title="WhatsApp"
+              sub="Message us — quick questions welcome"
+              onPress={() => Linking.openURL(waUrl).catch(() => {})}
+            />
+          )}
           <ProfileRow
             icon="help-circle"
             title="FAQ"
@@ -385,8 +364,7 @@ export default function AccountScreen() {
               icon="settings"
               title="Lanchai admin dashboard"
               sub="Products, bookings & more"
-              iconBg={COLORS.carbon}
-              iconColor={COLORS.amber}
+              tone="carbon"
               onPress={() => router.push('/admin')}
             />
           </ProfileSection>
@@ -411,20 +389,25 @@ export default function AccountScreen() {
           />
         </ProfileSection>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} disabled={loggingOut}>
-          <Text style={styles.logoutText}>{loggingOut ? 'Signing out…' : 'Log out'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.deleteAccountBtn}
-          onPress={() => router.push('/profile/delete-account')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.deleteAccountText}>Delete account</Text>
-        </TouchableOpacity>
+        {/* ── Log out / delete — same card rows; red only for the destructive one ── */}
+        <View style={{ marginTop: 24 }}>
+          <RowGroup>
+            <Row
+              icon={{ name: 'log-out' }}
+              title={loggingOut ? 'Signing out…' : 'Log out'}
+              onPress={loggingOut ? undefined : handleLogout}
+            />
+            <Row
+              icon={{ name: 'trash-2' }}
+              title="Delete account"
+              danger
+              onPress={() => router.push('/profile/delete-account')}
+            />
+          </RowGroup>
+        </View>
 
         <View style={styles.footer}>
-          <LanchaiMark size={18} color={COLORS.fg3} hexColor={COLORS.fg3} />
+          <LanchaiMark size={18} color={SHADES.carbonFaint} hexColor={SHADES.carbonFaint} />
           <Text style={styles.footerText}>
             {appVersion ? `v${appVersion} · ` : ''}Made with care in Vientiane
           </Text>
@@ -515,73 +498,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.porcelain,
   },
 
-  // Profile card
-  profileCard: {
-    backgroundColor: COLORS.carbon,
-    borderRadius: 24,
-    margin: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  avatar: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  profileInfo: {
-    flex: 1,
-    gap: 5,
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    color: COLORS.porcelain,
-  },
-  typeBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  typeBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  btobStatusBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  profileMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  profileMetaSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(250,250,247,0.6)',
-  },
 
   scroll: {
     flex: 1,
@@ -591,164 +507,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 
-  // Stats
-  statsWrap: {
-    gap: 10,
-    marginBottom: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-  },
-  statCardDark: {
-    backgroundColor: COLORS.carbon,
-    borderColor: COLORS.carbon,
-  },
-  statCardAmber: {
-    backgroundColor: COLORS.amber,
-    borderColor: COLORS.amber,
-  },
-  statEye: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-  },
-  statVal: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    color: COLORS.carbon,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  statSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
 
-  // Sections
-  section: {
-    marginTop: 18,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  rowGroup: {
-    backgroundColor: COLORS.white,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    overflow: 'hidden',
-  },
 
-  // Rows
-  prow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
-  },
-  prowDisabled: {
-    opacity: 0.45,
-  },
-  prowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  prowText: {
-    flex: 1,
-  },
-  prowTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-    color: COLORS.carbon,
-  },
-  prowSub: {
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginTop: 2,
-  },
-  prowMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  prowMetaText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.fg3,
-  },
-  whatsappInset: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
-  },
-  soonBadge: {
-    backgroundColor: COLORS.softGray200,
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  soonBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.fg3,
-    letterSpacing: 0.2,
-  },
 
-  // Logout
-  logoutBtn: {
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  logoutText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.fg1,
-  },
 
-  // Delete account
-  deleteAccountBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginTop: 4,
-  },
-  deleteAccountText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.danger,
-  },
 
   // Footer
   footer: {
@@ -764,31 +526,6 @@ const styles = StyleSheet.create({
     color: COLORS.fg3,
   },
 
-  // Avatar with photo
-  avatarWrap: {
-    position: 'relative',
-    width: 62,
-    height: 62,
-    flexShrink: 0,
-  },
-  avatarPhoto: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-  },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.carbon,
-  },
 
   // Upload error banner
   uploadErrorBanner: {

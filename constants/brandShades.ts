@@ -14,5 +14,5 @@ export const SHADES = {
   carbonLight: '#EFEEEA',  // light grey circles
   cream: '#FAFAF7',
   white: '#FFFFFF',
-  border: '#ECEBE6',
+  border: '#E8E6DF',      // card borders (0.5px) and row separators
 } as const;

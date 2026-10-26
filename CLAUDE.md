@@ -774,6 +774,14 @@ a snapshot indefinitely).
   category with a returned rental (catalogue order) + one locked next category; hidden
   with no returned rental. `<LoyaltyCard>` is the LIGHT card everywhere (My Account +
   Loyalty screen). `<ResidentPromoCard>` restyled (white, light amber home circle).
+  The WHOLE My Account screen now uses one design: `components/account/ui.tsx` (`UI`
+  tokens — card white / radius 18 / 0.5px `SHADES.border`, section title 18/800, title
+  15/700, subtitle 13/500 muted, chips — and `SectionTitle`, `RowGroup` (separators),
+  `Row` (icon circle, chevron, "Soon" = same grey chip as "Tourist ›", `danger` = the
+  app's `COLORS.danger` text only), `IconCircle`, `Chip`). Icon rule: AMBER = main
+  contact or action needed (chat, WhatsApp, missing ID / business document, invite
+  code), GREY = everything else, CARBON = staff (admin). WhatsApp is a palette row (no
+  green button). Profile sub-screens still use the old style (to decide).
 
 ## Security follow-ups
 

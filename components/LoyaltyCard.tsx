@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'reac
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
 import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import { TIER_LABELS } from '@/lib/loyalty';
 import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
@@ -69,10 +70,7 @@ export function LoyaltyCard({ interactive = true }: { interactive?: boolean }) {
 }
 
 const s = StyleSheet.create({
-  card: {
-    backgroundColor: SHADES.white, borderRadius: 20, borderWidth: 1, borderColor: SHADES.border,
-    padding: 16, marginTop: 14,
-  },
+  card: { ...UI.card, ...UI.cardPadded, marginTop: 14 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   member: { fontSize: 16, fontWeight: '700', color: SHADES.carbon },
   points: { fontSize: 16, fontWeight: '800', color: SHADES.carbon },

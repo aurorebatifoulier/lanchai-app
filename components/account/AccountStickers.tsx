@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import { SectionTitle } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { CATEGORIES } from '@/lib/mockData';
 
@@ -30,8 +31,8 @@ export function AccountStickers({ stickers, next }: { stickers: string[]; next: 
   if (stickers.length === 0) return null;
   const nextName = next ? CATEGORIES.find(c => c.id === next)?.name ?? next : null;
   return (
-    <View style={s.wrap}>
-      <Text style={s.title}>{ACCOUNT_COPY.stickersTitle}</Text>
+    <View>
+      <SectionTitle>{ACCOUNT_COPY.stickersTitle}</SectionTitle>
       <View style={s.grid}>
         {stickers.map((cat, i) => {
           const st = STYLES[i % STYLES.length];
@@ -59,8 +60,6 @@ export function AccountStickers({ stickers, next }: { stickers: string[]; next: 
 }
 
 const s = StyleSheet.create({
-  wrap: { marginTop: 22 },
-  title: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 12 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 },
   item: { width: '25%', alignItems: 'center' },
   sticker: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },

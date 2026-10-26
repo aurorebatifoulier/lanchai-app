@@ -7,6 +7,7 @@ import { COLORS } from '@/constants/Colors';
 import { auth } from '@/lib/auth';
 import { useResidentPromo } from '@/lib/residency';
 import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 
 // Resident-status promo for tourists ("Live in Laos? Residents pay a X% lower deposit")
@@ -72,10 +73,7 @@ const s = StyleSheet.create({
   },
   hintText: { flex: 1, fontSize: 12, fontWeight: '600', color: COLORS.amberTintText, lineHeight: 17 },
   hintLink: { fontWeight: '800', textDecorationLine: 'underline' },
-  card: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: SHADES.white, borderWidth: 1, borderColor: SHADES.border, borderRadius: 18, padding: 14,
-  },
+  card: { ...UI.card, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   cardIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 16, fontWeight: '800', color: SHADES.carbon },
   cardBody: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },

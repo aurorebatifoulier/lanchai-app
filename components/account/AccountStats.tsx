@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { compactLak, type AccountStats as Stats } from '@/lib/accountStats';
 
@@ -63,10 +64,7 @@ export function AccountStats({ stats }: { stats: Stats | null }) {
 
 const s = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  card: {
-    flex: 1, backgroundColor: SHADES.white, borderRadius: 18, borderWidth: 1, borderColor: SHADES.border,
-    alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8,
-  },
+  card: { ...UI.card, flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 },
   cardDark: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
   iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   value: { fontSize: 26, fontWeight: '800', color: SHADES.carbon, marginTop: 8, letterSpacing: -0.5 },
