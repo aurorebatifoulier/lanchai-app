@@ -796,7 +796,10 @@ a snapshot indefinitely).
   first name, tier chip) fades/slides in below the safe area once the header is scrolled
   past (threshold = header height − 52; instant with reduce motion), with the points +
   a 26px progress ring (tierProgress) on the right → Loyalty (nothing for excluded
-  accounts). The header decor (250×170, top-right) is drawn BEHIND the text; each text
+  accounts). The header decor is drawn BEHIND the text; the dashed path is built by
+  `components/account/flightPath.ts` from the header size + measured bubble centres (left
+  edge near the bottom → under the chips/tent → loop around the bike → up between tent and
+  tool → loop around the speaker → hexagon; a hidden bubble skips its loop); each text
   line (greeting, name, stacked chips) is measured and any bubble that would touch one is
   hidden (never shrunk). The tent bubble is placed in the gap right of the chips, before
   the bike. Other tab screens apply the top inset

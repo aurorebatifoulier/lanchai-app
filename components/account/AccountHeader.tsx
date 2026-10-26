@@ -12,23 +12,27 @@ import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { vteMinutesOfDay } from '@/functions/src/shared/dates';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
+import { buildFlightPath, type Pt } from '@/components/account/flightPath';
 
 // My Account header (validated mockup): white band, avatar with a thin amber ring (photo
 // button kept), greeting by Vientiane time + first name, tier chip + status chip, and a
-// subtle decor (dashed "flight path" drawing itself to a tiny amber hexagon + 4 floating
-// item bubbles) behind the text; bubbles that would touch the measured text block are
+// subtle decor (dashed "flight path" drawing itself from the left edge, looping around the
+// bike and the speaker, to a tiny amber hexagon — see flightPath.ts — + 4 floating item
+// bubbles) behind the text; bubbles that would touch the measured text block are
 // hidden (never overlap the greeting, name or chips). Brand shades only. Motion is
 // skipped with "reduce motion".
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
-// Decor box (top-right of the header, as in the validated mockup): 250 × 170.
+// Decor box (top-right of the header): bubble + hexagon positions are in these coordinates.
 const DECOR_W = 250;
-const DECOR_H = 170;
 const DECOR_RIGHT = -6;
 const DECOR_TOP = 4;
 const BUBBLE = 36;
-const PATH = 'M 18 150 C 60 150, 40 95, 80 82 S 120 30, 160 40 S 210 70, 236 22';
-const PATH_LEN = 420; // ≥ the path's length — only drives the drawing speed
+// Loop radius around a bubble: radius + clearance (bubbles float ±3px).
+const LOOP_R = BUBBLE / 2 + 9;
+// Hexagon centre in decor coordinates (top-right corner).
+const HEX = { x: 236, y: 22 };
+const HEX_PTS: [number, number][] = [[0, -10], [9, -5], [9, 5], [0, 10], [-9, 5], [-9, -5]];
 
 // x / y in decor coordinates. The tent has none: it sits in the gap right of the stacked
 // chips, between them and the bike (computed from the measured chips, see Decor).
@@ -87,22 +91,30 @@ class DecorBoundary extends React.Component<{ children: React.ReactNode }, { fai
  * text line (+ margin) is hidden — narrow screens lose bubbles rather than shrinking
  * everything. Bubbles wait for the measure.
  */
-function Decor({ headerWidth, lines, chips }: { headerWidth: number; lines: Box[] | null; chips: Box | null }) {
+function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: number; headerHeight: number; lines: Box[] | null; chips: Box | null }) {
   const reduce = useReduceMotion();
-  const draw = useRef(new Animated.Value(PATH_LEN)).current;
+  // Dash offset as a 0→1 fraction (path length depends on the measured layout).
+  const draw = useRef(new Animated.Value(1)).current;
   const floats = useMemo(() => BUBBLES.map(() => new Animated.Value(0)), []);
+  const ready = !!lines && headerWidth > 0 && headerHeight > 0;
+
+  // Draw-on-mount once the layout is measured (from the left edge to the hexagon).
+  useEffect(() => {
+    if (!ready) return;
+    if (reduce) { draw.setValue(0); return; }
+    draw.setValue(1);
+    Animated.timing(draw, { toValue: 0, duration: 1800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [ready, reduce, draw]);
 
   useEffect(() => {
-    if (reduce) { draw.setValue(0); return; }
-    draw.setValue(PATH_LEN);
-    Animated.timing(draw, { toValue: 0, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    if (reduce) return;
     const loops = floats.map((v, i) => Animated.loop(Animated.sequence([
       Animated.timing(v, { toValue: 1, duration: 1800 + i * 300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       Animated.timing(v, { toValue: 0, duration: 1800 + i * 300, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
     ])));
     loops.forEach(l => l.start());
     return () => loops.forEach(l => l.stop());
-  }, [reduce, draw, floats]);
+  }, [reduce, floats]);
 
   const decorLeft = headerWidth - DECOR_W - DECOR_RIGHT;
   const place = (b: typeof BUBBLES[number]): { left: number; top: number } | null => {
@@ -118,24 +130,47 @@ function Decor({ headerWidth, lines, chips }: { headerWidth: number; lines: Box[
     const l = pos.left, t = pos.top, r = l + BUBBLE, btm = t + BUBBLE;
     return lines.every(x => r < x.left - MARGIN || l > x.right + MARGIN || btm < x.top - MARGIN || t > x.bottom + MARGIN);
   };
-  const ready = !!lines && headerWidth > 0;
+  // Visible bubbles (null = hidden by the anti-overlap rule or not measured yet).
+  const placed = BUBBLES.map(b => {
+    if (!ready) return null;
+    const pos = place(b);
+    return pos && clear(pos) ? pos : null;
+  });
+  const centre = (icon: string): Pt | null => {
+    const pos = placed[BUBBLES.findIndex(b => b.icon === icon)];
+    return pos ? { x: pos.left + BUBBLE / 2, y: pos.top + BUBBLE / 2 } : null;
+  };
+  const hex = { x: decorLeft + HEX.x, y: DECOR_TOP + HEX.y };
+  const flight = ready ? buildFlightPath({
+    width: headerWidth, height: headerHeight, loopRadius: LOOP_R,
+    bike: centre('bike'), tent: centre('tent'), tool: centre('hammer-wrench'), speaker: centre('speaker'),
+    end: { x: hex.x - 9, y: hex.y },
+  }) : null;
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <View style={s.decor}>
-        <Svg width={DECOR_W} height={DECOR_H} viewBox={`0 0 ${DECOR_W} ${DECOR_H}`}>
-          <Defs>
-            <Mask id="reveal">
-              <AnimatedPath d={PATH} stroke="#fff" strokeWidth={8} fill="none" strokeDasharray={[PATH_LEN, PATH_LEN]} strokeDashoffset={draw} />
-            </Mask>
-          </Defs>
-          <Path d={PATH} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={[4, 6]} strokeLinecap="round" fill="none" mask="url(#reveal)" />
-          <Polygon points="236,12 245,17 245,27 236,32 227,27 227,17" fill={SHADES.amber} />
+      {headerWidth > 0 && headerHeight > 0 && (
+        <Svg width={headerWidth} height={headerHeight} style={StyleSheet.absoluteFill}>
+          {flight && (
+            <>
+              <Defs>
+                <Mask id="reveal">
+                  <AnimatedPath
+                    d={flight.d} stroke="#fff" strokeWidth={8} fill="none"
+                    strokeDasharray={[flight.length, flight.length]}
+                    strokeDashoffset={draw.interpolate({ inputRange: [0, 1], outputRange: [0, flight.length] })}
+                  />
+                </Mask>
+              </Defs>
+              <Path d={flight.d} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={[4, 6]} strokeLinecap="round" fill="none" mask="url(#reveal)" />
+            </>
+          )}
+          <Polygon points={HEX_PTS.map(([dx, dy]) => `${hex.x + dx},${hex.y + dy}`).join(' ')} fill={SHADES.amber} />
         </Svg>
-      </View>
-      {ready && BUBBLES.map((b, i) => {
-        const pos = place(b);
-        if (!pos || !clear(pos)) return null;
+      )}
+      {BUBBLES.map((b, i) => {
+        const pos = placed[i];
+        if (!pos) return null;
         return (
           <Animated.View
             key={b.icon}
@@ -175,6 +210,7 @@ const PAD_TOP = 22;
 export function AccountHeader(p: AccountHeaderProps) {
   const hour = Math.floor(vteMinutesOfDay(Date.now()) / 60);
   const [headerWidth, setHeaderWidth] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(0);
   // Text column position (relative to the row) + each line's box inside it.
   const [col, setCol] = useState<{ x: number; y: number } | null>(null);
   const [rects, setRects] = useState<Record<string, Rect>>({});
@@ -190,11 +226,16 @@ export function AccountHeader(p: AccountHeaderProps) {
   return (
     <View
       style={s.header}
-      onLayout={e => { setHeaderWidth(e.nativeEvent.layout.width); p.onHeight?.(e.nativeEvent.layout.height); }}
+      onLayout={e => {
+        const { width, height } = e.nativeEvent.layout;
+        setHeaderWidth(width);
+        setHeaderHeight(height);
+        p.onHeight?.(height);
+      }}
     >
       {/* Decor first → behind the text (and zIndex below it). */}
       <DecorBoundary>
-        <Decor headerWidth={headerWidth} lines={measured?.lines ?? null} chips={measured?.chips ?? null} />
+        <Decor headerWidth={headerWidth} headerHeight={headerHeight} lines={measured?.lines ?? null} chips={measured?.chips ?? null} />
       </DecorBoundary>
       <View style={s.row}>
         <TouchableOpacity onPress={p.onAvatarPress} activeOpacity={0.85} style={s.ring}>
@@ -313,9 +354,10 @@ const RING_R = (RING - RING_STROKE) / 2;
 const s = StyleSheet.create({
   header: {
     backgroundColor: SHADES.white, marginHorizontal: -16, paddingHorizontal: PAD_X, paddingTop: PAD_TOP, paddingBottom: 26,
-    borderBottomWidth: 0.5, borderBottomColor: SHADES.border, overflow: 'hidden', minHeight: DECOR_H,
+    borderBottomWidth: 0.5, borderBottomColor: SHADES.border, overflow: 'hidden',
+    // Room for the loop under the bike (bike bottom + loop clearance + bottom run).
+    minHeight: DECOR_TOP + 128 + BUBBLE / 2 + LOOP_R + 14,
   },
-  decor: { position: 'absolute', right: DECOR_RIGHT, top: DECOR_TOP, width: DECOR_W, height: DECOR_H, zIndex: 0 },
   bubble: {
     position: 'absolute', width: BUBBLE, height: BUBBLE, borderRadius: BUBBLE / 2,
     alignItems: 'center', justifyContent: 'center',
