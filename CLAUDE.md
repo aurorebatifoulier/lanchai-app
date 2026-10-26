@@ -782,7 +782,11 @@ a snapshot indefinitely).
   `Row` (icon circle, chevron, "Soon" = same grey chip as "Tourist ›", `danger` = the
   app's `COLORS.danger` text only), `IconCircle`, `Chip`). Icon rule: AMBER = main
   contact or action needed (chat, WhatsApp, missing ID / business document, invite
-  code), GREY = everything else, CARBON = staff (admin). WhatsApp is a palette row (no
+  code), GREY = everything else, CARBON = staff (admin). This rule is for My Account ROWS (and
+  status rows in sub-screens) only — the Loyalty "Your path" tiers use AMBER = reached
+  (filled amber circle, carbon check, award on the current tier; sub-line = coupon state
+  "{X}% coupon ready to use" / "{X}% coupon used") and a grey dashed lock = not reached
+  ("Unlocks … · {points} points"); Bronze = "Where everyone starts." WhatsApp is a palette row (no
   green button). **Profile sub-screens** use the same `ui.tsx` tokens (`UI.screenContent`
   padding 16, `SectionTitle` + `UI.card`, `UI.btnPrimary` amber / `UI.btnSecondary` white
   + carbon outline / `UI.dangerText`, `UI.input`, `UI.choice` chips, `StatusBlock`,

@@ -17,7 +17,7 @@ import {
 } from '@/lib/loyalty';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, RowGroup, Row, IconCircle, Chip } from '@/components/account/ui';
+import { UI, SectionTitle, RowGroup, Row, Chip } from '@/components/account/ui';
 
 // Loyalty screen (validated mockup): the loyalty card, "Your path" (every tier: reached
 // ✓ with its coupon used / ready, current "You're here", locked with required points and
@@ -80,14 +80,16 @@ export default function LoyaltyScreen() {
                   const isCurrent = i === currentRank;
                   const threshold = t === 'bronze' ? 0 : config.thresholds[t as PaidTier];
                   const coupon = t === 'bronze' ? null : coupons.find(c => c.tier === t);
-                  // Icon rule: amber = something to do (a coupon ready to use), grey = done.
-                  const couponReady = reached && !!coupon && !coupon.used;
+                  // NOT the My Account row rule: here amber = reached (filled amber circle,
+                  // carbon check / award for the current tier), grey dashed lock = not yet.
                   return (
                     <View key={t} style={s.pathRow}>
                       {reached ? (
-                        <IconCircle icon={{ name: couponReady ? 'tag' : 'check' }} tone={couponReady ? 'amber' : 'grey'} />
+                        <View style={s.reached}>
+                          <Feather name={isCurrent ? 'award' : 'check'} size={16} color={SHADES.carbon} />
+                        </View>
                       ) : (
-                        <View style={s.locked}><Feather name="lock" size={15} color={SHADES.carbonFaint} /></View>
+                        <View style={s.locked}><Feather name="lock" size={15} color={SHADES.carbonMuted} /></View>
                       )}
                       <View style={{ flex: 1 }}>
                         <View style={s.pathTitleRow}>
@@ -98,10 +100,11 @@ export default function LoyaltyScreen() {
                           {t === 'bronze'
                             ? 'Where everyone starts.'
                             : reached
+                              // Reached: the coupon state, never "Unlocks…".
                               ? coupon
-                                ? (coupon.used ? `${coupon.percent}% coupon used` : `${coupon.percent}% coupon ready — apply it at checkout`)
-                                : tierPerksText(t as PaidTier, config, isResident)
-                              : `${threshold.toLocaleString('en-US')} points · ${tierPerksText(t as PaidTier, config, isResident)}`}
+                                ? (coupon.used ? `${coupon.percent}% coupon used` : `${coupon.percent}% coupon ready to use`)
+                                : `${TIER_LABELS[t]} reached`
+                              : `${tierPerksText(t as PaidTier, config, isResident)} · ${threshold.toLocaleString('en-US')} points`}
                         </Text>
                       </View>
                     </View>
@@ -162,9 +165,10 @@ const s = StyleSheet.create({
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
   pathRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 },
+  reached: { width: 36, height: 36, borderRadius: 18, backgroundColor: SHADES.amber, alignItems: 'center', justifyContent: 'center' },
   locked: {
     width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: SHADES.carbonFaint,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center',
   },
   pathTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   historyRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
