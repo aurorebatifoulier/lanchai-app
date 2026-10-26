@@ -4,6 +4,7 @@
 export const SHADES = {
   amber: '#F4B400',
   amberMid: '#F2C76E',     // soft amber fill (stickers, bubbles)
+  amberSoft: '#FAC775',    // discreet end point (header flight-path hexagon)
   amberLight: '#F7ECD9',   // light amber circles, gauge track
   amberPale: '#FBF4E6',
   amberDeep: '#8A5A00',    // amber-brown icons/text on light amber

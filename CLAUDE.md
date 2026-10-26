@@ -806,7 +806,12 @@ a snapshot indefinitely).
   nudged onto the measured bubble / hexagon positions — same nudge on each anchor and its
   control points so tangents stay smooth; loops pass partly UNDER the bubbles, which are
   drawn on top; a hidden bubble's loop is replaced by a tangent-matched bridge). Draw-on-
-  mount, then a slow dash drift toward the hexagon; both off with reduce motion; each text
+  mount, then a slow dot drift toward the hexagon; both off with reduce motion. It must
+  stay in the BACKGROUND: round dots (dash 0.1 / gap 7, width 2), amber ≤ 30% opacity
+  with a fade-in from the left edge (3% → 30% before the bike loop — the ONLY gradient
+  allowed, an opacity fade on this decor), tight bike loop (partly under the bubble),
+  full speaker loop at bubble radius + 11px, small (16px) hexagon in `SHADES.amberSoft`
+  at 55% opacity; hexagon and tool bubble keep ~20px from the screen edge; each text
   line (greeting, name, stacked chips) is measured and any bubble that would touch one is
   hidden (never shrunk). The tent bubble is placed in the gap right of the chips, before
   the bike. Other tab screens apply the top inset

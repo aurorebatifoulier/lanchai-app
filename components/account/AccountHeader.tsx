@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import Svg, { Circle, Defs, Mask, Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Mask, Path, Polygon, Stop } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';
 import { UI } from '@/components/account/ui';
@@ -29,18 +29,26 @@ const DECOR_W = 250;
 const DECOR_RIGHT = -6;
 const DECOR_TOP = 4;
 const BUBBLE = 36;
-const DASH: [number, number] = [4, 6];
+// Background-only style: small round dots (round caps), amber ≤ 30% opacity, fading in
+// from the left edge (3% → 30% just before the bike loop, a continuous gradient).
+const DASH: [number, number] = [0.1, 7];
 const DASH_PERIOD = DASH[0] + DASH[1];
+const PATH_OPACITY_START = 0.03;
+const PATH_OPACITY = 0.3;
 // Hexagon centre in decor coordinates (top-right corner).
-const HEX = { x: 236, y: 22 };
-const HEX_PTS: [number, number][] = [[0, -10], [9, -5], [9, 5], [0, 10], [-9, 5], [-9, -5]];
+// ≈16px tall, light amber, ~20px of white space to the right edge of the screen
+// (decor right edge = screen edge + 6 → centre at 244 − 20 − 7).
+const HEX = { x: 217, y: 22 };
+const HEX_PTS: [number, number][] = [[0, -8], [7, -4], [7, 4], [0, 8], [-7, 4], [-7, -4]];
+const SPEAKER_LOOP_R = BUBBLE / 2 + 11;
 
 // x / y in decor coordinates. The tent has none: it sits in the gap right of the stacked
 // chips, between them and the bike (computed from the measured chips, see Decor).
 const BUBBLES: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; x?: number; y?: number; bg: string; fg: string; rot: string }[] = [
   { icon: 'tent', bg: SHADES.amberLight, fg: SHADES.amberDeep, rot: '-8deg' },
   { icon: 'speaker', x: 92, y: 24, bg: SHADES.carbonLight, fg: SHADES.carbon, rot: '6deg' },
-  { icon: 'hammer-wrench', x: 198, y: 68, bg: SHADES.amberMid, fg: SHADES.carbon, rot: '-6deg' },
+  // Same ~20px right margin as the hexagon (244 − 20 − 36).
+  { icon: 'hammer-wrench', x: 188, y: 68, bg: SHADES.amberMid, fg: SHADES.carbon, rot: '-6deg' },
   { icon: 'bike', x: 184, y: 128, bg: SHADES.carbon, fg: SHADES.amber, rot: '5deg' },
 ];
 
@@ -150,7 +158,7 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
   const hex = { x: decorLeft + HEX.x, y: DECOR_TOP + HEX.y };
   const flight = ready ? buildFlightPath({
     width: headerWidth, height: headerHeight,
-    bike: centre('bike'), speaker: centre('speaker'), hexagon: hex,
+    bike: centre('bike'), speaker: centre('speaker'), hexagon: hex, speakerLoopRadius: SPEAKER_LOOP_R,
   }) : null;
 
   return (
@@ -160,6 +168,10 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
           {flight && (
             <>
               <Defs>
+                <LinearGradient id="fade" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={Math.max(1, flight.fadeEndX)} y2={0}>
+                  <Stop offset={0} stopColor={SHADES.amber} stopOpacity={PATH_OPACITY_START} />
+                  <Stop offset={1} stopColor={SHADES.amber} stopOpacity={PATH_OPACITY} />
+                </LinearGradient>
                 <Mask id="reveal">
                   <AnimatedPath
                     d={flight.d} stroke="#fff" strokeWidth={8} fill="none"
@@ -169,13 +181,13 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
                 </Mask>
               </Defs>
               <AnimatedPath
-                d={flight.d} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={DASH} strokeLinecap="round" fill="none" mask="url(#reveal)"
+                d={flight.d} stroke="url(#fade)" strokeWidth={2} strokeDasharray={DASH} strokeLinecap="round" fill="none" mask="url(#reveal)"
                 // Decreasing offset → dashes move along the path, toward the hexagon.
                 strokeDashoffset={drift.interpolate({ inputRange: [0, 1], outputRange: [0, -DASH_PERIOD] })}
               />
             </>
           )}
-          <Polygon points={HEX_PTS.map(([dx, dy]) => `${hex.x + dx},${hex.y + dy}`).join(' ')} fill={SHADES.amber} />
+          <Polygon points={HEX_PTS.map(([dx, dy]) => `${hex.x + dx},${hex.y + dy}`).join(' ')} fill={SHADES.amberSoft} fillOpacity={0.55} />
         </Svg>
       )}
       {BUBBLES.map((b, i) => {
