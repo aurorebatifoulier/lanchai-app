@@ -16,9 +16,10 @@ import { buildFlightPath, type Pt } from '@/components/account/flightPath';
 
 // My Account header (validated mockup): white band, avatar with a thin amber ring (photo
 // button kept), greeting by Vientiane time + first name, tier chip + status chip, and a
-// subtle decor (dashed "flight path" drawing itself from the left edge, looping around the
-// bike and the speaker, to a tiny amber hexagon — see flightPath.ts — + 4 floating item
-// bubbles) behind the text; bubbles that would touch the measured text block are
+// subtle decor (hand-drawn dashed "bee flight" drawing itself from the left edge, looping
+// partly under the bike and the speaker, to a tiny amber hexagon — see flightPath.ts —,
+// then its dashes slowly drift toward the hexagon; + 4 floating item bubbles on top of
+// the path) behind the text; bubbles that would touch the measured text block are
 // hidden (never overlap the greeting, name or chips). Brand shades only. Motion is
 // skipped with "reduce motion".
 
@@ -28,8 +29,8 @@ const DECOR_W = 250;
 const DECOR_RIGHT = -6;
 const DECOR_TOP = 4;
 const BUBBLE = 36;
-// Loop radius around a bubble: radius + clearance (bubbles float ±3px).
-const LOOP_R = BUBBLE / 2 + 9;
+const DASH: [number, number] = [4, 6];
+const DASH_PERIOD = DASH[0] + DASH[1];
 // Hexagon centre in decor coordinates (top-right corner).
 const HEX = { x: 236, y: 22 };
 const HEX_PTS: [number, number][] = [[0, -10], [9, -5], [9, 5], [0, 10], [-9, 5], [-9, -5]];
@@ -95,16 +96,22 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
   const reduce = useReduceMotion();
   // Dash offset as a 0→1 fraction (path length depends on the measured layout).
   const draw = useRef(new Animated.Value(1)).current;
+  // Very slow dash drift toward the hexagon (one dash period every 2.4s).
+  const drift = useRef(new Animated.Value(0)).current;
   const floats = useMemo(() => BUBBLES.map(() => new Animated.Value(0)), []);
   const ready = !!lines && headerWidth > 0 && headerHeight > 0;
 
   // Draw-on-mount once the layout is measured (from the left edge to the hexagon).
   useEffect(() => {
     if (!ready) return;
-    if (reduce) { draw.setValue(0); return; }
+    if (reduce) { draw.setValue(0); drift.setValue(0); return; }
     draw.setValue(1);
-    Animated.timing(draw, { toValue: 0, duration: 1800, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [ready, reduce, draw]);
+    drift.setValue(0);
+    const flow = Animated.loop(Animated.timing(drift, { toValue: 1, duration: 2400, easing: Easing.linear, useNativeDriver: false }));
+    const anim = Animated.timing(draw, { toValue: 0, duration: 1800, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    anim.start(({ finished }) => { if (finished) flow.start(); });
+    return () => { anim.stop(); flow.stop(); };
+  }, [ready, reduce, draw, drift]);
 
   useEffect(() => {
     if (reduce) return;
@@ -142,9 +149,8 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
   };
   const hex = { x: decorLeft + HEX.x, y: DECOR_TOP + HEX.y };
   const flight = ready ? buildFlightPath({
-    width: headerWidth, height: headerHeight, loopRadius: LOOP_R,
-    bike: centre('bike'), tent: centre('tent'), tool: centre('hammer-wrench'), speaker: centre('speaker'),
-    end: { x: hex.x - 9, y: hex.y },
+    width: headerWidth, height: headerHeight,
+    bike: centre('bike'), speaker: centre('speaker'), hexagon: hex,
   }) : null;
 
   return (
@@ -162,7 +168,11 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
                   />
                 </Mask>
               </Defs>
-              <Path d={flight.d} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={[4, 6]} strokeLinecap="round" fill="none" mask="url(#reveal)" />
+              <AnimatedPath
+                d={flight.d} stroke={SHADES.amberMid} strokeWidth={2} strokeDasharray={DASH} strokeLinecap="round" fill="none" mask="url(#reveal)"
+                // Decreasing offset → dashes move along the path, toward the hexagon.
+                strokeDashoffset={drift.interpolate({ inputRange: [0, 1], outputRange: [0, -DASH_PERIOD] })}
+              />
             </>
           )}
           <Polygon points={HEX_PTS.map(([dx, dy]) => `${hex.x + dx},${hex.y + dy}`).join(' ')} fill={SHADES.amber} />
@@ -356,7 +366,7 @@ const s = StyleSheet.create({
     backgroundColor: SHADES.white, marginHorizontal: -16, paddingHorizontal: PAD_X, paddingTop: PAD_TOP, paddingBottom: 26,
     borderBottomWidth: 0.5, borderBottomColor: SHADES.border, overflow: 'hidden',
     // Room for the loop under the bike (bike bottom + loop clearance + bottom run).
-    minHeight: DECOR_TOP + 128 + BUBBLE / 2 + LOOP_R + 14,
+    minHeight: DECOR_TOP + 128 + BUBBLE + 23,
   },
   bubble: {
     position: 'absolute', width: BUBBLE, height: BUBBLE, borderRadius: BUBBLE / 2,
