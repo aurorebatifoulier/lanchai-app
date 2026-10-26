@@ -772,7 +772,9 @@ a snapshot indefinitely).
   retailPrice (USD→LAK) once per product, "+" if some have none, hidden if none; no
   picked-up rental → "Your first rental is waiting." card. `AccountStickers.tsx`: one per
   category with a returned rental (catalogue order) + one locked next category; hidden
-  with no returned rental. `<LoyaltyCard>` is the LIGHT card everywhere (My Account +
+  with no returned rental. Tap: locked → `/category/{id}`; unlocked → bottom sheet
+  (sticker, name, "Unlocked with {product}, {date}" = first returned rental of that
+  category, `stickerUnlocks` from `computeAccountStats`, amber "Browse {category}"). `<LoyaltyCard>` is the LIGHT card everywhere (My Account +
   Loyalty screen). `<ResidentPromoCard>` restyled (white, light amber home circle).
   The WHOLE My Account screen now uses one design: `components/account/ui.tsx` (`UI`
   tokens — card white / radius 18 / 0.5px `SHADES.border`, section title 18/800, title

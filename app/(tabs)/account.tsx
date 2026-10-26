@@ -249,7 +249,7 @@ export default function AccountScreen() {
         <LoyaltyCard />
 
         {/* ── Stickers (one per category rented and returned) ── */}
-        {stats && <AccountStickers stickers={stats.stickers} next={stats.nextSticker} />}
+        {stats && <AccountStickers stickers={stats.stickers} next={stats.nextSticker} unlocks={stats.stickerUnlocks} />}
 
         {/* ── Resident promo (unverified tourists, dismissible) ── */}
         <ResidentPromoCard style={{ marginTop: 24 }} />

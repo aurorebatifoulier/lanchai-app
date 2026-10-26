@@ -32,6 +32,8 @@ export const ACCOUNT_COPY = {
     home: 'Home hero',
   } as Record<string, string>,
   stickerLocked: (category: string) => `Rent ${category.toLowerCase()} to unlock`,
+  stickerUnlockedWith: (product: string, date: string) => `Unlocked with ${product}, ${date}`,
+  stickerBrowse: (category: string) => `Browse ${category.toLowerCase()}`,
 
   // ── Resident promo card ──
   promoTitle: 'Live in Laos?',
