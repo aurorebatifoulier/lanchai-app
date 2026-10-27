@@ -56,6 +56,14 @@ export function vteMinutesOfDay(ms: number): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
+/**
+ * True while today (Vientiane) is before the pick-up DAY — a handover now is an early
+ * handover (allowed after an explicit staff confirmation, recorded on the reservation).
+ */
+export function isBeforePickupDay(pickupAtMs: number, nowMs: number = Date.now()): boolean {
+  return pickupAtMs > 0 && vteEndOfDayMs(nowMs) < vteEndOfDayMs(pickupAtMs);
+}
+
 /** Local (Vientiane) day of the week, 0 = Sunday … 6 = Saturday. */
 export function vteWeekday(ms: number): number {
   return local(ms).getUTCDay();

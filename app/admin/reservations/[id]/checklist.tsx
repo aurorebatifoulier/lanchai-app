@@ -26,6 +26,7 @@ import {
   getUserProfile,
   getProduct,
   addStockAdjustmentToBatch,
+  earlyHandoverFields,
   CHECKLIST_CATEGORIES,
   type RentalDoc,
   type ChecklistCategoryId,
@@ -421,6 +422,7 @@ export default function ChecklistScreen() {
         await updateDoc(doc(db, 'reservations', id), {
           handoverChecklist: checklistData,
           status: 'active',
+          ...earlyHandoverFields(reservation?.pickupAt),
           updatedAt: serverTimestamp(),
         });
       } else {

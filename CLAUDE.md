@@ -423,6 +423,13 @@ a snapshot indefinitely).
   for history). Legal texts (Terms §8/§10, cancellation policy, FAQ "What if I can't
   make it to my pick-up?") describe it: booking released, nothing charged, new bookings
   paused until the renter contacts us.
+- **Early handover = confirm, never a block.** Before the planned pick-up DAY
+  (Vientiane, `isBeforePickupDay()` in `shared/dates.ts`), "Mark as picked up" on the
+  admin reservation detail and "Mark all as picked up" on the admin list show an inline
+  "This pick-up is planned for {date}. Hand over early anyway?" (`earlyHandoverPrompt`).
+  Every handover write (single checklist, chained `submitChecklistBatch`, plain
+  "Mark as picked up") adds `earlyHandoverFields(pickupAt)` → `earlyHandover: true` +
+  `earlyHandoverPlannedAt` (the planned pick-up) — internal, never shown to renters.
 - **Loyalty points — server-side only, one shared rule.** Points change ONLY in Cloud
   Functions via `creditLoyaltyPoints()` (`functions/src/index.ts`), which uses the pure
   `applyLoyaltyPointsChange()` (`functions/src/shared/loyalty.ts`) for balance, tier and

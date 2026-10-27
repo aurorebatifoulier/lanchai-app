@@ -20,6 +20,7 @@ import { db, functions } from './firebase';
 import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
+import { isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
 
 // Throws on Firestore error — callers must handle.
 // Drafts and archived products are never shown or bookable for renters (the
@@ -214,6 +215,9 @@ export interface RentalDoc {
   // Set once the return is > 72h late: flag only — status stays 'active', no automatic
   // lost/stolen or deduction. Admin decides (normal return, or "Report lost/stolen").
   nonReturnAt?: Timestamp;
+  // Internal: handed over before the planned pick-up day (staff confirmed it) + that plan.
+  earlyHandover?: boolean;
+  earlyHandoverPlannedAt?: Timestamp;
   currency: string;
   notes: string;
   status: ReservationStatus;
@@ -580,6 +584,21 @@ export interface ChecklistBatchChargeFields {
   outstandingBalance: number;
 }
 
+/**
+ * Internal marker for a handover done before the planned pick-up day (staff confirmed
+ * "Hand over early anyway?"): earlyHandover + the planned pick-up time. Never shown to
+ * renters. Empty when the handover happens on / after the pick-up day.
+ */
+export function earlyHandoverFields(pickupAt: Timestamp | null | undefined): Record<string, unknown> {
+  if (!pickupAt || !isBeforePickupDay(pickupAt.toMillis())) return {};
+  return { earlyHandover: true, earlyHandoverPlannedAt: pickupAt };
+}
+
+/** Staff-facing inline warning before an early handover (detail + bulk list). */
+export function earlyHandoverPrompt(pickupAtMs: number): string {
+  return `This pick-up is planned for ${vteDay(pickupAtMs)}. Hand over early anyway?`;
+}
+
 export async function submitChecklistBatch(
   items: Array<{
     id: string;
@@ -589,16 +608,18 @@ export async function submitChecklistBatch(
     productId: string;
     quantity: number;
     adminName: string;
+    /** Planned pick-up — handover only, to record an early handover. */
+    pickupAt?: Timestamp | null;
   }>,
 ): Promise<void> {
   if (items.length === 0) return;
   const batch = writeBatch(db);
-  items.forEach(({ id, type, checklistData, charge, productId, quantity, adminName }) => {
+  items.forEach(({ id, type, checklistData, charge, productId, quantity, adminName, pickupAt }) => {
     const isHandover = type === 'handover';
     batch.update(doc(db, 'reservations', id), {
       [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
       status: isHandover ? 'active' : 'returned',
-      ...(isHandover ? {} : { returnedAt: serverTimestamp(), stockReleasedAt: null }),
+      ...(isHandover ? earlyHandoverFields(pickupAt) : { returnedAt: serverTimestamp(), stockReleasedAt: null }),
       // Optional fields may be undefined (e.g. no suggested amount) — Firestore rejects those.
       ...Object.fromEntries(Object.entries(charge ?? {}).filter(([, v]) => v !== undefined)),
       ...(charge?.lateChargeWaived ? { lateChargeWaivedAt: serverTimestamp() } : {}),

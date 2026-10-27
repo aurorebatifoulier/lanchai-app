@@ -17,7 +17,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, type WriteBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { auth } from '@/lib/auth';
-import { isPickupMissed } from '@/functions/src/shared/dates';
+import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
 import type { BookingHold } from '@/lib/bookingHold';
 import {
   getUserProfile,
@@ -27,6 +27,8 @@ import {
   adminMarkNoShow,
   adminLiftNoShowHold,
   getReservationsByOrderId,
+  earlyHandoverFields,
+  earlyHandoverPrompt,
   type RentalDoc,
   type ReservationStatus,
   type UserProfile,
@@ -121,7 +123,7 @@ export default function AdminReservationDetailScreen() {
   // Undo of a waiver made on the return checklist — allowed until returnFinalizedAt.
   const [confirmUnwaive, setConfirmUnwaive] = useState<'late' | 'damage' | null>(null);
   const [confirmAction, setConfirmAction] = useState<
-    'confirm_payment' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
+    'confirm_payment' | 'early_handover' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
     | 'no_show' | 'lift_hold' | null
   >(null);
   // Admin cancellation — reason + scope (this line or the whole order)
@@ -434,6 +436,13 @@ export default function AdminReservationDetailScreen() {
   // Once a handover checklist has been submitted, the deposit was actually received in
   // whatever currency the admin chose there — show that instead of the original LAK
   // figure. Before handover, no currency choice has been made yet, so show LAK as usual.
+  // Pick-up: the checklist if none yet, else the plain confirm. Before the planned
+  // pick-up day, an inline "Hand over early anyway?" confirm comes first (no block).
+  const startHandover = () => {
+    if (reservation.handoverChecklist?.confirmedAt) setConfirmAction('pickup');
+    else { setConfirmAction(null); router.push(`/admin/reservations/${id}/checklist?type=handover`); }
+  };
+
   const handoverDeposit = reservation.handoverChecklist;
   const depositDisplay = (handoverDeposit?.depositCurrency && handoverDeposit?.depositAmount != null)
     ? `${handoverDeposit.depositAmount.toLocaleString('en-US')} ${handoverDeposit.depositCurrency}`
@@ -919,13 +928,22 @@ export default function AdminReservationDetailScreen() {
               )}
             />
           )}
+          {!actioning && confirmAction === 'early_handover' && (
+            <ConfirmBox
+              text={earlyHandoverPrompt(reservation.pickupAt?.toMillis() ?? 0)}
+              confirmLabel="Hand over early"
+              cancelLabel="Cancel"
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={startHandover}
+            />
+          )}
           {!actioning && confirmAction === 'pickup' && (
             <ConfirmBox
               text="Confirm the renter has picked up the item?"
               confirmLabel="Mark as picked up"
               onCancel={() => setConfirmAction(null)}
               onConfirm={() => runAction(
-                { status: 'active' },
+                { status: 'active', ...earlyHandoverFields(reservation.pickupAt) },
                 { status: 'active' },
                 () => {
                   sendNotif(reservation.renterId, {
@@ -1221,9 +1239,9 @@ export default function AdminReservationDetailScreen() {
               {status === 'confirmed' && (
                 <TouchableOpacity
                   style={d.primaryBtn}
-                  onPress={() => reservation.handoverChecklist?.confirmedAt
-                    ? setConfirmAction('pickup')
-                    : router.push(`/admin/reservations/${id}/checklist?type=handover`)}
+                  onPress={() => (isBeforePickupDay(reservation.pickupAt?.toMillis() ?? 0)
+                    ? setConfirmAction('early_handover')
+                    : startHandover())}
                   activeOpacity={0.85}
                 >
                   <Text style={d.primaryBtnText}>Mark as picked up</Text>

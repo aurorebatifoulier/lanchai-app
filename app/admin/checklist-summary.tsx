@@ -205,6 +205,7 @@ export default function ChecklistSummaryScreen() {
           productId: r.productId,
           quantity: r.quantity,
           adminName: confirmedByName.trim(),
+          pickupAt: r.pickupAt,
         };
       });
 

@@ -16,9 +16,9 @@ import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/fire
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { confirmReservationsPayment, type ReservationStatus } from '@/lib/firestore';
+import { confirmReservationsPayment, earlyHandoverPrompt, type ReservationStatus } from '@/lib/firestore';
 import { overdueSeverity, overdueChipColors } from '@/utils/overdue';
-import { isPickupMissed } from '@/functions/src/shared/dates';
+import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
 import DateFilterSheet from '@/components/DateFilterSheet';
 import {
   DateFilterState,
@@ -114,6 +114,8 @@ export default function AdminReservationsScreen() {
   const [search,         setSearch]         = useState('');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
+  // "Mark all as picked up" before the planned pick-up day → inline "Hand over early?".
+  const [earlyOrderId, setEarlyOrderId] = useState<string | null>(null);
   const [bulkConfirming, setBulkConfirming] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState<{ orderId: string; message: string } | null>(null);
   const [dateFilter,        setDateFilter]        = useState<DateFilterState>(DEFAULT_DATE_FILTER);
@@ -378,7 +380,25 @@ export default function AdminReservationsScreen() {
                     </TouchableOpacity>
 
                     {/* Bulk action — only when every item shares status AND dates */}
-                    {entry.bulkAction && (
+                    {entry.bulkAction && earlyOrderId === entry.orderId && entry.bulkAction.kind !== 'confirm_payment' ? (
+                      <View style={s.bulkConfirmRow}>
+                        <Text style={s.bulkConfirmText}>
+                          {earlyHandoverPrompt(entry.rows[0].pickupAt?.toMillis() ?? 0)}
+                        </Text>
+                        <View style={s.bulkConfirmBtnRow}>
+                          <TouchableOpacity style={s.bulkCancelBtn} onPress={() => setEarlyOrderId(null)} activeOpacity={0.75}>
+                            <Text style={s.bulkCancelBtnText}>Cancel</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={s.bulkConfirmBtn}
+                            onPress={() => { setEarlyOrderId(null); handleStartChecklistChain('handover', entry.rows.map(r => r.id)); }}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={s.bulkConfirmBtnText}>Hand over early</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : entry.bulkAction && (
                       confirmingOrderId === entry.orderId ? (
                         <View style={s.bulkConfirmRow}>
                           <Text style={s.bulkConfirmText}>
@@ -410,6 +430,9 @@ export default function AdminReservationsScreen() {
                           onPress={() =>
                             entry.bulkAction!.kind === 'confirm_payment'
                               ? setConfirmingOrderId(entry.orderId)
+                              : entry.bulkAction!.checklistType === 'handover'
+                                && entry.rows.some(r => isBeforePickupDay(r.pickupAt?.toMillis() ?? 0))
+                              ? setEarlyOrderId(entry.orderId)
                               : handleStartChecklistChain(entry.bulkAction!.checklistType, entry.rows.map(r => r.id))
                           }
                           activeOpacity={0.85}
