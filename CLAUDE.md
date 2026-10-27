@@ -940,6 +940,21 @@ a snapshot indefinitely).
   local styles): `AdminDateTimePicker`, `SettlementActions`, `CropScreen`,
   `RenterIdCard`, `RenterNameBlock`, `admin/residency/[uid]` buttons.
 
+- **Search (2026-10-27).** ONE engine: `lib/search.ts` (pure, dependency-free —
+  `npm run test:search`), used through `hooks/useProductSearch.ts` (debounced 200ms) by
+  Explore (the Home search opens Explore with `?q=`) and Liked; `filterProducts` no longer
+  does text search. Normalisation keeps Lao combining marks; plural stemming; typos (OSA
+  distance 1 ≥ 4 letters, 2 ≥ 8); prefix on the last word; lexical expansion through
+  `config/search` groups (`lib/searchVocabulary.ts` defaults, Admin → Search vocabulary,
+  `lib/searchConfig.ts`, cached 10 min). Weights: name 1 > keywords 0.85 > category 0.6 >
+  published collection titles 0.5 > description 0.3; direct 1 > prefix 0.85 > lexical
+  0.55 (×0.8 when reached via a typo) > typo 0.5; 0–100, min 30, ties → popularity.
+  Relevance order unless the renter picked another sort; "Best match" when the top is ≥
+  15 points ahead; admins see each card's %. `products.keywords` (≤ 20, Admin product
+  form chips; NEW products get `suggestKeywords()` auto-filled until edited, existing
+  ones only a Suggested row). Saving a product clears the products cache. No read per
+  keystroke; `config/search` covered by the config/* rule.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

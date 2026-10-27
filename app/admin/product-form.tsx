@@ -46,6 +46,7 @@ import { ConfirmBox } from '@/components/ConfirmBox';
 import KeywordsInput, { cleanKeyword } from '@/components/admin/KeywordsInput';
 import { suggestKeywords } from '@/lib/search';
 import { useSearchGroups } from '@/lib/searchConfig';
+import { clearHomeCache } from '@/lib/homeCache';
 
 type ProductAccessMode = 'public' | 'earlyAccess' | 'exclusive';
 
@@ -492,6 +493,9 @@ export default function AdminProductFormScreen() {
         usageExamples: usageExamples.filter(s => s.trim()),
         updatedAt: serverTimestamp(),
       };
+      // Home / Explore read products through a short cache — drop it so this edit
+      // (keywords included) shows on the admin's next visit.
+      clearHomeCache('products');
 
       if (isEdit && id) {
         const imageUrls = await withRetry(() => uploadAll(id));
