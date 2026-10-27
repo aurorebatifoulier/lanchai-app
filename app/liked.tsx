@@ -33,6 +33,7 @@ import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak, formatKip } from '@/utils/currency';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import PressScale from '@/components/PressScale';
+import { useProductSearch, bestMatchId } from '@/hooks/useProductSearch';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD    = 16;
@@ -89,7 +90,7 @@ function LikedEmptyState({
 export default function LikedScreen() {
   const router  = useRouter();
   const screen = useScreenInsets();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
 
@@ -151,8 +152,10 @@ export default function LikedScreen() {
     [likedProducts],
   );
 
+  // Same search engine as Explore (lib/search.ts, debounced), on the liked items only.
+  const search = useProductSearch(likedProducts, searchQuery);
   const filteredLiked = useMemo(() => {
-    let list = [...likedProducts];
+    let list = search.active ? search.results.map(r => r.product) : [...likedProducts];
 
     if (filters.availableOnly) list = list.filter(p => p.available);
     // PRICE_CONFIG / filters.priceMin/Max are LAK-denominated; pricePerDay is USD.
@@ -162,14 +165,10 @@ export default function LikedScreen() {
     }
     if (filters.minRating > 0) list = list.filter(p => p.averageRating != null && p.averageRating >= filters.minRating);
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(p => p.name.toLowerCase().includes(q));
-    }
-
     switch (filters.sort) {
       case 'popular':
-        list.sort((a, b) => (b.bookingsCount ?? b.rentalCount ?? 0) - (a.bookingsCount ?? a.rentalCount ?? 0));
+        // With a search, keep the relevance order; otherwise most rented first.
+        if (!search.active) list.sort((a, b) => (b.bookingsCount ?? b.rentalCount ?? 0) - (a.bookingsCount ?? a.rentalCount ?? 0));
         break;
       case 'price-asc':
         list.sort((a, b) => a.pricePerDay - b.pricePerDay);
@@ -182,7 +181,8 @@ export default function LikedScreen() {
         break;
     }
     return list;
-  }, [likedProducts, filters, searchQuery, exchangeRate]);
+  }, [likedProducts, filters, exchangeRate, search]);
+  const bestId = search.active && filters.sort === 'popular' ? bestMatchId(filteredLiked, search.scoreById) : null;
 
   const hasActiveFilters = useMemo(() => (
     filters.availableOnly
@@ -248,8 +248,10 @@ export default function LikedScreen() {
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
       availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
+      bestMatch={item.id === bestId}
+      matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
     />
-  ), [handleUnlike, router, exchangeRate, userTier, occupancy]);
+  ), [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search]);
 
   const keyExtractor = useCallback((item: Product) => item.id, []);
 

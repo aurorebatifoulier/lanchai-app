@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import ProductGridCard, { useProductCardLayout } from '@/components/ProductGridCard';
 import SearchBar from '@/components/SearchBar';
@@ -27,7 +27,8 @@ import {
   removeFavorite,
   submitRequest,
 } from '@/lib/firestore';
-import { Product } from '@/lib/mockData';
+import { CATEGORIES, type Product } from '@/lib/mockData';
+import { SHADES } from '@/constants/brandShades';
 import {
   Filters,
   PRICE_CONFIG,
@@ -39,6 +40,12 @@ import { useExchangeRate } from '@/lib/exchangeRate';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import { formatKip } from '@/utils/currency';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
+import { useProductSearch, bestMatchId } from '@/hooks/useProductSearch';
+import { SEARCH_COPY } from '@/constants/searchCopy';
+import { cached, HOME_TTL } from '@/lib/homeCache';
+import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
+import { CategoryBadge } from '@/components/account/ui';
+import PressScale from '@/components/PressScale';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
@@ -63,7 +70,7 @@ const EXPLORE_CATEGORIES = [
 export default function ExploreScreen() {
   const cardLayout = useProductCardLayout();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
   const CURRENT_USER = user?.uid ?? '';
@@ -104,7 +111,8 @@ export default function ExploreScreen() {
       if (!CURRENT_USER) { setLoading(false); return; }
       setLoading(true);
       setLoadError(false);
-      getProducts()
+      // Same short cache as the Home (lib/homeCache.ts) — no re-read on every tab switch.
+      cached('products', HOME_TTL.products, getProducts)
         .then(data => { setAllProducts(data); setLoading(false); })
         .catch(() => { setLoadError(true); setLoading(false); });
       getFavorites(CURRENT_USER).then(ids => setFavorites(new Set(ids)));
@@ -245,15 +253,21 @@ export default function ExploreScreen() {
     return chips;
   }, [activeCategory, filters, searchQuery]);
 
+  // Search (lib/search.ts, debounced): relevance order by default ("Popular" = the
+  // default sort); an explicit other sort (price, newest, rating) is respected.
+  const search = useProductSearch(allProducts, searchQuery);
   const filteredProducts = useMemo(() => {
     const matched = filterProducts(allProducts, filters, {
       category: activeCategory,
-      searchQuery,
       exchangeRate,
       categories: EXPLORE_CATEGORIES,
     });
-    return sortProducts(matched, filters.sort);
-  }, [allProducts, activeCategory, filters, searchQuery, exchangeRate]);
+    if (!search.active) return sortProducts(matched, filters.sort);
+    const allowed = new Set(matched.map(p => p.id));
+    const ranked = search.results.filter(r => allowed.has(r.product.id)).map(r => r.product);
+    return filters.sort === 'popular' ? ranked : sortProducts(ranked, filters.sort);
+  }, [allProducts, activeCategory, filters, exchangeRate, search]);
+  const bestId = search.active && filters.sort === 'popular' ? bestMatchId(filteredProducts, search.scoreById) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -267,8 +281,10 @@ export default function ExploreScreen() {
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
       availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
+      bestMatch={item.id === bestId}
+      matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
     />
-  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy]);
+  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search]);
 
   const ListHeader = useMemo(() => {
     if (activeChips.length === 0) return null;
@@ -368,11 +384,15 @@ export default function ExploreScreen() {
           extraData={{ favorites, productCount: allProducts.length }}
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={
-            <SmartEmptyState
-              catalogueEmpty={allProducts.length === 0}
-              onClearFilters={clearAllFilters}
-              onRequestItem={openRequest}
-            />
+            search.active && allProducts.length > 0 ? (
+              <SearchEmptyState query={search.query} collections={search.collections} onRequestItem={openRequest} />
+            ) : (
+              <SmartEmptyState
+                catalogueEmpty={allProducts.length === 0}
+                onClearFilters={clearAllFilters}
+                onRequestItem={openRequest}
+              />
+            )
           }
         />
       )}
@@ -469,6 +489,45 @@ export default function ExploreScreen() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** No search result: suggestions — categories and published "Got plans?" collections. */
+function SearchEmptyState({ query, collections, onRequestItem }: { query: string; collections: CollectionDoc[]; onRequestItem: () => void }) {
+  const router = useRouter();
+  return (
+    <View style={styles.searchEmpty}>
+      <Text style={styles.emptyTitle}>{SEARCH_COPY.noResults(query)}</Text>
+      <Text style={[styles.emptySub, { marginBottom: 16 }]}>{SEARCH_COPY.noResultsSub}</Text>
+      <Text style={styles.suggestLabel}>{SEARCH_COPY.categoriesLabel}</Text>
+      <View style={styles.suggestRow}>
+        {CATEGORIES.filter(c => c.id !== 'all').map(c => (
+          <PressScale key={c.id} style={styles.suggestCat} onPress={() => router.push(`/category/${c.id}`)}>
+            <CategoryBadge cat={c.id} size={44} />
+            <Text style={styles.suggestCatText} numberOfLines={1}>{c.name}</Text>
+          </PressScale>
+        ))}
+      </View>
+      {collections.length > 0 && (
+        <>
+          <Text style={[styles.suggestLabel, { marginTop: 18 }]}>{SEARCH_COPY.collectionsLabel}</Text>
+          <View style={styles.suggestRow}>
+            {collections.slice(0, 4).map(c => {
+              const t = COLLECTION_TILE[c.shade] ?? COLLECTION_TILE.carbonLight;
+              return (
+                <PressScale key={c.id} style={[styles.suggestCol, { backgroundColor: t.bg }]} onPress={() => router.push(`/collection/${c.id}`)}>
+                  <MaterialCommunityIcons name={c.icon} size={18} color={t.icon} />
+                  <Text style={[styles.suggestColText, { color: t.title }]} numberOfLines={1}>{c.title}</Text>
+                </PressScale>
+              );
+            })}
+          </View>
+        </>
+      )}
+      <TouchableOpacity style={[styles.requestItemBtn, { marginTop: 22 }]} onPress={onRequestItem}>
+        <Text style={styles.requestItemBtnText}>Request this item</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function SmartEmptyState({
   catalogueEmpty,
   onClearFilters,
@@ -519,6 +578,13 @@ function SmartEmptyState({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  searchEmpty: { paddingTop: 32, paddingHorizontal: 4 },
+  suggestLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbonMuted, marginBottom: 10 },
+  suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  suggestCat: { width: 64, alignItems: 'center', gap: 6 },
+  suggestCatText: { fontSize: 12, fontWeight: '600', color: SHADES.carbon },
+  suggestCol: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, maxWidth: '100%' },
+  suggestColText: { fontSize: 13, fontWeight: '700' },
   container: {
     flex: 1,
     backgroundColor: COLORS.porcelain,

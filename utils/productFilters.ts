@@ -23,7 +23,8 @@ export function filterProducts(
   filters: Filters,
   context: ProductFilterContext = {},
 ): Product[] {
-  const { category, searchQuery, exchangeRate, categories } = context;
+  // Text search is lib/search.ts (useProductSearch) — not here.
+  const { category, exchangeRate } = context;
   let list = [...products];
 
   if (category && category !== 'all') list = list.filter(p => p.category === category);
@@ -43,14 +44,6 @@ export function filterProducts(
 
   if (filters.minRating > 0) {
     list = list.filter(p => p.averageRating != null && p.averageRating >= filters.minRating);
-  }
-
-  if (searchQuery?.trim()) {
-    const q = searchQuery.trim().toLowerCase();
-    list = list.filter(p => {
-      const catName = categories?.find(c => c.id === p.category)?.name ?? '';
-      return p.name.toLowerCase().includes(q) || catName.toLowerCase().includes(q);
-    });
   }
 
   return list;

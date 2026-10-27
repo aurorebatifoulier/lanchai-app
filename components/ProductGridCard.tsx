@@ -13,6 +13,7 @@ import { getMinPrice } from '@/utils/pricing';
 import { toLak, formatKip } from '@/utils/currency';
 import { FavoriteButton } from '@/components/FavoriteHeart';
 import PressScale from '@/components/PressScale';
+import { SEARCH_COPY } from '@/constants/searchCopy';
 
 // Shared 2-column grid product card — Explore (app/(tabs)/explore.tsx) and Liked
 // (app/liked.tsx). Home sections and category pages use their own, different cards.
@@ -58,6 +59,8 @@ function ProductGridCard({
   exchangeRate,
   userTier,
   availability,
+  bestMatch = false,
+  matchPercent = null,
 }: {
   product: Product;
   width: number;
@@ -68,6 +71,10 @@ function ProductGridCard({
   userTier: LoyaltyTier | null;
   /** From gridAvailability(); null/undefined = bookable today (show social proof). */
   availability?: GridAvailability;
+  /** Search: "Best match" chip (renters and admins). */
+  bestMatch?: boolean;
+  /** Search score shown to ADMINS only (null = hidden) — to tune keywords. */
+  matchPercent?: number | null;
 }) {
   const layout = useProductCardLayout();
   const imageUri = product.images?.[0] ?? null;
@@ -92,6 +99,13 @@ function ProductGridCard({
         ) : (
           <View style={[s.cardImage, s.cardImagePlaceholder]}>
             <Feather name="image" size={28} color={COLORS.softGray} />
+          </View>
+        )}
+
+        {(bestMatch || matchPercent != null) && (
+          <View style={s.searchChips}>
+            {bestMatch && <View style={s.bestChip}><Text style={s.bestText}>{SEARCH_COPY.bestMatch}</Text></View>}
+            {matchPercent != null && <View style={s.pctChip}><Text style={s.pctText}>{SEARCH_COPY.matchPercent(matchPercent)}</Text></View>}
           </View>
         )}
 
@@ -135,6 +149,11 @@ function ProductGridCard({
 }
 
 const s = StyleSheet.create({
+  searchChips: { position: 'absolute', top: 8, left: 8, flexDirection: 'row', gap: 4, zIndex: 1 },
+  bestChip: { backgroundColor: SHADES.amber, borderRadius: 6, paddingHorizontal: 7, height: 20, justifyContent: 'center' },
+  bestText: { fontSize: 10, fontWeight: '800', color: SHADES.carbon },
+  pctChip: { backgroundColor: SHADES.carbon, borderRadius: 6, paddingHorizontal: 6, height: 20, justifyContent: 'center' },
+  pctText: { fontSize: 10, fontWeight: '800', color: SHADES.cream },
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
@@ -236,5 +255,5 @@ const s = StyleSheet.create({
 
 // Memoised for long lists: re-render only when what the card shows changes. Handlers are
 // per-render closures bound to this product's id, so ignoring their identity is safe.
-const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'availability'] as const;
+const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'availability', 'bestMatch', 'matchPercent'] as const;
 export default React.memo(ProductGridCard, (a, b) => SHOWN_PROPS.every(k => a[k] === b[k]));
