@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
@@ -12,6 +12,7 @@ import ProductSocialProof from '@/components/ProductSocialProof';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak, formatKip } from '@/utils/currency';
 import { FavoriteButton } from '@/components/FavoriteHeart';
+import PressScale from '@/components/PressScale';
 
 // Shared 2-column grid product card — Explore (app/(tabs)/explore.tsx) and Liked
 // (app/liked.tsx). Home sections and category pages use their own, different cards.
@@ -48,7 +49,7 @@ export function useProductCardLayout() {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ProductGridCard({
+function ProductGridCard({
   product,
   width,
   onPress,
@@ -84,7 +85,7 @@ export default function ProductGridCard({
     null;
 
   return (
-    <TouchableOpacity style={[s.card, { width, height: layout.card }]} onPress={onPress} activeOpacity={0.85}>
+    <PressScale style={[s.card, { width, height: layout.card }]} onPress={onPress} activeOpacity={0.85}>
       <View style={s.cardImageWrap}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={s.cardImage} contentFit="cover" transition={300} />
@@ -129,7 +130,7 @@ export default function ProductGridCard({
           )}
         </View>
       </View>
-    </TouchableOpacity>
+    </PressScale>
   );
 }
 
@@ -232,3 +233,8 @@ const s = StyleSheet.create({
     color: COLORS.fg3,
   },
 });
+
+// Memoised for long lists: re-render only when what the card shows changes. Handlers are
+// per-render closures bound to this product's id, so ignoring their identity is safe.
+const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'availability'] as const;
+export default React.memo(ProductGridCard, (a, b) => SHOWN_PROPS.every(k => a[k] === b[k]));

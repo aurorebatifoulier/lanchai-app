@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, AccessibilityInfo, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, ActivityIndicator,
   type LayoutChangeEvent,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Mask, Path, Polygon, Stop } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';
+import { useReducedMotion } from '@/constants/motion';
 import { categoryStyle, type CategoryIconName } from '@/constants/categoryStyle';
 import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
@@ -54,15 +55,8 @@ const BUBBLES: { cat: string; icon: CategoryIconName; x?: number; y?: number; bg
   { cat: 'sports', x: 184, y: 128, rot: '5deg' },
 ] as const).map(b => ({ ...b, ...categoryStyle(b.cat) })); // one look per category, everywhere
 
-export function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduce).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduce);
-    return () => sub.remove();
-  }, []);
-  return reduce;
-}
+// Kept as an alias — the hook lives in constants/motion.ts.
+export const useReduceMotion = useReducedMotion;
 
 /** One text line (greeting, name, chips) in header coordinates, from onLayout. */
 interface Box { left: number; top: number; right: number; bottom: number }

@@ -1,10 +1,11 @@
 import React from 'react';
-import { Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';
 import { UI } from '@/components/account/ui';
 import { HOME_COPY } from '@/constants/homeCopy';
 import type { WhyBuy } from '@/lib/homeData';
+import PressScale from '@/components/PressScale';
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
 
@@ -17,12 +18,12 @@ export default function WhyBuyCard({ pick }: { pick: WhyBuy }) {
     : HOME_COPY.whyBuyCatalogue(n(pick.perDayLak));
   const kicker = pick.kind === 'mine' ? HOME_COPY.whyBuyMineKicker : HOME_COPY.whyBuyCatalogueKicker;
   return (
-    <TouchableOpacity style={[UI.card, s.card]} onPress={() => router.push(`/product/${pick.product.id}`)} activeOpacity={0.9}>
+    <PressScale style={[UI.card, s.card]} onPress={() => router.push(`/product/${pick.product.id}`)} activeOpacity={0.9}>
       <Text style={s.label}>{HOME_COPY.whyBuyLabel}</Text>
       <Text style={s.big}>{HOME_COPY.whyBuyCosts(pick.product.name, n(pick.retailLak))}</Text>
       <Text style={s.big}>{line2}</Text>
       <Text style={s.kicker}>{kicker}</Text>
-    </TouchableOpacity>
+    </PressScale>
   );
 }
 

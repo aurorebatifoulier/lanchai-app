@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';
 import { ProductThumb } from '@/components/home/ProductThumb';
 import type { Product } from '@/lib/mockData';
+import PressScale from '@/components/PressScale';
 
 // Home "Most rented" podium (validated mockup): top 3 shown 2 – 1 – 3, centre highest.
 // 1 = amber, 2 = light amber (dark amber number), 3 = carbon (amber number).
@@ -30,13 +31,13 @@ export default function MostRentedPodium({ top }: { top: Product[] }) {
         const p = ordered[i];
         if (!p) return <View key={st.rank} style={s.col} />;
         return (
-          <TouchableOpacity key={st.rank} style={s.col} onPress={() => router.push(`/product/${p.id}`)} activeOpacity={0.8}>
+          <PressScale key={st.rank} style={s.col} onPress={() => router.push(`/product/${p.id}`)} activeOpacity={0.8}>
             <ProductThumb product={p} size={st.img} />
             <Text style={s.name} numberOfLines={2}>{shortName(p.name)}</Text>
             <View style={[s.block, { height: st.height, backgroundColor: st.bg }]}>
               <Text style={[s.rank, { color: st.fg }]}>{st.rank}</Text>
             </View>
-          </TouchableOpacity>
+          </PressScale>
         );
       })}
     </View>

@@ -24,6 +24,7 @@ import { getProductAccessState } from '@/utils/productAccess';
 import { DEFAULT_FILTERS, type Filters } from '@/lib/filterConfig';
 import { filterProducts, sortProducts, sortProductsByRating } from '@/utils/productFilters';
 import { FavoriteButton } from '@/components/FavoriteHeart';
+import PressScale from '@/components/PressScale';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -225,7 +226,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
   const accessState = getProductAccessState(product, userTier);
 
   return (
-    <TouchableOpacity style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
+    <PressScale style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.prodImg, { backgroundColor: bg }]}>
         {accessState.badgeLabel ? (
           <View style={[
@@ -274,7 +275,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
           )}
         </View>
       </View>
-    </TouchableOpacity>
+    </PressScale>
   );
 }
 

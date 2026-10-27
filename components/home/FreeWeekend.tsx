@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
@@ -9,6 +9,7 @@ import { ProductThumb } from '@/components/home/ProductThumb';
 import type { Product } from '@/lib/mockData';
 import type { WeekendWindow } from '@/lib/homeData';
 import { toLak } from '@/utils/currency';
+import PressScale from '@/components/PressScale';
 
 const THUMB = 104;
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -32,7 +33,7 @@ export default function FreeWeekend({ products, win, exchangeRate }: { products:
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.scroll} contentContainerStyle={s.rail}>
         {products.map(p => (
-          <TouchableOpacity
+          <PressScale
             key={p.id}
             style={{ width: THUMB }}
             onPress={() => router.push({
@@ -49,7 +50,7 @@ export default function FreeWeekend({ products, win, exchangeRate }: { products:
             {exchangeRate != null && p.pricePerDay > 0 && (
               <Text style={UI.small}>{HOME_COPY.perDay(toLak(p.pricePerDay, exchangeRate).toLocaleString('en-US'))}</Text>
             )}
-          </TouchableOpacity>
+          </PressScale>
         ))}
       </ScrollView>
       <View style={s.hint}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
@@ -11,13 +11,14 @@ import type { LoyaltyTier } from '@/lib/firestore';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
 import { getProductAccessState } from '@/utils/productAccess';
+import PressScale from '@/components/PressScale';
 
 // Horizontal-rail product card on the My Account design (Home rails: New arrivals, Rent
 // again, Most rented). White card, thin border, radius 18. Shows the access / Premium /
 // Popular badge but never "New" — that one stays in Explore (ProductGridCard).
 export const RAIL_CARD_WIDTH = 150;
 
-export default function ProductRailCard({
+function ProductRailCard({
   product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite,
 }: {
   product: Product;
@@ -37,7 +38,7 @@ export default function ProductRailCard({
   const image = product.images?.[0];
 
   return (
-    <TouchableOpacity style={[UI.card, s.card]} onPress={onPress} activeOpacity={0.85}>
+    <PressScale style={[UI.card, s.card]} onPress={onPress} activeOpacity={0.85}>
       <View style={s.img}>
         {image
           ? <Image source={{ uri: image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
@@ -57,7 +58,7 @@ export default function ProductRailCard({
           : <Text style={[s.price, s.priceMissing]}>Price not set</Text>}
         <ProductSocialProof product={product} />
       </View>
-    </TouchableOpacity>
+    </PressScale>
   );
 }
 
@@ -76,3 +77,8 @@ const s = StyleSheet.create({
   price: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted },
   priceMissing: { fontStyle: 'italic' },
 });
+
+// Memoised for long lists: re-render only when what the card shows changes. Handlers are
+// per-render closures bound to this product's id, so ignoring their identity is safe.
+const SHOWN_PROPS = ['product', 'isFavorite', 'exchangeRate', 'userTier'] as const;
+export default React.memo(ProductRailCard, (a, b) => SHOWN_PROPS.every(k => a[k] === b[k]));

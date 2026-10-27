@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { UI } from '@/components/account/ui';
 import { HOME_COPY } from '@/constants/homeCopy';
 import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
 import { RailHeader } from '@/components/home/RailHeader';
+import PressScale from '@/components/PressScale';
 
 // Home "Got plans?" (validated mockup): 2-column grid of large tiles in the collection's
 // shade — big icon, title, one short line. 4 tiles max, "See all" shows the rest inline.
@@ -26,7 +27,7 @@ export default function CollectionTiles({ collections }: { collections: Collecti
         {shown.map(c => {
           const t = COLLECTION_TILE[c.shade] ?? COLLECTION_TILE.carbonLight;
           return (
-            <TouchableOpacity
+            <PressScale
               key={c.id}
               style={[s.tile, { backgroundColor: t.bg }]}
               onPress={() => router.push(`/collection/${c.id}`)}
@@ -37,7 +38,7 @@ export default function CollectionTiles({ collections }: { collections: Collecti
                 <Text style={[s.title, { color: t.title }]} numberOfLines={2}>{c.title}</Text>
                 {!!c.subtitle && <Text style={[UI.subtitle, { color: t.sub }]} numberOfLines={2}>{c.subtitle}</Text>}
               </View>
-            </TouchableOpacity>
+            </PressScale>
           );
         })}
       </View>

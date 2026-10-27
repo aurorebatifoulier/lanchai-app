@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import { categoryStyle } from '@/constants/categoryStyle';
+import PressScale from '@/components/PressScale';
 
 // My Account design language (validated mockup) — ONE place for the card, section title,
 // row, chip and icon-circle styles used by the whole screen (top + everything below), so
@@ -234,7 +235,7 @@ export function Row({
     </>
   );
   if (soon || !onPress) return <View style={s.row}>{content}</View>;
-  return <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>;
+  return <PressScale style={s.row} onPress={onPress} activeOpacity={0.7}>{content}</PressScale>;
 }
 
 /** Row with a switch (same layout as <Row>): amber track when on. */

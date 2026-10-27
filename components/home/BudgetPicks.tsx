@@ -7,6 +7,7 @@ import { HOME_COPY } from '@/constants/homeCopy';
 import { ProductThumb } from '@/components/home/ProductThumb';
 import type { Product } from '@/lib/mockData';
 import { toLak } from '@/utils/currency';
+import PressScale from '@/components/PressScale';
 
 // Home "Under {X} LAK a day" (validated mockup): light-amber card, 2×2 mini cards
 // (thumbnail, name, price in an amber chip). 4 shown, or 2 when only 2–3 match.
@@ -30,7 +31,7 @@ export default function BudgetPicks({ products, thresholdLak, exchangeRate }: { 
       </View>
       <View style={s.grid}>
         {shown.map(p => (
-          <TouchableOpacity key={p.id} style={s.mini} onPress={() => router.push(`/product/${p.id}`)} activeOpacity={0.85}>
+          <PressScale key={p.id} style={s.mini} onPress={() => router.push(`/product/${p.id}`)} activeOpacity={0.85}>
             <View style={s.thumbBox}>
               <ProductThumb product={p} size={64} radius={12} fill />
             </View>
@@ -40,7 +41,7 @@ export default function BudgetPicks({ products, thresholdLak, exchangeRate }: { 
                 <Text style={s.priceText}>{toLak(p.pricePerDay, exchangeRate).toLocaleString('en-US')}</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </PressScale>
         ))}
       </View>
     </View>
