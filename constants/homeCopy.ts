@@ -30,6 +30,15 @@ export const HOME_COPY = {
   mostRentedTitle: 'Most rented this month',
   mostRentedAllTimeTitle: 'Most rented',
 
+  freeWeekendTitle: 'Free this weekend',
+  freeWeekendSub: 'Still available. Not for long.',
+  freeWeekendChip: (from: string, to: string) => `${from} – ${to}`,
+  freeWeekendHint: 'Tap an item: the weekend dates are already filled in.',
+  perDay: (price: string) => `${price} / day`,
+
+  budgetLabel: 'Small price, big plans',
+  budgetTitle: (threshold: string) => `Under ${threshold} LAK a day`,
+
   whyBuyLabel: 'Why buy it?',
   whyBuyCosts: (product: string, retail: string) => `${/^[aeiou]/i.test(product) ? 'An' : 'A'} ${product} costs ${retail} LAK.`,
   whyBuyMine: (times: number, paid: string) =>
@@ -61,6 +70,7 @@ export const HOME_COPY = {
     scope === 'month' ? 'Podium: returns this month.' : 'Podium: all-time rentals (fewer than 3 products rented this month).',
   adminWhyBuyMine: 'Returning renter version:',
   adminWhyBuyCatalogue: 'New renter version:',
+  adminExampleData: 'Example data — not enough matching products right now.',
   adminDraftsIncluded: 'Drafts and out-of-date collections included.',
 
   collectionEmpty: 'Nothing here yet — check back soon.',

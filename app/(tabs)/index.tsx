@@ -34,7 +34,13 @@ import WhyBuyCard from '@/components/home/WhyBuyCard';
 import ReferralPromoCard from '@/components/home/ReferralPromoCard';
 import { RailHeader } from '@/components/home/RailHeader';
 import { useReduceMotion } from '@/components/account/AccountHeader';
-import { rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue } from '@/lib/homeData';
+import { rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue, weekendWindow, freeThisWeekend, budgetPicks, bookableByPopularity } from '@/lib/homeData';
+import FreeWeekend from '@/components/home/FreeWeekend';
+import BudgetPicks from '@/components/home/BudgetPicks';
+import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
+import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
+import { getAvailableTimeSlots } from '@/utils/timeSlots';
+import { fetchAllOccupancy, type OccupancyRecord } from '@/utils/availability';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
@@ -121,6 +127,13 @@ export default function HomeScreen() {
   const [firstName, setFirstName] = useState<string>('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const loyalty = useMyLoyalty();
+  const shop = useShopInfo();
+  const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
+  // "Free this weekend": all live occupancy in ONE query (null = not loaded / failed →
+  // section hidden, never a false "free"). "Under X": threshold from config/home.
+  const [occupancy, setOccupancy] = useState<Map<string, OccupancyRecord[]> | null>(null);
+  const [budgetLak, setBudgetLak] = useState(DEFAULT_BUDGET_THRESHOLD_LAK);
+  const [focusTick, setFocusTick] = useState(0);
   const reduceMotion = useReduceMotion();
   const { width: screenW } = useWindowDimensions();
 
@@ -149,6 +162,9 @@ export default function HomeScreen() {
       // Next pick-up card + "Rent again" (equality-only query, no index).
       getMyReservations(user.uid).then(setReservations).catch(() => setReservations([]));
       getPublishedCollections().then(setCollections).catch(() => setCollections([]));
+      fetchAllOccupancy().then(setOccupancy).catch(() => setOccupancy(null));
+      getHomeConfig().then(c => setBudgetLak(c.budgetThresholdLak));
+      setFocusTick(t => t + 1);
     }, [user])
   );
 
@@ -233,6 +249,26 @@ export default function HomeScreen() {
   const whyCatalogue = useMemo(() => whyBuyCatalogue(products, exchangeRate), [products, exchangeRate]);
   const whyBuy = returning ? (whyMine ?? whyCatalogue) : whyCatalogue;
   const referralPts = loyalty.config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
+
+  const weekend = useMemo(
+    () => weekendWindow(new Date(), d => getAvailableTimeSlots(d, timeSlots)),
+    // focusTick: recompute the window each time Home is shown (the day may have changed).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeSlots, focusTick],
+  );
+  const weekendFree = useMemo(
+    () => (weekend && occupancy ? freeThisWeekend(products, occupancy, weekend, userTier ?? null) : []),
+    [products, occupancy, weekend, userTier],
+  );
+  const budget = useMemo(
+    () => budgetPicks(products, budgetLak, exchangeRate, userTier ?? null),
+    [products, budgetLak, exchangeRate, userTier],
+  );
+  // Admin preview: example products when not enough match right now.
+  const weekendShown = weekendFree.length >= 3 ? weekendFree
+    : preview ? bookableByPopularity(products, userTier ?? null).slice(0, 8) : [];
+  const budgetShown = budget.length >= 2 ? budget
+    : preview ? [...bookableByPopularity(products, userTier ?? null)].sort((a, b) => a.pricePerDay - b.pricePerDay).slice(0, 4) : [];
 
   // Categories: all on one row (≤ 6) sized to the width; horizontal scroll from 7.
   const catFit = HOME_CATEGORIES.length <= 6;
@@ -402,6 +438,13 @@ export default function HomeScreen() {
               <AdminHint />
             ) : null}
 
+            {/* Free this weekend — products free for the whole weekend window */}
+            {!loading && weekend && weekendShown.length >= 3 && (
+              <>
+                <FreeWeekend products={weekendShown} win={weekend} exchangeRate={exchangeRate} />
+                {preview && weekendFree.length < 3 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
+              </>
+            )}
           </View>
 
           {/* Banner — breaks the rhythm between the rails and the lists */}
@@ -434,6 +477,14 @@ export default function HomeScreen() {
                 {rail(mostRented)}
               </>
             ) : null}
+
+            {/* Under {X} LAK a day — budget picks */}
+            {!loading && budgetShown.length >= 2 && (
+              <>
+                <BudgetPicks products={budgetShown} thresholdLak={budgetLak} exchangeRate={exchangeRate} />
+                {preview && budget.length < 2 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
+              </>
+            )}
 
             {/* Why buy it? — a real comparison */}
             {!loading && (preview ? (

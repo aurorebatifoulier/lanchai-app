@@ -859,11 +859,20 @@ a snapshot indefinitely).
   one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) → "Got
   plans?" `<CollectionTiles>` (2-col tiles in the collection's shade, `COLLECTION_TILE`, 4
-  max + "See all" inline; admin-only dashed hint when none) → "Consume better" banner →
+  max + "See all" inline; admin-only dashed hint when none) → "Free this weekend"
+  `<FreeWeekend>` (`weekendWindow`: Mon–Thu → coming Fri–Sun, Fri–Sat → today–Sun, Sunday
+  → next weekend; first open slot (2h lead time), return Sunday same time; products from
+  ONE `fetchAllOccupancy()` + `computeAvailableUnits` for the exact window — the booking
+  rule — top 12 bookable by popularity, tier-locked excluded, 8 shown, hidden under 3 or if
+  occupancy failed; tap → `booking/new?productId&pickupAt&returnAt` (ms, pre-fill ignored
+  when no longer valid)) → "Consume better" banner →
   "Rent again" `<RentAgainList>` (one card, 3 rows, `rentAgainRows`) →
   `<MostRentedPodium>` (`podiumPick`: `products.rentalsByMonth.{YYYY-MM}` — written by
   `applyRentalCount`, Vientiane month of the return — when 3 products have some, else
-  all-time `rentalCount` titled "Most rented", else the rail) → `<WhyBuyCard>` (returning:
+  all-time `rentalCount` titled "Most rented", else the rail) → "Under {X} LAK a day"
+  `<BudgetPicks>` (`config/home.budgetThresholdLak`, default 100,000, Shop settings →
+  Home, `lib/homeConfig.ts`; `pricePerDay` in LAK ≤ X, popularity order, 4 or 2, hidden
+  under 2; "See all" → `explore?maxPrice=X` = the Explore price filter) → `<WhyBuyCard>` (returning:
   `whyBuyMine` = most-returned product with a `retailPrice`, total paid = sum of frozen
   `total` LAK; else `whyBuyCatalogue` = best retailPrice / daily price; hidden without a
   retail value or rate) → returning renters (≥ 1 returned rental, not loyalty-excluded):
