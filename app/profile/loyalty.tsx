@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { Timestamp, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
@@ -45,6 +45,10 @@ export default function LoyaltyScreen() {
   const { config, points, tier, coupons, isResident } = loyalty;
   const reviewPts = config?.reviewRewardPoints ?? DEFAULT_REVIEW_REWARD_POINTS;
   const referralPts = config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
+  // ?section=referral (Home referral card) → scroll to the referral card once laid out.
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolled = useRef(false);
   const currentRank = TIER_ORDER.indexOf(tier);
 
   return (
@@ -63,6 +67,7 @@ export default function LoyaltyScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
           showsVerticalScrollIndicator={false}
@@ -124,7 +129,16 @@ export default function LoyaltyScreen() {
           </RowGroup>
 
           {/* ── Referral ── */}
-          <ReferralCard points={referralPts} />
+          <View
+            onLayout={e => {
+              if (section !== 'referral' || scrolled.current) return;
+              scrolled.current = true;
+              const y = e.nativeEvent.layout.y;
+              setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }), 250);
+            }}
+          >
+            <ReferralCard points={referralPts} />
+          </View>
 
           {/* ── Recent points ── */}
           {history.length > 0 && (

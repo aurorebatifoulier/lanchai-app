@@ -25,7 +25,21 @@ export const HOME_COPY = {
   collectionsTitle: 'Got plans?',
   newArrivalsTitle: 'New arrivals',
   rentAgainTitle: 'Rent again',
+  rentAgainButton: 'Rent again',
+  lastRented: (date: string) => `Last rented ${date}`,
   mostRentedTitle: 'Most rented this month',
+  mostRentedAllTimeTitle: 'Most rented',
+
+  whyBuyLabel: 'Why buy it?',
+  whyBuyCosts: (product: string, retail: string) => `${/^[aeiou]/i.test(product) ? 'An' : 'A'} ${product} costs ${retail} LAK.`,
+  whyBuyMine: (times: number, paid: string) =>
+    `You rented it ${times === 1 ? 'once' : times === 2 ? 'twice' : `${times} times`} for ${paid} LAK.`,
+  whyBuyMineKicker: "And it's not in your closet. Win-win.",
+  whyBuyCatalogue: (perDay: string) => `Rent it for ${perDay} LAK a day.`,
+  whyBuyCatalogueKicker: 'Use it, return it, keep the space.',
+
+  referralTitle: "Friends don't let friends buy a drill they'll use once.",
+  referralSub: (points: number) => `Invite one. You both get ${points} points.`,
   seeAll: 'See all',
   loadError: "Couldn't load products. Check your connection and try again.",
 
@@ -43,6 +57,10 @@ export const HOME_COPY = {
   adminPickupExample: 'Example data — no upcoming pick-up on this account.',
   adminRentAgainStats: (returned: number, matched: number) =>
     `${returned} returned rental${returned === 1 ? '' : 's'} · ${matched} product${matched === 1 ? '' : 's'} still in the catalogue`,
+  adminPodiumScope: (scope: 'month' | 'allTime') =>
+    scope === 'month' ? 'Podium: returns this month.' : 'Podium: all-time rentals (fewer than 3 products rented this month).',
+  adminWhyBuyMine: 'Returning renter version:',
+  adminWhyBuyCatalogue: 'New renter version:',
   adminDraftsIncluded: 'Drafts and out-of-date collections included.',
 
   collectionEmpty: 'Nothing here yet — check back soon.',

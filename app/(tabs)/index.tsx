@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   StyleSheet,
   Image,
   ActivityIndicator,
+  Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,7 +28,15 @@ import InsetCarousel from '@/components/home/InsetCarousel';
 import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
 import ShopStatusLine from '@/components/home/ShopStatusLine';
 import RentReturnRepeat from '@/components/home/RentReturnRepeat';
-import CollectionCards from '@/components/home/CollectionCards';
+import CollectionTiles from '@/components/home/CollectionTiles';
+import RentAgainList from '@/components/home/RentAgainList';
+import MostRentedPodium from '@/components/home/MostRentedPodium';
+import WhyBuyCard from '@/components/home/WhyBuyCard';
+import ReferralPromoCard from '@/components/home/ReferralPromoCard';
+import { RailHeader } from '@/components/home/RailHeader';
+import { useReduceMotion } from '@/components/account/AccountHeader';
+import { rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue } from '@/lib/homeData';
+import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
 import {
@@ -34,7 +44,7 @@ import {
 } from '@/lib/firestore';
 import { CATEGORIES, type Product } from '@/lib/mockData';
 import { useExchangeRate } from '@/lib/exchangeRate';
-import { useLoyaltyTier } from '@/lib/loyalty';
+import { useLoyaltyTier, DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -90,21 +100,9 @@ const SLIDES: HeroSlide[] = [
 const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
 // Admin "Preview all sections" toggle, remembered per device.
 const PREVIEW_KEY = 'home.adminPreviewAll';
-
-/** Distinct products of the renter's returned rentals, most recently returned first. */
-function rentAgainProducts(reservations: RentalDoc[], products: Product[]): Product[] {
-  const byId = new Map(products.map(p => [p.id, p]));
-  const seen = new Set<string>();
-  const out: Product[] = [];
-  [...reservations]
-    .filter(r => r.status === 'returned')
-    .sort((a, b) => (b.returnAt?.toMillis() ?? 0) - (a.returnAt?.toMillis() ?? 0))
-    .forEach(r => {
-      const p = byId.get(r.productId);
-      if (p && !seen.has(p.id)) { seen.add(p.id); out.push(p); }
-    });
-  return out;
-}
+// Sticky search geometry: inline field top padding, overlay vertical padding.
+const SEARCH_PAD_TOP = 16;
+const STICKY_PAD = 8;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -123,6 +121,16 @@ export default function HomeScreen() {
   const [bagCount, setBagCount] = useState(0);
   const [firstName, setFirstName] = useState<string>('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const loyalty = useMyLoyalty();
+  const reduceMotion = useReduceMotion();
+  const { width: screenW } = useWindowDimensions();
+
+  // Sticky search: an overlay copy of the field pins under the header once the inline
+  // field reaches the top of the scroll area (threshold from its measured position).
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [searchY, setSearchY] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const pinAt = searchY != null ? searchY + SEARCH_PAD_TOP - STICKY_PAD : Number.MAX_SAFE_INTEGER;
 
   useFocusEffect(
     useCallback(() => {
@@ -212,6 +220,7 @@ export default function HomeScreen() {
     () => [...products].sort((a, b) => (b.rentalCount ?? b.bookingsCount ?? 0) - (a.rentalCount ?? a.bookingsCount ?? 0)).slice(0, 5),
     [products]
   );
+  const podium = useMemo(() => podiumPick(products), [products]);
   // "Got plans?": hide a collection with no product the renter can see.
   const visibleCollections = useMemo(() => {
     const ids = new Set(products.map(p => p.id));
@@ -219,7 +228,17 @@ export default function HomeScreen() {
   }, [collections, products]);
   const pickup = useMemo(() => nextPickup(reservations), [reservations]);
   const returnedCount = useMemo(() => reservations.filter(r => r.status === 'returned').length, [reservations]);
-  const rentAgain = useMemo(() => rentAgainProducts(reservations, products), [reservations, products]);
+  const rentAgain = useMemo(() => rentAgainRows(reservations, products), [reservations, products]);
+  const returning = returnedCount > 0;
+  const whyMine = useMemo(() => whyBuyMine(reservations, products, exchangeRate), [reservations, products, exchangeRate]);
+  const whyCatalogue = useMemo(() => whyBuyCatalogue(products, exchangeRate), [products, exchangeRate]);
+  const whyBuy = returning ? (whyMine ?? whyCatalogue) : whyCatalogue;
+  const referralPts = loyalty.config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
+
+  // Categories: all on one row (≤ 6) sized to the width; horizontal scroll from 7.
+  const catFit = HOME_CATEGORIES.length <= 6;
+  const catItemW = catFit ? (screenW - 32) / HOME_CATEGORIES.length : 72;
+  const catCircle = Math.min(52, Math.floor(catItemW - 6));
 
   const rail = (items: Product[]) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.railScroll} contentContainerStyle={styles.rail}>
@@ -235,6 +254,28 @@ export default function HomeScreen() {
         />
       ))}
     </ScrollView>
+  );
+
+  // Same field inline and pinned — shared value, same submit.
+  const search = (
+    <SearchBar
+      variant="account"
+      value={homeQuery}
+      onChangeText={setHomeQuery}
+      onSubmit={() => {
+        if (homeQuery.trim()) {
+          router.push({ pathname: '/explore', params: { q: homeQuery.trim() } } as never);
+        }
+      }}
+      placeholder={HOME_COPY.searchPlaceholder(firstName)}
+    />
+  );
+
+  const categoryItem = (cat: (typeof HOME_CATEGORIES)[number]) => (
+    <TouchableOpacity key={cat.id} style={[styles.catItem, { width: catItemW }]} onPress={() => router.push(`/category/${cat.id}`)} activeOpacity={0.75}>
+      <CategoryBadge cat={cat.id} size={catCircle} />
+      <Text style={styles.catLabel} numberOfLines={1}>{cat.name}</Text>
+    </TouchableOpacity>
   );
 
   return (
@@ -281,112 +322,151 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: SCREEN_BOTTOM_GAP }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <HeroCarousel />
+      {/* Scroll area + the sticky search overlay (one fixed sibling above: the top bar). */}
+      <View style={{ flex: 1 }}>
+        <Animated.ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: SCREEN_BOTTOM_GAP }}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+            listener: (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+              const next = e.nativeEvent.contentOffset.y >= pinAt;
+              setPinned(prev => (prev === next ? prev : next));
+            },
+          })}
+        >
+          <HeroCarousel />
 
-        <View style={styles.content}>
-          <SearchBar
-            variant="account"
-            value={homeQuery}
-            onChangeText={setHomeQuery}
-            onSubmit={() => {
-              if (homeQuery.trim()) {
-                router.push({ pathname: '/explore', params: { q: homeQuery.trim() } } as never);
-              }
-            }}
-            placeholder={HOME_COPY.searchPlaceholder(firstName)}
-            style={{ marginTop: 16 }}
-          />
-
-          {isAdmin && (
-            <View style={[UI.card, styles.previewCard]}>
-              <ToggleRow title={HOME_COPY.adminPreviewToggle} sub={HOME_COPY.adminPreviewSub} value={previewAll} onValueChange={togglePreview} />
-            </View>
-          )}
-
-          {(pickup || preview) && (
-            <View style={{ marginTop: 14 }}>
-              <NextPickupCard rental={pickup} />
-              {preview && !pickup && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPickupExample}</Text>}
-            </View>
-          )}
-
-          <View style={{ marginTop: 14 }}>
-            <ShopStatusLine />
+          <View style={styles.searchWrap} onLayout={e => setSearchY(e.nativeEvent.layout.y)}>
+            {search}
           </View>
 
-          {/* Categories — same circles as the My Account stickers */}
-          <SectionTitle>{HOME_COPY.categoriesTitle}</SectionTitle>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.railScroll} contentContainerStyle={styles.catRail}>
-            {HOME_CATEGORIES.map(cat => (
-              <TouchableOpacity key={cat.id} style={styles.catItem} onPress={() => router.push(`/category/${cat.id}`)} activeOpacity={0.75}>
-                <CategoryBadge cat={cat.id} size={64} />
-                <Text style={styles.catLabel} numberOfLines={1}>{cat.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View style={styles.content}>
+            {isAdmin && (
+              <View style={[UI.card, styles.previewCard]}>
+                <ToggleRow title={HOME_COPY.adminPreviewToggle} sub={HOME_COPY.adminPreviewSub} value={previewAll} onValueChange={togglePreview} />
+              </View>
+            )}
 
-          {loading ? (
-            <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 24 }} />
-          ) : loadError ? (
-            <View style={styles.loadError}>
-              <Feather name="alert-circle" size={14} color={COLORS.danger} />
-              <Text style={UI.errorText}>{HOME_COPY.loadError}</Text>
+            {(pickup || preview) && (
+              <View style={{ marginTop: 14 }}>
+                <NextPickupCard rental={pickup} />
+                {preview && !pickup && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPickupExample}</Text>}
+              </View>
+            )}
+
+            <View style={{ marginTop: 14 }}>
+              <ShopStatusLine />
             </View>
-          ) : null}
 
-          {/* Got plans? — admin-managed occasion collections */}
-          {preview ? (
-            <>
-              <CollectionCards collections={allCollections} />
-              {allCollections.length > 0 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminDraftsIncluded}</Text>}
-              {allCollections.length === 0 && <AdminHint />}
-            </>
-          ) : !loading && visibleCollections.length > 0 ? (
-            <CollectionCards collections={visibleCollections} />
-          ) : !loading && isAdmin ? (
-            <AdminHint />
-          ) : null}
+            {/* Categories — same circles as the My Account stickers, all on one row */}
+            <SectionTitle>{HOME_COPY.categoriesTitle}</SectionTitle>
+            {catFit ? (
+              <View style={styles.catRow}>
+                {HOME_CATEGORIES.map(cat => categoryItem(cat))}
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.railScroll} contentContainerStyle={styles.catRail}>
+                {HOME_CATEGORIES.map(cat => categoryItem(cat))}
+              </ScrollView>
+            )}
 
-          {/* New arrivals */}
-          {!loading && newArrivals.length > 0 && (
-            <>
-              <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
-              {rail(newArrivals)}
-            </>
-          )}
+            {loading ? (
+              <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 24 }} />
+            ) : loadError ? (
+              <View style={styles.loadError}>
+                <Feather name="alert-circle" size={14} color={COLORS.danger} />
+                <Text style={UI.errorText}>{HOME_COPY.loadError}</Text>
+              </View>
+            ) : null}
 
-          {/* Returning renters: their past products ("Rent again"). Otherwise — never
-              rented, or none of those products is still in the catalogue — how it works.
-              Admin preview: both, plus the counts behind the choice. */}
-          {(preview || rentAgain.length === 0) && <RentReturnRepeat />}
-          {!loading && (preview || rentAgain.length > 0) && (
-            <>
-              <RailHeader title={HOME_COPY.rentAgainTitle} />
-              {preview && <Text style={[UI.small, styles.adminNote, { marginTop: -6, marginBottom: 10 }]}>{HOME_COPY.adminRentAgainStats(returnedCount, rentAgain.length)}</Text>}
-              {rail(rentAgain)}
-            </>
-          )}
+            {/* Got plans? — 2-column tiles */}
+            {preview ? (
+              <>
+                <CollectionTiles collections={allCollections} />
+                {allCollections.length > 0 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminDraftsIncluded}</Text>}
+                {allCollections.length === 0 && <AdminHint />}
+              </>
+            ) : !loading && visibleCollections.length > 0 ? (
+              <CollectionTiles collections={visibleCollections} />
+            ) : !loading && isAdmin ? (
+              <AdminHint />
+            ) : null}
 
-          {/* Most rented this month */}
-          {!loading && mostRented.length > 0 && (
-            <>
-              <RailHeader title={HOME_COPY.mostRentedTitle} onSeeAll={() => router.push('/explore')} />
-              {rail(mostRented)}
-            </>
-          )}
-        </View>
+            {/* New arrivals — the product-card rail (the showcase) */}
+            {!loading && newArrivals.length > 0 && (
+              <>
+                <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
+                {rail(newArrivals)}
+              </>
+            )}
+          </View>
 
-        {/* Consume better */}
-        <View style={{ marginTop: 28 }}>
-          <WhyRentSection />
-        </View>
-      </ScrollView>
+          {/* Banner — breaks the rhythm between the rails and the lists */}
+          <View style={{ marginTop: 28 }}>
+            <WhyRentSection />
+          </View>
+
+          <View style={styles.content}>
+            {/* Rent again — compact list (returning renters) */}
+            {!loading && (preview || rentAgain.length > 0) && (
+              <>
+                <RentAgainList rows={rentAgain} />
+                {preview && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminRentAgainStats(returnedCount, rentAgain.length)}</Text>}
+              </>
+            )}
+
+            {/* Most rented — podium (this month, else all-time), else the rail */}
+            {!loading && podium ? (
+              <>
+                <RailHeader
+                  title={podium.scope === 'month' ? HOME_COPY.mostRentedTitle : HOME_COPY.mostRentedAllTimeTitle}
+                  onSeeAll={() => router.push('/explore')}
+                />
+                <MostRentedPodium top={podium.top} />
+                {preview && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPodiumScope(podium.scope)}</Text>}
+              </>
+            ) : !loading && mostRented.length > 0 ? (
+              <>
+                <RailHeader title={HOME_COPY.mostRentedAllTimeTitle} onSeeAll={() => router.push('/explore')} />
+                {rail(mostRented)}
+              </>
+            ) : null}
+
+            {/* Why buy it? — a real comparison */}
+            {!loading && (preview ? (
+              <>
+                {whyMine && <Text style={[UI.small, styles.adminLabel]}>{HOME_COPY.adminWhyBuyMine}</Text>}
+                {whyMine && <WhyBuyCard pick={whyMine} />}
+                {whyCatalogue && <Text style={[UI.small, styles.adminLabel]}>{HOME_COPY.adminWhyBuyCatalogue}</Text>}
+                {whyCatalogue && <WhyBuyCard pick={whyCatalogue} />}
+              </>
+            ) : whyBuy ? (
+              <View style={{ marginTop: 24 }}><WhyBuyCard pick={whyBuy} /></View>
+            ) : null)}
+
+            {/* Bottom: returning renters → referral; new renters → how it works */}
+            {(preview || (returning && !loyalty.excluded)) && (
+              <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} /></View>
+            )}
+            {(preview || !returning) && <RentReturnRepeat />}
+          </View>
+        </Animated.ScrollView>
+
+        {/* Sticky search overlay — fades in once the inline field reaches the top */}
+        <Animated.View
+          pointerEvents={pinned ? 'auto' : 'none'}
+          style={[styles.sticky, {
+            opacity: scrollY.interpolate({ inputRange: [pinAt - (reduceMotion ? 0.5 : 10), pinAt], outputRange: [0, 1], extrapolate: 'clamp' }),
+            transform: [{ translateY: scrollY.interpolate({ inputRange: [pinAt - (reduceMotion ? 0.5 : 10), pinAt], outputRange: [reduceMotion ? 0 : -6, 0], extrapolate: 'clamp' }) }],
+          }]}
+        >
+          {search}
+        </Animated.View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -400,19 +480,6 @@ function AdminHint() {
       <Text style={[UI.small, { flex: 1 }]}>{HOME_COPY.adminNoCollections}</Text>
       <Feather name="chevron-right" size={16} color={SHADES.carbonMuted} />
     </TouchableOpacity>
-  );
-}
-
-function RailHeader({ title, onSeeAll }: { title: string; onSeeAll?: () => void }) {
-  return (
-    <View style={styles.railHead}>
-      <SectionTitle style={styles.railTitle}>{title}</SectionTitle>
-      {onSeeAll && (
-        <TouchableOpacity onPress={onSeeAll} hitSlop={8} activeOpacity={0.7}>
-          <Text style={UI.link}>{HOME_COPY.seeAll}</Text>
-        </TouchableOpacity>
-      )}
-    </View>
   );
 }
 
@@ -524,12 +591,18 @@ const styles = StyleSheet.create({
   // Rails bleed to the screen edges, content stays on the 16px gutter.
   railScroll: { marginHorizontal: -16 },
   rail: { paddingHorizontal: 16, gap: 12 },
-  railHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 },
-  railTitle: { marginTop: 0, marginBottom: 0 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: SEARCH_PAD_TOP },
+  sticky: {
+    position: 'absolute', top: 0, left: 0, right: 0,
+    paddingHorizontal: 16, paddingVertical: STICKY_PAD,
+    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
+  },
 
+  catRow: { flexDirection: 'row' },
   catRail: { paddingHorizontal: 12, gap: 4 },
-  catItem: { width: 76, alignItems: 'center' },
-  catLabel: { fontSize: 13, fontWeight: '600', color: SHADES.carbon, marginTop: 8 },
+  catItem: { alignItems: 'center' },
+  catLabel: { fontSize: 12, fontWeight: '600', color: SHADES.carbon, marginTop: 7 },
+  adminLabel: { marginTop: 24, marginBottom: 8, fontStyle: 'italic' },
 
   previewCard: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 4 },
   adminNote: { marginTop: 6, fontStyle: 'italic' },

@@ -21,6 +21,14 @@ export const COLLECTION_SHADES: Record<CollectionShade, { bg: string; fg: string
   carbonLight: { bg: SHADES.carbonLight, fg: SHADES.carbon },
 };
 
+/** Home "Got plans?" tile colours (tile background = the shade, text adapted). */
+export const COLLECTION_TILE: Record<CollectionShade, { bg: string; icon: string; title: string; sub: string }> = {
+  amberLight: { bg: SHADES.amberLight, icon: SHADES.amberDeep, title: SHADES.carbon, sub: SHADES.amberDeep },
+  amberMid: { bg: SHADES.amberMid, icon: SHADES.carbon, title: SHADES.carbon, sub: SHADES.carbonSoft },
+  carbon: { bg: SHADES.carbon, icon: SHADES.amber, title: SHADES.white, sub: SHADES.carbonFaint },
+  carbonLight: { bg: SHADES.carbonLight, icon: SHADES.carbon, title: SHADES.carbon, sub: SHADES.carbonMuted },
+};
+
 /** Icons offered in the admin picker — rentable objects / occasions. */
 export const COLLECTION_ICONS: CollectionIcon[] = [
   'tent', 'baby-carriage', 'truck-outline', 'party-popper', 'speaker', 'sail-boat',

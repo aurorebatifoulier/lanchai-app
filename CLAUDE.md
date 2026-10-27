@@ -850,26 +850,28 @@ a snapshot indefinitely).
   the bike. Other tab screens apply the top inset
   on a non-scrolling root — not affected.
 
-- **Home (validated mockup, 2026-10-27) — My Account design.** Copy in
-  `constants/homeCopy.ts`. Top to bottom: header (unchanged) → hero `InsetCarousel`
-  (`components/home/`, 16px margins, radius 18, only the active dot amber) → search
-  (`SearchBar variant="account"`) → `<NextPickupCard>` (carbon card, nearest
-  `pending_payment`/`confirmed` line whose pick-up day isn't over — `nextPickup()`, tap →
-  `/rentals/{id}`) → `<ShopStatusLine>` (`shopOpenState()` in `functions/src/shared/shop.ts`,
-  Vientiane time, from `config/shop` openTime/closeTime + optional `closedDays` (0 = Sun,
-  Shop settings chips — display only, does NOT block bookings) + Directions) → categories
-  → "Got plans?" → New arrivals → `<RentReturnRepeat>` (no `returned` rental yet; dotted
-  bee trail with the header's `DASH`/`PATH_OPACITY`) or "Rent again" (distinct returned
-  products, latest first) → Most rented → "Consume better" (`WhyRentSection`, inset).
-  Removed: Popular near you, Premium rail, How LANCHAI works, `TrustSection`.
-  "Rent again" shows when at least one returned rental's product is still renter-visible;
-  otherwise (never rented, or every rented product gone) the 3-step card shows — the
-  section is never empty. Admins see the Home exactly like a renter, plus: a "Preview all
-  sections" toggle (AsyncStorage `home.adminPreviewAll`, per device, off by default) that
-  forces every conditional section (example next pick-up, all collections incl. drafts,
-  both 3-step card and Rent again with "N returned · M still in the catalogue"), and a
-  dashed admin-only hint where "Got plans?" will appear when nothing is published.
-  `<FavoriteButton>` = the ONE heart button on product cards (white circle, zIndex).
+- **Home (validated mockups, 2026-10-27) — My Account design, alternating formats.** Copy
+  in `constants/homeCopy.ts`, pure picks in `lib/homeData.ts`, blocks in `components/home/`.
+  Order: header → hero `InsetCarousel` → search (`SearchBar variant="account"`, STICKY: an
+  overlay copy fades in under the header once the inline field reaches the top — shared
+  value, native-driver opacity, instant with reduce motion) → `<NextPickupCard>` (nearest
+  `pending_payment`/`confirmed` line whose pick-up day isn't over) + `<ShopStatusLine>`
+  (`shopOpenState()`, `config/shop` hours + optional `closedDays` — display only) →
+  categories (all on one row up to 6, circles ≤ 52px; scroll from 7) → "Got plans?"
+  `<CollectionTiles>` (2-col tiles in the collection's shade, `COLLECTION_TILE`, 4 max +
+  "See all" inline; admin-only dashed hint when none) → New arrivals rail → "Consume
+  better" banner → "Rent again" `<RentAgainList>` (one card, 3 rows, `rentAgainRows`) →
+  `<MostRentedPodium>` (`podiumPick`: `products.rentalsByMonth.{YYYY-MM}` — written by
+  `applyRentalCount`, Vientiane month of the return — when 3 products have some, else
+  all-time `rentalCount` titled "Most rented", else the rail) → `<WhyBuyCard>` (returning:
+  `whyBuyMine` = most-returned product with a `retailPrice`, total paid = sum of frozen
+  `total` LAK; else `whyBuyCatalogue` = best retailPrice / daily price; hidden without a
+  retail value or rate) → bottom: returning (≥ 1 returned rental, not loyalty-excluded) →
+  `<ReferralPromoCard>` (→ `/profile/loyalty?section=referral`, scrolls to the referral
+  card); new renters → `<RentReturnRepeat>` (dotted bee trail, header's `DASH`). Admins see
+  the Home like a renter + "Preview all sections" (AsyncStorage `home.adminPreviewAll`)
+  showing every variant (example pick-up, drafts, both Why-buy versions, both bottom
+  cards, data-source notes).
   - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
     fun = speaker, sports = bike — + palette shades) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
