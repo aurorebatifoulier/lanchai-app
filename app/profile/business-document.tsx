@@ -27,6 +27,7 @@ import { storage, functions } from '@/lib/firebase';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
 import { canReplaceBtobDocument } from '@/utils/btob';
 import { useMyIdentity, ID_DOC_TYPES } from '@/lib/identity';
+import PressScale from '@/components/PressScale';
 
 export default function BusinessDocumentScreen() {
   const screen = useScreenInsets();
@@ -233,7 +234,7 @@ export default function BusinessDocumentScreen() {
         {rejection === 'fixable' && (
           <>
             {submitError && <Text style={[UI.errorText, s.feedback]}>{submitError}</Text>}
-            <TouchableOpacity
+            <PressScale
               style={[UI.btnPrimary, { marginTop: 20 }, !canResubmit && UI.btnDisabled]}
               onPress={handleResubmit}
               disabled={!canResubmit}
@@ -242,7 +243,7 @@ export default function BusinessDocumentScreen() {
               {submitting
                 ? <ActivityIndicator size="small" color={SHADES.carbon} />
                 : <Text style={UI.btnPrimaryText}>Resubmit application</Text>}
-            </TouchableOpacity>
+            </PressScale>
           </>
         )}
       </ScrollView>

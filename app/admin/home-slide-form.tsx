@@ -21,6 +21,7 @@ import {
   getSlide, getAllSlides, newSlideId, createSlideWithId, updateSlide, uploadSlidePhoto, deleteSlidePhoto,
   SLIDE_LIMITS, type SlideLink, type SlidePlacement,
 } from '@/lib/homeSlides';
+import PressScale from '@/components/PressScale';
 
 type LinkKind = SlideLink['kind'];
 const LINK_KINDS: { key: LinkKind; label: string }[] = [
@@ -266,9 +267,9 @@ export default function HomeSlideFormScreen() {
           </View>
 
           {error && <Text style={[UI.errorText, { marginTop: 14 }]}>{error}</Text>}
-          <TouchableOpacity style={[UI.btnPrimary, { marginTop: 20 }, !canSave && UI.btnDisabled]} onPress={save} disabled={!canSave} activeOpacity={0.85}>
+          <PressScale style={[UI.btnPrimary, { marginTop: 20 }, !canSave && UI.btnDisabled]} onPress={save} disabled={!canSave} activeOpacity={0.85}>
             {saving ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>Save slide</Text>}
-          </TouchableOpacity>
+          </PressScale>
         </ScrollView>
       )}
 

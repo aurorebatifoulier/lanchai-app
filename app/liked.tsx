@@ -32,6 +32,7 @@ import {
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak, formatKip } from '@/utils/currency';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
+import PressScale from '@/components/PressScale';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD    = 16;
@@ -60,9 +61,9 @@ function LikedEmptyState({
         <Text style={s.emptySub}>
           Tap the heart on any product to save it here.
         </Text>
-        <TouchableOpacity style={[UI.btnPrimary, s.exploreBtn]} onPress={onExplore} activeOpacity={0.85}>
+        <PressScale style={[UI.btnPrimary, s.exploreBtn]} onPress={onExplore} activeOpacity={0.85}>
           <Text style={UI.btnPrimaryText}>Explore products</Text>
-        </TouchableOpacity>
+        </PressScale>
       </View>
     );
   }
@@ -76,9 +77,9 @@ function LikedEmptyState({
       <Text style={s.emptySub}>
         None of your liked items match the current filters.
       </Text>
-      <TouchableOpacity style={[UI.btnSecondary, s.exploreBtn]} onPress={onClearFilters} activeOpacity={0.85}>
+      <PressScale style={[UI.btnSecondary, s.exploreBtn]} onPress={onClearFilters} activeOpacity={0.85}>
         <Text style={UI.btnSecondaryText}>Clear filters</Text>
-      </TouchableOpacity>
+      </PressScale>
     </View>
   );
 }

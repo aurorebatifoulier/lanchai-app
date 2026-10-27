@@ -23,6 +23,7 @@ import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { getClaimsForReservation, submitClaim, type ClaimType, type ClaimMediaType } from '@/lib/claims';
 import { useAuth } from '@/contexts/AuthContext';
+import PressScale from '@/components/PressScale';
 
 interface PickedMedia { uri: string; type: ClaimMediaType; }
 
@@ -176,9 +177,9 @@ export default function ClaimScreen() {
             We&apos;re already looking into an issue you reported for this rental — check the rental
             details screen for its status.
           </Text>
-          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace(`/rentals/${rental.id}`)}>
+          <PressScale style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace(`/rentals/${rental.id}`)}>
             <Text style={UI.btnPrimaryText}>Back to rental</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       </SafeAreaView>
     );
@@ -195,9 +196,9 @@ export default function ClaimScreen() {
           <Text style={styles.stateSub}>
             We&apos;ve received your report and will get back to you soon.
           </Text>
-          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
+          <PressScale style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
             <Text style={UI.btnPrimaryText}>Back to my rentals</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       </SafeAreaView>
     );
@@ -301,7 +302,7 @@ export default function ClaimScreen() {
           )}
 
           {/* Submit */}
-          <TouchableOpacity
+          <PressScale
             style={[UI.btnPrimary, styles.submitBtn, (submitting || !type || media.length === 0) && styles.submitBtnBusy]}
             onPress={handleSubmit}
             disabled={submitting || !type || media.length === 0}
@@ -310,7 +311,7 @@ export default function ClaimScreen() {
             {submitting
               ? <ActivityIndicator color={COLORS.carbon} size="small" />
               : <Text style={UI.btnPrimaryText}>Submit claim</Text>}
-          </TouchableOpacity>
+          </PressScale>
         </ScrollView>
       </KeyboardAvoidingView>
 

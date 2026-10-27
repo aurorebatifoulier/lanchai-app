@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   Linking,
 } from 'react-native';
@@ -14,6 +13,7 @@ import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
 import { UI, SectionTitle, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
+import PressScale from '@/components/PressScale';
 
 export default function PickupLocationScreen() {
   const screen = useScreenInsets();
@@ -43,14 +43,14 @@ export default function PickupLocationScreen() {
           </View>
           <Text style={[UI.small, { marginTop: 6 }]}>Pick up and return your rentals here.</Text>
 
-          <TouchableOpacity
+          <PressScale
             style={[UI.btnPrimary, { marginTop: 16 }]}
             onPress={() => Linking.openURL(buildMapsUrl(shop))}
             activeOpacity={0.85}
           >
             <Feather name="map" size={16} color={SHADES.carbon} />
             <Text style={UI.btnPrimaryText}>Get directions</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       </View>
     </View>

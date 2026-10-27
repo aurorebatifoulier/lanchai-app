@@ -12,6 +12,7 @@ import {
   getAllCollections, createCollection, saveCollectionOrder, shadeOf, isCollectionActive,
   type CollectionDoc, type CollectionIcon, type CollectionShade,
 } from '@/lib/collections';
+import PressScale from '@/components/PressScale';
 
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -82,10 +83,10 @@ export default function AdminCollectionsScreen() {
       <ScrollView contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: screen.contentBottom }]}>
         <Text style={UI.body}>Shown on Home under &quot;Got plans?&quot; when published, in their dates, and with at least one visible product.</Text>
 
-        <TouchableOpacity style={[UI.btnPrimary, s.newBtn]} onPress={() => router.push('/admin/collection-form' as never)} activeOpacity={0.85}>
+        <PressScale style={[UI.btnPrimary, s.newBtn]} onPress={() => router.push('/admin/collection-form' as never)} activeOpacity={0.85}>
           <Feather name="plus" size={18} color={SHADES.carbon} />
           <Text style={UI.btnPrimaryText}>New collection</Text>
-        </TouchableOpacity>
+        </PressScale>
 
         {error && <Text style={[UI.errorText, { marginTop: 12 }]}>{error}</Text>}
 
@@ -95,9 +96,9 @@ export default function AdminCollectionsScreen() {
           <View style={[UI.card, UI.cardPadded, { marginTop: 16, gap: 12 }]}>
             <Text style={UI.title}>No collections yet</Text>
             <Text style={UI.body}>Start from 4 example drafts (no products, unpublished) and edit them.</Text>
-            <TouchableOpacity style={[UI.btnSecondary, busy && UI.btnDisabled]} onPress={seed} disabled={busy} activeOpacity={0.8}>
+            <PressScale style={[UI.btnSecondary, busy && UI.btnDisabled]} onPress={seed} disabled={busy} activeOpacity={0.8}>
               <Text style={UI.btnSecondaryText}>Create example drafts</Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         ) : (
           <View style={{ marginTop: 16, gap: 10 }}>

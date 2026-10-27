@@ -15,6 +15,7 @@ import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
 import { pad, getAvailableTimeSlots } from '@/utils/timeSlots';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
+import PressScale from '@/components/PressScale';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -244,7 +245,7 @@ export default function DateRangePicker({
         )
       )}
 
-      <TouchableOpacity
+      <PressScale
         style={[s.confirmBtn, !canConfirm && s.confirmBtnOff]}
         onPress={handleConfirm}
         disabled={!canConfirm}
@@ -253,7 +254,7 @@ export default function DateRangePicker({
         <Text style={[s.confirmBtnText, !canConfirm && s.confirmBtnTextOff]}>
           {canConfirm ? 'Confirm dates' : 'Select all fields to confirm'}
         </Text>
-      </TouchableOpacity>
+      </PressScale>
     </>
   );
 

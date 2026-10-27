@@ -31,6 +31,7 @@ import { ID_DOC_TYPES, pickIdPhoto, submitMyIdentityDocument, type IdDocType } f
 import { applyInviteCode } from '@/lib/referral';
 import { db, storage } from '@/lib/firebase';
 import { getUserProfile } from '@/lib/firestore';
+import PressScale from '@/components/PressScale';
 
 function firebaseAuthErrorMessage(err: unknown): string {
   const code = (err as { code?: string })?.code ?? '';
@@ -631,7 +632,7 @@ export default function LoginScreen() {
 
           {error && <Text style={styles.error}>{error}</Text>}
 
-          <TouchableOpacity
+          <PressScale
             style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
             onPress={handleSubmit}
             disabled={!canSubmit}
@@ -643,7 +644,7 @@ export default function LoginScreen() {
                 {isSignUp ? 'Create account' : 'Sign in'}
               </Text>
             )}
-          </TouchableOpacity>
+          </PressScale>
 
           {/* Consent line */}
           <Text style={styles.consentText}>

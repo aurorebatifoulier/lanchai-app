@@ -20,6 +20,7 @@ import {
   COLLECTION_ICONS, COLLECTION_SHADES, COLLECTION_LIMITS,
   type CollectionIcon, type CollectionShade,
 } from '@/lib/collections';
+import PressScale from '@/components/PressScale';
 
 const SHADE_KEYS = Object.keys(COLLECTION_SHADES) as CollectionShade[];
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -215,9 +216,9 @@ export default function CollectionFormScreen() {
 
           {error && <Text style={[UI.errorText, { marginTop: 14 }]}>{error}</Text>}
 
-          <TouchableOpacity style={[UI.btnPrimary, { marginTop: 20 }, !canSave && UI.btnDisabled]} onPress={save} disabled={!canSave} activeOpacity={0.85}>
+          <PressScale style={[UI.btnPrimary, { marginTop: 20 }, !canSave && UI.btnDisabled]} onPress={save} disabled={!canSave} activeOpacity={0.85}>
             {saving ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>Save collection</Text>}
-          </TouchableOpacity>
+          </PressScale>
 
           {id && (
             confirmDelete ? (

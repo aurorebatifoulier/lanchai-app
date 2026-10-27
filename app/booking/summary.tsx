@@ -30,6 +30,7 @@ import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import { ResidentPromoHint } from '@/components/ResidentPromo';
 import { BookingPointsHint } from '@/components/BookingPointsHint';
+import PressScale from '@/components/PressScale';
 
 export default function BookingSummaryScreen() {
   const router = useRouter();
@@ -353,7 +354,7 @@ export default function BookingSummaryScreen() {
 
       {/* ── Confirm button ── */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity
+        <PressScale
           style={[s.confirmBtn, (!agreed || confirming || !!bookingHold) && s.confirmBtnOff]}
           onPress={() => handleConfirm()}
           disabled={!agreed || confirming || !!bookingHold}
@@ -369,7 +370,7 @@ export default function BookingSummaryScreen() {
               Confirm booking
             </Text>
           )}
-        </TouchableOpacity>
+        </PressScale>
       </View>
     </View>
   );

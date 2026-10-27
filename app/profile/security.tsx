@@ -24,6 +24,7 @@ import { SHADES } from '@/constants/brandShades';
 import { UI, SectionTitle, CheckLine, useScreenInsets } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { requestPasswordReset, AuthEmailRateLimitError } from '@/lib/authEmails';
+import PressScale from '@/components/PressScale';
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ export default function ChangePasswordScreen() {
           {saveStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{feedbackMsg}</Text>}
 
           {/* ── Update button ── */}
-          <TouchableOpacity
+          <PressScale
             style={[UI.btnPrimary, { marginTop: 18 }, !canSubmit && UI.btnDisabled]}
             onPress={handleUpdate}
             disabled={!canSubmit}
@@ -215,13 +216,13 @@ export default function ChangePasswordScreen() {
             ) : (
               <Text style={UI.btnPrimaryText}>Update password</Text>
             )}
-          </TouchableOpacity>
+          </PressScale>
         </View>
 
         {/* ── Reset email ── */}
         <SectionTitle>Forgot your password?</SectionTitle>
         <View style={[UI.card, UI.cardPadded]}>
-          <TouchableOpacity
+          <PressScale
             style={[UI.btnSecondary, resetting && UI.btnDisabled]}
             onPress={handleResetEmail}
             disabled={resetting}
@@ -235,7 +236,7 @@ export default function ChangePasswordScreen() {
                   <Text style={UI.btnSecondaryText}>Send me a reset email instead</Text>
                 </>
               )}
-          </TouchableOpacity>
+          </PressScale>
           {resetStatus === 'success' && <View style={s.feedback}><CheckLine text={resetMsg} /></View>}
           {resetStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{resetMsg}</Text>}
         </View>

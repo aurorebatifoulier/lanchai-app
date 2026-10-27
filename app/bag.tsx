@@ -42,6 +42,7 @@ import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import DateRangePicker from '@/components/DateRangePicker';
 import { PriceLak } from '@/components/PriceLak';
+import PressScale from '@/components/PressScale';
 
 // ── Date format helper ────────────────────────────────────────────────────────
 const DOW_S  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -508,7 +509,7 @@ export default function BagScreen() {
             )}
 
             {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 12 }} />}
-            <TouchableOpacity
+            <PressScale
               style={[s.cta, (readyItems.length === 0 || !!bookingHold) && s.ctaOff]}
               onPress={handleCheckout}
               disabled={readyItems.length === 0 || !!bookingHold}
@@ -519,7 +520,7 @@ export default function BagScreen() {
                   ? `Reserve ${readyItems.length} item${readyItems.length !== 1 ? 's' : ''}`
                   : 'Set dates to continue'}
               </Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         </>
       )}

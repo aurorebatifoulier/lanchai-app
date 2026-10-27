@@ -1,11 +1,12 @@
 import React from 'react';
-import { View, Text, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';
 import { HOME_COPY } from '@/constants/homeCopy';
 import InsetCarousel from '@/components/home/InsetCarousel';
 import { slideTarget, type HomeSlide } from '@/lib/homeSlides';
+import PressScale from '@/components/PressScale';
 
 // Admin-managed Home slides (hero carousel / mid-page banner): photo full-bleed in the
 // rounded 16px-margin card, a subtle dark overlay ONLY when there's text, amber button
@@ -41,9 +42,9 @@ export default function SlideCarousel({
               {!!slide.title && <Text style={s.title} numberOfLines={2}>{slide.title}</Text>}
               {!!slide.subtitle && <Text style={s.sub} numberOfLines={2}>{slide.subtitle}</Text>}
               {!!slide.ctaLabel && target && (
-                <TouchableOpacity style={s.cta} onPress={go} activeOpacity={0.85}>
+                <PressScale style={s.cta} onPress={go} activeOpacity={0.85}>
                   <Text style={s.ctaText}>{slide.ctaLabel}</Text>
-                </TouchableOpacity>
+                </PressScale>
               )}
             </View>
           </Pressable>

@@ -31,6 +31,7 @@ import { displayOrderId } from '@/utils/rentalDocs';
 import { SettlementSummary } from '@/components/SettlementSummary';
 import { PriceLak } from '@/components/PriceLak';
 import { getClaimsForReservation, type ClaimDoc, type ClaimType, type ClaimStatus } from '@/lib/claims';
+import PressScale from '@/components/PressScale';
 
 const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
   damage_not_caused: "Damage I didn't cause",
@@ -326,14 +327,14 @@ export default function RentalDetailScreen() {
             <Text style={s.locationTitle}>{shop.name}</Text>
             <Text style={s.locationSub}>{shop.addressLine}, {shop.city}</Text>
             <Text style={s.locationSub}>{shop.hours}</Text>
-            <TouchableOpacity
+            <PressScale
               onPress={() => Linking.openURL(buildMapsUrl(shop))}
               activeOpacity={0.7}
               style={[UI.btnPrimary, s.directionsBtn]}
             >
               <Feather name="map" size={15} color={SHADES.carbon} />
               <Text style={UI.btnPrimaryText}>Get directions</Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         </View>
 

@@ -44,6 +44,7 @@ import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import { ResidentPromoHint } from '@/components/ResidentPromo';
 import { BookingPointsHint } from '@/components/BookingPointsHint';
+import PressScale from '@/components/PressScale';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -481,7 +482,7 @@ export default function BagSummaryScreen() {
 
       {/* ── Footer CTA ── */}
       <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity
+        <PressScale
           style={[s.cta, (!agreed || submitting || !!bookingHold) && s.ctaOff]}
           onPress={() => handleConfirm()}
           disabled={!agreed || submitting || !!bookingHold}
@@ -497,7 +498,7 @@ export default function BagSummaryScreen() {
               Confirm reservation
             </Text>
           )}
-        </TouchableOpacity>
+        </PressScale>
       </View>
     </View>
   );

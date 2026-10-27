@@ -16,6 +16,7 @@ import {
   getAllSlides, createSlide, updateSlide, deleteSlide, saveSlideOrder,
   type HomeSlide, type HomeSlideInput, type SlideLink, type SlidePlacement,
 } from '@/lib/homeSlides';
+import PressScale from '@/components/PressScale';
 
 const PLACEMENTS: { key: SlidePlacement; label: string; sub: string }[] = [
   { key: 'hero', label: 'Hero carousel', sub: 'Top of the Home.' },
@@ -90,10 +91,10 @@ export default function AdminHomeSlidesScreen() {
         <Text style={UI.body}>
           Published slides in their dates replace the built-in ones. Landscape photos, about 1080 × 480.
         </Text>
-        <TouchableOpacity style={[UI.btnPrimary, { marginTop: 16 }]} onPress={() => router.push('/admin/home-slide-form' as never)} activeOpacity={0.85}>
+        <PressScale style={[UI.btnPrimary, { marginTop: 16 }]} onPress={() => router.push('/admin/home-slide-form' as never)} activeOpacity={0.85}>
           <Feather name="plus" size={18} color={SHADES.carbon} />
           <Text style={UI.btnPrimaryText}>New slide</Text>
-        </TouchableOpacity>
+        </PressScale>
         {error && <Text style={[UI.errorText, { marginTop: 12 }]}>{error}</Text>}
 
         {loading ? (
@@ -104,9 +105,9 @@ export default function AdminHomeSlidesScreen() {
               <View style={[UI.card, UI.cardPadded, { marginTop: 16, gap: 12 }]}>
                 <Text style={UI.title}>No slides yet</Text>
                 <Text style={UI.body}>Start from the current built-in slides as drafts (no photos) and edit them.</Text>
-                <TouchableOpacity style={[UI.btnSecondary, busy && UI.btnDisabled]} onPress={seed} disabled={busy} activeOpacity={0.8}>
+                <PressScale style={[UI.btnSecondary, busy && UI.btnDisabled]} onPress={seed} disabled={busy} activeOpacity={0.8}>
                   <Text style={UI.btnSecondaryText}>Create example drafts</Text>
-                </TouchableOpacity>
+                </PressScale>
               </View>
             )}
             {PLACEMENTS.map(pl => {

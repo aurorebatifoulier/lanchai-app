@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI, IconCircle } from '@/components/account/ui';
 import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import { getMyInviteCode, shareInvite } from '@/lib/referral';
+import PressScale from '@/components/PressScale';
 
 // Referral card (validated mockup): users icon, headline, "You both get N points…",
 // amber "Share my invite link" (native share sheet with the code), "Your code: …".
@@ -22,7 +23,7 @@ export function ReferralCard({ points }: { points: number }) {
       <IconCircle icon={{ name: 'users' }} tone="amber" size={48} />
       <Text style={s.title}>{LOYALTY_COPY.referralTitle}</Text>
       <Text style={[UI.body, s.sub]}>{LOYALTY_COPY.referralSub(points)}</Text>
-      <TouchableOpacity
+      <PressScale
         style={[UI.btnPrimary, s.btn, !code && { opacity: 0.6 }]}
         disabled={!code}
         onPress={() => code && shareInvite(code, points).catch(() => {})}
@@ -34,7 +35,7 @@ export function ReferralCard({ points }: { points: number }) {
             <Text style={UI.btnPrimaryText}>{LOYALTY_COPY.referralShare}</Text>
           </>
         ) : error ? <Text style={UI.btnPrimaryText}>{LOYALTY_COPY.referralShare}</Text> : <ActivityIndicator color={SHADES.carbon} />}
-      </TouchableOpacity>
+      </PressScale>
       {code ? <Text style={[UI.small, s.code]} selectable>{LOYALTY_COPY.referralYourCode(code)}</Text> : null}
       {error ? <Text style={[UI.errorText, { marginTop: 8 }]}>{error}</Text> : null}
     </View>

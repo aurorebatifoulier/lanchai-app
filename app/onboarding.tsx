@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '@/constants/Colors';
 import { setOnboardingComplete } from '@/lib/onboarding';
+import PressScale from '@/components/PressScale';
 
 // ── Slides ──────────────────────────────────────────────────────────────────────
 // Background photos are placeholders (picsum.photos, seeded so each slide is stable
@@ -126,14 +127,14 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        <TouchableOpacity
+        <PressScale
           style={[styles.ctaBtn, activeSlide !== LAST_INDEX && styles.ctaBtnHidden]}
           onPress={finish}
           activeOpacity={0.85}
           disabled={activeSlide !== LAST_INDEX}
         >
           <Text style={styles.ctaText}>Get started</Text>
-        </TouchableOpacity>
+        </PressScale>
       </View>
     </View>
   );

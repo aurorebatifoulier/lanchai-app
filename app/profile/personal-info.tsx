@@ -21,6 +21,7 @@ import { UI, SectionTitle, RowGroup, Row, StatusChip, CheckLine, useScreenInsets
 import { auth } from '@/lib/auth';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
 import { getCustomerTypeConfig } from '@/utils/customerType';
+import PressScale from '@/components/PressScale';
 
 function isPhoneValid(p: string): boolean {
   return p.replace(/\D/g, '').length >= 6;
@@ -369,7 +370,7 @@ export default function PersonalInfoScreen() {
         </View>
 
         {/* Save */}
-        <TouchableOpacity
+        <PressScale
           style={[UI.btnPrimary, (!isValid || saving) && UI.btnDisabled]}
           onPress={handleSave}
           disabled={!isValid || saving}
@@ -383,7 +384,7 @@ export default function PersonalInfoScreen() {
           ) : (
             <Text style={UI.btnPrimaryText}>Save</Text>
           )}
-        </TouchableOpacity>
+        </PressScale>
       </ScrollView>
     </KeyboardAvoidingView>
   );

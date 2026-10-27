@@ -20,6 +20,7 @@ import { splitHtVat } from '@/utils/currency';
 import { PICKUP_DELAY_MS } from '@/utils/availability';
 import { BillingSummary } from '@/components/BillingSummary';
 import WhatsAppButton from '@/components/WhatsAppButton';
+import PressScale from '@/components/PressScale';
 
 // ── QR code string formats (documented here for the admin scanner) ─────────────
 // Order-level QR (shown when there are 2+ items in an order):
@@ -192,21 +193,21 @@ export default function BookingConfirmationScreen() {
             : `Hi LANCHAI, I have a question about my booking (order ID: ${orderId}; reservation IDs: ${reservations.map(r => r.id).join(', ')}).`}
         />
 
-        <TouchableOpacity
+        <PressScale
           style={s.primaryBtn}
           onPress={() => router.replace('/(tabs)/reservations')}
           activeOpacity={0.85}
         >
           <Text style={s.primaryBtnText}>View my rentals</Text>
-        </TouchableOpacity>
+        </PressScale>
 
-        <TouchableOpacity
+        <PressScale
           style={s.secondaryBtn}
           onPress={() => router.replace('/(tabs)')}
           activeOpacity={0.75}
         >
           <Text style={s.secondaryBtnText}>Back to home</Text>
-        </TouchableOpacity>
+        </PressScale>
       </ScrollView>
 
       {/* ── Lightbox overlay (absolutely positioned — no Modal, avoids Android SDK 54 issues) ── */}

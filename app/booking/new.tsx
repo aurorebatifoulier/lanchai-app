@@ -33,6 +33,7 @@ import { getUserProfile, type UserProfile } from '@/lib/firestore';
 import { useLoyaltyConfig, depositPercentFor, useLoyaltyTier } from '@/lib/loyalty';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { getProductAccessState } from '@/utils/productAccess';
+import PressScale from '@/components/PressScale';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -510,14 +511,14 @@ export default function BookingNewScreen() {
             </Text>
           </View>
         )}
-        <TouchableOpacity
+        <PressScale
           style={[s.cta, !ready && s.ctaOff, subtotal === 0 && { flex: 1 }]}
           onPress={handleSubmit}
           disabled={!ready}
           activeOpacity={0.85}
         >
           <Text style={[s.ctaText, !ready && s.ctaTextOff]}>{ctaLabel}</Text>
-        </TouchableOpacity>
+        </PressScale>
       </View>
     </View>
   );

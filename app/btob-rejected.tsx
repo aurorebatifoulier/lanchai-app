@@ -11,6 +11,7 @@ import { getUserProfile, type UserProfile } from '@/lib/firestore';
 import {
   BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, isBtobRejectionKey,
 } from '@/functions/src/shared/btob';
+import PressScale from '@/components/PressScale';
 
 export default function BtobRejectedScreen() {
   const screen = useScreenInsets();
@@ -61,14 +62,14 @@ export default function BtobRejectedScreen() {
               {!!detail && <Text style={[s.reasonText, s.needText, s.detailText]}>{detail}</Text>}
               {!!BTOB_REVIEW_TIME_NOTE && <Text style={s.noteText}>{BTOB_REVIEW_TIME_NOTE}</Text>}
             </View>
-            <TouchableOpacity
+            <PressScale
               style={[UI.btnPrimary, s.fullBtn]}
               onPress={() => router.push('/profile/business-document')}
               activeOpacity={0.85}
             >
               <Feather name="upload" size={16} color={SHADES.carbon} />
               <Text style={UI.btnPrimaryText}>Update my application</Text>
-            </TouchableOpacity>
+            </PressScale>
           </>
         ) : (
           <>
@@ -92,19 +93,19 @@ export default function BtobRejectedScreen() {
           </>
         )}
 
-        <TouchableOpacity
+        <PressScale
           style={[UI.btnSecondary, s.fullBtn]}
           onPress={() => router.push('/')}
           activeOpacity={0.85}
         >
           <Feather name="grid" size={16} color={SHADES.carbon} />
           <Text style={UI.btnSecondaryText}>Browse catalogue</Text>
-        </TouchableOpacity>
+        </PressScale>
 
-        <TouchableOpacity style={[fixable ? UI.btnSecondary : UI.btnPrimary, s.fullBtn, { marginBottom: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+        <PressScale style={[fixable ? UI.btnSecondary : UI.btnPrimary, s.fullBtn, { marginBottom: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
           <Feather name="message-circle" size={16} color={SHADES.carbon} />
           <Text style={fixable ? UI.btnSecondaryText : UI.btnPrimaryText}>Contact us</Text>
-        </TouchableOpacity>
+        </PressScale>
 
         <TouchableOpacity onPress={() => signOut()} activeOpacity={0.7} style={s.signOutBtn}>
           <Text style={s.signOutText}>Sign out</Text>

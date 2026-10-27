@@ -24,6 +24,7 @@ import { auth } from '@/lib/auth';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyReservations, RentalDoc } from '@/lib/firestore';
+import PressScale from '@/components/PressScale';
 
 // Reservation statuses that make account deletion unsafe — explicit check, independent
 // of any date field, so it blocks regardless of a reservation's return date.
@@ -129,10 +130,10 @@ export default function DeleteAccountScreen() {
   }
 
   const contactButton = (
-    <TouchableOpacity style={[UI.btnPrimary, { marginTop: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+    <PressScale style={[UI.btnPrimary, { marginTop: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
       <Feather name="message-circle" size={16} color={SHADES.carbon} />
       <Text style={UI.btnPrimaryText}>Contact us</Text>
-    </TouchableOpacity>
+    </PressScale>
   );
 
   return (

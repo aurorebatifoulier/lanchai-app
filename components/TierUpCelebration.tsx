@@ -10,6 +10,7 @@ import { db } from '@/lib/firebase';
 import { auth } from '@/lib/auth';
 import { TIER_LABELS, TIER_ORDER, type LoyaltyTierKey, type PaidTier } from '@/lib/loyalty';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
+import PressScale from '@/components/PressScale';
 
 // Tier-up celebration (validated mockup) — shown once per tier, the first time the app
 // sees users.loyaltyTier above users.celebratedTier (mounted in app/(tabs)/_layout.tsx).
@@ -105,9 +106,9 @@ export function TierUpCelebration() {
               {extra ? <Text style={s.extra}>{extra}</Text> : null}
             </View>
           )}
-          <TouchableOpacity style={[UI.btnPrimary, s.cta]} onPress={() => close(true)} activeOpacity={0.85}>
+          <PressScale style={[UI.btnPrimary, s.cta]} onPress={() => close(true)} activeOpacity={0.85}>
             <Text style={UI.btnPrimaryText}>{LOYALTY_COPY.tierUpCta}</Text>
-          </TouchableOpacity>
+          </PressScale>
           <TouchableOpacity onPress={() => close(false)} hitSlop={10} style={{ marginTop: 16 }}>
             <Text style={s.later}>{LOYALTY_COPY.tierUpLater}</Text>
           </TouchableOpacity>

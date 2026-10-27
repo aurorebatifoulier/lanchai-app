@@ -8,6 +8,7 @@ import { SHADES } from '@/constants/brandShades';
 import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile } from '@/lib/firestore';
+import PressScale from '@/components/PressScale';
 
 export default function BtobPendingScreen() {
   const screen = useScreenInsets();
@@ -82,19 +83,19 @@ export default function BtobPendingScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <PressScale
           style={[UI.btnSecondary, s.fullBtn]}
           onPress={() => router.push('/')}
           activeOpacity={0.85}
         >
           <Feather name="grid" size={16} color={SHADES.carbon} />
           <Text style={UI.btnSecondaryText}>Browse catalogue</Text>
-        </TouchableOpacity>
+        </PressScale>
 
-        <TouchableOpacity style={[UI.btnPrimary, s.fullBtn, { marginBottom: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+        <PressScale style={[UI.btnPrimary, s.fullBtn, { marginBottom: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
           <Feather name="message-circle" size={16} color={SHADES.carbon} />
           <Text style={UI.btnPrimaryText}>Contact us</Text>
-        </TouchableOpacity>
+        </PressScale>
 
         <TouchableOpacity onPress={() => signOut()} activeOpacity={0.7} style={s.signOutBtn}>
           <Text style={s.signOutText}>Sign out</Text>

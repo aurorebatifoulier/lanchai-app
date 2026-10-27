@@ -9,6 +9,7 @@ import {
   useMyResidency, submitResidency, withdrawMyResidency, RESIDENCY_PROOF_TYPES, RESIDENCY_REJECTION_REASONS,
   RESIDENCY_MAX_PAGES, type ResidencyPath, type ResidencyProofType,
 } from '@/lib/residency';
+import PressScale from '@/components/PressScale';
 
 // "Residency" card of the ID & residency screen (app/profile/id-residency.tsx) —
 // resident vs tourist (the deposit depends on it). Tourist is the default with nothing
@@ -112,9 +113,9 @@ export function ResidencySection() {
                   {rejection.text ? `${RESIDENCY_REJECTION_REASONS[rejection.reason]?.text ? ' ' : ''}${rejection.text}` : ''}
                 </Text>
                 {!finalRejection && !formOpen && (
-                  <TouchableOpacity style={[UI.btnPrimary, { marginTop: 14 }]} onPress={() => setFormOpen(true)} activeOpacity={0.85}>
+                  <PressScale style={[UI.btnPrimary, { marginTop: 14 }]} onPress={() => setFormOpen(true)} activeOpacity={0.85}>
                     <Text style={UI.btnPrimaryText}>Update my documents</Text>
-                  </TouchableOpacity>
+                  </PressScale>
                 )}
                 {finalRejection && <Text style={[UI.small, { marginTop: 8 }]}>If you think this is a mistake, please message us.</Text>}
               </StatusBlock>
@@ -185,7 +186,7 @@ export function ResidencySection() {
                         {pages.length < RESIDENCY_MAX_PAGES && (
                           <View style={s.addRow}>
                             {(['camera', 'gallery'] as const).map(src => (
-                              <TouchableOpacity
+                              <PressScale
                                 key={src}
                                 style={[UI.btnSecondary, { flex: 1 }]}
                                 onPress={async () => { const u = await pickIdPhoto(src); if (u) setPages(p => [...p, u]); }}
@@ -193,7 +194,7 @@ export function ResidencySection() {
                               >
                                 <Feather name={src === 'camera' ? 'camera' : 'image'} size={15} color={SHADES.carbon} />
                                 <Text style={UI.btnSecondaryText}>{src === 'camera' ? 'Take a photo' : 'From gallery'}</Text>
-                              </TouchableOpacity>
+                              </PressScale>
                             ))}
                           </View>
                         )}
@@ -201,9 +202,9 @@ export function ResidencySection() {
                     )}
 
                     {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
-                    <TouchableOpacity style={[UI.btnPrimary, { marginTop: 16 }, !canSubmit && UI.btnDisabled]} disabled={!canSubmit} onPress={send} activeOpacity={0.85}>
+                    <PressScale style={[UI.btnPrimary, { marginTop: 16 }, !canSubmit && UI.btnDisabled]} disabled={!canSubmit} onPress={send} activeOpacity={0.85}>
                       {busy ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>Send for review</Text>}
-                    </TouchableOpacity>
+                    </PressScale>
                     <Text style={[UI.small, { marginTop: 8, textAlign: 'center' }]}>Only you and our staff can see your documents. We never share them or send them by email.</Text>
                   </View>
                 )}

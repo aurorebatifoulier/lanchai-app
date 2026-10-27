@@ -6,6 +6,7 @@ import { UI } from '@/components/account/ui';
 import {
   ID_DOC_TYPES, ID_MAX_PAGES, pickIdPhoto, submitMyIdentityDocument, type IdDocType,
 } from '@/lib/identity';
+import PressScale from '@/components/PressScale';
 
 // Identity document upload: document type, one or more pages (camera or gallery),
 // then "Save my ID". Used by the ID & residency screen (components/profile/IdentitySection.tsx) and the booking step
@@ -70,26 +71,26 @@ export function IdUploadPanel({ onDone, submitLabel = 'Save my ID' }: { onDone: 
       )}
       {pages.length < ID_MAX_PAGES && (
         <View style={s.addRow}>
-          <TouchableOpacity style={[UI.btnSecondary, { flex: 1 }]} onPress={() => add('camera')} activeOpacity={0.8} disabled={saving}>
+          <PressScale style={[UI.btnSecondary, { flex: 1 }]} onPress={() => add('camera')} activeOpacity={0.8} disabled={saving}>
             <Feather name="camera" size={15} color={SHADES.carbon} />
             <Text style={UI.btnSecondaryText}>Take a photo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[UI.btnSecondary, { flex: 1 }]} onPress={() => add('gallery')} activeOpacity={0.8} disabled={saving}>
+          </PressScale>
+          <PressScale style={[UI.btnSecondary, { flex: 1 }]} onPress={() => add('gallery')} activeOpacity={0.8} disabled={saving}>
             <Feather name="image" size={15} color={SHADES.carbon} />
             <Text style={UI.btnSecondaryText}>From gallery</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       )}
 
       {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
-      <TouchableOpacity
+      <PressScale
         style={[UI.btnPrimary, { marginTop: 16 }, (!docType || pages.length === 0 || saving) && UI.btnDisabled]}
         onPress={save}
         disabled={!docType || pages.length === 0 || saving}
         activeOpacity={0.85}
       >
         {saving ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{submitLabel}</Text>}
-      </TouchableOpacity>
+      </PressScale>
       <Text style={[UI.small, s.privacy]}>
         Only you and our staff can see it. We never share it or send it by email.
       </Text>

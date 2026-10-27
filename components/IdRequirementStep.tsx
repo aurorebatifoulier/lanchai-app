@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { IdUploadPanel } from '@/components/IdUploadPanel';
+import PressScale from '@/components/PressScale';
 
 // Shown when a renter without an ID document taps "Confirm booking" (single booking and
 // bag checkout). The booking screen stays mounted underneath, so the selection is kept:
@@ -47,14 +48,14 @@ export function IdRequirementStep({
               />
             ) : (
               <>
-                <TouchableOpacity style={UI.btnPrimary} onPress={() => setUploading(true)} activeOpacity={0.85}>
+                <PressScale style={UI.btnPrimary} onPress={() => setUploading(true)} activeOpacity={0.85}>
                   <Feather name="camera" size={16} color={SHADES.carbon} />
                   <Text style={UI.btnPrimaryText}>Add my ID now</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[UI.btnSecondary, { height: 50, marginTop: 10 }]} onPress={onAtCounter} activeOpacity={0.85}>
+                </PressScale>
+                <PressScale style={[UI.btnSecondary, { height: 50, marginTop: 10 }]} onPress={onAtCounter} activeOpacity={0.85}>
                   <Feather name="map-pin" size={16} color={SHADES.carbon} />
                   <Text style={UI.btnSecondaryText}>I&apos;ll show my ID at the shop</Text>
-                </TouchableOpacity>
+                </PressScale>
                 <Text style={[UI.small, s.note]}>Either way, we check your ID with you at your first pick-up.</Text>
               </>
             )}

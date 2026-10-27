@@ -21,6 +21,7 @@ import { getProduct, getReview, submitReview, getUserProfile, getReservationById
 import { isLoyaltyExcluded, useLoyaltyConfig, DEFAULT_REVIEW_REWARD_POINTS } from '@/lib/loyalty';
 import { Product } from '@/lib/mockData';
 import { useAuth } from '@/contexts/AuthContext';
+import PressScale from '@/components/PressScale';
 
 export default function ReviewScreen() {
   const { productId } = useLocalSearchParams<{ productId: string }>();
@@ -128,9 +129,9 @@ export default function ReviewScreen() {
           <IconCircle icon={{ name: 'check' }} size={64} />
           <Text style={styles.stateTitle}>Already reviewed</Text>
           <Text style={styles.stateSub}>You&apos;ve already left a review for this rental.</Text>
-          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
+          <PressScale style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
             <Text style={UI.btnPrimaryText}>Back to my rentals</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       </SafeAreaView>
     );
@@ -149,9 +150,9 @@ export default function ReviewScreen() {
           <Text style={styles.stateSub}>
             Your feedback helps other renters and makes LANCHAI better.
           </Text>
-          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
+          <PressScale style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
             <Text style={UI.btnPrimaryText}>Back to my rentals</Text>
-          </TouchableOpacity>
+          </PressScale>
         </View>
       </SafeAreaView>
     );
@@ -236,7 +237,7 @@ export default function ReviewScreen() {
           )}
 
           {/* Submit */}
-          <TouchableOpacity
+          <PressScale
             style={[UI.btnPrimary, styles.submitBtn, submitting && styles.submitBtnBusy]}
             onPress={handleSubmit}
             disabled={submitting}
@@ -245,7 +246,7 @@ export default function ReviewScreen() {
             {submitting
               ? <ActivityIndicator color={COLORS.carbon} size="small" />
               : <Text style={UI.btnPrimaryText}>Submit review</Text>}
-          </TouchableOpacity>
+          </PressScale>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

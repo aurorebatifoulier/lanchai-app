@@ -8,6 +8,7 @@ import { IdUploadPanel } from '@/components/IdUploadPanel';
 import { storage } from '@/lib/firebase';
 import { useMyIdentity, ID_DOC_TYPES, deleteMyIdentityDocument } from '@/lib/identity';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import PressScale from '@/components/PressScale';
 
 // "ID document" card of the ID & residency screen (app/profile/id-residency.tsx): the
 // identity document required to rent (passport, ID card or Lao ID card). The renter sees
@@ -93,10 +94,10 @@ export function IdentitySection() {
                 </Text>
                 {!replacing && !confirmDelete && (
                   <View style={s.actions}>
-                    <TouchableOpacity style={UI.btnSecondary} onPress={() => setReplacing(true)} activeOpacity={0.7}>
+                    <PressScale style={UI.btnSecondary} onPress={() => setReplacing(true)} activeOpacity={0.7}>
                       <Feather name="refresh-cw" size={14} color={SHADES.carbon} />
                       <Text style={UI.btnSecondaryText}>Replace my ID</Text>
-                    </TouchableOpacity>
+                    </PressScale>
                     <TouchableOpacity onPress={() => setConfirmDelete(true)} activeOpacity={0.7} hitSlop={8}>
                       <Text style={UI.dangerText}>Delete my ID</Text>
                     </TouchableOpacity>

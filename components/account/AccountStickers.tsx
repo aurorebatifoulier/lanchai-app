@@ -6,6 +6,7 @@ import { SectionTitle, UI, useScreenInsets, CategoryBadge } from '@/components/a
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { CATEGORIES } from '@/lib/mockData';
 import type { StickerUnlock } from '@/lib/accountStats';
+import PressScale from '@/components/PressScale';
 
 // "Your stickers" (validated mockup): one round sticker per category with a RETURNED
 // rental, slightly rotated, in its category's shades, then ONE locked sticker
@@ -61,9 +62,9 @@ export function AccountStickers({ stickers, next, unlocks }: { stickers: string[
               {unlock && (
                 <Text style={[UI.body, s.sheetSub]}>{ACCOUNT_COPY.stickerUnlockedWith(unlock.productName, fmtDate(unlock.atMs))}</Text>
               )}
-              <TouchableOpacity style={[UI.btnPrimary, s.sheetBtn]} onPress={() => browse(open)} activeOpacity={0.85}>
+              <PressScale style={[UI.btnPrimary, s.sheetBtn]} onPress={() => browse(open)} activeOpacity={0.85}>
                 <Text style={UI.btnPrimaryText}>{ACCOUNT_COPY.stickerBrowse(categoryName(open))}</Text>
-              </TouchableOpacity>
+              </PressScale>
             </Pressable>
           )}
         </Pressable>

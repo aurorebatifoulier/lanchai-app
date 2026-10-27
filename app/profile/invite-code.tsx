@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
@@ -8,6 +8,7 @@ import { SHADES } from '@/constants/brandShades';
 import { UI, StatusBlock, StatusChip, useScreenInsets } from '@/components/account/ui';
 import { applyInviteCode } from '@/lib/referral';
 import { useLoyaltyConfig, DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
+import PressScale from '@/components/PressScale';
 
 // "Have an invite code?" — new renters, before their first booking (any booking, even
 // cancelled, closes the window — checked server-side by applyInviteCode).
@@ -64,9 +65,9 @@ export default function InviteCodeScreen() {
               autoCorrect={false}
             />
             {error && <Text style={[UI.errorText, { marginTop: 8 }]}>{error}</Text>}
-            <TouchableOpacity style={[UI.btnPrimary, { marginTop: 14 }, (!code.trim() || busy) && UI.btnDisabled]} disabled={!code.trim() || busy} onPress={apply} activeOpacity={0.85}>
+            <PressScale style={[UI.btnPrimary, { marginTop: 14 }, (!code.trim() || busy) && UI.btnDisabled]} disabled={!code.trim() || busy} onPress={apply} activeOpacity={0.85}>
               {busy ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>Apply code</Text>}
-            </TouchableOpacity>
+            </PressScale>
           </View>
         )}
       </View>

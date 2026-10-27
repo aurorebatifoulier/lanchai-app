@@ -13,6 +13,7 @@ import { RentalDocCard } from '@/components/RentalDocCard';
 import { auth } from '@/lib/auth';
 import { getMyReservations, type RentalDoc } from '@/lib/firestore';
 import { rentalsWithDocuments, inPeriod, type RentalPeriod } from '@/utils/rentalDocs';
+import PressScale from '@/components/PressScale';
 
 // "All rentals" (from Receipts & reports › See all): every rental with at least one document,
 // newest first, with search, period chips and "Load more" (10 per page).
@@ -128,9 +129,9 @@ export default function AllRentalsScreen() {
           {visible.map(r => <RentalDocCard key={r.id} rental={r} icons={false} />)}
 
           {visible.length < filtered.length && (
-            <TouchableOpacity style={[UI.btnSecondary, { marginTop: 4 }]} onPress={() => setPages(p => p + 1)} activeOpacity={0.8}>
+            <PressScale style={[UI.btnSecondary, { marginTop: 4 }]} onPress={() => setPages(p => p + 1)} activeOpacity={0.8}>
               <Text style={UI.btnSecondaryText}>Load more</Text>
-            </TouchableOpacity>
+            </PressScale>
           )}
         </ScrollView>
       )}

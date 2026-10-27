@@ -60,6 +60,7 @@ import { CATEGORIES, type Product } from '@/lib/mockData';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { cached, clearHomeCache, HOME_TTL } from '@/lib/homeCache';
 import { DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
+import PressScale from '@/components/PressScale';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -578,9 +579,9 @@ function HeroCarousel() {
           <View style={styles.slideContent}>
             <Text style={styles.slideTitle}>{slide.title}</Text>
             <Text style={styles.slideSub}>{slide.subtitle}</Text>
-            <TouchableOpacity style={styles.slideCta} onPress={() => router.push(slide.route as never)} activeOpacity={0.85}>
+            <PressScale style={styles.slideCta} onPress={() => router.push(slide.route as never)} activeOpacity={0.85}>
               <Text style={styles.slideCtaText}>{slide.cta}</Text>
-            </TouchableOpacity>
+            </PressScale>
           </View>
         </View>
       ))}
