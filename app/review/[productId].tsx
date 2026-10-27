@@ -15,6 +15,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import { getProduct, getReview, submitReview, getUserProfile, getReservationById } from '@/lib/firestore';
 import { isLoyaltyExcluded, useLoyaltyConfig, DEFAULT_REVIEW_REWARD_POINTS } from '@/lib/loyalty';
 import { Product } from '@/lib/mockData';
@@ -108,7 +110,7 @@ export default function ReviewScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
-          <Feather name="alert-circle" size={32} color={COLORS.fg3} />
+          <IconCircle icon={{ name: 'alert-circle' }} size={64} />
           <Text style={styles.stateTitle}>Couldn&apos;t load this review</Text>
           <Text style={styles.stateSub}>The product or reservation may no longer be available.</Text>
         </View>
@@ -123,11 +125,11 @@ export default function ReviewScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
-          <Feather name="check-circle" size={36} color={COLORS.success} />
+          <IconCircle icon={{ name: 'check' }} size={64} />
           <Text style={styles.stateTitle}>Already reviewed</Text>
           <Text style={styles.stateSub}>You&apos;ve already left a review for this rental.</Text>
-          <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/reservations')}>
-            <Text style={styles.doneBtnText}>Back to my rentals</Text>
+          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
+            <Text style={UI.btnPrimaryText}>Back to my rentals</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -140,15 +142,15 @@ export default function ReviewScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.center}>
-          <Feather name="star" size={40} color={COLORS.amber} />
+          <IconCircle icon={{ name: 'star' }} tone="amber" size={64} />
           <Text style={styles.stateTitle}>
             {rewardEligible && rewardPoints > 0 ? `Thanks! +${rewardPoints} points added` : 'Thanks for your review!'}
           </Text>
           <Text style={styles.stateSub}>
             Your feedback helps other renters and makes LANCHAI better.
           </Text>
-          <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/reservations')}>
-            <Text style={styles.doneBtnText}>Back to my rentals</Text>
+          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
+            <Text style={UI.btnPrimaryText}>Back to my rentals</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -179,50 +181,51 @@ export default function ReviewScreen() {
           {/* Product name */}
           <Text style={styles.productName}>{product.name}</Text>
 
-          {/* Star selector */}
-          <Text style={styles.fieldLabel}>Your rating</Text>
-          <View style={styles.starsRow}>
-            {[1, 2, 3, 4, 5].map(n => (
-              <TouchableOpacity
-                key={n}
-                style={styles.starBtn}
-                onPress={() => { setRating(n); setError(null); }}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-              >
-                <Feather
-                  name="star"
-                  size={36}
-                  color={n <= rating ? COLORS.amber : COLORS.softGray}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-          {rating > 0 && (
-            <Text style={styles.ratingLabel}>
-              {['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'][rating]}
-            </Text>
-          )}
+          <View style={[UI.card, UI.cardPadded]}>
+            {/* Star selector */}
+            <Text style={styles.fieldLabel}>Your rating</Text>
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <TouchableOpacity
+                  key={n}
+                  style={styles.starBtn}
+                  onPress={() => { setRating(n); setError(null); }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Feather
+                    name="star"
+                    size={36}
+                    color={n <= rating ? SHADES.amber : SHADES.carbonFaint}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            {rating > 0 && (
+              <Text style={styles.ratingLabel}>
+                {['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'][rating]}
+              </Text>
+            )}
 
-          {/* Text input */}
-          <Text style={styles.fieldLabel}>Your review</Text>
-          <TextInput
-            style={styles.textInput}
-            multiline
-            placeholder="Tell us what you thought — quality, ease of use, value for money…"
-            placeholderTextColor={COLORS.fg3}
-            value={text}
-            onChangeText={t => { setText(t); setError(null); }}
-            textAlignVertical="top"
-            maxLength={1000}
-          />
-          <Text style={styles.charHint}>{text.trim().length}/1000 · min 10 characters</Text>
+            {/* Text input */}
+            <Text style={styles.fieldLabel}>Your review</Text>
+            <TextInput
+              style={styles.textInput}
+              multiline
+              placeholder="Tell us what you thought — quality, ease of use, value for money…"
+              placeholderTextColor={SHADES.carbonFaint}
+              value={text}
+              onChangeText={t => { setText(t); setError(null); }}
+              textAlignVertical="top"
+              maxLength={1000}
+            />
+            <Text style={styles.charHint}>{text.trim().length}/1000 · min 10 characters</Text>
+          </View>
 
           {/* Error banner */}
           {error && (
             <View style={styles.errorBanner}>
-              <Feather name="alert-circle" size={14} color={COLORS.danger} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={[UI.errorText, { flex: 1 }]}>{error}</Text>
               <TouchableOpacity
                 onPress={() => setError(null)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -234,14 +237,14 @@ export default function ReviewScreen() {
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitBtn, submitting && styles.submitBtnBusy]}
+            style={[UI.btnPrimary, styles.submitBtn, submitting && styles.submitBtnBusy]}
             onPress={handleSubmit}
             disabled={submitting}
             activeOpacity={0.8}
           >
             {submitting
               ? <ActivityIndicator color={COLORS.carbon} size="small" />
-              : <Text style={styles.submitBtnText}>Submit review</Text>}
+              : <Text style={UI.btnPrimaryText}>Submit review</Text>}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -249,143 +252,34 @@ export default function ReviewScreen() {
   );
 }
 
+// My Account design (components/account/ui.tsx), brand shades only.
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
+  container: { flex: 1, backgroundColor: COLORS.porcelain },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
     backgroundColor: COLORS.porcelain,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    gap: 8,
-  },
-  productName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    marginBottom: 24,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.fg2,
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
-  },
-  starBtn: {
-    padding: 4,
-  },
-  ratingLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.amber,
-    marginBottom: 8,
-  },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 20, gap: 8 },
+  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 12 },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbon, marginBottom: 8, marginTop: 4 },
+  starsRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
+  starBtn: { padding: 4 },
+  ratingLabel: { fontSize: 13, fontWeight: '700', color: SHADES.amberDeep, marginBottom: 12 },
   textInput: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 14,
-    color: COLORS.carbon,
-    minHeight: 130,
-    lineHeight: 20,
+    backgroundColor: SHADES.cream, borderWidth: 1, borderColor: SHADES.border, borderRadius: 12,
+    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12, fontSize: 15, color: SHADES.carbon,
+    minHeight: 130, lineHeight: 21,
   },
-  charHint: {
-    fontSize: 11,
-    color: COLORS.fg3,
-    textAlign: 'right',
-    marginBottom: 16,
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.danger,
-    fontWeight: '500',
-  },
-  submitBtn: {
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitBtnBusy: {
-    opacity: 0.65,
-  },
-  submitBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  stateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    textAlign: 'center',
-  },
-  stateSub: {
-    fontSize: 14,
-    color: COLORS.fg3,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  doneBtn: {
-    marginTop: 16,
-    height: 48,
-    paddingHorizontal: 28,
-    backgroundColor: COLORS.amber,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
+  charHint: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'right', marginTop: 6 },
+  // One-line error (no red background), dismissable.
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  submitBtn: { marginTop: 12 },
+  submitBtnBusy: { opacity: 0.65 },
+  stateTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon, textAlign: 'center' },
+  stateSub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
+  doneBtn: { marginTop: 16, paddingHorizontal: 28 },
 });

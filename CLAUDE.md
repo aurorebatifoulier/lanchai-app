@@ -802,7 +802,13 @@ a snapshot indefinitely).
   `IdRequirementStep`, `TierUpCelebration` (carbon card + confetti kept), BtoB pending /
   rejected. `ConfirmBox` (all screens, admin included) = white card, amber confirm,
   "Keep" outlined, destructive = white button with red text (never a red fill).
-  `WhatsAppButton variant="row"` = palette row (amber circle, no green) — used by the FAQ.
+  `WhatsAppButton variant="row"` = palette row (amber circle, no green) — used by the FAQ. Batch 4
+  (closes the account / rentals restyle) — rental detail (`rentals/[id].tsx`), review,
+  claim, notifications inbox (stored `iconColor` mapped to palette circles: amber/coral →
+  amber, green/blue/carbon → grey), Liked, admin Inbox tab. Shared rating chips (good /
+  fair / damaged) and overdue chips unchanged. Main app screens (Home, Explore, product,
+  category, booking flow, bag, Reservations tab, login, onboarding) are NOT on this design
+  yet.
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled

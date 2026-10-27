@@ -18,6 +18,8 @@ import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { getClaimsForReservation, submitClaim, type ClaimType, type ClaimMediaType } from '@/lib/claims';
 import { useAuth } from '@/contexts/AuthContext';
@@ -143,7 +145,7 @@ export default function ClaimScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.center} edges={['top']}>
-        <ActivityIndicator color={COLORS.amber} size="large" />
+        <ActivityIndicator color={SHADES.amber} size="large" />
       </SafeAreaView>
     );
   }
@@ -153,7 +155,7 @@ export default function ClaimScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
-          <Feather name="alert-circle" size={32} color={COLORS.fg3} />
+          <IconCircle icon={{ name: 'alert-circle' }} size={64} />
           <Text style={styles.stateTitle}>Couldn&apos;t load this rental</Text>
           <Text style={styles.stateSub}>The reservation may no longer be available.</Text>
         </View>
@@ -168,14 +170,14 @@ export default function ClaimScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
-          <Feather name="clock" size={36} color={COLORS.amber} />
+          <IconCircle icon={{ name: 'clock' }} size={64} />
           <Text style={styles.stateTitle}>You already have an open claim</Text>
           <Text style={styles.stateSub}>
             We&apos;re already looking into an issue you reported for this rental — check the rental
             details screen for its status.
           </Text>
-          <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace(`/rentals/${rental.id}`)}>
-            <Text style={styles.doneBtnText}>Back to rental</Text>
+          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace(`/rentals/${rental.id}`)}>
+            <Text style={UI.btnPrimaryText}>Back to rental</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -188,13 +190,13 @@ export default function ClaimScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.center}>
-          <Feather name="check-circle" size={40} color={COLORS.success} />
+          <IconCircle icon={{ name: 'check' }} size={64} />
           <Text style={styles.stateTitle}>Claim submitted</Text>
           <Text style={styles.stateSub}>
             We&apos;ve received your report and will get back to you soon.
           </Text>
-          <TouchableOpacity style={styles.doneBtn} onPress={() => router.replace('/reservations')}>
-            <Text style={styles.doneBtnText}>Back to my rentals</Text>
+          <TouchableOpacity style={[UI.btnPrimary, styles.doneBtn]} onPress={() => router.replace('/reservations')}>
+            <Text style={UI.btnPrimaryText}>Back to my rentals</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -240,7 +242,7 @@ export default function ClaimScreen() {
                     <Text style={styles.typeRowLabel}>{opt.label}</Text>
                     <Text style={styles.typeRowSub}>{opt.sub}</Text>
                   </View>
-                  {active && <Feather name="check" size={16} color={COLORS.carbon} />}
+                  {active && <Feather name="check" size={16} color={SHADES.carbon} />}
                 </TouchableOpacity>
               );
             })}
@@ -252,7 +254,7 @@ export default function ClaimScreen() {
             style={styles.textInput}
             multiline
             placeholder="Describe the issue with as much detail as you can…"
-            placeholderTextColor={COLORS.fg3}
+            placeholderTextColor={SHADES.carbonFaint}
             value={description}
             onChangeText={t => { setDescription(t); setError(null); }}
             textAlignVertical="top"
@@ -280,7 +282,7 @@ export default function ClaimScreen() {
               </View>
             ))}
             <TouchableOpacity style={styles.addPhotoBtn} onPress={() => setMediaSheetVisible(true)}>
-              <Feather name="plus" size={20} color={COLORS.fg3} />
+              <Feather name="plus" size={20} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>
           <Text style={styles.mediaHint}>At least one photo or video is required.</Text>
@@ -288,8 +290,7 @@ export default function ClaimScreen() {
           {/* Error banner */}
           {error && (
             <View style={styles.errorBanner}>
-              <Feather name="alert-circle" size={14} color={COLORS.danger} />
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={[UI.errorText, { flex: 1 }]}>{error}</Text>
               <TouchableOpacity
                 onPress={() => setError(null)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -301,14 +302,14 @@ export default function ClaimScreen() {
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitBtn, (submitting || !type || media.length === 0) && styles.submitBtnBusy]}
+            style={[UI.btnPrimary, styles.submitBtn, (submitting || !type || media.length === 0) && styles.submitBtnBusy]}
             onPress={handleSubmit}
             disabled={submitting || !type || media.length === 0}
             activeOpacity={0.8}
           >
             {submitting
               ? <ActivityIndicator color={COLORS.carbon} size="small" />
-              : <Text style={styles.submitBtnText}>Submit claim</Text>}
+              : <Text style={UI.btnPrimaryText}>Submit claim</Text>}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -348,249 +349,71 @@ export default function ClaimScreen() {
   );
 }
 
+// My Account design (components/account/ui.tsx), brand shades only.
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 12,
-  },
+  container: { flex: 1, backgroundColor: COLORS.porcelain },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
     backgroundColor: COLORS.porcelain,
   },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    gap: 8,
-  },
-  productName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    marginBottom: 24,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.fg2,
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  typeList: {
-    gap: 8,
-    marginBottom: 8,
-  },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 20, gap: 8 },
+  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 12 },
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbon, marginBottom: 8, marginTop: 8 },
+  typeList: { gap: 8, marginBottom: 8 },
+  // Choice rows: white cards; selected = light amber with an amber border.
   typeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    gap: 8,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: SHADES.white,
+    borderWidth: 0.5, borderColor: SHADES.border, borderRadius: 18,
+    paddingVertical: 13, paddingHorizontal: 14, gap: 8,
   },
-  typeRowActive: {
-    backgroundColor: COLORS.amber,
-    borderColor: COLORS.amber,
-  },
-  typeRowLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  typeRowSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginTop: 2,
-  },
+  typeRowActive: { backgroundColor: SHADES.amberLight, borderColor: SHADES.amber, borderWidth: 1 },
+  typeRowLabel: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  typeRowSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
 
   textInput: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 14,
-    color: COLORS.carbon,
-    minHeight: 110,
-    lineHeight: 20,
+    backgroundColor: SHADES.white, borderWidth: 1, borderColor: SHADES.border, borderRadius: 12,
+    paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12, fontSize: 15, color: SHADES.carbon,
+    minHeight: 110, lineHeight: 21,
   },
-  charHint: {
-    fontSize: 11,
-    color: COLORS.fg3,
-    textAlign: 'right',
-    marginBottom: 16,
-  },
+  charHint: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'right', marginBottom: 16 },
 
-  photoRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  photoThumbWrap: {
-    width: 72,
-    height: 72,
-  },
-  photoThumb: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: COLORS.softGray200,
-  },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  photoThumbWrap: { width: 72, height: 72 },
+  photoThumb: { width: 72, height: 72, borderRadius: 12, backgroundColor: SHADES.carbonLight },
   photoRemoveBtn: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.carbon,
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10,
+    backgroundColor: SHADES.carbon, alignItems: 'center', justifyContent: 'center',
   },
   addPhotoBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 72, height: 72, borderRadius: 12, borderWidth: 1.5, borderColor: SHADES.carbonFaint,
+    borderStyle: 'dashed', backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
   },
-  videoThumb: {
-    backgroundColor: COLORS.carbon,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  videoThumb: { backgroundColor: SHADES.carbon, alignItems: 'center', justifyContent: 'center' },
   playBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  mediaHint: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginTop: -8,
-    marginBottom: 16,
-  },
+  mediaHint: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginTop: -8, marginBottom: 16 },
 
   // Media action sheet
-  actionOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
+  actionOverlay: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
   actionSheet: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 8,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
+    backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingTop: 8, paddingBottom: 40, paddingHorizontal: 20,
   },
-  actionOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 18,
-  },
-  actionOptionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  actionDivider: {
-    height: 1,
-    backgroundColor: COLORS.softGray200,
-  },
+  actionOption: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18 },
+  actionOptionText: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
+  actionDivider: { height: 0.5, backgroundColor: SHADES.border },
 
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.danger,
-    fontWeight: '500',
-  },
-  submitBtn: {
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitBtnBusy: {
-    opacity: 0.65,
-  },
-  submitBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  stateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    textAlign: 'center',
-  },
-  stateSub: {
-    fontSize: 14,
-    color: COLORS.fg3,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  doneBtn: {
-    marginTop: 16,
-    height: 48,
-    paddingHorizontal: 28,
-    backgroundColor: COLORS.amber,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
+  // One-line error (no red background), dismissable.
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  submitBtn: { marginTop: 8 },
+  submitBtnBusy: { opacity: 0.45 },
+  stateTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon, textAlign: 'center' },
+  stateSub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
+  doneBtn: { marginTop: 16, paddingHorizontal: 28 },
 });

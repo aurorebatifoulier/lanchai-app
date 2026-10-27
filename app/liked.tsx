@@ -16,6 +16,8 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import ProductGridCard from '@/components/ProductGridCard';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import SearchBar from '@/components/SearchBar';
 import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,14 +55,14 @@ function LikedEmptyState({
     return (
       <View style={s.empty}>
         <View style={s.emptyIconWrap}>
-          <Ionicons name="heart-outline" size={36} color={COLORS.fg3} />
+          <Ionicons name="heart-outline" size={30} color={SHADES.carbon} />
         </View>
         <Text style={s.emptyTitle}>No liked items yet</Text>
         <Text style={s.emptySub}>
           Tap the heart on any product to save it here.
         </Text>
-        <TouchableOpacity style={s.exploreBtn} onPress={onExplore} activeOpacity={0.85}>
-          <Text style={s.exploreBtnText}>Explore products</Text>
+        <TouchableOpacity style={[UI.btnPrimary, s.exploreBtn]} onPress={onExplore} activeOpacity={0.85}>
+          <Text style={UI.btnPrimaryText}>Explore products</Text>
         </TouchableOpacity>
       </View>
     );
@@ -69,14 +71,14 @@ function LikedEmptyState({
   return (
     <View style={s.empty}>
       <View style={s.emptyIconWrap}>
-        <Feather name="package" size={32} color={COLORS.fg3} />
+        <Feather name="package" size={28} color={SHADES.carbon} />
       </View>
       <Text style={s.emptyTitle}>No matches</Text>
       <Text style={s.emptySub}>
         None of your liked items match the current filters.
       </Text>
-      <TouchableOpacity style={[s.exploreBtn, s.clearBtn]} onPress={onClearFilters} activeOpacity={0.85}>
-        <Text style={s.exploreBtnText}>Clear filters</Text>
+      <TouchableOpacity style={[UI.btnSecondary, s.exploreBtn]} onPress={onClearFilters} activeOpacity={0.85}>
+        <Text style={UI.btnSecondaryText}>Clear filters</Text>
       </TouchableOpacity>
     </View>
   );
@@ -311,8 +313,7 @@ export default function LikedScreen() {
       {/* Unlike error banner */}
       {unlikeError && (
         <View style={s.errorBanner}>
-          <Feather name="alert-circle" size={14} color={COLORS.danger} />
-          <Text style={s.errorBannerText}>Couldn&apos;t remove item — please try again.</Text>
+          <Text style={[UI.errorText, { flex: 1 }]}>Couldn&apos;t remove item — please try again.</Text>
           <TouchableOpacity onPress={() => setUnlikeError(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Feather name="x" size={14} color={COLORS.danger} />
           </TouchableOpacity>
@@ -322,11 +323,11 @@ export default function LikedScreen() {
       {/* Body */}
       {loading ? (
         <View style={s.centered}>
-          <ActivityIndicator color={COLORS.amber} />
+          <ActivityIndicator color={SHADES.amber} />
         </View>
       ) : loadError ? (
         <View style={s.centered}>
-          <Feather name="alert-circle" size={28} color={COLORS.fg3} style={{ marginBottom: 10 }} />
+          <View style={{ marginBottom: 12 }}><IconCircle icon={{ name: 'alert-circle' }} size={64} /></View>
           <Text style={s.errorText}>Couldn&apos;t load your liked items.</Text>
           <Text style={s.errorSub}>Check your connection and try again.</Text>
         </View>
@@ -403,44 +404,16 @@ const s = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  // Error banner (unlike failure)
+  // One-line error (unlike failure) — no red background.
   errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderBottomWidth: 1,
-    borderBottomColor: '#FCA5A5',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  errorBannerText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.danger,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 8,
   },
 
   // States
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  errorText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  errorSub: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    textAlign: 'center',
-  },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  errorText: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, textAlign: 'center', marginBottom: 4 },
+  errorSub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center' },
 
   // Results bar
   resultsBar: {
@@ -450,9 +423,9 @@ const s = StyleSheet.create({
     paddingBottom: 8,
   },
   resultsCount: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   resultsNum: {
     fontWeight: '800',
@@ -479,52 +452,13 @@ const s = StyleSheet.create({
     gap: COL_GAP,
   },
 
-  // Empty states
-  empty: {
-    alignItems: 'center',
-    paddingTop: 64,
-    paddingHorizontal: 32,
-  },
+  // Empty states (My Account design)
+  empty: { alignItems: 'center', paddingTop: 64, paddingHorizontal: 32 },
   emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    width: 64, height: 64, borderRadius: 32, backgroundColor: SHADES.carbonLight,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    marginBottom: 8,
-    letterSpacing: -0.2,
-  },
-  emptySub: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 24,
-  },
-  exploreBtn: {
-    height: 44,
-    paddingHorizontal: 24,
-    backgroundColor: COLORS.amber,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  clearBtn: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-  },
-  exploreBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
+  emptySub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  exploreBtn: { paddingHorizontal: 24 },
 });

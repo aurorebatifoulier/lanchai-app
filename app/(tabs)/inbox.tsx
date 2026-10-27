@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { useAuth } from '@/contexts/AuthContext';
 import { InitialAvatar, formatTime } from '@/components/chat/MessageBubble';
 import { Conversation, subscribeToConversations } from '@/lib/chat';
@@ -42,7 +43,7 @@ function EmptyState() {
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIcon}>
-        <Feather name="message-circle" size={32} color={COLORS.fg3} />
+        <Feather name="message-circle" size={28} color={SHADES.carbon} />
       </View>
       <Text style={styles.emptyTitle}>No conversations yet</Text>
       <Text style={styles.emptySub}>Renter messages will show up here in real time.</Text>
@@ -85,7 +86,7 @@ export default function InboxScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} />
       ) : conversations.length === 0 ? (
         <EmptyState />
       ) : (
@@ -112,130 +113,40 @@ export default function InboxScreen() {
   );
 }
 
+// My Account design (components/account/ui.tsx): white cards, brand shades only.
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  greeting: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-    color: COLORS.carbon,
-    marginTop: 2,
-  },
+  container: { flex: 1, backgroundColor: COLORS.porcelain },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6, color: SHADES.carbon, marginTop: 2 },
 
-  listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
-  },
-  separator: {
-    height: 12,
-  },
+  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20 },
+  separator: { height: 10 },
 
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: SHADES.white, borderRadius: 18, borderWidth: 0.5, borderColor: SHADES.border,
+    paddingHorizontal: 14, paddingVertical: 13,
   },
-  rowText: {
-    flex: 1,
-  },
-  rowTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  name: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: -0.1,
-    color: COLORS.carbon,
-  },
-  nameUnread: {
-    fontWeight: '800',
-  },
-  time: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  rowBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 3,
-    gap: 8,
-  },
-  preview: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  previewUnread: {
-    color: COLORS.carbon,
-    fontWeight: '600',
-  },
+  rowText: { flex: 1 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  name: { flex: 1, fontSize: 15, fontWeight: '600', color: SHADES.carbon },
+  nameUnread: { fontWeight: '800' },
+  time: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
+  rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 8 },
+  preview: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
+  previewUnread: { color: SHADES.carbon, fontWeight: '600' },
   badge: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10,
+    backgroundColor: SHADES.amber, alignItems: 'center', justifyContent: 'center',
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
+  badgeText: { fontSize: 11, fontWeight: '800', color: SHADES.carbon },
 
   // ── Empty state ────────────────────────────────────────────────────────
-  emptyState: {
-    alignItems: 'center',
-    paddingTop: 64,
-    paddingHorizontal: 32,
-  },
+  emptyState: { alignItems: 'center', paddingTop: 64, paddingHorizontal: 32 },
   emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    width: 64, height: 64, borderRadius: 32, backgroundColor: SHADES.carbonLight,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-    marginBottom: 8,
-  },
-  emptySub: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.fg2,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
+  emptySub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
 });

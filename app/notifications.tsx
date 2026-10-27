@@ -10,7 +10,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons';
 import {
   collection,
   onSnapshot,
@@ -25,6 +24,8 @@ import {
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle, type IconTone } from '@/components/account/ui';
 import BackButton from '@/components/BackButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -66,12 +67,14 @@ const ICON_NAME: Record<NotifIcon, string> = {
   radio:   'radio',
 };
 
-const COLOR_CONFIG: Record<NotifColor, { bg: string; icon: string }> = {
-  amber:  { bg: COLORS.notifAmberBg,  icon: COLORS.notifAmberIcon },
-  green:  { bg: COLORS.notifGreenBg,  icon: COLORS.notifGreenIcon },
-  blue:   { bg: COLORS.notifBlueBg,   icon: COLORS.notifBlueIcon },
-  coral:  { bg: COLORS.notifCoralBg,  icon: COLORS.notifCoralIcon },
-  carbon: { bg: COLORS.notifCarbonBg, icon: COLORS.carbon },
+// Stored iconColor → My Account icon circles (brand palette only): amber = needs your
+// attention (amber / coral alerts), grey = information (confirmations, news, system).
+const COLOR_TONE: Record<NotifColor, IconTone> = {
+  amber:  'amber',
+  coral:  'amber',
+  green:  'grey',
+  blue:   'grey',
+  carbon: 'grey',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -303,11 +306,11 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {loading || bLoading ? (
-          <ActivityIndicator color={COLORS.amber} />
+          <ActivityIndicator color={SHADES.amber} />
         ) : filtered.length === 0 ? (
           <>
             <View style={s.emptyIconBox}>
-              <Feather name="bell" size={32} color={COLORS.fg3} />
+              <IconCircle icon={{ name: 'bell' }} size={64} />
             </View>
             <Text style={s.emptyTitle}>No notifications yet</Text>
             <Text style={s.emptyBody}>You&apos;re all caught up!</Text>
@@ -316,14 +319,16 @@ export default function NotificationsScreen() {
           grouped.map(section => (
             <View key={section.label}>
               <Text style={s.sectionLabel}>{section.label}</Text>
-              {section.data.map((item, i) => (
-                <NotifRow
-                  key={item.id}
-                  item={item}
-                  onPress={() => handlePress(item)}
-                  isLast={i === section.data.length - 1}
-                />
-              ))}
+              <View style={[UI.card, s.sectionCard]}>
+                {section.data.map((item, i) => (
+                  <NotifRow
+                    key={item.id}
+                    item={item}
+                    onPress={() => handlePress(item)}
+                    isLast={i === section.data.length - 1}
+                  />
+                ))}
+              </View>
             </View>
           ))
         )}
@@ -344,7 +349,7 @@ function NotifRow({
   isLast: boolean;
 }) {
   const isUnread = !item.readAt;
-  const colors   = COLOR_CONFIG[item.iconColor] ?? COLOR_CONFIG.carbon;
+  const tone     = COLOR_TONE[item.iconColor] ?? 'grey';
   const iconName = ICON_NAME[item.icon] ?? 'bell';
   const ctaLabel = item.deepLink ? getCtaLabel(item.type) : null;
 
@@ -355,10 +360,8 @@ function NotifRow({
         onPress={onPress}
         activeOpacity={0.75}
       >
-        {/* Colored icon square */}
-        <View style={[s.iconBox, { backgroundColor: colors.bg }]}>
-          <Feather name={iconName as never} size={18} color={colors.icon} />
-        </View>
+        {/* Icon circle (palette) */}
+        <IconCircle icon={{ name: iconName as never }} tone={tone} size={40} />
 
         {/* Text block */}
         <View style={s.rowBody}>
@@ -404,76 +407,68 @@ const s = StyleSheet.create({
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
 
-  chipsScroll: { height: 44, flexShrink: 0 },
+  chipsScroll: { height: 50, flexShrink: 0 },
   chipsRow: {
-    paddingHorizontal: 20, paddingBottom: 10,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6,
     gap: 8, flexDirection: 'row', alignItems: 'center',
   },
+  // Choice chips (UI.choice): grey, carbon when selected.
   chip: {
-    height: 32, paddingHorizontal: 14, borderRadius: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1.5, borderColor: COLORS.softGray200,
+    height: 34, paddingHorizontal: 12, borderRadius: 10,
+    backgroundColor: SHADES.carbonLight,
     alignItems: 'center', justifyContent: 'center',
   },
-  chipActive:     { backgroundColor: COLORS.carbon, borderColor: COLORS.carbon },
-  chipText:       { fontSize: 12, fontWeight: '700', color: COLORS.fg3 },
-  chipTextActive: { color: COLORS.porcelain },
+  chipActive:     { backgroundColor: SHADES.carbon },
+  chipText:       { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  chipTextActive: { color: SHADES.cream },
 
-  markAllRow: { paddingHorizontal: 20, paddingBottom: 10, alignItems: 'flex-end' },
-  markAllText: { fontSize: 12, fontWeight: '700', color: COLORS.amber },
+  markAllRow: { paddingHorizontal: 16, paddingBottom: 6, alignItems: 'flex-end' },
+  markAllText: { fontSize: 13, fontWeight: '700', color: SHADES.amberDeep },
 
   list:              { flex: 1 },
   listContent:       { paddingTop: 4, paddingBottom: 32 },
   listContentCenter: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 0 },
 
+  // Section title (UI.sectionTitle) + one white card per section.
   sectionLabel: {
-    fontSize: 11, fontWeight: '700', color: COLORS.fg3,
-    letterSpacing: 0.2,
-    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8,
+    fontSize: 18, fontWeight: '800', color: SHADES.carbon,
+    paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12,
   },
+  sectionCard: { marginHorizontal: 16, overflow: 'hidden' },
 
   row: {
     flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingVertical: 14, gap: 14,
-    backgroundColor: COLORS.porcelain,
+    paddingHorizontal: 14, paddingVertical: 13, gap: 12,
+    backgroundColor: SHADES.white,
   },
-  rowUnread: { backgroundColor: COLORS.notifUnreadBg },
-
-  iconBox: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
+  rowUnread: { backgroundColor: SHADES.amberPale },
 
   rowBody:    { flex: 1, gap: 3 },
   rowTitleRow: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', gap: 8,
   },
-  rowTitle:       { fontSize: 13.5, fontWeight: '500', color: COLORS.fg2, flex: 1, letterSpacing: -0.1 },
-  rowTitleUnread: { fontWeight: '700', color: COLORS.carbon },
-  rowTime:        { fontSize: 11, fontWeight: '500', color: COLORS.fg3, flexShrink: 0 },
-  rowBodyText:    { fontSize: 12.5, fontWeight: '400', color: COLORS.fg2, lineHeight: 17 },
-  rowCta:         { fontSize: 12, fontWeight: '700', color: COLORS.amber, marginTop: 4 },
+  rowTitle:       { fontSize: 15, fontWeight: '600', color: SHADES.carbon, flex: 1 },
+  rowTitleUnread: { fontWeight: '800' },
+  rowTime:        { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, flexShrink: 0 },
+  rowBodyText:    { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 18 },
+  rowCta:         { fontSize: 13, fontWeight: '700', color: SHADES.amberDeep, marginTop: 4 },
 
   unreadDot: {
     width: 8, height: 8, borderRadius: 4,
-    backgroundColor: COLORS.amber,
+    backgroundColor: SHADES.amber,
     marginTop: 16, flexShrink: 0,
   },
 
-  // Separator indented to align with text (20 pad + 40 icon + 14 gap = 74)
-  sep: { height: 1, backgroundColor: COLORS.softGray200, marginLeft: 74 },
+  // Separator aligned with the text (14 pad + 40 icon + 12 gap = 66)
+  sep: { height: 0.5, backgroundColor: SHADES.border, marginLeft: 66 },
 
-  emptyIconBox: {
-    width: 72, height: 72, borderRadius: 20,
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
+  emptyIconBox: { marginBottom: 16 },
   emptyTitle: {
-    fontSize: 16, fontWeight: '700', color: COLORS.carbon,
-    textAlign: 'center', letterSpacing: -0.2, marginBottom: 6,
+    fontSize: 18, fontWeight: '800', color: SHADES.carbon,
+    textAlign: 'center', marginBottom: 6,
   },
   emptyBody: {
-    fontSize: 13, fontWeight: '400', color: COLORS.fg3, textAlign: 'center',
+    fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center',
   },
 });

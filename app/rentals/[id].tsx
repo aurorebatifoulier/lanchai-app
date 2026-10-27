@@ -15,6 +15,8 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { cancelTier as getCancelTier, cancellationOutcome } from '@/functions/src/shared/cancellation';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, RowGroup, Row, IconCircle } from '@/components/account/ui';
 import { getReservationById, getProduct, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
 import { Product } from '@/lib/mockData';
@@ -39,9 +41,9 @@ const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
 };
 
 const CLAIM_STATUS_STYLE: Record<ClaimStatus, { label: string; color: string; bg: string }> = {
-  open:       { label: 'Open',       color: '#854F0B',      bg: '#FBE8C4' },
-  in_review:  { label: 'In review',  color: COLORS.pending,  bg: 'rgba(37,115,181,0.1)' },
-  resolved:   { label: 'Resolved',   color: COLORS.success,  bg: 'rgba(46,139,87,0.1)' },
+  open:       { label: 'Open',       color: SHADES.amberDeep,   bg: SHADES.amberLight },
+  in_review:  { label: 'In review',  color: SHADES.carbonMuted, bg: SHADES.carbonLight },
+  resolved:   { label: 'Resolved',   color: COLORS.success,     bg: '#E7F3EC' },
   rejected:   { label: 'Rejected',   color: COLORS.fg3,      bg: COLORS.softGray200 },
 };
 
@@ -70,15 +72,15 @@ function getBadge(r: RentalDoc, cat: TabId): Badge {
     return { label: 'Missed pick-up', color: COLORS.fg3, bg: COLORS.softGray200 };
   }
   if (cat === 'history') {
-    return { label: 'Returned', color: COLORS.fg3, bg: COLORS.warmBeige };
+    return { label: 'Returned', color: SHADES.carbonMuted, bg: SHADES.carbonLight };
   }
   if (cat === 'active') {
-    return { label: 'Active', color: COLORS.success, bg: 'rgba(46,139,87,0.1)' };
+    return { label: 'Active', color: COLORS.success, bg: '#E7F3EC' };
   }
   if (r.status === 'pending_payment') {
-    return { label: 'Pending payment at pick-up', color: '#854F0B', bg: '#FBE8C4' };
+    return { label: 'Pending payment at pick-up', color: SHADES.amberDeep, bg: SHADES.amberLight };
   }
-  return { label: 'Confirmed', color: COLORS.success, bg: 'rgba(46,139,87,0.1)' };
+  return { label: 'Confirmed', color: COLORS.success, bg: '#E7F3EC' };
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -319,9 +321,7 @@ export default function RentalDetailScreen() {
         {/* ── Pick-up location ── */}
         <Text style={s.sectionLabel}>Pick-up location</Text>
         <View style={s.locationCard}>
-          <View style={s.locationIcon}>
-            <Feather name="map-pin" size={18} color={COLORS.carbon} />
-          </View>
+          <IconCircle icon={{ name: 'map-pin' }} size={40} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={s.locationTitle}>{shop.name}</Text>
             <Text style={s.locationSub}>{shop.addressLine}, {shop.city}</Text>
@@ -329,10 +329,10 @@ export default function RentalDetailScreen() {
             <TouchableOpacity
               onPress={() => Linking.openURL(buildMapsUrl(shop))}
               activeOpacity={0.7}
-              style={s.directionsBtn}
+              style={[UI.btnPrimary, s.directionsBtn]}
             >
-              <Feather name="map" size={13} color={COLORS.carbon} />
-              <Text style={s.directionsBtnText}>Get directions</Text>
+              <Feather name="map" size={15} color={SHADES.carbon} />
+              <Text style={UI.btnPrimaryText}>Get directions</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -381,25 +381,18 @@ export default function RentalDetailScreen() {
 
         {/* ── Receipt link ── */}
         {rental.status === 'returned' && rental.returnFinalizedAt && (
-          <TouchableOpacity
-            style={s.receiptLink}
-            onPress={() => router.push(`/rentals/${rental.id}/receipt`)}
-            activeOpacity={0.75}
-          >
-            <Feather name="file-text" size={15} color={COLORS.carbon} />
-            <Text style={s.receiptLinkText}>View receipt</Text>
-            <Feather name="chevron-right" size={15} color={COLORS.fg3} />
-          </TouchableOpacity>
+          <View style={{ marginBottom: 12 }}>
+            <RowGroup>
+              <Row icon={{ name: 'file-text' }} title="View receipt" onPress={() => router.push(`/rentals/${rental.id}/receipt`)} />
+            </RowGroup>
+          </View>
         )}
 
         {/* ── Cancel section ── */}
         {isCancellable && (
           <View style={s.cancelSection}>
             {cancelError && (
-              <View style={s.cancelErrorBox}>
-                <Feather name="alert-circle" size={14} color={COLORS.danger} />
-                <Text style={s.cancelErrorText}>{cancelError}</Text>
-              </View>
+              <Text style={[UI.errorText, s.cancelErrorText]}>{cancelError}</Text>
             )}
 
             {cancelPhase === 'idle' && (
@@ -433,7 +426,7 @@ export default function RentalDetailScreen() {
                 </Text>
                 <View style={s.cancelBtnRow}>
                   <TouchableOpacity style={s.cancelKeepBtn} onPress={() => setCancelPhase('idle')} activeOpacity={0.8}>
-                    <Text style={s.cancelKeepText}>Keep it</Text>
+                    <Text style={UI.btnSecondaryText}>Keep it</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.cancelConfirmBtn, cancelling && s.cancelBtnOff]}
@@ -442,8 +435,8 @@ export default function RentalDetailScreen() {
                     activeOpacity={0.8}
                   >
                     {cancelling
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={s.cancelConfirmText}>Cancel rental</Text>
+                      ? <ActivityIndicator size="small" color={COLORS.danger} />
+                      : <Text style={UI.dangerText}>Cancel rental</Text>
                     }
                   </TouchableOpacity>
                 </View>
@@ -459,7 +452,7 @@ export default function RentalDetailScreen() {
                     color={
                       cancelTier === 'no_refund' ? COLORS.danger
                       : cancelTier === 'premium'  ? COLORS.fg2
-                      : '#854F0B'
+                      : SHADES.amberDeep
                     }
                   />
                   <Text style={[
@@ -502,7 +495,7 @@ export default function RentalDetailScreen() {
                   activeOpacity={0.75}
                 >
                   <View style={[s.cancelCheckbox, cancelAgreed && s.cancelCheckboxChecked]}>
-                    {cancelAgreed && <Feather name="check" size={11} color={COLORS.carbon} />}
+                    {cancelAgreed && <Feather name="check" size={12} color={SHADES.cream} />}
                   </View>
                   <Text style={s.cancelAgreeText}>
                     I have read and accept the cancellation terms
@@ -514,7 +507,7 @@ export default function RentalDetailScreen() {
                     onPress={() => { setCancelPhase('idle'); setCancelAgreed(false); }}
                     activeOpacity={0.8}
                   >
-                    <Text style={s.cancelKeepText}>Keep it</Text>
+                    <Text style={UI.btnSecondaryText}>Keep it</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.cancelConfirmBtn, (!cancelAgreed || cancelling) && s.cancelBtnOff]}
@@ -523,8 +516,8 @@ export default function RentalDetailScreen() {
                     activeOpacity={0.8}
                   >
                     {cancelling
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={s.cancelConfirmText}>Cancel rental</Text>
+                      ? <ActivityIndicator size="small" color={COLORS.danger} />
+                      : <Text style={UI.dangerText}>Cancel rental</Text>
                     }
                   </TouchableOpacity>
                 </View>
@@ -553,7 +546,7 @@ export default function RentalDetailScreen() {
 
         {/* ── Claim status ── */}
         {claims.length > 0 && (
-          <View style={{ marginTop: 20 }}>
+          <View>
             <Text style={s.sectionLabel}>Your reports</Text>
             {claims.map(claim => {
               const st = CLAIM_STATUS_STYLE[claim.status];
@@ -648,507 +641,119 @@ function DetailRow({
   );
 }
 
+// My Account design (components/account/ui.tsx), brand shades; green / red only as
+// small status chips (overdue chips: shared overdueChipColors).
 const dr = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 9,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.carbon,
-    textAlign: 'right',
-    flexShrink: 1,
-    marginLeft: 12,
-  },
-  valueBold: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  valueMuted: {
-    color: COLORS.fg3,
-    fontWeight: '500',
-  },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9 },
+  label: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted },
+  value: { fontSize: 14, fontWeight: '600', color: SHADES.carbon, textAlign: 'right', flexShrink: 1, marginLeft: 12 },
+  valueBold: { fontSize: 15, fontWeight: '800' },
+  valueMuted: { color: SHADES.carbonMuted, fontWeight: '500' },
 });
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
+const CARD = { backgroundColor: SHADES.white, borderRadius: 18, borderWidth: 0.5, borderColor: SHADES.border } as const;
+
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
+  root: { flex: 1, backgroundColor: COLORS.porcelain },
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
 
-  // Content
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-
-  // Product name
-  productName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.4,
-    marginBottom: 10,
-  },
+  content: { paddingHorizontal: 16, paddingTop: 20 },
+  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 10 },
 
   // Pick-up QR card
-  qrCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 16,
-    marginBottom: 4,
-  },
-  qrCardLeft: {
-    flex: 1,
-    gap: 4,
-  },
-  qrCardTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    letterSpacing: -0.1,
-  },
-  qrCardHint: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
-  },
+  qrCard: { ...CARD, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 4 },
+  qrCardLeft: { flex: 1, gap: 2 },
+  qrCardTitle: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  qrCardHint: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
 
-  // Status badge
-  badge: {
-    alignSelf: 'flex-start',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 20,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  overdueBannerWrap: {
-    gap: 6,
-    marginBottom: 20,
-  },
-  penaltyNote: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.danger,
-    lineHeight: 17,
-  },
+  // Status badge (small chip)
+  badge: { alignSelf: 'flex-start', borderRadius: 7, paddingHorizontal: 9, paddingVertical: 4, marginBottom: 20 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  overdueBannerWrap: { gap: 6, marginBottom: 20 },
+  penaltyNote: { fontSize: 13, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
 
   // Recap card
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 14,
-    marginBottom: 12,
-  },
-  receiptLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    marginBottom: 12,
-  },
-  receiptLinkText: { flex: 1, fontSize: 14, fontWeight: '700', color: COLORS.carbon },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.softGray200,
-    marginVertical: 4,
-  },
+  card: { ...CARD, paddingHorizontal: 16, paddingVertical: 8, marginBottom: 12 },
+  divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 4 },
 
-  // Deposit note
-  depositNote: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    lineHeight: 17,
-    marginBottom: 12,
-  },
+  depositNote: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 17, marginBottom: 12 },
+  refId: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginBottom: 4 },
 
-  // Ref ID
-  refId: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    letterSpacing: 0.3,
-    marginBottom: 28,
-  },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-    marginBottom: 10,
-  },
+  // Section title (UI.sectionTitle)
+  sectionLabel: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginTop: 24, marginBottom: 12 },
 
   // Location card
-  locationCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 14,
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-    marginBottom: 24,
-  },
-  locationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  locationTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    letterSpacing: -0.1,
-  },
-  locationSub: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    lineHeight: 17,
-  },
-  directionsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 8,
-    backgroundColor: COLORS.amber,
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  directionsBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
+  locationCard: { ...CARD, padding: 16, flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 12 },
+  locationTitle: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  locationSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 18 },
+  directionsBtn: { marginTop: 12, height: 44 },
 
   // Notes
-  notesCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 14,
-  },
-  notesText: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.carbon,
-    lineHeight: 20,
-  },
+  notesCard: { ...CARD, padding: 16, marginBottom: 12 },
+  notesText: { fontSize: 14, fontWeight: '500', color: SHADES.carbon, lineHeight: 20 },
 
   // Error
-  errorBox: {
-    alignItems: 'center',
-    paddingTop: 64,
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
+  errorBox: { alignItems: 'center', paddingTop: 64, gap: 12 },
+  errorText: { fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted },
 
   // Claim status cards
-  claimCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 14,
-    marginBottom: 10,
-    gap: 8,
-  },
-  claimCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  claimCardType: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  claimStatusBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  claimStatusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  claimCardDescription: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.fg2,
-    lineHeight: 18,
-  },
-  claimResponseBox: {
-    backgroundColor: COLORS.porcelain,
-    borderRadius: 8,
-    padding: 10,
-    gap: 3,
-  },
-  claimResponseLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-  },
-  claimResponseText: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.carbon,
-    lineHeight: 18,
-  },
+  claimCard: { ...CARD, padding: 16, marginBottom: 10, gap: 8 },
+  claimCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  claimCardType: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  claimStatusBadge: { borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3 },
+  claimStatusBadgeText: { fontSize: 12, fontWeight: '700' },
+  claimCardDescription: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
+  claimResponseBox: { backgroundColor: SHADES.cream, borderRadius: 12, padding: 12, gap: 3 },
+  claimResponseLabel: { fontSize: 12, fontWeight: '700', color: SHADES.carbonMuted },
+  claimResponseText: { fontSize: 13, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
 
-  // Issues section (report an issue / dispute a charge)
-  issueLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 12,
-    marginBottom: 8,
-  },
-  issueLinkText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  issueLinkSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginTop: 1,
-  },
+  // Issues section (report an issue / dispute a charge) — row style
+  issueLink: { ...CARD, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 13, marginBottom: 8 },
+  issueLinkText: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  issueLinkSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
 
   // Cancel section
-  cancelSection: {
-    marginTop: 20,
-  },
-  cancelLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-  },
-  cancelLinkText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.danger,
-  },
-  cancelCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 14,
-    gap: 10,
-  },
-  cancelCardTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  cancelCardBody: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.fg2,
-    lineHeight: 18,
-  },
-  cancelWarningRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  cancelWarningTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#854F0B',
-    letterSpacing: -0.1,
-  },
-  cancelBulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  cancelBullet: {
-    fontSize: 14,
-    color: COLORS.fg3,
-    lineHeight: 18,
-  },
-  cancelBulletText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg2,
-    lineHeight: 18,
-  },
-  cancelPolicyLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-  },
-  cancelPolicyLinkText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.fg3,
-    textDecorationLine: 'underline',
-  },
-  cancelAgreeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    paddingTop: 2,
-  },
+  cancelSection: { marginTop: 20 },
+  cancelLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
+  cancelLinkText: { fontSize: 14, fontWeight: '700', color: COLORS.danger },
+  cancelCard: { ...CARD, padding: 16, gap: 10 },
+  cancelCardTitle: { fontSize: 15, fontWeight: '800', color: SHADES.carbon },
+  cancelCardBody: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
+  cancelWarningRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  cancelWarningTitle: { fontSize: 14, fontWeight: '800', color: SHADES.amberDeep },
+  cancelBulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  cancelBullet: { fontSize: 14, color: SHADES.carbonMuted, lineHeight: 18 },
+  cancelBulletText: { flex: 1, fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 18 },
+  cancelPolicyLink: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  cancelPolicyLinkText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon, textDecorationLine: 'underline' },
+  cancelAgreeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingTop: 2 },
   cancelCheckbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    marginTop: 1,
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: SHADES.carbonFaint,
+    backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  cancelCheckboxChecked: {
-    backgroundColor: COLORS.amber,
-    borderColor: COLORS.amber,
-  },
-  cancelAgreeText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.fg2,
-    lineHeight: 18,
-  },
-  cancelBtnRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingTop: 2,
-  },
+  cancelCheckboxChecked: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
+  cancelAgreeText: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
+  cancelBtnRow: { flexDirection: 'row', gap: 10, paddingTop: 4 },
+  // Keep = secondary (white, carbon outline); confirm = destructive (white, red text).
   cancelKeepBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.white,
-  },
-  cancelKeepText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.fg2,
+    flex: 1, height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: SHADES.carbon,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: SHADES.white,
   },
   cancelConfirmBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, height: 46, borderRadius: 14, borderWidth: 1, borderColor: SHADES.border,
+    backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
   },
-  cancelBtnOff: {
-    backgroundColor: COLORS.softGray200,
-  },
-  cancelConfirmText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  cancelErrorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 4,
-  },
-  cancelErrorText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.danger,
-  },
-  cancelledBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.softGray200,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 20,
-  },
-  cancelledBannerText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
+  cancelBtnOff: { opacity: 0.45 },
+  cancelErrorText: { marginBottom: 8, textAlign: 'center' },
+  // Neutral info card (cancelled / missed pick-up) — no grey banner.
+  cancelledBanner: { ...CARD, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, marginTop: 20 },
+  cancelledBannerText: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
 });
