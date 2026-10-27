@@ -65,7 +65,8 @@ export interface ProductDoc {
   // Display (mirrors the client Product interface exactly)
   iconName: string;
   iconSet: 'Feather' | 'MaterialCommunityIcons' | 'Ionicons';
-  cardBg: 'amber' | 'dark' | 'beige' | 'default';
+  /** Legacy — no longer read or written. */
+  cardBg?: 'amber' | 'dark' | 'beige' | 'default';
   tag?: string;
   tagStyle?: 'amber' | 'dark';
   imageUrl?: string;

@@ -47,7 +47,8 @@ export interface Product {
   usageExamples?: string[];
   iconName: string;
   iconSet: 'Feather' | 'MaterialCommunityIcons' | 'Ionicons';
-  cardBg: 'amber' | 'dark' | 'beige' | 'default';
+  /** Legacy per-product colour — no longer read or written (old docs may still carry it). */
+  cardBg?: 'amber' | 'dark' | 'beige' | 'default';
   tag?: string;
   tagStyle?: 'amber' | 'dark';
   imageUrl?: string;
@@ -79,11 +80,11 @@ export const CATEGORIES = [
   { id: 'home',    name: 'Home',    icon: 'home',      iconSet: 'Feather' as const },
 ];
 
-export const CATEGORY_DETAILS: Record<string, { label: string; description: string; cardBg: 'amber' | 'dark' | 'beige' | 'default' }> = {
-  'fun':     { label: 'Fun',     description: 'Books (kids & novels) and board games',          cardBg: 'amber'   },
-  'tools':   { label: 'Tools',   description: 'DIY, hardware & garden equipment',               cardBg: 'default' },
-  'outdoor': { label: 'Outdoor', description: 'Camping, hiking, tents & outdoor gear',          cardBg: 'dark'    },
-  'sports':  { label: 'Sports',  description: 'Archery, pétanque, golf & sports equipment',     cardBg: 'beige'   },
-  'kids':    { label: 'Kids',    description: 'Strollers, baby beds, playards & kids gear',     cardBg: 'amber'   },
-  'home':    { label: 'Home',    description: 'Kitchen, appliances, cleaning & bedding',        cardBg: 'beige'   },
+export const CATEGORY_DETAILS: Record<string, { label: string; description: string }> = {
+  'fun':     { label: 'Fun',     description: 'Books (kids & novels) and board games' },
+  'tools':   { label: 'Tools',   description: 'DIY, hardware & garden equipment' },
+  'outdoor': { label: 'Outdoor', description: 'Camping, hiking, tents & outdoor gear' },
+  'sports':  { label: 'Sports',  description: 'Archery, pétanque, golf & sports equipment' },
+  'kids':    { label: 'Kids',    description: 'Strollers, baby beds, playards & kids gear' },
+  'home':    { label: 'Home',    description: 'Kitchen, appliances, cleaning & bedding' },
 };

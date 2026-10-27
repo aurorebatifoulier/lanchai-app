@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -13,26 +14,18 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
-import { getProductsByCategory, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
+import { getProductsByCategory, getFavorites, addFavorite, removeFavorite } from '@/lib/firestore';
 import { Product, CATEGORIES, CATEGORY_DETAILS, ProductCategory } from '@/lib/mockData';
-import { getMinPrice } from '@/utils/pricing';
-import { effectiveStock } from '@/utils/availability';
 import { useExchangeRate } from '@/lib/exchangeRate';
-import { toLak } from '@/utils/currency';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import { DEFAULT_FILTERS, type Filters } from '@/lib/filterConfig';
 import { filterProducts, sortProducts, sortProductsByRating } from '@/utils/productFilters';
-import { FavoriteButton } from '@/components/FavoriteHeart';
-import PressScale from '@/components/PressScale';
-import QuickAddButton from '@/components/QuickAddButton';
+import ProductGridCard from '@/components/ProductGridCard';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { cached, HOME_TTL } from '@/lib/homeCache';
-import { fetchAllOccupancy, gridAvailability, type OccupancyRecord, type GridAvailability } from '@/utils/availability';
-import SignalLine from '@/components/SignalLine';
-import { productSignal } from '@/lib/productSignal';
+import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import { categoryStyle } from '@/constants/categoryStyle';
-import { SHADES } from '@/constants/brandShades';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,6 +41,8 @@ export default function CategoryScreen() {
   // Quick add "+": amber when free today — same cached occupancy as Home / Explore.
   const [occupancy, setOccupancy] = useState<Map<string, OccupancyRecord[]> | null>(null);
   const { openQuickAdd } = useQuickAdd();
+  const { width: screenW } = useWindowDimensions();
+  const cardWidth = (screenW - 32 - 12) / 2;
   useEffect(() => {
     cached('occupancy', HOME_TTL.occupancy, fetchAllOccupancy).then(setOccupancy).catch(() => setOccupancy(null));
   }, []);
@@ -205,91 +200,30 @@ export default function CategoryScreen() {
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.gridContent}>
           <View style={styles.grid}>
-            {displayedProducts.map(p => (
-              <CategoryProductCard
-                key={p.id}
-                product={p}
-                onPress={() => router.push(`/product/${p.id}`)}
-                exchangeRate={exchangeRate}
-                userTier={userTier ?? null}
-                isFavorite={favorites.has(p.id)}
-                onToggleFavorite={() => handleToggleFavorite(p.id)}
-                availability={gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined)}
-                onQuickAdd={avail => openQuickAdd(p, { availableToday: avail })}
-              />
-            ))}
+            {/* Same card as Explore (ProductGridCard): signal line, quick add "+". */}
+            {displayedProducts.map(p => {
+              const availability = gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined);
+              const locked = getProductAccessState(p, userTier ?? null).locked;
+              return (
+                <ProductGridCard
+                  key={p.id}
+                  product={p}
+                  width={cardWidth}
+                  onPress={() => router.push(`/product/${p.id}`)}
+                  exchangeRate={exchangeRate}
+                  userTier={userTier ?? null}
+                  isFavorite={favorites.has(p.id)}
+                  onToggleFavorite={() => handleToggleFavorite(p.id)}
+                  availability={availability}
+                  quickAdd={locked ? null : availability ? 'later' : 'now'}
+                  onQuickAdd={() => openQuickAdd(p, { availableToday: !availability })}
+                />
+              );
+            })}
           </View>
         </ScrollView>
       )}
     </SafeAreaView>
-  );
-}
-
-function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, availability, onQuickAdd }: { product: Product; onPress: () => void; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void; availability: GridAvailability; onQuickAdd: (availableToday: boolean) => void }) {
-  const availableToday = !availability;
-  const bgColors: Record<string, string> = {
-    amber: COLORS.amber,
-    dark: COLORS.carbon,
-    beige: COLORS.warmBeige,
-    default: COLORS.warmBeige,
-  };
-  const bg = bgColors[product.cardBg] ?? COLORS.warmBeige;
-  const iconColor = product.cardBg === 'dark' ? COLORS.amber : COLORS.carbon;
-  const minPrice = getMinPrice(product);
-  const accessState = getProductAccessState(product, userTier);
-
-  return (
-    <PressScale style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
-      <View style={[styles.prodImg, { backgroundColor: bg }]}>
-        {accessState.badgeLabel ? (
-          <View style={[
-            styles.prodTag,
-            { backgroundColor: accessState.badgeTone === 'unlocked' ? COLORS.amber : COLORS.carbon },
-          ]}>
-            <Text style={[styles.prodTagText, accessState.badgeTone === 'locked' && { color: COLORS.white }]}>
-              {accessState.badgeLabel}
-            </Text>
-          </View>
-        ) : product.tag ? (
-          <View style={[
-            styles.prodTag,
-            product.tagStyle === 'dark' && styles.prodTagDark,
-            product.tagStyle === 'amber' && styles.prodTagAmber,
-          ]}>
-            <Text style={[styles.prodTagText, product.tagStyle === 'dark' && { color: COLORS.amber }]}>
-              {product.tag}
-            </Text>
-          </View>
-        ) : effectiveStock(product) <= 1 ? (
-          <View style={[styles.prodTag, { backgroundColor: '#C8412C' }]}>
-            <Text style={[styles.prodTagText, { color: '#FAFAF7' }]}>1 left</Text>
-          </View>
-        ) : null}
-        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} />
-        <Feather name={product.iconName as never} size={52} color={iconColor} />
-      </View>
-      <View style={styles.prodMeta}>
-        <Text style={styles.prodName} numberOfLines={1}>{product.name}</Text>
-        <Text style={styles.prodSub} numberOfLines={1}>{product.shortDesc}</Text>
-        <View style={styles.prodBottom}>
-          {minPrice != null && exchangeRate != null ? (
-            <Text style={styles.prodPrice} numberOfLines={1}>{`${toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day`}</Text>
-          ) : (
-            <Text style={styles.prodSub}>Price not set</Text>
-          )}
-        </View>
-        {/* Same signal line as every product card; the "+" width is reserved on it. */}
-        <View style={styles.signalLine}>
-          <SignalLine signal={productSignal(product, { availability })} />
-        </View>
-        {/* Quick add — none on a tier-locked product (its lock badge says why). */}
-        {!accessState.locked && (
-          <View style={styles.quickAdd}>
-            <QuickAddButton state={availableToday ? 'now' : 'later'} onPress={() => onQuickAdd(availableToday)} />
-          </View>
-        )}
-      </View>
-    </PressScale>
   );
 }
 
@@ -456,84 +390,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-  },
-  prodCard: {
-    width: '47%',
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    overflow: 'hidden',
-  },
-  prodImg: {
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  prodTag: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    height: 20,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: COLORS.porcelain,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
-  prodTagAmber: { backgroundColor: COLORS.amber },
-  prodTagDark: { backgroundColor: COLORS.carbon },
-  prodTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: 0.4,
-  },
-  prodMeta: {
-    padding: 12,
-    height: 104, // name, short description, price, signal line (+ the "+" button)
-  },
-  prodName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    letterSpacing: -0.1,
-  },
-  prodSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  quickAdd: { position: 'absolute', right: 8, bottom: 8 },
-  signalLine: { paddingRight: 30, minHeight: 24, justifyContent: 'center', marginTop: 2 },
-  prodBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  prodPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  // Same grey for the digits and "LAK / day" (all product cards).
-  prodPrice: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
-  prodPriceUnit: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.fg2,
   },
 });

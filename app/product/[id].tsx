@@ -186,9 +186,7 @@ export default function ProductDetailScreen() {
 
   // ── Derived values ───────────────────────────────────────────────────────────
 
-  const heroBg =
-    ({ amber: COLORS.amber, dark: COLORS.carbon, beige: COLORS.warmBeige, default: COLORS.warmBeige } as Record<string, string>)[product.cardBg] ??
-    COLORS.warmBeige;
+  const heroBg = COLORS.softGray200; // neutral photo background (per-product cardBg dropped)
   const carouselImages = product.images ?? [];
 
   // Badges: collect whichever flags are set on the product

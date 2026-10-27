@@ -473,7 +473,6 @@ export default function AdminProductFormScreen() {
         available,
         iconName:      'package',
         iconSet:       'Feather',
-        cardBg:        'default',
         isPopular:      false,
         isNewThisWeek:  false,
         isMostRented:   false,
