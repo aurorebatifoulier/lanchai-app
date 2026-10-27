@@ -11,6 +11,7 @@ import ReviewCard from '@/components/product/ReviewCard';
 import type { ProductSignal } from '@/lib/productSignal';
 import type { Product } from '@/lib/mockData';
 import type { ReviewDoc } from '@/lib/firestore';
+import Stars from '@/components/Stars';
 
 // Product page sections (validated mockup) — My Account / Home language. Copy in
 // constants/productCopy.ts. The page (app/product/[id].tsx) computes the figures.
@@ -151,7 +152,7 @@ export function PriceTiers({ tiers, weekLak, vatPct }: { tiers: Tier[]; weekLak:
       </View>
       {weekLak != null && (
         <Text style={[UI.body, { marginTop: 10 }]}>
-          {p.week}<Text style={s.bold}>{n(weekLak)}</Text>{p.allLak}
+          {p.week}<Text style={s.bold}>{n(weekLak)}</Text>{p.weekUnit}
         </Text>
       )}
       {vatPct != null && <Text style={[UI.small, { marginTop: 4 }]}>{p.vat(vatPct)}</Text>}
@@ -315,11 +316,7 @@ export function ReviewsBlock({ rating, count, latest, onSeeAll }: {
         <View style={s.summary}>
           <Text style={s.big}>{rating.toFixed(1)}</Text>
           <View>
-            <View style={{ flexDirection: 'row', gap: 2 }}>
-              {[1, 2, 3, 4, 5].map(i => (
-                <Feather key={i} name="star" size={15} color={i <= Math.round(rating) ? SHADES.amber : SHADES.carbonFaint} />
-              ))}
-            </View>
+            <Stars rating={rating} size={17} />
             <Text style={[UI.subtitle, { marginTop: 4 }]}>{r.summary(count)}</Text>
           </View>
         </View>

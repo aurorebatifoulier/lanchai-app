@@ -17,6 +17,8 @@ export interface PriceLakProps {
   color?: string;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
+  /** Appended in the same style after "… LAK" (e.g. " / day" → "198,000 LAK / day"). */
+  suffix?: string;
 }
 
 export function PriceLak({
@@ -28,6 +30,7 @@ export function PriceLak({
   color = COLORS.carbon,
   style,
   textStyle,
+  suffix = '',
 }: PriceLakProps) {
   const fmt = (n: number) => `${n.toLocaleString('en-US')} LAK`;
   const isBusiness = customerType === 'business';
@@ -36,7 +39,7 @@ export function PriceLak({
   if (!isBusiness || vatPercent == null) {
     return (
       <Text style={[{ fontSize: size, fontWeight: bold ? '800' : '600', color }, textStyle]}>
-        {fmt(lak)}
+        {fmt(lak)}{suffix}
       </Text>
     );
   }
@@ -47,7 +50,7 @@ export function PriceLak({
   return (
     <View style={style}>
       <Text style={[{ fontSize: size, fontWeight: bold ? '800' : '600', color }, textStyle]}>
-        {fmt(ht)} <Text style={s.htTag}>HT</Text>
+        {fmt(ht)} <Text style={s.htTag}>HT</Text>{suffix}
       </Text>
       <Text style={s.vatLine}>
         + {fmt(vat)} VAT ({pct}%) · {fmt(ttc)} TTC

@@ -7,12 +7,13 @@ import { PRODUCT_COPY } from '@/constants/productCopy';
 import PressScale from '@/components/PressScale';
 import FavoriteHeart from '@/components/FavoriteHeart';
 import { MOTION } from '@/constants/motion';
+import BagButton from '@/components/home/BagButton';
 
 // Product page photo gallery (validated mockup): full width on carbonLight, back (left),
 // share + heart (right), "1 / 5" counter chip, amber active dot. Scrolls away with the
 // page; tap → the fullscreen viewer.
 export function ProductGallery({
-  images, width, height, topInset, iconName, liked, onBack, onShare, onToggleFav, onOpen, onEdit,
+  images, width, height, topInset, iconName, liked, onBack, onShare, onToggleFav, onOpen, onEdit, bagCount, onBag,
 }: {
   images: string[];
   width: number;
@@ -25,6 +26,8 @@ export function ProductGallery({
   onToggleFav: () => void;
   onOpen: (index: number) => void;
   onEdit?: () => void;
+  bagCount: number | null;
+  onBag: () => void;
 }) {
   const [active, setActive] = useState(0);
   return (
@@ -50,15 +53,17 @@ export function ProductGallery({
 
       <View style={[s.topRow, { top: topInset + 8 }]} pointerEvents="box-none">
         <CircleBtn onPress={onBack} label="Back"><Feather name="arrow-left" size={20} color={SHADES.carbon} /></CircleBtn>
+        {/* Left → right: share, heart, bag (+ Edit for admins). */}
         <View style={s.topRight}>
+          <CircleBtn onPress={onShare} label="Share"><Feather name="share-2" size={18} color={SHADES.carbon} /></CircleBtn>
+          <CircleBtn onPress={onToggleFav} label="Like"><FavoriteHeart liked={liked} size={20} /></CircleBtn>
+          <BagButton count={bagCount} onPress={onBag} circle size={42} />
           {onEdit && (
             <PressScale style={s.editChip} onPress={onEdit}>
               <Feather name="edit-2" size={13} color={SHADES.cream} />
               <Text style={s.editText}>{PRODUCT_COPY.edit}</Text>
             </PressScale>
           )}
-          <CircleBtn onPress={onShare} label="Share"><Feather name="share-2" size={18} color={SHADES.carbon} /></CircleBtn>
-          <CircleBtn onPress={onToggleFav} label="Like"><FavoriteHeart liked={liked} size={20} /></CircleBtn>
         </View>
       </View>
 
@@ -90,7 +95,7 @@ export function CircleBtn({ onPress, children, label, size = 42 }: { onPress: ()
  * motion → instant.
  */
 export function ProductStickyBar({
-  scrollY, showAt, reduce, topInset, name, liked, onBack, onToggleFav, onEdit, visible,
+  scrollY, showAt, reduce, topInset, name, liked, onBack, onToggleFav, onEdit, visible, bagCount, onBag,
 }: {
   scrollY: Animated.Value;
   showAt: number;
@@ -102,6 +107,8 @@ export function ProductStickyBar({
   onBack: () => void;
   onToggleFav: () => void;
   onEdit?: () => void;
+  bagCount: number | null;
+  onBag: () => void;
 }) {
   const range = [showAt - (reduce ? 0.5 : 24), showAt];
   return (
@@ -115,13 +122,14 @@ export function ProductStickyBar({
       <View style={s.barRow}>
         <CircleBtn onPress={onBack} label="Back" size={36}><Feather name="arrow-left" size={18} color={SHADES.carbon} /></CircleBtn>
         <Text style={s.barName} numberOfLines={1}>{name}</Text>
+        <CircleBtn onPress={onToggleFav} label="Like" size={36}><FavoriteHeart liked={liked} size={18} /></CircleBtn>
+        <BagButton count={bagCount} onPress={onBag} circle size={36} />
         {onEdit && (
           <PressScale style={s.editChip} onPress={onEdit}>
             <Feather name="edit-2" size={13} color={SHADES.cream} />
             <Text style={s.editText}>{PRODUCT_COPY.edit}</Text>
           </PressScale>
         )}
-        <CircleBtn onPress={onToggleFav} label="Like" size={36}><FavoriteHeart liked={liked} size={18} /></CircleBtn>
       </View>
     </Animated.View>
   );

@@ -35,6 +35,7 @@ import { useLoyaltyConfig, depositPercentFor, loyaltyPointsFor } from '@/lib/loy
 import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
 import { useResidentPromo } from '@/lib/residency';
 import { cached, HOME_TTL } from '@/lib/homeCache';
+import { listenBagItems } from '@/lib/bag';
 import { usePublishedCollections } from '@/hooks/useProductSearch';
 import { getProductAccessState } from '@/utils/productAccess';
 import { needsBtobDocument } from '@/utils/btob';
@@ -98,6 +99,12 @@ export default function ProductDetailScreen() {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const lightboxRef = useRef<ScrollView>(null);
   const [docRequiredNotice, setDocRequiredNotice] = useState(false);
+  // Bag count badge (same live listener as the Home header; null until it answers).
+  const [bagCount, setBagCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!user) { setBagCount(null); return; }
+    return listenBagItems(user.uid, items => setBagCount(items.length), () => setBagCount(null));
+  }, [user]);
 
   // Sticky bar once the gallery has scrolled away.
   const galleryH = Math.round(W * GALLERY_RATIO);
@@ -252,6 +259,8 @@ export default function ProductDetailScreen() {
           onToggleFav={toggleFav}
           onOpen={i => setLightbox(i)}
           onEdit={editProduct}
+          bagCount={bagCount}
+          onBag={() => router.push('/bag')}
         />
 
         <View style={s.content}>
@@ -331,6 +340,8 @@ export default function ProductDetailScreen() {
         onBack={() => router.back()}
         onToggleFav={toggleFav}
         onEdit={editProduct}
+        bagCount={bagCount}
+        onBag={() => router.push('/bag')}
       />
 
       {/* ── Fixed bottom bar ── */}
@@ -348,10 +359,8 @@ export default function ProductDetailScreen() {
             {bookable && minUsd != null && exchangeRate != null ? (
               <>
                 <Text style={UI.small}>{PRODUCT_COPY.bar.from}</Text>
-                <View style={s.priceRow}>
-                  <PriceLak lak={toLak(minUsd, exchangeRate)} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.price} />
-                  <Text style={s.priceUnit}>{PRODUCT_COPY.bar.perDay}</Text>
-                </View>
+                {/* "198,000 LAK / day" once, one colour and weight. */}
+                <PriceLak lak={toLak(minUsd, exchangeRate)} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.price} suffix={PRODUCT_COPY.bar.perDay} />
               </>
             ) : (
               <Text style={UI.small} numberOfLines={2}>
@@ -414,9 +423,7 @@ const s = StyleSheet.create({
     borderTopWidth: 0.5, borderTopColor: SHADES.border, paddingHorizontal: 16, paddingTop: 12,
   },
   bottomRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline' },
   price: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
-  priceUnit: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted },
   bagBtn: {
     width: 54, height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: SHADES.carbon,
     backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',

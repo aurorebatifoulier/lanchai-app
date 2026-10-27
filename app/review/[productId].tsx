@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
@@ -194,9 +194,9 @@ export default function ReviewScreen() {
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
-                  <Feather
-                    name="star"
-                    size={36}
+                  <MaterialCommunityIcons
+                    name={n <= rating ? 'star' : 'star-outline'}
+                    size={38}
                     color={n <= rating ? SHADES.amber : SHADES.carbonFaint}
                   />
                 </TouchableOpacity>

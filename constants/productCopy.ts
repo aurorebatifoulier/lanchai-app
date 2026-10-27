@@ -28,7 +28,7 @@ export const PRODUCT_COPY = {
     title: 'The longer, the cheaper',
     sub: 'Price per day, applied automatically.',
     week: 'A full week: ',
-    allLak: ' LAK. All prices in LAK.',
+    weekUnit: ' LAK.',
     vat: (pct: number) => `Prices include VAT (${pct}%).`,
     notSet: "Pricing for this item hasn't been set yet. Check back soon.",
   },
@@ -36,7 +36,7 @@ export const PRODUCT_COPY = {
   whyBuy: {
     label: 'Why buy it?',
     worth: (x: string) => `Worth ${x} LAK new.`,
-    weekend: (x: string) => `A weekend costs you ${x}.`,
+    weekend: (x: string) => `A weekend costs you ${x} LAK.`,
     kicker: "And it won't live in your closet after.",
   },
 
@@ -79,7 +79,7 @@ export const PRODUCT_COPY = {
 
   bar: {
     from: 'From',
-    perDay: ' LAK / day',
+    perDay: ' / day',
     rent: 'Rent it',
     restricted: 'Access restricted',
     comingSoon: 'Coming soon',

@@ -19,6 +19,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatReviewerName } from '@/utils/reviewerName';
+import Stars from '@/components/Stars';
 
 type FilterOption = 'all' | 'unanswered' | '5' | '4' | '3' | '2' | '1';
 type SortOption = 'newest' | 'oldest' | 'highest' | 'lowest';
@@ -257,14 +258,7 @@ export default function AdminReviewsScreen() {
                   {/* Stars + product name */}
                   <View style={s.rowTop}>
                     <View style={s.rowStars}>
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Feather
-                          key={i}
-                          name="star"
-                          size={11}
-                          color={i < r.rating ? COLORS.amber : COLORS.softGray}
-                        />
-                      ))}
+                      <Stars rating={r.rating} size={12} gap={1} />
                     </View>
                     <Text style={s.rowProduct} numberOfLines={1}>{r.productName}</Text>
                   </View>

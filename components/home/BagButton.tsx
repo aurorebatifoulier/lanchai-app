@@ -10,7 +10,8 @@ import { MOTION, useReducedMotion } from '@/constants/motion';
 // Home header bag: when the item count goes UP (an item was added), the icon bounces and
 // the badge pops with the new number sliding in. Nothing on the first load (`count` null
 // until the bag listener answers) nor when it goes down. Reduce motion → static.
-export default function BagButton({ count, onPress }: { count: number | null; onPress: () => void }) {
+// `circle`: the product page variant — white circle (gallery overlay / sticky bar).
+export default function BagButton({ count, onPress, circle, size = 40 }: { count: number | null; onPress: () => void; circle?: boolean; size?: number }) {
   const reduce = useReducedMotion();
   const icon = useSharedValue(1);
   const badge = useSharedValue(1);
@@ -29,12 +30,16 @@ export default function BagButton({ count, onPress }: { count: number | null; on
   const badgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: badge.value }] }));
   const n = count ?? 0;
   return (
-    <TouchableOpacity style={s.btn} onPress={onPress}>
+    <TouchableOpacity
+      style={[s.btn, { width: size, height: size }, circle && [s.circle, { borderRadius: size / 2 }]]}
+      onPress={onPress}
+      accessibilityLabel="Bag"
+    >
       <Animated.View style={iconStyle}>
-        <Feather name="shopping-bag" size={22} color={COLORS.carbon} />
+        <Feather name="shopping-bag" size={circle ? Math.round(size * 0.45) : 22} color={COLORS.carbon} />
       </Animated.View>
       {n > 0 && (
-        <Animated.View style={[s.badge, badgeStyle]}>
+        <Animated.View style={[s.badge, circle && s.badgeCircle, badgeStyle]}>
           <Animated.Text
             key={n}
             entering={reduce || prev.current == null ? undefined : FadeInDown.duration(MOTION.duration.base).reduceMotion(ReduceMotion.System)}
@@ -49,6 +54,8 @@ export default function BagButton({ count, onPress }: { count: number | null; on
 }
 
 const s = StyleSheet.create({
+  circle: { backgroundColor: 'rgba(255,255,255,0.95)' },
+  badgeCircle: { top: -2, right: -2, borderColor: COLORS.white },
   btn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   badge: {
     position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, backgroundColor: COLORS.amber, borderRadius: 8,
