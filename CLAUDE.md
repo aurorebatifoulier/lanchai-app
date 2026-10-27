@@ -882,6 +882,32 @@ a snapshot indefinitely).
   the Home like a renter + "Preview all sections" (AsyncStorage `home.adminPreviewAll`)
   showing every variant (example pick-up, drafts, both Why-buy versions, both bottom
   cards, data-source notes).
+  - **Home slides** (`homeSlides/{id}`, `lib/homeSlides.ts`, Admin → Home slides,
+    `app/admin/home-slides.tsx` + `home-slide-form.tsx?id=`): placement hero | banner,
+    photo (Storage `homeSlides/{id}/…`, picker crop 9:4, 1600px JPEG 0.7 like product
+    photos; path + download URL stored), optional title / subtitle / button label, link
+    (category, collection, product, Explore `q` / `maxPrice`, none), optional dates,
+    order, published. Renters read published ones only (rule + equality query).
+    `<SlideCarousel>`: overlay only with text, button only with label + link. No published
+    active slide for a placement (or a read error) → the built-in slides
+    (`components/home/builtInSlides.ts` HERO_BUILT_IN, `WhyRentSection` WHY_RENT_SLIDES).
+  - **No repeats:** `pickSections()` (`lib/homeData.ts`, pure) builds New arrivals → Free
+    this weekend → Rent again (exempt) → most-rented ranking (exempt, true top 3) → Under X
+    → Why buy it? in display order: unseen products first, reuse only to reach a section's
+    minimum, never from the product section directly above; exempt ones still count.
+  - **Loading:** one `loadHome()` (parallel `Promise.allSettled`); `lib/homeCache.ts`
+    in-memory TTL cache — products 5 min, occupancy 2 min, `config/home` / published
+    collections / slides 10 min — cleared by pull-to-refresh (amber `RefreshControl`),
+    sign-out / account change and every admin save of those docs. Reservations and
+    favourites are re-read on every visit. `users/{uid}` is read ONCE (the live
+    `useMyLoyalty` snapshot also gives first name + tier — don't add another read).
+    `<HomeSection>` (`components/home/Skeletons.tsx`) shows a palette-grey skeleton per
+    section until its own data is in, then fades in / collapses (Reanimated layout
+    transitions, reduce-motion aware).
+  - **Storage deletes:** `request.resource` is null on delete, so every path in
+    `storage.rules` states `allow delete` separately — products / home slides: admin;
+    profile photos: owner or admin; chat, claims, checklist photos, business documents:
+    never from the client (evidence).
   - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
     fun = speaker, sports = bike — + palette shades) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
