@@ -7,7 +7,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
@@ -42,6 +42,14 @@ export default function ChatScreen() {
 
   const [messages,  setMessages]  = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
+  // ?about=… (product page "A question about this item?") → first line pre-filled once.
+  const { about } = useLocalSearchParams<{ about?: string }>();
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (!about || prefilled.current) return;
+    prefilled.current = true;
+    setInputText(String(about));
+  }, [about]);
   const [sending,   setSending]   = useState(false);
   const [uploading, setUploading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);

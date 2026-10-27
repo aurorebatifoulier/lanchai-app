@@ -14,7 +14,10 @@ import {
   serverTimestamp,
   writeBatch,
   increment,
+  limit,
+  startAfter,
   type WriteBatch,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db, functions } from './firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -788,6 +791,17 @@ export async function getProductReviews(productId: string): Promise<ReviewDoc[]>
     query(collection(db, 'reviews', productId, 'reviews'), orderBy('createdAt', 'desc')),
   );
   return snap.docs.map(d => d.data() as ReviewDoc);
+}
+
+/** Latest reviews of a product, one page at a time (single orderBy — no index). */
+export async function getProductReviewsPage(
+  productId: string,
+  pageSize: number,
+  after?: QueryDocumentSnapshot | null,
+): Promise<{ reviews: ReviewDoc[]; last: QueryDocumentSnapshot | null }> {
+  const base = query(collection(db, 'reviews', productId, 'reviews'), orderBy('createdAt', 'desc'), limit(pageSize));
+  const snap = await getDocs(after ? query(base, startAfter(after)) : base);
+  return { reviews: snap.docs.map(d => d.data() as ReviewDoc), last: snap.docs[snap.docs.length - 1] ?? null };
 }
 
 // Writes a review (reservationId as doc ID → one review per rental). The product's

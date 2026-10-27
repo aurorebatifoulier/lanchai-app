@@ -106,6 +106,7 @@ function RootLayoutNav() {
       <Stack.Screen name="product/[id]" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="category/[id]" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="collection/[id]" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="reviews/[productId]" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="booking/new" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
       <Stack.Screen name="booking/summary" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="booking/confirmation" options={{ animation: 'fade' }} />

@@ -30,7 +30,9 @@ import { toLak } from '@/utils/currency';
 // checks still run at checkout.
 
 type Choice = 'weekend' | 'tomorrow' | 'pick';
-interface QuickAddApi { openQuickAdd: (product: Product, opts?: { availableToday?: boolean }) => void }
+/** range: dates already picked (product page calendar) → the sheet opens on them. */
+type QuickAddOpts = { availableToday?: boolean; range?: { start: Date; end: Date } };
+interface QuickAddApi { openQuickAdd: (product: Product, opts?: QuickAddOpts) => void }
 const Ctx = createContext<QuickAddApi>({ openQuickAdd: () => {} });
 export const useQuickAdd = () => useContext(Ctx);
 
@@ -50,11 +52,13 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
   const [startOnPick, setStartOnPick] = useState(false);
+  const [presetRange, setPresetRange] = useState<{ start: Date; end: Date } | null>(null);
   const [toast, setToast] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const openQuickAdd = useCallback((p: Product, opts?: { availableToday?: boolean }) => {
-    setStartOnPick(opts?.availableToday === false);
+  const openQuickAdd = useCallback((p: Product, opts?: QuickAddOpts) => {
+    setStartOnPick(opts?.availableToday === false || !!opts?.range);
+    setPresetRange(opts?.range ?? null);
     setProduct(p);
   }, []);
 
@@ -70,7 +74,7 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={api}>
       {children}
-      {product && <QuickAddSheet product={product} startOnPick={startOnPick} onClose={() => setProduct(null)} onAdded={onAdded} />}
+      {product && <QuickAddSheet product={product} startOnPick={startOnPick} presetRange={presetRange} onClose={() => setProduct(null)} onAdded={onAdded} />}
       {toast && <Toast onView={() => { setToast(false); router.push('/bag'); }} />}
     </Ctx.Provider>
   );
@@ -94,8 +98,8 @@ function Toast({ onView }: { onView: () => void }) {
   );
 }
 
-function QuickAddSheet({ product, startOnPick, onClose, onAdded }: {
-  product: Product; startOnPick: boolean; onClose: () => void; onAdded: () => void;
+function QuickAddSheet({ product, startOnPick, presetRange, onClose, onAdded }: {
+  product: Product; startOnPick: boolean; presetRange: { start: Date; end: Date } | null; onClose: () => void; onAdded: () => void;
 }) {
   const screen = useScreenInsets();
   const { user } = useAuth();
@@ -105,7 +109,7 @@ function QuickAddSheet({ product, startOnPick, onClose, onAdded }: {
   const stock = effectiveStock(product);
   const [occ, setOcc] = useState<OccupancyRecord[] | null>(null);
   const [choice, setChoice] = useState<Choice>(startOnPick ? 'pick' : 'weekend');
-  const [range, setRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const [range, setRange] = useState<{ start: Date | null; end: Date | null }>(presetRange ?? { start: null, end: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,13 +144,14 @@ function QuickAddSheet({ product, startOnPick, onClose, onAdded }: {
   useEffect(() => {
     if (occ == null || defaulted.current) return;
     defaulted.current = true;
+    if (presetRange) return; // dates already chosen on the product page calendar
     if (startOnPick) {
       const next = nextAvailableDay(occ, stock);
       if (next instanceof Date) setRange({ start: next, end: new Date(next.getFullYear(), next.getMonth(), next.getDate() + 1) });
       return;
     }
     if (!free(windows.weekend)) setChoice(free(windows.tomorrow) ? 'tomorrow' : 'pick');
-  }, [occ, free, windows, startOnPick, stock]);
+  }, [occ, free, windows, startOnPick, stock, presetRange]);
 
   const sel = windows[choice];
   const selFree = free(sel);
