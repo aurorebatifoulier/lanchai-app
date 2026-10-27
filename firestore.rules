@@ -84,6 +84,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── homeSlides/{id} (Home hero carousel + mid-page banner) ───────────
+    // Same model as collections: signed-in renters read published slides only (the
+    // app queries where('published','==',true)); drafts are admin-only.
+    match /homeSlides/{slideId} {
+      allow read:  if (isAuthed() && resource.data.published == true) || isAdmin();
+      allow write: if isAdmin();
+    }
+
     // ── stockAdjustments ─────────────────────────────────────────────────
     // Append-only audit log of inRepairUnits/lostUnits changes on the parent
     // product (utils/availability.ts's effectiveStock reads those two count

@@ -20,7 +20,7 @@ interface WhyRentSlide {
   description: string;
 }
 
-const SLIDES: WhyRentSlide[] = [
+export const WHY_RENT_SLIDES: WhyRentSlide[] = [
   {
     id: 'save',
     image: null, // → assets/images/why-spend-less.jpg  (savings / money scene — e.g. wallet, price tag)
@@ -64,7 +64,7 @@ export default function WhyRentSection() {
     <InsetCarousel
       height={200}
       intervalMs={6000}
-      slides={SLIDES.map(slide => (
+      slides={WHY_RENT_SLIDES.map(slide => (
         <View key={slide.id} style={[styles.slide, { backgroundColor: slide.tint }]}>
           {slide.image != null && (
             <Image source={slide.image} style={StyleSheet.absoluteFillObject} resizeMode="cover" />

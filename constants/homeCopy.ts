@@ -71,6 +71,7 @@ export const HOME_COPY = {
   adminWhyBuyMine: 'Returning renter version:',
   adminWhyBuyCatalogue: 'New renter version:',
   adminExampleData: 'Example data — not enough matching products right now.',
+  adminDraft: 'Draft',
   adminDraftsIncluded: 'Drafts and out-of-date collections included.',
 
   collectionEmpty: 'Nothing here yet — check back soon.',

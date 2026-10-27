@@ -50,6 +50,9 @@ import { fetchAllOccupancy, type OccupancyRecord } from '@/utils/availability';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
+import { HERO_BUILT_IN } from '@/components/home/builtInSlides';
+import SlideCarousel from '@/components/home/SlideCarousel';
+import { getPublishedSlides, getAllSlides, type HomeSlide } from '@/lib/homeSlides';
 import {
   getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc, type LoyaltyTier,
 } from '@/lib/firestore';
@@ -61,53 +64,6 @@ import { DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
 // Copy in constants/homeCopy.ts; category looks in constants/categoryStyle.ts.
-
-interface HeroSlide {
-  // Local asset from assets/images/. null = placeholder tint shown until photo is added.
-  // When ready: replace null with require('@/assets/images/FILENAME.jpg')
-  // Recommended size: 1080 × 540 px (2:1 ratio)
-  image: number | null;
-  tint: string;  // background color shown when image is null or loading
-  title: string;
-  subtitle: string;
-  cta: string;
-  route: string;
-}
-
-const SLIDES: HeroSlide[] = [
-  {
-    image: null, // → assets/images/hero-lifestyle.jpg  (LANCHAI store or rental lifestyle scene)
-    tint: SHADES.carbon,
-    title: 'Why buy it when\nyou can rent it?',
-    subtitle: 'Everything you need. Only when you need it.',
-    cta: 'Explore now',
-    route: '/explore',
-  },
-  {
-    image: null, // → assets/images/hero-outdoor.jpg   (outdoor / camping gear in nature)
-    tint: SHADES.carbonSoft,
-    title: 'Planning a weekend\noutdoors?',
-    subtitle: 'Rent camping gear instead of buying it.',
-    cta: 'Explore camping',
-    route: '/category/outdoor',
-  },
-  {
-    image: null, // → assets/images/hero-creator.jpg   (camera / content creation setup)
-    tint: SHADES.carbon,
-    title: 'Creating content?',
-    subtitle: 'Access professional equipment instantly.',
-    cta: 'Explore creator gear',
-    route: '/explore',
-  },
-  {
-    image: null, // → assets/images/hero-tools.jpg     (power tools / DIY workshop)
-    tint: SHADES.carbonSoft,
-    title: 'Working on a\nDIY project?',
-    subtitle: 'Rent tools and get the job done.',
-    cta: 'Explore tools',
-    route: '/category/tools',
-  },
-];
 
 const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
 // Admin "Preview all sections" toggle, remembered per device.
@@ -128,6 +84,8 @@ export default function HomeScreen() {
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
   const [collections, setCollections] = useState<CollectionDoc[]>([]);
   const [allCollections, setAllCollections] = useState<CollectionDoc[]>([]);
+  const [slides, setSlides] = useState<HomeSlide[]>([]);
+  const [allSlides, setAllSlides] = useState<HomeSlide[]>([]);
   const [previewAll, setPreviewAll] = useState(false);
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
@@ -178,6 +136,8 @@ export default function HomeScreen() {
         .then(setOccupancy, () => setOccupancy(null))
         .finally(() => setReady(r => ({ ...r, occupancy: true }))),
       cached('homeConfig', HOME_TTL.config, getHomeConfig, force).then(c => setBudgetLak(c.budgetThresholdLak)),
+      // Failure → no admin slides → the built-in ones (the Home never looks broken).
+      cached('slides:published', HOME_TTL.config, getPublishedSlides, force).then(setSlides, () => setSlides([])),
     ]);
   }, [user]);
 
@@ -195,6 +155,7 @@ export default function HomeScreen() {
     await Promise.all([
       loadHome(true),
       isAdmin && previewAll ? getAllCollections().then(setAllCollections, () => setAllCollections([])) : null,
+      isAdmin && previewAll ? getAllSlides().then(setAllSlides, () => setAllSlides([])) : null,
     ]);
     setRefreshing(false);
   }, [loadHome, isAdmin, previewAll]);
@@ -227,6 +188,7 @@ export default function HomeScreen() {
     useCallback(() => {
       if (!isAdmin || !previewAll) return;
       getAllCollections().then(setAllCollections).catch(() => setAllCollections([]));
+      getAllSlides().then(setAllSlides).catch(() => setAllSlides([]));
     }, [isAdmin, previewAll])
   );
   const preview = isAdmin && previewAll;
@@ -310,6 +272,11 @@ export default function HomeScreen() {
     : preview ? bookableByPopularity(products, userTier ?? null).slice(0, 8) : [];
   const budgetShown = picked.budget.length >= 2 ? picked.budget
     : preview ? [...bookableByPopularity(products, userTier ?? null)].sort((a, b) => a.pricePerDay - b.pricePerDay).slice(0, 4) : [];
+
+  // Admin slides per placement (preview: drafts too); none → the built-in slides.
+  const slideSource = preview ? allSlides : slides;
+  const heroSlides = useMemo(() => slideSource.filter(x => x.placement === 'hero'), [slideSource]);
+  const bannerSlides = useMemo(() => slideSource.filter(x => x.placement === 'banner'), [slideSource]);
 
   // Categories: all on one row (≤ 6) sized to the width; horizontal scroll from 7.
   const catFit = HOME_CATEGORIES.length <= 6;
@@ -417,7 +384,9 @@ export default function HomeScreen() {
             },
           })}
         >
-          <HeroCarousel />
+          {heroSlides.length > 0
+            ? <SlideCarousel slides={heroSlides} height={190} intervalMs={10000} showDraft={preview} />
+            : <HeroCarousel />}
 
           <View style={styles.searchWrap} onLayout={e => setSearchY(e.nativeEvent.layout.y)}>
             {search}
@@ -499,7 +468,9 @@ export default function HomeScreen() {
 
           {/* Banner — breaks the rhythm between the rails and the lists */}
           <View style={{ marginTop: 28 }}>
-            <WhyRentSection />
+            {bannerSlides.length > 0
+              ? <SlideCarousel slides={bannerSlides} height={200} intervalMs={6000} showDraft={preview} />
+              : <WhyRentSection />}
           </View>
 
           <View style={styles.content}>
@@ -598,7 +569,7 @@ function HeroCarousel() {
     <InsetCarousel
       height={190}
       intervalMs={10000}
-      slides={SLIDES.map((slide, i) => (
+      slides={HERO_BUILT_IN.map((slide, i) => (
         <View key={i} style={[styles.slide, { backgroundColor: slide.tint }]}>
           {slide.image != null && (
             <Image source={slide.image} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
