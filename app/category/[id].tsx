@@ -23,7 +23,7 @@ import { useLoyaltyTier } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import { DEFAULT_FILTERS, type Filters } from '@/lib/filterConfig';
 import { filterProducts, sortProducts, sortProductsByRating } from '@/utils/productFilters';
-import FavoriteHeart from '@/components/FavoriteHeart';
+import { FavoriteButton } from '@/components/FavoriteHeart';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -251,14 +251,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
             <Text style={[styles.prodTagText, { color: '#FAFAF7' }]}>1 left</Text>
           </View>
         ) : null}
-        <TouchableOpacity
-          style={styles.prodFav}
-          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          activeOpacity={0.8}
-        >
-          <FavoriteHeart liked={isFavorite} size={13} />
-        </TouchableOpacity>
+        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} />
         <Feather name={product.iconName as never} size={52} color={iconColor} />
       </View>
       <View style={styles.prodMeta}>
@@ -482,18 +475,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.carbon,
     letterSpacing: 0.4,
-  },
-  prodFav: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
   },
   prodMeta: {
     padding: 12,

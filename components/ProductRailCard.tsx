@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI } from '@/components/account/ui';
-import FavoriteHeart from '@/components/FavoriteHeart';
+import { FavoriteButton } from '@/components/FavoriteHeart';
 import ProductSocialProof from '@/components/ProductSocialProof';
 import type { Product } from '@/lib/mockData';
 import type { LoyaltyTier } from '@/lib/firestore';
@@ -42,14 +42,7 @@ export default function ProductRailCard({
         {image
           ? <Image source={{ uri: image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
           : <Feather name={(product.iconName || 'package') as never} size={40} color={SHADES.carbonFaint} />}
-        <TouchableOpacity
-          style={s.fav}
-          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          activeOpacity={0.8}
-        >
-          <FavoriteHeart liked={isFavorite} size={17} />
-        </TouchableOpacity>
+        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} />
         {badge && (
           <View style={[s.badge, badge.dark ? s.badgeDark : s.badgeAmber]}>
             {badge.icon && <Feather name={badge.icon} size={9} color={badge.dark ? SHADES.cream : SHADES.carbon} />}
@@ -71,10 +64,6 @@ export default function ProductRailCard({
 const s = StyleSheet.create({
   card: { width: RAIL_CARD_WIDTH, overflow: 'hidden' },
   img: { height: 112, backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  fav: {
-    position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center',
-  },
   badge: {
     position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3,
     height: 20, paddingHorizontal: 7, borderRadius: 6,

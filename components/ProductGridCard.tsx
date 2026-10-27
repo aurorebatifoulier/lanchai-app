@@ -11,7 +11,7 @@ import type { GridAvailability } from '@/utils/availability';
 import ProductSocialProof from '@/components/ProductSocialProof';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak, formatKip } from '@/utils/currency';
-import FavoriteHeart from '@/components/FavoriteHeart';
+import { FavoriteButton } from '@/components/FavoriteHeart';
 
 // Shared 2-column grid product card — Explore (app/(tabs)/explore.tsx) and Liked
 // (app/liked.tsx). Home sections and category pages use their own, different cards.
@@ -105,14 +105,7 @@ export default function ProductGridCard({
           </View>
         )}
 
-        <TouchableOpacity
-          style={s.heartBtn}
-          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          activeOpacity={0.8}
-        >
-          <FavoriteHeart liked={isFavorite} />
-        </TouchableOpacity>
+        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} />
       </View>
 
       <View style={s.cardBody}>
@@ -182,17 +175,6 @@ const s = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.2,
-  },
-  heartBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   // Sizes below are the CARD_* constants above — change them there, not here, so
   // productCardLayout() keeps the card tall enough for everything.
