@@ -21,12 +21,10 @@ import {
   SORT_LABELS,
   DEFAULT_FILTERS,
 } from '@/lib/filterConfig';
+import { formatLakRange } from '@/utils/currency';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-function formatKip(value: number): string {
-  return `₭${value.toLocaleString('en-US')}`;
-}
 
 // ── ActiveChip ────────────────────────────────────────────────────────────────
 
@@ -116,7 +114,7 @@ export default function FilterSheet({
             {/* Price range */}
             <Text style={styles.sectionLabel}>Price range / day</Text>
             <Text style={styles.sliderRangeText}>
-              {formatKip(pendingFilters.priceMin)} – {formatKip(pendingFilters.priceMax)} / day
+              {formatLakRange(pendingFilters.priceMin, pendingFilters.priceMax)} / day
             </Text>
             <DualSlider
               min={PRICE_CONFIG.min}

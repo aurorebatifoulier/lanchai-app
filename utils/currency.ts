@@ -47,6 +47,12 @@ export function convertLakTo(
 export { splitHtVat } from '@/functions/src/shared/receiptData';
 
 /** Compact kip format for product cards and price chips, e.g. "₭120,000". */
+// Prices are always shown as "126,000 LAK" (never the ₭ sign).
 export function formatKip(value: number): string {
-  return `₭${value.toLocaleString('en-US')}`;
+  return `${value.toLocaleString('en-US')} LAK`;
+}
+
+/** Price filter range: "0 – 100,000 LAK". */
+export function formatLakRange(min: number, max: number): string {
+  return `${min.toLocaleString('en-US')} – ${max.toLocaleString('en-US')} LAK`;
 }

@@ -30,7 +30,7 @@ import {
   DEFAULT_FILTERS,
 } from '@/lib/filterConfig';
 import { useExchangeRate } from '@/lib/exchangeRate';
-import { toLak, formatKip } from '@/utils/currency';
+import { toLak, formatLakRange } from '@/utils/currency';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import PressScale from '@/components/PressScale';
 import { useProductSearch, bestMatchId } from '@/hooks/useProductSearch';
@@ -205,7 +205,7 @@ export default function LikedScreen() {
     if (filters.priceMin > PRICE_CONFIG.min || filters.priceMax < PRICE_CONFIG.max) {
       chips.push({
         id: 'price',
-        label: `${formatKip(filters.priceMin)} – ${formatKip(filters.priceMax)} / day`,
+        label: `${formatLakRange(filters.priceMin, filters.priceMax)} / day`,
         onRemove: () => setFilters(f => ({ ...f, priceMin: PRICE_CONFIG.min, priceMax: PRICE_CONFIG.max })),
       });
     }

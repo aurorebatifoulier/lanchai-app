@@ -3,35 +3,36 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
-import { COLORS } from '@/constants/Colors';
 import type { Product } from '@/lib/mockData';
 import type { LoyaltyTier } from '@/lib/firestore';
-import { getProductAccessState, fmtShortDate } from '@/utils/productAccess';
+import { getProductAccessState } from '@/utils/productAccess';
 import type { GridAvailability } from '@/utils/availability';
-import ProductSocialProof from '@/components/ProductSocialProof';
 import { getMinPrice } from '@/utils/pricing';
-import { toLak, formatKip } from '@/utils/currency';
+import { toLak } from '@/utils/currency';
+import { UI } from '@/components/account/ui';
+import { productSignal } from '@/lib/productSignal';
 import { FavoriteButton } from '@/components/FavoriteHeart';
 import PressScale from '@/components/PressScale';
+import QuickAddButton, { type QuickAddState } from '@/components/QuickAddButton';
 import { SEARCH_COPY } from '@/constants/searchCopy';
 
-// Shared 2-column grid product card — Explore (app/(tabs)/explore.tsx) and Liked
-// (app/liked.tsx). Home sections and category pages use their own, different cards.
+// Shared 2-column grid product card — Explore and Liked (category pages use their own).
+// My Account / Home language (validated mockup): white, radius 18, thin border, heart in a
+// white circle, name, "126,000 LAK / day", then ONE honest signal line (lib/productSignal).
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 // Cards keep a fixed height so every row in the 2-column grid lines up, but that
-// height is DERIVED from its parts below — never hardcoded — so a font/size change
-// can't silently clip the availability badge again. Text-bearing heights scale with
-// the OS font size (fontScale), since Android scales fontSize AND lineHeight with it.
-const CARD_IMAGE_H     = 150;
-const CARD_PAD_TOP     = 10;
-const CARD_PAD_BOTTOM  = 12;
-const CARD_NAME_LH     = 17; // cardName lineHeight
+// height is DERIVED from its parts below — never hardcoded. Text-bearing heights scale
+// with the OS font size (fontScale), since Android scales fontSize AND lineHeight with it.
+const CARD_IMAGE_H     = 140;
+const CARD_PAD_TOP     = 12;
+const CARD_PAD_BOTTOM  = 14;
+const CARD_NAME_LH     = 19; // cardName lineHeight
 const CARD_NAME_LINES  = 2;  // title block always reserves exactly 2 lines
-const CARD_NAME_GAP    = 4;
-const CARD_PRICE_LH    = 16; // cardPrice / cardPriceUnavailable lineHeight
-const CARD_PRICE_GAP   = 6; // price → social proof / booking pill
-const CARD_BADGE_H     = 22; // slot under the price — always reserved: booking pill, social proof, or empty
+const CARD_NAME_GAP    = 2;
+const CARD_PRICE_LH    = 18;
+const CARD_PRICE_GAP   = 4;
+const CARD_BADGE_H     = 18; // signal line slot — always reserved
 
 export function productCardLayout(fontScale: number) {
   const scale  = Math.max(1, fontScale);
@@ -59,8 +60,11 @@ function ProductGridCard({
   exchangeRate,
   userTier,
   availability,
+  weekendUnits = null,
   bestMatch = false,
   matchPercent = null,
+  quickAdd = null,
+  onQuickAdd,
 }: {
   product: Product;
   width: number;
@@ -69,12 +73,17 @@ function ProductGridCard({
   onToggleFavorite: () => void;
   exchangeRate: number | null;
   userTier: LoyaltyTier | null;
-  /** From gridAvailability(); null/undefined = bookable today (show social proof). */
+  /** From gridAvailability(); null/undefined = bookable today. */
   availability?: GridAvailability;
+  /** Units free in the active "Free this weekend" window (null = chip off). */
+  weekendUnits?: number | null;
   /** Search: "Best match" chip (renters and admins). */
   bestMatch?: boolean;
   /** Search score shown to ADMINS only (null = hidden) — to tune keywords. */
   matchPercent?: number | null;
+  /** Quick-add "+" state (bottom-right); null = no button (e.g. tier-locked). */
+  quickAdd?: QuickAddState | null;
+  onQuickAdd?: () => void;
 }) {
   const layout = useProductCardLayout();
   const imageUri = product.images?.[0] ?? null;
@@ -83,22 +92,23 @@ function ProductGridCard({
   const sectionBadge: { label: string; icon?: string; bg: string; text: string } | null =
     accessState.badgeLabel ? {
       label: accessState.badgeLabel,
-      bg:    accessState.badgeTone === 'unlocked' ? COLORS.amber : COLORS.carbon,
-      text:  accessState.badgeTone === 'unlocked' ? COLORS.carbon : COLORS.white,
+      icon:  accessState.locked ? 'lock' : undefined,
+      bg:    accessState.badgeTone === 'unlocked' ? SHADES.amber : SHADES.carbon,
+      text:  accessState.badgeTone === 'unlocked' ? SHADES.carbon : SHADES.cream,
     } :
-    product.isPremium     ? { label: 'Premium', icon: 'award', bg: COLORS.amber,   text: COLORS.carbon } :
-    product.showInNew     ? { label: 'New',                    bg: SHADES.amberLight, text: SHADES.amberDeep } :
-    product.showInPopular ? { label: 'Popular',                bg: COLORS.carbon,  text: COLORS.white  } :
+    product.isPremium     ? { label: 'Premium', icon: 'award', bg: SHADES.amber, text: SHADES.carbon } :
+    product.showInNew     ? { label: 'New', bg: SHADES.amberLight, text: SHADES.amberDeep } :
     null;
+  const signal = productSignal(product, { availability, weekendUnits });
 
   return (
-    <PressScale style={[s.card, { width, height: layout.card }]} onPress={onPress} activeOpacity={0.85}>
+    <PressScale style={[UI.card, s.card, { width, height: layout.card }]} onPress={onPress}>
       <View style={s.cardImageWrap}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={s.cardImage} contentFit="cover" transition={300} />
         ) : (
           <View style={[s.cardImage, s.cardImagePlaceholder]}>
-            <Feather name="image" size={28} color={COLORS.softGray} />
+            <Feather name={(product.iconName || 'package') as never} size={34} color={SHADES.carbonFaint} />
           </View>
         )}
 
@@ -111,12 +121,8 @@ function ProductGridCard({
 
         {sectionBadge && (
           <View style={[s.sectionBadge, { backgroundColor: sectionBadge.bg }]}>
-            {sectionBadge.icon && (
-              <Feather name={sectionBadge.icon as never} size={9} color={sectionBadge.text} />
-            )}
-            <Text style={[s.sectionBadgeText, { color: sectionBadge.text }]}>
-              {sectionBadge.label}
-            </Text>
+            {sectionBadge.icon && <Feather name={sectionBadge.icon as never} size={10} color={sectionBadge.text} />}
+            <Text style={[s.sectionBadgeText, { color: sectionBadge.text }]}>{sectionBadge.label}</Text>
           </View>
         )}
 
@@ -125,24 +131,25 @@ function ProductGridCard({
 
       <View style={s.cardBody}>
         <Text style={[s.cardName, { height: layout.name }]} numberOfLines={CARD_NAME_LINES}>{product.name}</Text>
-        {minPrice != null && exchangeRate != null
-          ? <Text style={s.cardPrice} numberOfLines={1}>{formatKip(toLak(minPrice, exchangeRate))} / day</Text>
-          : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
-        {/* Fixed-height slot right under the price, content top-aligned — any spare
-            height ends up at the bottom of the card, never between price and line. */}
-        <View style={[s.bottomSlot, { height: layout.badge }]}>
-          {availability ? (
-            <View style={[s.pill, availability.kind === 'unavailable' && s.pillMuted]}>
-              <Text style={[s.pillText, availability.kind === 'unavailable' && s.pillTextMuted]} numberOfLines={1}>
-                {availability.kind === 'backOn'
-                  ? `Back on ${fmtShortDate(availability.date)}`
-                  : availability.kind === 'fullyBooked' ? 'Fully booked' : 'Unavailable'}
-              </Text>
-            </View>
-          ) : (
-            <ProductSocialProof product={product} />
-          )}
+        <View style={quickAdd ? s.withQuickAdd : undefined}>
+          {minPrice != null && exchangeRate != null ? (
+            <Text style={s.cardPrice} numberOfLines={1}>
+              {toLak(minPrice, exchangeRate).toLocaleString('en-US')}
+              <Text style={s.cardPriceUnit}> LAK / day</Text>
+            </Text>
+          ) : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
+          <View style={[s.signalSlot, { height: layout.badge }]}>
+            {signal && (
+              <View style={s.signalRow}>
+                {signal.icon === 'clock' && <Feather name="clock" size={11} color={SHADES.carbonMuted} />}
+                <Text style={[s.signal, signal.tone === 'amber' && s.signalAmber, signal.tone === 'muted' && s.signalMuted]} numberOfLines={1}>
+                  {signal.text}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
+        {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
       </View>
     </PressScale>
   );
@@ -154,106 +161,47 @@ const s = StyleSheet.create({
   bestText: { fontSize: 10, fontWeight: '800', color: SHADES.carbon },
   pctChip: { backgroundColor: SHADES.carbon, borderRadius: 6, paddingHorizontal: 6, height: 20, justifyContent: 'center' },
   pctText: { fontSize: 10, fontWeight: '800', color: SHADES.cream },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: COLORS.carbon,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
+  card: { overflow: 'hidden' },
   cardImageWrap: {
-    width: '100%',
-    height: CARD_IMAGE_H,
-    position: 'relative',
+    width: '100%', height: CARD_IMAGE_H, position: 'relative',
     overflow: 'hidden', // expo-image on Fabric/Android — keep it clipped to its box
     flexShrink: 0,
   },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardImagePlaceholder: {
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  cardImage: { width: '100%', height: '100%' },
+  cardImagePlaceholder: { backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center' },
   sectionBadge: {
-    position: 'absolute',
-    bottom: 7,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    height: 18,
-    paddingHorizontal: 6,
-    borderRadius: 5,
+    position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3,
+    height: 20, paddingHorizontal: 7, borderRadius: 6,
   },
-  sectionBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  // Sizes below are the CARD_* constants above — change them there, not here, so
-  // productCardLayout() keeps the card tall enough for everything.
-  cardBody: {
-    paddingHorizontal: 10,
-    paddingTop: CARD_PAD_TOP,
-    paddingBottom: CARD_PAD_BOTTOM,
-  },
+  sectionBadgeText: { fontSize: 10, fontWeight: '800' },
+  // Sizes below are the CARD_* constants above — change them there, not here.
+  cardBody: { paddingHorizontal: 12, paddingTop: CARD_PAD_TOP, paddingBottom: CARD_PAD_BOTTOM },
   cardName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    letterSpacing: -0.1,
-    lineHeight: CARD_NAME_LH,
-    marginBottom: CARD_NAME_GAP,
+    fontSize: 15, fontWeight: '700', color: SHADES.carbon, letterSpacing: -0.1,
+    lineHeight: CARD_NAME_LH, marginBottom: CARD_NAME_GAP,
   },
-  cardPrice: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.fg2,
-    lineHeight: CARD_PRICE_LH,
-    marginBottom: CARD_PRICE_GAP,
-  },
+  withQuickAdd: { paddingRight: 40 },
+  cardPrice: { fontSize: 13.5, fontWeight: '700', color: SHADES.carbon, lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP },
+  cardPriceUnit: { fontWeight: '500', color: SHADES.carbonMuted },
   cardPriceUnavailable: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    fontStyle: 'italic',
-    lineHeight: CARD_PRICE_LH,
-    marginBottom: CARD_PRICE_GAP,
+    fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted, fontStyle: 'italic',
+    lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP,
   },
-  bottomSlot: {
-    justifyContent: 'flex-start',
-    flexShrink: 0,
-  },
-  pill: {
-    alignSelf: 'flex-start',
-    height: '100%',
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pillMuted: {
-    backgroundColor: COLORS.softGray200,
-  },
-  pillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    letterSpacing: 0.2,
-  },
-  pillTextMuted: {
-    color: COLORS.fg3,
-  },
+  signalSlot: { justifyContent: 'center', flexShrink: 0 },
+  signalRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  signal: { fontSize: 12, fontWeight: '600', color: SHADES.carbon },
+  signalAmber: { color: SHADES.amberText },
+  signalMuted: { color: SHADES.carbonMuted, fontWeight: '500' },
+  quickAdd: { position: 'absolute', right: 10, bottom: CARD_PAD_BOTTOM - 4 },
 });
 
 // Memoised for long lists: re-render only when what the card shows changes. Handlers are
-// per-render closures bound to this product's id, so ignoring their identity is safe.
-const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'availability', 'bestMatch', 'matchPercent'] as const;
-export default React.memo(ProductGridCard, (a, b) => SHOWN_PROPS.every(k => a[k] === b[k]));
+// per-render closures bound to this product's id, so ignoring their identity is safe;
+// availability is compared by value (a fresh object each parent render).
+const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'weekendUnits', 'bestMatch', 'matchPercent', 'quickAdd'] as const;
+const availKey = (a: GridAvailability | undefined) =>
+  !a ? '' : a.kind === 'backOn' ? `b${a.date.getTime()}` : a.kind;
+type Props = React.ComponentProps<typeof ProductGridCard>;
+export default React.memo(ProductGridCard, (a: Props, b: Props) =>
+  SHOWN_PROPS.every(k => a[k] === b[k])
+  && availKey(a.availability) === availKey(b.availability));
