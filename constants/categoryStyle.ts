@@ -20,6 +20,8 @@ export const CATEGORY_STYLE: Record<string, CategoryStyle> = {
   kids: { icon: 'baby-carriage', bg: SHADES.carbon, fg: SHADES.amber },
   sports: { icon: 'bike', bg: SHADES.amberLight, fg: SHADES.amberDeep },
   home: { icon: 'sofa-outline', bg: SHADES.carbonLight, fg: SHADES.carbon },
+  // Explore's "All" filter circle (not a real category).
+  all: { icon: 'view-grid-outline', bg: SHADES.carbonLight, fg: SHADES.carbon },
 };
 
 const FALLBACK: CategoryStyle = { icon: 'package-variant-closed', bg: SHADES.carbonLight, fg: SHADES.carbon };

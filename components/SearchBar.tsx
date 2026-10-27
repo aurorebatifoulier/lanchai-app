@@ -29,7 +29,7 @@ export default function SearchBar({
   variant = 'default',
 }: Props) {
   const field = (
-    <View style={[styles.field, value.length > 0 && styles.fieldActive, showFilter && styles.fieldFlex]}>
+    <View style={[styles.field, variant === 'account' && styles.fieldAccount, value.length > 0 && styles.fieldActive, showFilter && styles.fieldFlex]}>
       <Feather name="search" size={16} color={value ? COLORS.carbon : COLORS.fg3} />
       <TextInput
         style={styles.input}
@@ -58,14 +58,14 @@ export default function SearchBar({
       <View style={[styles.row, style]}>
         {field}
         <TouchableOpacity
-          style={[styles.filterBtn, filterActive && styles.filterBtnActive]}
+          style={[styles.filterBtn, filterActive && styles.filterBtnActive, variant === 'account' && styles.filterBtnAccount]}
           onPress={onFilterPress}
           activeOpacity={0.8}
         >
           <Feather
             name="sliders"
-            size={16}
-            color={filterActive ? COLORS.porcelain : COLORS.carbon}
+            size={variant === 'account' ? 18 : 16}
+            color={variant === 'account' ? SHADES.amber : filterActive ? COLORS.porcelain : COLORS.carbon}
           />
           {filterActive && <View style={styles.filterDot} />}
         </TouchableOpacity>
@@ -149,6 +149,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.carbon,
     borderColor: COLORS.carbon,
   },
+  // 'account' variant: carbon square button with an amber icon (Explore mockup).
+  filterBtnAccount: { width: 50, height: 50, borderRadius: 14, backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
   filterDot: {
     position: 'absolute',
     top: 8,

@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   Modal,
   Platform,
   Dimensions,
   TextInput,
   KeyboardAvoidingView,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -38,13 +38,25 @@ import {
 import { filterProducts, sortProducts } from '@/utils/productFilters';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { useLoyaltyTier } from '@/lib/loyalty';
-import { formatLakRange } from '@/utils/currency';
-import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
+import {
+  fetchAllOccupancy, gridAvailability, computeAvailableUnits, effectiveStock, type OccupancyRecord,
+} from '@/utils/availability';
+import { EXPLORE_COPY } from '@/constants/exploreCopy';
+import RotatingLine from '@/components/explore/RotatingLine';
+import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
+import CountUpText from '@/components/CountUpText';
+import { MOTION, useReducedMotion } from '@/constants/motion';
+import { weekendWindow } from '@/lib/homeData';
+import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
+import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
+import { getAvailableTimeSlots } from '@/utils/timeSlots';
+import { vteMonthKey } from '@/functions/src/shared/dates';
+import { toLak, formatLakRange } from '@/utils/currency';
 import { useProductSearch, bestMatchId } from '@/hooks/useProductSearch';
 import { SEARCH_COPY } from '@/constants/searchCopy';
 import { cached, HOME_TTL } from '@/lib/homeCache';
 import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
-import { CategoryBadge } from '@/components/account/ui';
+import { CategoryBadge, UI } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -62,10 +74,14 @@ const EXPLORE_CATEGORIES = [
   { id: 'home',    name: 'Home'    },
 ] as const;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+type QuickKey = 'weekend' | 'under' | 'newItems' | 'popular';
+const NO_QUICK: Record<QuickKey, boolean> = { weekend: false, under: false, newItems: false, popular: false };
+// Sticky search + categories: overlay vertical padding (like the Home sticky search).
+const STICKY_PAD = 8;
 
+/** Product rows for the one-column list: pairs of cards (surprise cards come later). */
+type Row = { key: string; kind: 'pair'; items: Product[] };
 
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ExploreScreen() {
   const cardLayout = useProductCardLayout();
@@ -103,6 +119,18 @@ export default function ExploreScreen() {
   // All products' occupancy in ONE query (fetchAllOccupancy) — null until loaded or if
   // it failed, in which case cards show no booking badge (never a false "Back on").
   const [occupancy,      setOccupancy]      = useState<Map<string, OccupancyRecord[]> | null>(null);
+  // Quick filter chips (combinable with category, search and the filter sheet).
+  const [quick, setQuick] = useState<Record<QuickKey, boolean>>(NO_QUICK);
+  const [budgetLak, setBudgetLak] = useState(DEFAULT_BUDGET_THRESHOLD_LAK);
+  const shop = useShopInfo();
+  const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
+  const reduce = useReducedMotion();
+
+  // Sticky search + categories (overlay copy once the inline block reaches the top).
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [pinY, setPinY] = useState<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const pinAt = pinY != null ? pinY - STICKY_PAD : Number.MAX_SAFE_INTEGER;
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -116,7 +144,8 @@ export default function ExploreScreen() {
         .then(data => { setAllProducts(data); setLoading(false); })
         .catch(() => { setLoadError(true); setLoading(false); });
       getFavorites(CURRENT_USER).then(ids => setFavorites(new Set(ids)));
-      fetchAllOccupancy().then(setOccupancy).catch(() => setOccupancy(null));
+      cached('occupancy', HOME_TTL.occupancy, fetchAllOccupancy).then(setOccupancy).catch(() => setOccupancy(null));
+      cached('homeConfig', HOME_TTL.config, getHomeConfig).then(c => setBudgetLak(c.budgetThresholdLak));
     }, [CURRENT_USER])
   );
 
@@ -193,6 +222,7 @@ export default function ExploreScreen() {
     setActiveCategory('all');
     setFilters(DEFAULT_FILTERS);
     setSearchQuery('');
+    setQuick(NO_QUICK);
   }, []);
 
   const hasActiveFilters = useMemo(() => (
@@ -253,6 +283,32 @@ export default function ExploreScreen() {
     return chips;
   }, [activeCategory, filters, searchQuery]);
 
+  // "Free this weekend": units free per product for the weekend window (booking rule).
+  const weekend = useMemo(
+    () => weekendWindow(new Date(), d => getAvailableTimeSlots(d, timeSlots)),
+    [timeSlots],
+  );
+  const weekendUnitsById = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!weekend || !occupancy) return m;
+    for (const p of allProducts) {
+      if (p.available === false) continue;
+      m.set(p.id, computeAvailableUnits(occupancy.get(p.id) ?? [], weekend.pickupAt, weekend.returnAt, effectiveStock(p)));
+    }
+    return m;
+  }, [allProducts, occupancy, weekend]);
+  // "Popular" chip: ≥ 3 returns this month (rentalsByMonth) OR the admin "Popular" flag
+  // (the flag alone while the month has no data yet).
+  const isPopular = useCallback((p: Product) => {
+    const n = p.rentalsByMonth?.[vteMonthKey(Date.now())] ?? 0;
+    return n >= 3 || p.showInPopular === true;
+  }, []);
+  // "{n} ready today": renter-visible products with a unit free today (grid rule).
+  const readyToday = useMemo(
+    () => (occupancy ? allProducts.filter(p => gridAvailability(p, occupancy.get(p.id) ?? []) === null).length : null),
+    [allProducts, occupancy],
+  );
+
   // Search (lib/search.ts, debounced): relevance order by default ("Popular" = the
   // default sort); an explicit other sort (price, newest, rating) is respected.
   const search = useProductSearch(allProducts, searchQuery);
@@ -262,17 +318,43 @@ export default function ExploreScreen() {
       exchangeRate,
       categories: EXPLORE_CATEGORIES,
     });
-    if (!search.active) return sortProducts(matched, filters.sort);
-    const allowed = new Set(matched.map(p => p.id));
+    const quickOk = (p: Product) =>
+      (!quick.weekend || (weekendUnitsById.get(p.id) ?? 0) >= 1)
+      && (!quick.under || (exchangeRate != null && p.pricePerDay > 0 && toLak(p.pricePerDay, exchangeRate) <= budgetLak))
+      && (!quick.newItems || p.showInNew === true)
+      && (!quick.popular || isPopular(p));
+    const base = matched.filter(quickOk);
+    if (!search.active) return sortProducts(base, filters.sort);
+    const allowed = new Set(base.map(p => p.id));
     const ranked = search.results.filter(r => allowed.has(r.product.id)).map(r => r.product);
     return filters.sort === 'popular' ? ranked : sortProducts(ranked, filters.sort);
-  }, [allProducts, activeCategory, filters, exchangeRate, search]);
+  }, [allProducts, activeCategory, filters, exchangeRate, search, quick, weekendUnitsById, budgetLak, isPopular]);
   const bestId = search.active && filters.sort === 'popular' ? bestMatchId(filteredProducts, search.scoreById) : null;
+
+  const n = filteredProducts.length;
+  const onlyQuick = (Object.keys(quick) as QuickKey[]).filter(k => quick[k]);
+  const budgetLabel = budgetLak.toLocaleString('en-US');
+  const resultsLine = search.active ? EXPLORE_COPY.results.search(n)
+    : onlyQuick.length === 1 && onlyQuick[0] === 'weekend' ? EXPLORE_COPY.results.weekend(n)
+    : onlyQuick.length === 1 && onlyQuick[0] === 'under' ? EXPLORE_COPY.results.under(n, budgetLabel)
+    : onlyQuick.length === 1 && onlyQuick[0] === 'newItems' ? EXPLORE_COPY.results.newItems(n)
+    : onlyQuick.length === 1 && onlyQuick[0] === 'popular' ? EXPLORE_COPY.results.popular(n)
+    : EXPLORE_COPY.results.base(n);
+  const sortLabel = search.active && filters.sort === 'popular' ? EXPLORE_COPY.bestMatchSort : SORT_LABELS[filters.sort];
+
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    for (let i = 0; i < filteredProducts.length; i += 2) {
+      out.push({ key: `p${filteredProducts[i].id}`, kind: 'pair', items: filteredProducts.slice(i, i + 2) });
+    }
+    return out;
+  }, [filteredProducts]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const renderItem = useCallback(({ item }: { item: Product }) => (
+  const renderCard = useCallback((item: Product) => (
     <ProductGridCard
+      key={item.id}
       product={item}
       width={CARD_WIDTH}
       onPress={() => router.push(`/product/${item.id}`)}
@@ -283,119 +365,156 @@ export default function ExploreScreen() {
       availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
       bestMatch={item.id === bestId}
       matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
+      weekendUnits={quick.weekend ? (weekendUnitsById.get(item.id) ?? null) : null}
     />
-  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search]);
+  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById]);
 
-  const ListHeader = useMemo(() => {
-    if (activeChips.length === 0) return null;
-    return (
-      <View style={styles.resultsChipsRow}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.activeChipsContent}
-        >
-          {activeChips.map(chip => (
-            <ActiveChip key={chip.id} label={chip.label} onRemove={chip.onRemove} />
-          ))}
-        </ScrollView>
+  const renderRow = useCallback(({ item }: { item: Row }) => (
+    <View style={styles.row}>{item.items.map(renderCard)}</View>
+  ), [renderCard]);
+
+  const toggleQuick = (k: QuickKey) => setQuick(q => ({ ...q, [k]: !q[k] }));
+  const quickChips: { key: QuickKey; label: string; icon?: 'calendar'; disabled?: boolean }[] = [
+    { key: 'weekend', label: EXPLORE_COPY.chips.weekend, icon: 'calendar', disabled: !weekend || !occupancy },
+    { key: 'under', label: EXPLORE_COPY.chips.under(budgetLabel) },
+    { key: 'newItems', label: EXPLORE_COPY.chips.newItems },
+    { key: 'popular', label: EXPLORE_COPY.chips.popular },
+  ];
+
+  // Search field + categories: inline in the header, and as the pinned overlay copy.
+  const searchAndCategories = (
+    <>
+      <SearchBar
+        variant="account"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder={EXPLORE_COPY.searchPlaceholder}
+        showFilter
+        onFilterPress={openSheet}
+        filterActive={hasActiveFilters}
+      />
+      <View style={{ marginTop: 12 }}>
+        <CategoryFilterRow categories={EXPLORE_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} />
       </View>
-    );
-  }, [activeChips]);
+    </>
+  );
+
+  const header = (
+    <View>
+      <View style={styles.headerBand}>
+        <View style={styles.titleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>{EXPLORE_COPY.title}</Text>
+            <RotatingLine lines={EXPLORE_COPY.oneLiners} style={styles.oneLiner} />
+          </View>
+          {readyToday != null && (
+            <View style={styles.counter}>
+              <CountUpText id="explore.readyToday" value={readyToday} style={styles.counterNum} />
+              <Text style={styles.counterLabel}>{EXPLORE_COPY.readyToday}</Text>
+            </View>
+          )}
+        </View>
+        <View onLayout={e => setPinY(e.nativeEvent.layout.y)}>{searchAndCategories}</View>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+        {quickChips.map(c => (
+          <PressScale
+            key={c.key}
+            style={[styles.quickChip, quick[c.key] && styles.quickChipOn, c.disabled && UI.btnDisabled]}
+            onPress={() => toggleQuick(c.key)}
+            disabled={c.disabled}
+          >
+            {c.icon && <Feather name={c.icon} size={13} color={quick[c.key] ? SHADES.amber : SHADES.carbon} />}
+            <Text style={[styles.quickChipText, quick[c.key] && styles.quickChipTextOn]}>{c.label}</Text>
+          </PressScale>
+        ))}
+      </ScrollView>
+
+      {activeChips.length > 0 && (
+        <View style={styles.resultsChipsRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeChipsContent}>
+            {activeChips.map(chip => <ActiveChip key={chip.id} label={chip.label} onRemove={chip.onRemove} />)}
+            <TouchableOpacity onPress={clearAllFilters} hitSlop={8} style={{ justifyContent: 'center' }}>
+              <Text style={styles.clearAllText}>Clear all</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      )}
+
+      {!loading && (
+        <View style={styles.resultsBar}>
+          <Text style={styles.resultsLine} numberOfLines={1}>
+            <Text style={styles.resultsNum}>{resultsLine.split(' ')[0]}</Text>
+            {` ${resultsLine.split(' ').slice(1).join(' ')}`}
+          </Text>
+          <TouchableOpacity onPress={openSheet} hitSlop={8} style={styles.sortBtn}>
+            <Text style={UI.link}>{sortLabel}</Text>
+            <Feather name="chevron-down" size={14} color={SHADES.amberText} />
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* ── Fixed header ─────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Explore</Text>
-        <View style={styles.locationRow}>
-          <Feather name="map-pin" size={12} color={COLORS.fg3} />
-          <Text style={styles.locationText}>Vientiane, Laos</Text>
-        </View>
-
-        {/* Search + filter button */}
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={{ marginBottom: 10 }}
-          showFilter
-          onFilterPress={openSheet}
-          filterActive={hasActiveFilters}
-        />
-
-        {/* Category chip bar */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsContent}
-          style={styles.chipsScroll}
-        >
-          {EXPLORE_CATEGORIES.map(cat => (
-            <TouchableOpacity
-              key={cat.id}
-              style={[styles.chip, activeCategory === cat.id && styles.chipActive]}
-              onPress={() => setActiveCategory(cat.id)}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.chipText, activeCategory === cat.id && styles.chipTextActive]}>
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Results count + clear-all row */}
-        {!loading && (
-          <View style={styles.resultsBar}>
-            <Text style={styles.resultsCount}>
-              <Text style={styles.resultsNum}>{filteredProducts.length}</Text>
-              {filteredProducts.length === 1 ? ' item' : ' items'}
-            </Text>
-            {activeChips.length > 0 && (
-              <TouchableOpacity onPress={clearAllFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.clearAllText}>Clear all</Text>
-              </TouchableOpacity>
-            )}
+      {/* One flex child (list) + the absolute sticky overlay — Fabric-safe layout. */}
+      <View style={{ flex: 1 }}>
+        {loadError ? (
+          <View style={styles.loadError}>
+            <Feather name="alert-circle" size={28} color={SHADES.carbonMuted} />
+            <Text style={styles.loadErrorTitle}>Couldn&apos;t load items</Text>
+            <Text style={styles.loadErrorBody}>Check your connection and try again.</Text>
           </View>
+        ) : (
+          <Animated.FlatList
+            style={styles.grid}
+            data={loading ? [] : rows}
+            renderItem={renderRow}
+            keyExtractor={item => item.key}
+            contentContainerStyle={styles.gridContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            extraData={{ favorites, productCount: allProducts.length }}
+            ListHeaderComponent={header}
+            scrollEventThrottle={16}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+              useNativeDriver: true,
+              listener: (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+                const next = e.nativeEvent.contentOffset.y >= pinAt;
+                setPinned(prev => (prev === next ? prev : next));
+              },
+            })}
+            ListEmptyComponent={
+              loading ? (
+                <View style={styles.skeletonGrid}>
+                  {[0, 1, 2, 3].map(i => <View key={i} style={[styles.skeletonCard, { height: cardLayout.card }]} />)}
+                </View>
+              ) : search.active && allProducts.length > 0 ? (
+                <SearchEmptyState query={search.query} collections={search.collections} onRequestItem={openRequest} />
+              ) : (
+                <SmartEmptyState
+                  catalogueEmpty={allProducts.length === 0}
+                  onClearFilters={clearAllFilters}
+                  onRequestItem={openRequest}
+                />
+              )
+            }
+          />
         )}
-      </View>
 
-      {/* ── Product grid ─────────────────────────────────────────────────── */}
-      {loading ? (
-        <View style={styles.skeletonGrid}>
-          {[0, 1, 2, 3].map(i => <View key={i} style={[styles.skeletonCard, { height: cardLayout.card }]} />)}
-        </View>
-      ) : loadError ? (
-        <View style={styles.loadError}>
-          <Feather name="alert-circle" size={28} color={COLORS.fg3} />
-          <Text style={styles.loadErrorTitle}>Couldn&apos;t load items</Text>
-          <Text style={styles.loadErrorBody}>Check your connection and try again.</Text>
-        </View>
-      ) : (
-        <FlatList
-          style={styles.grid}
-          data={filteredProducts}
-          renderItem={renderItem}
-          keyExtractor={item => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.gridContent}
-          showsVerticalScrollIndicator={false}
-          extraData={{ favorites, productCount: allProducts.length }}
-          ListHeaderComponent={ListHeader}
-          ListEmptyComponent={
-            search.active && allProducts.length > 0 ? (
-              <SearchEmptyState query={search.query} collections={search.collections} onRequestItem={openRequest} />
-            ) : (
-              <SmartEmptyState
-                catalogueEmpty={allProducts.length === 0}
-                onClearFilters={clearAllFilters}
-                onRequestItem={openRequest}
-              />
-            )
-          }
-        />
-      )}
+        {/* Pinned search + categories — fades in once the inline block reaches the top */}
+        <Animated.View
+          pointerEvents={pinned ? 'auto' : 'none'}
+          style={[styles.sticky, {
+            opacity: scrollY.interpolate({ inputRange: [pinAt - (reduce ? 0.5 : 10), pinAt], outputRange: [0, 1], extrapolate: 'clamp' }),
+            transform: [{ translateY: scrollY.interpolate({ inputRange: [pinAt - (reduce ? 0.5 : 10), pinAt], outputRange: [reduce ? 0 : -MOTION.riseY, 0], extrapolate: 'clamp' }) }],
+          }]}
+        >
+          {searchAndCategories}
+        </Animated.View>
+      </View>
 
       {/* ── Filter bottom sheet ───────────────────────────────────────────── */}
       <FilterSheet
@@ -578,6 +697,29 @@ function SmartEmptyState({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  headerBand: {
+    backgroundColor: SHADES.white, marginHorizontal: -H_PAD, paddingHorizontal: H_PAD, paddingTop: 8, paddingBottom: 14,
+    borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
+  },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  oneLiner: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
+  counter: { alignItems: 'flex-end', paddingTop: 4 },
+  counterNum: { fontSize: 24, fontWeight: '800', color: SHADES.amberText, lineHeight: 28 },
+  counterLabel: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
+  quickRow: { gap: 8, paddingVertical: 14 },
+  quickChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 12,
+    backgroundColor: SHADES.white, borderWidth: 0.5, borderColor: SHADES.border,
+  },
+  quickChipOn: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
+  quickChipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  quickChipTextOn: { color: SHADES.cream },
+  resultsLine: { flex: 1, fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  sticky: {
+    position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: H_PAD, paddingVertical: STICKY_PAD,
+    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
+  },
   searchEmpty: { paddingTop: 32, paddingHorizontal: 4 },
   suggestLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbonMuted, marginBottom: 10 },
   suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -585,10 +727,8 @@ const styles = StyleSheet.create({
   suggestCatText: { fontSize: 12, fontWeight: '600', color: SHADES.carbon },
   suggestCol: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, maxWidth: '100%' },
   suggestColText: { fontSize: 13, fontWeight: '700' },
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
+  // White behind the status bar (matches the white header band); list on porcelain.
+  container: { flex: 1, backgroundColor: SHADES.white },
 
   // ── Header ────────────────────────────────────────────────────────────────
   header: {
@@ -603,14 +743,7 @@ const styles = StyleSheet.create({
     color: COLORS.fg3,
     marginBottom: 4,
   },
-  title: {
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-    color: COLORS.carbon,
-    lineHeight: 34,
-    marginBottom: 4,
-  },
+  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6, color: SHADES.carbon, lineHeight: 33 },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -656,27 +789,14 @@ const styles = StyleSheet.create({
   },
 
   // ── Results bar ───────────────────────────────────────────────────────────
-  resultsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-  },
+  resultsBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingBottom: 12 },
   resultsCount: {
     fontSize: 12,
     fontWeight: '500',
     color: COLORS.fg3,
   },
-  resultsNum: {
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
-  clearAllText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    textDecorationLine: 'underline',
-  },
+  resultsNum: { fontWeight: '800', color: SHADES.carbon },
+  clearAllText: { fontSize: 12.5, fontWeight: '700', color: SHADES.amberText, marginLeft: 4 },
 
   // ── Active filter chips ───────────────────────────────────────────────────
   resultsChipsRow: {
@@ -738,18 +858,9 @@ const styles = StyleSheet.create({
   },
 
   // ── FlatList grid ─────────────────────────────────────────────────────────
-  grid: {
-    flex: 1,
-  },
-  gridContent: {
-    paddingHorizontal: H_PAD,
-    paddingTop: 8,
-    paddingBottom: 36,
-  },
-  row: {
-    gap: COL_GAP,
-    marginBottom: COL_GAP,
-  },
+  grid: { flex: 1, backgroundColor: COLORS.porcelain },
+  gridContent: { paddingHorizontal: H_PAD, paddingBottom: 36 },
+  row: { flexDirection: 'row', gap: COL_GAP, marginBottom: COL_GAP },
 
   // ── Smart empty state ─────────────────────────────────────────────────────
   empty: {
