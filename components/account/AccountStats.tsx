@@ -6,6 +6,7 @@ import { SHADES } from '@/constants/brandShades';
 import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { compactLak, type AccountStats as Stats } from '@/lib/accountStats';
+import CountUpText from '@/components/CountUpText';
 
 // Three stat cards (validated mockup): round trips · things not in your closet · LAK not
 // spent on stuff (carbon card; "+" when some rented products have no replacement value;
@@ -37,14 +38,14 @@ export function AccountStats({ stats }: { stats: Stats | null }) {
         <View style={[s.iconCircle, { backgroundColor: SHADES.amberLight }]}>
           <MaterialCommunityIcons name="infinity" size={20} color={SHADES.amberDeep} />
         </View>
-        <Text style={s.value}>{stats.roundTrips}</Text>
+        <CountUpText id="stats.roundTrips" style={s.value} value={stats.roundTrips} />
         <Text style={s.label}>{ACCOUNT_COPY.roundTrips(stats.roundTrips)}</Text>
       </View>
       <View style={s.card}>
         <View style={[s.iconCircle, { backgroundColor: SHADES.carbonLight }]}>
           <Feather name="box" size={18} color={SHADES.carbon} />
         </View>
-        <Text style={s.value}>{stats.distinctProducts}</Text>
+        <CountUpText id="stats.distinctProducts" style={s.value} value={stats.distinctProducts} />
         <Text style={s.label}>{ACCOUNT_COPY.notInCloset(stats.distinctProducts)}</Text>
       </View>
       {stats.valueLak != null && (
@@ -52,9 +53,14 @@ export function AccountStats({ stats }: { stats: Stats | null }) {
           <View style={[s.iconCircle, { backgroundColor: SHADES.carbonSoft }]}>
             <MaterialCommunityIcons name="piggy-bank-outline" size={20} color={SHADES.amber} />
           </View>
-          <Text style={[s.value, s.valueLight]} numberOfLines={1} adjustsFontSizeToFit>
-            {compactLak(stats.valueLak)}{stats.valuePartial ? '+' : ''}
-          </Text>
+          <CountUpText
+            id="stats.valueLak"
+            style={[s.value, s.valueLight]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            value={stats.valueLak}
+            format={v => `${compactLak(Math.round(v))}${stats.valuePartial ? '+' : ''}`}
+          />
           <Text style={[s.label, s.labelLight]}>{ACCOUNT_COPY.notSpent}</Text>
         </View>
       )}

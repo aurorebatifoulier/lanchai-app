@@ -21,6 +21,7 @@ import { PICKUP_DELAY_MS } from '@/utils/availability';
 import { BillingSummary } from '@/components/BillingSummary';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import PressScale from '@/components/PressScale';
+import DrawnCheck from '@/components/DrawnCheck';
 
 // ── QR code string formats (documented here for the admin scanner) ─────────────
 // Order-level QR (shown when there are 2+ items in an order):
@@ -133,7 +134,8 @@ export default function BookingConfirmationScreen() {
           </View>
         )}
 
-        {/* ── Headline ── */}
+        {/* ── Headline (amber check drawing itself) ── */}
+        <View style={s.checkWrap}><DrawnCheck /></View>
         <Text style={s.title}>Booking confirmation</Text>
         <Text style={s.subtitle}>
           All set! Your items are waiting patiently and pretending not to be excited to see you.
@@ -295,6 +297,7 @@ const s = StyleSheet.create({
   },
 
   // ── Headline ─────────────────────────────────────────────────────────────
+  checkWrap: { alignItems: 'center', marginBottom: 12 },
   title: {
     fontSize: 24,
     fontWeight: '800',

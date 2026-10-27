@@ -6,7 +6,7 @@ import { Easing as REasing } from 'react-native-reanimated';
 // confirmation check, Home sections). Every animation must check useReducedMotion() and
 // jump straight to its end state when it's on (Reanimated: also .reduceMotion(System)).
 export const MOTION = {
-  duration: { fast: 120, base: 220, slow: 450 },
+  duration: { fast: 120, base: 220, slow: 450, count: 500 },
   easing: {
     standard: REasing.bezier(0.2, 0, 0, 1),
     out: REasing.out(REasing.cubic),
