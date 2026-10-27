@@ -29,6 +29,7 @@ import { needsBtobDocument } from '@/utils/btob';
 import { formatReviewerName } from '@/utils/reviewerName';
 import { PICKUP_DELAY_MS } from '@/utils/availability';
 import { PriceLak } from '@/components/PriceLak';
+import FavoriteHeart from '@/components/FavoriteHeart';
 const HERO_H = 340;
 
 type PriceTier = 't12' | 't36' | 't713' | 't1429' | 't30plus';
@@ -272,7 +273,7 @@ export default function ProductDetailScreen() {
 
         {/* Favourite button — overlaid */}
         <TouchableOpacity style={styles.heroFav} onPress={handleToggleFav}>
-          <Feather name="heart" size={20} color={isFav ? COLORS.danger : COLORS.carbon} />
+          <FavoriteHeart liked={isFav} size={21} />
         </TouchableOpacity>
 
         {/* Pagination dots */}

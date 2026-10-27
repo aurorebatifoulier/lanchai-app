@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
+import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import type { Product } from '@/lib/mockData';
 import type { LoyaltyTier } from '@/lib/firestore';
@@ -10,6 +11,7 @@ import type { GridAvailability } from '@/utils/availability';
 import ProductSocialProof from '@/components/ProductSocialProof';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak, formatKip } from '@/utils/currency';
+import FavoriteHeart from '@/components/FavoriteHeart';
 
 // Shared 2-column grid product card — Explore (app/(tabs)/explore.tsx) and Liked
 // (app/liked.tsx). Home sections and category pages use their own, different cards.
@@ -77,7 +79,7 @@ export default function ProductGridCard({
       text:  accessState.badgeTone === 'unlocked' ? COLORS.carbon : COLORS.white,
     } :
     product.isPremium     ? { label: 'Premium', icon: 'award', bg: COLORS.amber,   text: COLORS.carbon } :
-    product.showInNew     ? { label: 'New',                    bg: COLORS.success, text: COLORS.white  } :
+    product.showInNew     ? { label: 'New',                    bg: SHADES.amberLight, text: SHADES.amberDeep } :
     product.showInPopular ? { label: 'Popular',                bg: COLORS.carbon,  text: COLORS.white  } :
     null;
 
@@ -109,11 +111,7 @@ export default function ProductGridCard({
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           activeOpacity={0.8}
         >
-          <Ionicons
-            name={isFavorite ? 'heart' : 'heart-outline'}
-            size={15}
-            color={isFavorite ? COLORS.danger : COLORS.carbon}
-          />
+          <FavoriteHeart liked={isFavorite} />
         </TouchableOpacity>
       </View>
 

@@ -28,6 +28,7 @@ import { COLORS } from '@/constants/Colors';
 import ProductSocialProof from '@/components/ProductSocialProof';
 import LanchaiIcon from '@/components/LanchaiIcon';
 import SearchBar from '@/components/SearchBar';
+import FavoriteHeart from '@/components/FavoriteHeart';
 import { getProducts, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { getMinPrice } from '@/utils/pricing';
@@ -443,7 +444,7 @@ function ProductCard({ product, onPress, tagBgOverride, exchangeRate, userTier, 
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           activeOpacity={0.8}
         >
-          <Feather name="heart" size={12} color={isFavorite ? COLORS.danger : COLORS.carbon} />
+          <FavoriteHeart liked={isFavorite} size={13} />
         </TouchableOpacity>
         {sectionBadge && (
           <View style={[styles.sectionBadge, { backgroundColor: sectionBadge.bg }]}>

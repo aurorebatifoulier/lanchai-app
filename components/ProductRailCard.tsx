@@ -1,0 +1,89 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
+import { Feather } from '@expo/vector-icons';
+import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
+import FavoriteHeart from '@/components/FavoriteHeart';
+import ProductSocialProof from '@/components/ProductSocialProof';
+import type { Product } from '@/lib/mockData';
+import type { LoyaltyTier } from '@/lib/firestore';
+import { getMinPrice } from '@/utils/pricing';
+import { toLak } from '@/utils/currency';
+import { getProductAccessState } from '@/utils/productAccess';
+
+// Horizontal-rail product card on the My Account design (Home rails: New arrivals, Rent
+// again, Most rented). White card, thin border, radius 18. Shows the access / Premium /
+// Popular badge but never "New" — that one stays in Explore (ProductGridCard).
+export const RAIL_CARD_WIDTH = 150;
+
+export default function ProductRailCard({
+  product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite,
+}: {
+  product: Product;
+  onPress: () => void;
+  exchangeRate: number | null;
+  userTier: LoyaltyTier | null;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+}) {
+  const minPrice = getMinPrice(product);
+  const access = getProductAccessState(product, userTier);
+  const badge: { label: string; icon?: 'award'; dark: boolean } | null =
+    access.badgeLabel ? { label: access.badgeLabel, dark: access.badgeTone !== 'unlocked' } :
+    product.isPremium ? { label: 'Premium', icon: 'award', dark: false } :
+    product.showInPopular ? { label: 'Popular', dark: true } :
+    null;
+  const image = product.images?.[0];
+
+  return (
+    <TouchableOpacity style={[UI.card, s.card]} onPress={onPress} activeOpacity={0.85}>
+      <View style={s.img}>
+        {image
+          ? <Image source={{ uri: image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+          : <Feather name={(product.iconName || 'package') as never} size={40} color={SHADES.carbonFaint} />}
+        <TouchableOpacity
+          style={s.fav}
+          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          activeOpacity={0.8}
+        >
+          <FavoriteHeart liked={isFavorite} size={17} />
+        </TouchableOpacity>
+        {badge && (
+          <View style={[s.badge, badge.dark ? s.badgeDark : s.badgeAmber]}>
+            {badge.icon && <Feather name={badge.icon} size={9} color={badge.dark ? SHADES.cream : SHADES.carbon} />}
+            <Text style={[s.badgeText, badge.dark && { color: SHADES.cream }]}>{badge.label}</Text>
+          </View>
+        )}
+      </View>
+      <View style={s.body}>
+        <Text style={s.name} numberOfLines={2}>{product.name}</Text>
+        {minPrice != null && exchangeRate != null
+          ? <Text style={s.price}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
+          : <Text style={[s.price, s.priceMissing]}>Price not set</Text>}
+        <ProductSocialProof product={product} />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const s = StyleSheet.create({
+  card: { width: RAIL_CARD_WIDTH, overflow: 'hidden' },
+  img: { height: 112, backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  fav: {
+    position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 3,
+    height: 20, paddingHorizontal: 7, borderRadius: 6,
+  },
+  badgeAmber: { backgroundColor: SHADES.amber },
+  badgeDark: { backgroundColor: SHADES.carbon },
+  badgeText: { fontSize: 10, fontWeight: '800', color: SHADES.carbon },
+  body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 3 },
+  name: { fontSize: 14, fontWeight: '700', color: SHADES.carbon, lineHeight: 18 },
+  price: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted },
+  priceMissing: { fontStyle: 'italic' },
+});

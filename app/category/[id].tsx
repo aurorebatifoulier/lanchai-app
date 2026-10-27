@@ -23,6 +23,7 @@ import { useLoyaltyTier } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import { DEFAULT_FILTERS, type Filters } from '@/lib/filterConfig';
 import { filterProducts, sortProducts, sortProductsByRating } from '@/utils/productFilters';
+import FavoriteHeart from '@/components/FavoriteHeart';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -256,7 +257,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           activeOpacity={0.8}
         >
-          <Feather name="heart" size={12} color={isFavorite ? COLORS.danger : COLORS.carbon} />
+          <FavoriteHeart liked={isFavorite} size={13} />
         </TouchableOpacity>
         <Feather name={product.iconName as never} size={52} color={iconColor} />
       </View>
