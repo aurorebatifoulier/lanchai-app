@@ -11,7 +11,6 @@ import {
   isValidWhatsappNumber,
 } from '@/lib/shop';
 
-const WHATSAPP_GREEN = '#25D366';
 
 interface WhatsAppButtonProps {
   /** Pre-filled message text (URL-encoded for you). */
@@ -76,7 +75,7 @@ export default function WhatsAppButton({
         accessibilityRole="link"
         accessibilityLabel={label}
       >
-        <Ionicons name="logo-whatsapp" size={17} color={WHATSAPP_GREEN} />
+        <Ionicons name="logo-whatsapp" size={17} color={SHADES.carbon} />
         <Text style={s.btnText}>{label}</Text>
       </TouchableOpacity>
     </View>
@@ -99,11 +98,12 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    backgroundColor: COLORS.white,
+    // Palette secondary button (white, carbon outline) — no WhatsApp green.
+    height: 46,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: SHADES.carbon,
+    backgroundColor: SHADES.white,
     paddingHorizontal: 16,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 },

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { COLORS } from '@/constants/Colors';
+import { UI, IconCircle } from '@/components/account/ui';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import type { BookingHold } from '@/lib/bookingHold';
 
@@ -36,30 +35,22 @@ export default function BookingHoldNotice({
     ? `Hi LANCHAI, I'd like to settle the balance on my rental (reservation ID: ${ids}).`
     : `Hi LANCHAI, I missed my pick-up (reservation ID: ${ids}) and I'd like to book again.`;
 
+  // Palette card (no red banner): amber icon circle = action needed, the reason in one
+  // clear line per hold, then the WhatsApp row as the action.
   return (
-    <View style={[s.card, style]}>
+    <View style={[UI.card, s.card, style]}>
       <View style={s.titleRow}>
-        <Feather name="pause-circle" size={16} color={COLORS.danger} />
-        <Text style={s.title}>New bookings are paused</Text>
+        <IconCircle icon={{ name: 'pause-circle' }} tone="amber" />
+        <Text style={[UI.title, { flex: 1 }]}>New bookings are paused</Text>
       </View>
-      {lines.map(line => <Text key={line} style={s.body}>{line}</Text>)}
-      <WhatsAppButton message={message} label="Contact us on WhatsApp" style={s.whatsapp} />
+      {lines.map(line => <Text key={line} style={UI.body}>{line}</Text>)}
+      <WhatsAppButton message={message} label="Contact us on WhatsApp" variant="row" style={s.whatsapp} />
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  card: {
-    alignSelf: 'stretch',
-    backgroundColor: '#FFF8F8',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    borderRadius: 12,
-    padding: 14,
-    gap: 8,
-  },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 14, fontWeight: '800', color: COLORS.carbon },
-  body: { fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19 },
+  card: { alignSelf: 'stretch', padding: 14, gap: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   whatsapp: { marginTop: 4 },
 });

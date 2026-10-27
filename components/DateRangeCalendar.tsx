@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import {
   fetchOccupancy,
@@ -189,7 +190,7 @@ export default function DateRangeCalendar({
 
       {availError && (
         <View style={s.availErrorNote}>
-          <Feather name="alert-circle" size={12} color={COLORS.fg3} />
+          <Feather name="alert-circle" size={12} color={SHADES.carbonMuted} />
           <Text style={s.availErrorNoteText}>
             Couldn&apos;t load availability — dates will be verified when you continue.
           </Text>
@@ -211,9 +212,9 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -236,7 +237,7 @@ const s = StyleSheet.create({
   calDowText: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.softGray,
+    color: SHADES.carbonFaint,
     letterSpacing: 0.5,
   },
 
@@ -254,7 +255,7 @@ const s = StyleSheet.create({
     bottom: '15%',
     left: 0,
     right: 0,
-    backgroundColor: COLORS.amberTint,
+    backgroundColor: SHADES.amberLight,
   },
   rangeBarFromStart: {
     left: '50%',
@@ -272,7 +273,7 @@ const s = StyleSheet.create({
     opacity: 0.3,
   },
   calCellUnavailable: {
-    backgroundColor: COLORS.warmBeigeDark,
+    backgroundColor: SHADES.border,
   },
   calCellEndpoint: {
     backgroundColor: COLORS.amber,
@@ -284,10 +285,10 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
   },
   calCellTextDisabled: {
-    color: COLORS.softGray,
+    color: SHADES.carbonFaint,
   },
   calCellTextUnavailable: {
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
   },
   calCellTextEndpoint: {
     color: COLORS.carbon,
@@ -304,6 +305,6 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 11,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 });

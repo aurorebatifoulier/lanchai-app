@@ -813,9 +813,14 @@ a snapshot indefinitely).
   (closes the account / rentals restyle) — rental detail (`rentals/[id].tsx`), review,
   claim, notifications inbox (stored `iconColor` mapped to palette circles: amber/coral →
   amber, green/blue/carbon → grey), Liked, admin Inbox tab. Shared rating chips (good /
-  fair / damaged) and overdue chips unchanged. Main app screens (Home, Explore, product,
-  category, booking flow, bag, Reservations tab, login, onboarding) are NOT on this design
-  yet.
+  fair / damaged) and overdue chips unchanged. Batch 5 — booking flow (`booking/new`, `summary`,
+  `confirmation`, Bag, bag checkout, `DateRangePicker` / `DateRangeCalendar` colours only,
+  `BillingSummary`): palette cards, neutral duration info, one-line errors,
+  `BookingHoldNotice` = white card + amber pause icon + WhatsApp row. `WhatsAppButton` has
+  no green anywhere (button variant = white, carbon outline; row variant on the booking
+  confirmation, hold notice, overdue rental). Small stock dots / chips keep green / red.
+  Main app screens (Home, Explore, product, category, Reservations tab, login, onboarding)
+  are NOT on this design yet.
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled

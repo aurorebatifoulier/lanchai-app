@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
 import { pad, getAvailableTimeSlots } from '@/utils/timeSlots';
@@ -230,7 +231,7 @@ export default function DateRangePicker({
       {pickupDateTime && returnDateTime && (
         isReturnValid ? (
           <View style={s.durationChip}>
-            <Feather name="clock" size={13} color={COLORS.success} />
+            <Feather name="clock" size={13} color={SHADES.carbon} />
             <Text style={s.durationText}>
               {billableDays} day{billableDays !== 1 ? 's' : ''}
             </Text>
@@ -310,9 +311,9 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -328,9 +329,9 @@ const s = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -343,7 +344,7 @@ const s = StyleSheet.create({
   subSubtitle: {
     fontSize: 11,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginBottom: 12,
     marginTop: -8,
   },
@@ -360,7 +361,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.porcelain,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 14,
     gap: 4,
   },
@@ -374,44 +375,37 @@ const s = StyleSheet.create({
   fieldEye: {
     fontSize: 9,
     fontWeight: '800',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     letterSpacing: 0.2,
   },
   fieldEyeFilled: { color: 'rgba(30,30,30,0.55)' },
   fieldVal: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   fieldValFilled: { color: COLORS.carbon },
 
   // Duration / error inline feedback
   durationChip: {
+    // Neutral info card (no green background).
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(46,139,87,0.08)',
-    borderRadius: 10,
+    backgroundColor: SHADES.white,
+    borderRadius: 12,
     padding: 10,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(46,139,87,0.2)',
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
   },
-  durationText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.success,
-  },
+  durationText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
   returnError: {
+    // One-line error (no red background).
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(200,65,44,0.07)',
-    borderRadius: 10,
-    padding: 10,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(200,65,44,0.18)',
   },
   returnErrorText: {
     fontSize: 13,
@@ -429,9 +423,9 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   confirmBtnOff: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
   },
   confirmBtnText: {
     fontSize: 15,
@@ -439,7 +433,7 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
     letterSpacing: -0.2,
   },
-  confirmBtnTextOff: { color: COLORS.fg3 },
+  confirmBtnTextOff: { color: SHADES.carbonMuted },
 
   // Time list
   timeScroll:        { maxHeight: 300 },
@@ -457,7 +451,7 @@ const s = StyleSheet.create({
   timeRowText: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
   },
   timeRowTextActive: { fontWeight: '800', color: COLORS.carbon },
 });

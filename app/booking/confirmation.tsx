@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { getReservationsByOrderId, RentalDoc } from '@/lib/firestore';
 import { QRThumb } from '@/components/QRThumb';
 import { QRLightbox } from '@/components/QRLightbox';
@@ -184,6 +185,7 @@ export default function BookingConfirmationScreen() {
 
         {/* ── Actions ── */}
         <WhatsAppButton
+          variant="row"
           title="Questions about your booking?"
           message={isSingle
             ? `Hi LANCHAI, I have a question about my booking (reservation ID: ${reservations[0].id}).`
@@ -235,7 +237,7 @@ const s = StyleSheet.create({
   },
   errorText: {
     fontSize: 14,
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     textAlign: 'center',
   },
   errorLink: {
@@ -276,19 +278,19 @@ const s = StyleSheet.create({
   heroPeriodLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     width: 52,
     flexShrink: 0,
   },
   heroPickupText: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   pickupDelayNote: {
     fontSize: 11,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 
   // ── Headline ─────────────────────────────────────────────────────────────
@@ -302,7 +304,7 @@ const s = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     lineHeight: 22,
     textAlign: 'center',
     maxWidth: 300,
@@ -313,33 +315,21 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: 'rgba(244,180,0,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(244,180,0,0.45)',
-    borderRadius: 8,
-    paddingHorizontal: 14,
+    backgroundColor: SHADES.amberLight,
+    borderRadius: 9,
+    paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#C98F00',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7A5500',
-    letterSpacing: 0.2,
-  },
+  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: SHADES.amber },
+  statusText: { fontSize: 13, fontWeight: '700', color: SHADES.amberDeep },
 
   // ── Per-item cards (grouped only, horizontal layout) ─────────────────────
   itemCard: {
     alignSelf: 'stretch',
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -363,23 +353,23 @@ const s = StyleSheet.create({
   itemDateLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     width: 52,
     flexShrink: 0,
   },
   itemPickupText: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 
   // ── Totals reminder ───────────────────────────────────────────────────────
   totalsCard: {
     alignSelf: 'stretch',
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     padding: 16,
   },
   // ── Buttons ───────────────────────────────────────────────────────────────
@@ -387,7 +377,7 @@ const s = StyleSheet.create({
     alignSelf: 'stretch',
     height: 52,
     backgroundColor: COLORS.amber,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -402,11 +392,15 @@ const s = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: SHADES.carbon,
+    backgroundColor: SHADES.white,
   },
   secondaryBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 
 });

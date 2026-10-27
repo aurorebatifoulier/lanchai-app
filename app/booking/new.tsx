@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import { useBookingHold } from '@/lib/bookingHold';
@@ -191,11 +192,11 @@ export default function BookingNewScreen() {
           </View>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 }}>
-          <Feather name="lock" size={32} color={COLORS.fg3} />
+          <Feather name="lock" size={32} color={SHADES.carbonMuted} />
           <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.carbon, textAlign: 'center' }}>
             Booking restricted
           </Text>
-          <Text style={{ fontSize: 13, fontWeight: '500', color: COLORS.fg3, textAlign: 'center' }}>
+          <Text style={{ fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center' }}>
             {accessState.message}
           </Text>
         </View>
@@ -293,7 +294,7 @@ export default function BookingNewScreen() {
           ) : (
             <View style={s.durationChip}>
               <View style={s.durationChipRow}>
-                <Feather name="clock" size={13} color={COLORS.success} />
+                <Feather name="clock" size={13} color={SHADES.carbon} />
                 <Text style={s.durationChipMain}>
                   {billableDays} day{billableDays !== 1 ? 's' : ''} · 24h
                 </Text>
@@ -348,7 +349,7 @@ export default function BookingNewScreen() {
         <TextInput
           style={s.notesInput}
           placeholder="Special instructions or questions…"
-          placeholderTextColor={COLORS.fg3}
+          placeholderTextColor={SHADES.carbonMuted}
           value={notes}
           onChangeText={setNotes}
           multiline
@@ -358,7 +359,7 @@ export default function BookingNewScreen() {
 
         {/* Trust */}
         <View style={s.trust}>
-          <Feather name="check-circle" size={13} color={COLORS.success} />
+          <Feather name="check-circle" size={13} color={SHADES.amber} />
           <Text style={s.trustText}>Free cancellation up to 48h before pick-up.</Text>
         </View>
 
@@ -518,7 +519,7 @@ const s = StyleSheet.create({
     gap: 14,
     backgroundColor: COLORS.porcelain,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    borderBottomColor: SHADES.border,
   },
   headerTitle: {
     fontSize: 18,
@@ -529,26 +530,26 @@ const s = StyleSheet.create({
   headerSub: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginTop: 1,
   },
 
   // Scroll
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 20,
   },
   sectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0,
+    color: SHADES.carbon,
     marginBottom: 10,
   },
   sectionOptional: {
     fontSize: 10,
     fontWeight: '500',
-    color: COLORS.softGray,
+    color: SHADES.carbonFaint,
     textTransform: 'lowercase',
     letterSpacing: 0,
   },
@@ -565,7 +566,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 14,
     gap: 4,
   },
@@ -579,7 +580,7 @@ const s = StyleSheet.create({
   fieldBtnEye: {
     fontSize: 9,
     fontWeight: '800',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     letterSpacing: 0.2,
   },
   fieldBtnEyeFilled: {
@@ -588,7 +589,7 @@ const s = StyleSheet.create({
   fieldBtnVal: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     letterSpacing: -0.1,
   },
   fieldBtnValFilled: {
@@ -636,7 +637,7 @@ const s = StyleSheet.create({
   modalSubtitle: {
     fontSize: 11,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginBottom: 14,
     marginTop: -8,
   },
@@ -663,7 +664,7 @@ const s = StyleSheet.create({
   timeModalRowText: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
   },
   timeModalRowTextActive: {
     fontWeight: '800',
@@ -672,30 +673,21 @@ const s = StyleSheet.create({
 
   // Duration chip (green status)
   durationChip: {
-    backgroundColor: 'rgba(46,139,87,0.08)',
-    borderRadius: 10,
+    // Neutral info card (no green background).
+    backgroundColor: SHADES.white,
+    borderRadius: 12,
     padding: 12,
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(46,139,87,0.2)',
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
   },
   durationChipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  durationChipMain: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.success,
-  },
-  durationChipSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: COLORS.success,
-    marginTop: 3,
-    opacity: 0.85,
-  },
+  durationChipMain: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
+  durationChipSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 3 },
   discountPill: {
     backgroundColor: COLORS.amber,
     borderRadius: 12,
@@ -710,21 +702,13 @@ const s = StyleSheet.create({
 
   // Return error
   returnError: {
+    // One-line error (no red background).
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 12,
-    padding: 10,
-    backgroundColor: 'rgba(200,65,44,0.07)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(200,65,44,0.18)',
   },
-  returnErrorText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.danger,
-  },
+  returnErrorText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.danger },
 
   // Stock badge
   stockBadge: {
@@ -750,16 +734,16 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 6,
   },
   qtyBtn: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -780,7 +764,7 @@ const s = StyleSheet.create({
   qtyUnit: {
     fontSize: 11,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 
   // Notes
@@ -788,7 +772,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 14,
     fontSize: 14,
     fontWeight: '400',
@@ -807,7 +791,7 @@ const s = StyleSheet.create({
   trustText: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
   },
 
   // Footer
@@ -819,7 +803,7 @@ const s = StyleSheet.create({
     paddingTop: 14,
     backgroundColor: COLORS.porcelain,
     borderTopWidth: 1,
-    borderTopColor: COLORS.softGray200,
+    borderTopColor: SHADES.border,
   },
   footerLeft: {
     flexShrink: 0,
@@ -833,21 +817,21 @@ const s = StyleSheet.create({
   footerPriceSub: {
     fontSize: 11,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginTop: -2,
   },
   cta: {
     flex: 1,
     height: 52,
     backgroundColor: COLORS.amber,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaOff: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
   },
   ctaText: {
     fontSize: 15,
@@ -856,6 +840,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.2,
   },
   ctaTextOff: {
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 });

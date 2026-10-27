@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { formatLakAmount } from '@/utils/currency';
 
 // Canonical Subtotal → VAT → Total → Deposit block, shared by every screen
@@ -69,12 +70,12 @@ const s = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   value: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     textAlign: 'right',
     flexShrink: 1,
     marginLeft: 12,

@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import { useBookingHold } from '@/lib/bookingHold';
@@ -219,7 +220,7 @@ export default function BookingSummaryScreen() {
 
           {selectedCoupon && (
             <View style={s.couponAppliedRow}>
-              <Feather name="tag" size={13} color="#854F0B" />
+              <Feather name="tag" size={13} color={SHADES.amberDeep} />
               <Text style={s.couponAppliedText}>
                 Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
               </Text>
@@ -258,12 +259,12 @@ export default function BookingSummaryScreen() {
             onPress={() => setDepositOpen(o => !o)}
             activeOpacity={0.7}
           >
-            <Feather name="info" size={13} color="#854F0B" />
+            <Feather name="info" size={13} color={SHADES.amberDeep} />
             <Text style={s.depositAccordionLabel}>How does the deposit work?</Text>
             <Feather
               name="chevron-right"
               size={14}
-              color="#854F0B"
+              color={SHADES.amberDeep}
               style={{ transform: [{ rotate: depositOpen ? '90deg' : '0deg' }] }}
             />
           </TouchableOpacity>
@@ -290,12 +291,12 @@ export default function BookingSummaryScreen() {
             onPress={() => setCancelPolicyOpen(o => !o)}
             activeOpacity={0.7}
           >
-            <Feather name="info" size={13} color="#854F0B" />
+            <Feather name="info" size={13} color={SHADES.amberDeep} />
             <Text style={s.depositAccordionLabel}>Cancellation policy</Text>
             <Feather
               name="chevron-right"
               size={14}
-              color="#854F0B"
+              color={SHADES.amberDeep}
               style={{ transform: [{ rotate: cancelPolicyOpen ? '90deg' : '0deg' }] }}
             />
           </TouchableOpacity>
@@ -393,7 +394,7 @@ const r = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   value: {
     fontSize: 14,
@@ -404,7 +405,7 @@ const r = StyleSheet.create({
     marginLeft: 12,
   },
   valueMuted: {
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     fontWeight: '500',
   },
 });
@@ -423,7 +424,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    borderBottomColor: SHADES.border,
   },
   headerTitle: {
     fontSize: 17,
@@ -434,16 +435,18 @@ const s = StyleSheet.create({
 
   // Content
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 24,
     gap: 16,
   },
 
   // Card
   card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
     padding: 16,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
   },
   productName: {
     fontSize: 17,
@@ -454,7 +457,7 @@ const s = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.softGray200,
+    backgroundColor: SHADES.border,
     marginVertical: 4,
   },
 
@@ -470,7 +473,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: '#854F0B',
+    color: SHADES.amberDeep,
   },
   depositExplain: {
     backgroundColor: COLORS.porcelain,
@@ -486,7 +489,7 @@ const s = StyleSheet.create({
   },
   depositExplainBullet: {
     fontSize: 14,
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     lineHeight: 20,
   },
   depositExplainText: {
@@ -499,7 +502,7 @@ const s = StyleSheet.create({
   cancelPolicyFullLink: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     textDecorationLine: 'underline',
     marginTop: 4,
   },
@@ -510,10 +513,11 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   couponSectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.carbon,
+    color: SHADES.carbon,
     marginBottom: 8,
+    letterSpacing: 0,
   },
   couponCard: {
     flexDirection: 'row',
@@ -522,12 +526,12 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 10,
     marginBottom: 8,
   },
   couponCardSelected: {
-    backgroundColor: COLORS.amberTint,
+    backgroundColor: SHADES.amberLight,
     borderColor: COLORS.amber,
   },
   couponPercentBox: {
@@ -552,7 +556,7 @@ const s = StyleSheet.create({
   couponCardSub: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginTop: 1,
   },
   couponAppliedRow: {
@@ -564,7 +568,7 @@ const s = StyleSheet.create({
   couponAppliedText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#854F0B',
+    color: SHADES.amberDeep,
   },
 
   // Notes box
@@ -577,7 +581,7 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.2,
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginBottom: 6,
   },
   notesText: {
@@ -599,7 +603,7 @@ const s = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: COLORS.softGray,
+    borderColor: SHADES.carbonFaint,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -614,7 +618,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
     lineHeight: 20,
   },
   termsLink: {
@@ -625,12 +629,10 @@ const s = StyleSheet.create({
 
   // Error
   errorBox: {
+    // One-line error (no red background).
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    padding: 12,
   },
   errorText: {
     flex: 1,
@@ -646,21 +648,21 @@ const s = StyleSheet.create({
     paddingTop: 14,
     backgroundColor: COLORS.porcelain,
     borderTopWidth: 1,
-    borderTopColor: COLORS.softGray200,
+    borderTopColor: SHADES.border,
   },
   confirmBtn: {
     height: 52,
     backgroundColor: COLORS.amber,
-    borderRadius: 10,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   confirmBtnOff: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
   },
   confirmBtnText: {
     fontSize: 15,
@@ -669,6 +671,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.2,
   },
   confirmBtnTextOff: {
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 });

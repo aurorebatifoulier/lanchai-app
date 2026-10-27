@@ -247,6 +247,7 @@ export default function RentalDetailScreen() {
                     This rental is now more than 72 hours overdue and is treated as a non-return. Your deposit may be kept and our contract procedure applies. Please contact us right away.
                   </Text>
                   <WhatsAppButton
+                    variant="row"
                     message={`Hi LANCHAI, I'm contacting you about my overdue rental (reservation ID: ${rental.id}).`}
                   />
                 </>

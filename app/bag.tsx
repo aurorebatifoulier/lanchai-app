@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import { useBookingHold } from '@/lib/bookingHold';
@@ -277,7 +278,7 @@ export default function BagScreen() {
             onPress={() => handleRemove(item.id)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Feather name="trash-2" size={15} color={COLORS.fg3} />
+            <Feather name="trash-2" size={15} color={SHADES.carbonMuted} />
           </TouchableOpacity>
         </View>
 
@@ -290,9 +291,9 @@ export default function BagScreen() {
             onPress={() => setDatePickerItemId(item.id)}
             activeOpacity={0.75}
           >
-            <Feather name="calendar" size={14} color={COLORS.fg2} />
+            <Feather name="calendar" size={14} color={SHADES.carbonMuted} />
             <Text style={s.setDatesBtnText}>Set rental dates</Text>
-            <Feather name="chevron-right" size={14} color={COLORS.fg3} />
+            <Feather name="chevron-right" size={14} color={SHADES.carbonMuted} />
           </TouchableOpacity>
         ) : (
           <View style={s.datesRow}>
@@ -398,7 +399,7 @@ export default function BagScreen() {
             <>
               <View style={s.divider} />
               <View style={s.unpricedNotice}>
-                <Feather name="alert-circle" size={13} color={COLORS.fg3} />
+                <Feather name="alert-circle" size={13} color={SHADES.carbonMuted} />
                 <Text style={s.unpricedNoticeText}>Pricing not set — this item can&apos;t be checked out.</Text>
               </View>
             </>
@@ -412,7 +413,7 @@ export default function BagScreen() {
   const renderEmptyState = () => (
     <View style={s.centered}>
       <View style={s.emptyIconWrap}>
-        <Feather name="shopping-bag" size={36} color={COLORS.fg3} />
+        <Feather name="shopping-bag" size={36} color={SHADES.carbonMuted} />
       </View>
       <Text style={s.emptyTitle}>Your bag is empty</Text>
       <Text style={s.emptySub}>Add items from the catalogue to build your rental order.</Text>
@@ -475,7 +476,7 @@ export default function BagScreen() {
           <View style={[s.summary, { paddingBottom: insets.bottom + 12 }]}>
             {itemsNeedingDates > 0 && (
               <View style={s.needsDatesRow}>
-                <Feather name="info" size={13} color={COLORS.fg3} />
+                <Feather name="info" size={13} color={SHADES.carbonMuted} />
                 <Text style={s.needsDatesText}>
                   {itemsNeedingDates} item{itemsNeedingDates !== 1 ? 's' : ''} need{itemsNeedingDates === 1 ? 's' : ''} dates before checkout
                 </Text>
@@ -555,7 +556,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    borderBottomColor: SHADES.border,
   },
   headerTitle: {
     position: 'absolute',
@@ -581,7 +582,7 @@ const s = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -595,7 +596,7 @@ const s = StyleSheet.create({
   },
   emptySub: {
     fontSize: 13,
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     textAlign: 'center',
     lineHeight: 19,
     marginBottom: 24,
@@ -604,7 +605,7 @@ const s = StyleSheet.create({
     height: 44,
     paddingHorizontal: 24,
     backgroundColor: COLORS.amber,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -629,8 +630,8 @@ const s = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    backgroundColor: COLORS.warmBeige,
+    borderColor: SHADES.border,
+    backgroundColor: SHADES.carbonLight,
     marginBottom: 12,
   },
   sameDatesBtnText: {
@@ -641,10 +642,10 @@ const s = StyleSheet.create({
 
   // Item card
   card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     overflow: 'hidden',
   },
   cardTop: {
@@ -660,7 +661,7 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   thumbPlaceholder: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -678,7 +679,7 @@ const s = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: COLORS.softGray200,
+    backgroundColor: SHADES.border,
     marginHorizontal: 14,
   },
 
@@ -694,7 +695,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
   },
 
   // Dates display
@@ -717,7 +718,7 @@ const s = StyleSheet.create({
   dateLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     width: 42,
     letterSpacing: 0.1,
   },
@@ -727,9 +728,9 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
   },
   durationText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.success,
+    color: SHADES.carbonMuted,
     marginTop: 4,
   },
   editDatesBtn: {
@@ -737,8 +738,8 @@ const s = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    backgroundColor: COLORS.warmBeige,
+    borderColor: SHADES.border,
+    backgroundColor: SHADES.carbonLight,
   },
   editDatesBtnText: {
     fontSize: 11,
@@ -748,24 +749,14 @@ const s = StyleSheet.create({
 
   // Conflict
   conflictBanner: {
+    // One-line warning (no red background).
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
     marginHorizontal: 14,
     marginTop: 8,
-    padding: 10,
-    backgroundColor: 'rgba(200,65,44,0.07)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(200,65,44,0.18)',
   },
-  conflictText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.danger,
-    lineHeight: 17,
-  },
+  conflictText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.danger, lineHeight: 18 },
   unpricedNotice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -777,7 +768,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     lineHeight: 17,
   },
 
@@ -792,7 +783,7 @@ const s = StyleSheet.create({
   qtyLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
     flex: 1,
   },
   qtyControl: {
@@ -802,7 +793,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.porcelain,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 4,
   },
   qtyBtn: {
@@ -811,7 +802,7 @@ const s = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -844,7 +835,7 @@ const s = StyleSheet.create({
   pricingLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   pricingValue: {
     fontSize: 12,
@@ -856,7 +847,7 @@ const s = StyleSheet.create({
   summary: {
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
-    borderTopColor: COLORS.softGray200,
+    borderTopColor: SHADES.border,
     paddingHorizontal: 20,
     paddingTop: 14,
     gap: 10,
@@ -869,7 +860,7 @@ const s = StyleSheet.create({
   needsDatesText: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   summaryRows: {
     gap: 5,
@@ -883,17 +874,17 @@ const s = StyleSheet.create({
     marginTop: 4,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: COLORS.softGray200,
+    borderTopColor: SHADES.border,
   },
   summaryLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
   },
   summaryLabelNote: {
     fontSize: 11,
     fontWeight: '400',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   summaryValue: {
     fontSize: 13,
@@ -917,14 +908,14 @@ const s = StyleSheet.create({
   cta: {
     height: 52,
     backgroundColor: COLORS.amber,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaOff: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
   },
   ctaText: {
     fontSize: 15,
@@ -932,5 +923,5 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
     letterSpacing: -0.2,
   },
-  ctaTextOff: { color: COLORS.fg3 },
+  ctaTextOff: { color: SHADES.carbonMuted },
 });

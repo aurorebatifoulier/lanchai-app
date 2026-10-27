@@ -13,6 +13,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import { useBookingHold } from '@/lib/bookingHold';
@@ -336,7 +338,7 @@ export default function BagSummaryScreen() {
 
           {selectedCoupon && (
             <View style={s.couponAppliedRow}>
-              <Feather name="tag" size={13} color="#854F0B" />
+              <Feather name="tag" size={13} color={SHADES.amberDeep} />
               <Text style={s.couponAppliedText}>
                 Coupon applied: −{discountAmount.toLocaleString('en-US')} LAK
               </Text>
@@ -368,12 +370,12 @@ export default function BagSummaryScreen() {
             onPress={() => setDepositOpen(o => !o)}
             activeOpacity={0.7}
           >
-            <Feather name="info" size={13} color="#854F0B" />
+            <Feather name="info" size={13} color={SHADES.amberDeep} />
             <Text style={s.depositAccordionLabel}>How does the deposit work?</Text>
             <Feather
               name="chevron-right"
               size={14}
-              color="#854F0B"
+              color={SHADES.amberDeep}
               style={{ transform: [{ rotate: depositOpen ? '90deg' : '0deg' }] }}
             />
           </TouchableOpacity>
@@ -397,12 +399,12 @@ export default function BagSummaryScreen() {
             onPress={() => setCancelPolicyOpen(o => !o)}
             activeOpacity={0.7}
           >
-            <Feather name="info" size={13} color="#854F0B" />
+            <Feather name="info" size={13} color={SHADES.amberDeep} />
             <Text style={s.depositAccordionLabel}>Cancellation policy</Text>
             <Feather
               name="chevron-right"
               size={14}
-              color="#854F0B"
+              color={SHADES.amberDeep}
               style={{ transform: [{ rotate: cancelPolicyOpen ? '90deg' : '0deg' }] }}
             />
           </TouchableOpacity>
@@ -450,10 +452,10 @@ export default function BagSummaryScreen() {
 
         {/* ── Business document required ── */}
         {docRequired && (
-          <View style={s.errorBox}>
-            <Feather name="alert-circle" size={14} color={COLORS.danger} />
+          <View style={[UI.card, s.docBox]}>
+            <IconCircle icon={{ name: 'upload' }} tone="amber" />
             <View style={{ flex: 1 }}>
-              <Text style={s.errorText}>
+              <Text style={s.docText}>
                 Please upload your business registration document before booking.
                 You can do this in your account settings.
               </Text>
@@ -578,7 +580,7 @@ const s = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 
   // Header
@@ -589,7 +591,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    borderBottomColor: SHADES.border,
   },
   headerTitle: {
     position: 'absolute',
@@ -609,19 +611,20 @@ const s = StyleSheet.create({
     gap: 12,
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.fg3,
+    fontSize: 18,
+    fontWeight: '800',
+    color: SHADES.carbon,
     paddingHorizontal: 4,
     marginBottom: 2,
+    letterSpacing: 0,
   },
 
   // Card
   card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     overflow: 'hidden',
   },
   cardTitle: {
@@ -648,7 +651,7 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   thumbPlaceholder: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -672,7 +675,7 @@ const s = StyleSheet.create({
   dateLineLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     width: 44,
   },
   dateLineValue: {
@@ -681,9 +684,9 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
   },
   durationChip: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
-    color: COLORS.success,
+    color: SHADES.carbonMuted,
     marginTop: 4,
   },
   itemPricing: {
@@ -700,7 +703,7 @@ const s = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: COLORS.softGray200,
+    backgroundColor: SHADES.border,
     marginHorizontal: 14,
   },
 
@@ -708,15 +711,15 @@ const s = StyleSheet.create({
   rowLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   rowLabelMuted: {
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   rowNote: {
     fontSize: 11,
     fontWeight: '400',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
   rowValue: {
     fontSize: 13,
@@ -724,7 +727,7 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
   },
   rowValueMuted: {
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     fontWeight: '500',
   },
 
@@ -741,7 +744,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: '#854F0B',
+    color: SHADES.amberDeep,
   },
   depositExplain: {
     backgroundColor: COLORS.porcelain,
@@ -758,7 +761,7 @@ const s = StyleSheet.create({
   },
   depositExplainBullet: {
     fontSize: 14,
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     lineHeight: 20,
   },
   depositExplainText: {
@@ -771,7 +774,7 @@ const s = StyleSheet.create({
   cancelPolicyFullLink: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     textDecorationLine: 'underline',
     marginTop: 4,
   },
@@ -782,10 +785,11 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   couponSectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.carbon,
+    color: SHADES.carbon,
     marginBottom: 8,
+    letterSpacing: 0,
   },
   couponCard: {
     flexDirection: 'row',
@@ -794,12 +798,12 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
     padding: 10,
     marginBottom: 8,
   },
   couponCardSelected: {
-    backgroundColor: COLORS.amberTint,
+    backgroundColor: SHADES.amberLight,
     borderColor: COLORS.amber,
   },
   couponPercentBox: {
@@ -824,7 +828,7 @@ const s = StyleSheet.create({
   couponCardSub: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginTop: 1,
   },
   couponAppliedRow: {
@@ -837,7 +841,7 @@ const s = StyleSheet.create({
   couponAppliedText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#854F0B',
+    color: SHADES.amberDeep,
   },
 
   // Terms
@@ -852,7 +856,7 @@ const s = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: COLORS.softGray,
+    borderColor: SHADES.carbonFaint,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -867,7 +871,7 @@ const s = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg2,
+    color: SHADES.carbonMuted,
     lineHeight: 20,
   },
   termsLink: {
@@ -878,12 +882,10 @@ const s = StyleSheet.create({
 
   // Error
   errorBox: {
+    // One-line error (no red background).
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    padding: 12,
   },
   errorText: {
     flex: 1,
@@ -892,6 +894,8 @@ const s = StyleSheet.create({
     color: COLORS.danger,
     lineHeight: 18,
   },
+  docBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14 },
+  docText: { fontSize: 14, fontWeight: '500', color: SHADES.carbon, lineHeight: 20 },
   errorLink: {
     fontSize: 13,
     fontWeight: '700',
@@ -909,21 +913,21 @@ const s = StyleSheet.create({
     paddingTop: 14,
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
-    borderTopColor: COLORS.softGray200,
+    borderTopColor: SHADES.border,
   },
   cta: {
     height: 52,
     backgroundColor: COLORS.amber,
-    borderRadius: 12,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   ctaOff: {
-    backgroundColor: COLORS.warmBeige,
+    backgroundColor: SHADES.carbonLight,
     borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    borderColor: SHADES.border,
   },
   ctaText: {
     fontSize: 15,
@@ -932,6 +936,6 @@ const s = StyleSheet.create({
     letterSpacing: -0.2,
   },
   ctaTextOff: {
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 });
