@@ -796,9 +796,13 @@ a snapshot indefinitely).
   Loyalty (+ `ReferralCard`), ID & residency (+ `IdUploadPanel`, also used by the booking
   ID step), Personal info; batch 2 — Receipts & reports (+ `RentalDocCard`), All rentals,
   Notifications, Pick-up location, Security, Delete account, Invite code, Business
-  document. Still old style (batch 3): FAQ / legal screens, chat, receipt + condition
-  report screens, `ConfirmBox`, `IdRequirementStep`, `TierUpCelebration`, BtoB pending /
-  rejected screens.
+  document. Batch 3 — FAQ + `LegalScreen` (visual only, texts
+  untouched), renter chat (+ shared chat components: white incoming bubbles, one-line
+  error), receipt + condition report screens (+ `RentalReceipt`, `ChecklistSummary`),
+  `IdRequirementStep`, `TierUpCelebration` (carbon card + confetti kept), BtoB pending /
+  rejected. `ConfirmBox` (all screens, admin included) = white card, amber confirm,
+  "Keep" outlined, destructive = white button with red text (never a red fill).
+  `WhatsAppButton variant="row"` = palette row (amber circle, no green) — used by the FAQ.
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled

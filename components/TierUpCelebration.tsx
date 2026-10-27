@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet, Animated, Easing, Dime
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { doc, updateDoc } from 'firebase/firestore';
-import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
 import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import { db } from '@/lib/firebase';
 import { auth } from '@/lib/auth';
@@ -19,7 +20,7 @@ import { useMyLoyalty } from '@/lib/loyaltyUi';
 
 const rank = (t: LoyaltyTierKey | null) => (t ? TIER_ORDER.indexOf(t) : 0);
 const { width: W, height: H } = Dimensions.get('window');
-const CONFETTI_COLORS = [COLORS.amber, '#E8C46A', '#FAFAF7', '#D99A00'];
+const CONFETTI_COLORS = [SHADES.amber, SHADES.amberMid, SHADES.cream, SHADES.amberSoft];
 
 function Confetti() {
   const pieces = useMemo(() => Array.from({ length: 36 }, (_, i) => ({
@@ -94,7 +95,7 @@ export function TierUpCelebration() {
       <View style={s.backdrop}>
         <View style={s.sheet}>
           <Confetti />
-          <View style={s.badge}><Feather name="award" size={64} color={COLORS.carbon} /></View>
+          <View style={s.badge}><Feather name="award" size={56} color={SHADES.carbon} /></View>
           <Text style={s.title}>{LOYALTY_COPY.tierUpTitle(TIER_LABELS[tier])}</Text>
           <Text style={s.body}>{LOYALTY_COPY.tierUpBody}</Text>
           {(coupon > 0 || extra) && (
@@ -104,8 +105,8 @@ export function TierUpCelebration() {
               {extra ? <Text style={s.extra}>{extra}</Text> : null}
             </View>
           )}
-          <TouchableOpacity style={s.cta} onPress={() => close(true)} activeOpacity={0.85}>
-            <Text style={s.ctaText}>{LOYALTY_COPY.tierUpCta}</Text>
+          <TouchableOpacity style={[UI.btnPrimary, s.cta]} onPress={() => close(true)} activeOpacity={0.85}>
+            <Text style={UI.btnPrimaryText}>{LOYALTY_COPY.tierUpCta}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => close(false)} hitSlop={10} style={{ marginTop: 16 }}>
             <Text style={s.later}>{LOYALTY_COPY.tierUpLater}</Text>
@@ -116,20 +117,21 @@ export function TierUpCelebration() {
   );
 }
 
+// Carbon full-screen card + confetti kept; buttons, chips and text sizes aligned with the
+// My Account design (components/account/ui.tsx), brand shades only.
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 16 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(30,30,30,0.6)', justifyContent: 'center', padding: 16 },
   sheet: {
-    backgroundColor: COLORS.carbon, borderRadius: 28, paddingHorizontal: 24, paddingTop: 48, paddingBottom: 28,
+    backgroundColor: SHADES.carbon, borderRadius: 24, paddingHorizontal: 24, paddingTop: 44, paddingBottom: 24,
     alignItems: 'center', overflow: 'hidden',
   },
-  badge: { width: 136, height: 136, borderRadius: 68, backgroundColor: COLORS.amber, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 34, fontWeight: '800', color: COLORS.porcelain, marginTop: 24, letterSpacing: -0.6 },
-  body: { fontSize: 16, fontWeight: '500', color: 'rgba(250,250,247,0.75)', textAlign: 'center', lineHeight: 24, marginTop: 10 },
-  unlocked: { backgroundColor: '#2C2C2C', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 28, alignItems: 'center', marginTop: 24 },
-  unlockedLabel: { fontSize: 14, fontWeight: '600', color: 'rgba(250,250,247,0.7)' },
-  coupon: { fontSize: 28, fontWeight: '800', color: COLORS.amber, marginTop: 4 },
-  extra: { fontSize: 14, fontWeight: '500', color: 'rgba(250,250,247,0.75)', marginTop: 4, textAlign: 'center' },
-  cta: { alignSelf: 'stretch', height: 56, borderRadius: 16, backgroundColor: COLORS.amber, alignItems: 'center', justifyContent: 'center', marginTop: 28 },
-  ctaText: { fontSize: 17, fontWeight: '800', color: COLORS.carbon },
-  later: { fontSize: 15, fontWeight: '600', color: 'rgba(250,250,247,0.65)' },
+  badge: { width: 120, height: 120, borderRadius: 60, backgroundColor: SHADES.amber, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 28, fontWeight: '800', color: SHADES.cream, marginTop: 22, letterSpacing: -0.4, textAlign: 'center' },
+  body: { fontSize: 15, fontWeight: '500', color: 'rgba(250,250,247,0.75)', textAlign: 'center', lineHeight: 22, marginTop: 8 },
+  unlocked: { backgroundColor: SHADES.carbonSoft, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 24, alignItems: 'center', marginTop: 22 },
+  unlockedLabel: { fontSize: 13, fontWeight: '600', color: 'rgba(250,250,247,0.7)' },
+  coupon: { fontSize: 24, fontWeight: '800', color: SHADES.amber, marginTop: 4 },
+  extra: { fontSize: 13, fontWeight: '500', color: 'rgba(250,250,247,0.75)', marginTop: 4, textAlign: 'center' },
+  cta: { alignSelf: 'stretch', marginTop: 24 },
+  later: { fontSize: 14, fontWeight: '700', color: 'rgba(250,250,247,0.65)' },
 });

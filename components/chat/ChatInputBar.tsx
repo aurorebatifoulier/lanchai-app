@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Modal, Text } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 
 interface ChatInputBarProps {
   value: string;
@@ -123,9 +124,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     gap: 8,
-    backgroundColor: COLORS.white,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.softGray,
+    backgroundColor: SHADES.white,
+    borderTopWidth: 0.5,
+    borderTopColor: SHADES.border,
   },
   attachBtn: {
     width: 36,
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     maxHeight: 120,
-    backgroundColor: COLORS.softGray200,
+    backgroundColor: SHADES.carbonLight,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingTop: Platform.OS === 'ios' ? 9 : 6,
@@ -157,19 +158,19 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sendBtnDisabled: {
-    backgroundColor: COLORS.softGray,
+    backgroundColor: SHADES.carbonLight,
   },
 
   // ── Attach action sheet ────────────────────────────────────────────────
   actionOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(30,30,30,0.45)',
     justifyContent: 'flex-end',
   },
   actionSheet: {
     backgroundColor: COLORS.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingTop: 8,
     paddingBottom: 40,
     paddingHorizontal: 20,
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
     color: COLORS.carbon,
   },
   actionDivider: {
-    height: 1,
-    backgroundColor: COLORS.softGray200,
+    height: 0.5,
+    backgroundColor: SHADES.border,
   },
 });

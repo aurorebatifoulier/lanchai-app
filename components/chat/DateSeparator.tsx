@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { ChatMessage } from '@/lib/chat';
 
 // ── Formatting ───────────────────────────────────────────────────────────────
@@ -69,12 +69,12 @@ const styles = StyleSheet.create({
   line: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.softGray200,
+    backgroundColor: SHADES.border,
   },
   label: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.fg3,
+    fontSize: 12,
+    fontWeight: '600',
+    color: SHADES.carbonMuted,
     letterSpacing: 0.3,
   },
 });

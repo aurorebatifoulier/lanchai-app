@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle, StatusChip } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile } from '@/lib/firestore';
 import {
@@ -40,20 +42,20 @@ export default function BtobRejectedScreen() {
         showsVerticalScrollIndicator={false}
       >
         {loading ? (
-          <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 40 }} />
+          <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 40 }} />
         ) : fixable ? (
           <>
-            <View style={[s.iconBox, s.iconBoxAmber]}>
-              <Feather name="edit-3" size={26} color={COLORS.carbon} />
+            <View style={s.iconBox}>
+              <IconCircle icon={{ name: 'edit-3' }} tone="amber" size={64} />
             </View>
             <Text style={s.title}>Almost there — we just need one more thing</Text>
             <Text style={s.msg}>{btobNeedLine(key)}.</Text>
-            <View style={[s.reasonBox, s.needBox]}>
-              <Text style={[s.reasonBoxLabel, s.needLabel]}>What we need</Text>
+            <View style={[UI.card, UI.cardPadded, s.reasonBox]}>
+              <Text style={s.reasonBoxLabel}>What we need</Text>
               {preset?.need && <Text style={[s.reasonText, s.needText]}>{preset.need}</Text>}
               {preset?.needBullets?.map(b => (
                 <View key={b.text} style={s.bulletRow}>
-                  <Feather name={b.icon === 'camera' ? 'camera' : 'file-text'} size={14} color={COLORS.fg2} />
+                  <Feather name={b.icon === 'camera' ? 'camera' : 'file-text'} size={14} color={SHADES.carbonMuted} />
                   <Text style={s.bulletText}>{b.text}</Text>
                 </View>
               ))}
@@ -61,22 +63,24 @@ export default function BtobRejectedScreen() {
               {!!BTOB_REVIEW_TIME_NOTE && <Text style={s.noteText}>{BTOB_REVIEW_TIME_NOTE}</Text>}
             </View>
             <TouchableOpacity
-              style={s.primaryBtn}
+              style={[UI.btnPrimary, s.fullBtn]}
               onPress={() => router.push('/profile/business-document')}
               activeOpacity={0.85}
             >
-              <Feather name="upload" size={16} color={COLORS.carbon} />
-              <Text style={s.chatBtnText}>Update my application</Text>
+              <Feather name="upload" size={16} color={SHADES.carbon} />
+              <Text style={UI.btnPrimaryText}>Update my application</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <View style={s.iconBox}>
-              <Feather name="x-circle" size={26} color={COLORS.danger} />
+              <IconCircle icon={{ name: 'x-circle' }} size={64} />
             </View>
             <Text style={s.title}>We couldn&apos;t approve your application</Text>
+            {/* Red only as a small status signal. */}
+            <View style={{ marginBottom: 16 }}><StatusChip label="Declined" tone="danger" /></View>
             {(preset?.reason || detail) ? (
-              <View style={s.reasonBox}>
+              <View style={[UI.card, UI.cardPadded, s.reasonBox]}>
                 <Text style={s.reasonBoxLabel}>Reason</Text>
                 {preset?.reason && <Text style={s.reasonText}>{preset.reason}</Text>}
                 {!!detail && <Text style={[s.reasonText, preset?.reason ? s.detailText : null]}>{detail}</Text>}
@@ -90,17 +94,17 @@ export default function BtobRejectedScreen() {
         )}
 
         <TouchableOpacity
-          style={s.browseBtn}
+          style={[UI.btnSecondary, s.fullBtn]}
           onPress={() => router.push('/')}
           activeOpacity={0.85}
         >
-          <Feather name="grid" size={16} color={COLORS.carbon} />
-          <Text style={s.browseBtnText}>Browse catalogue</Text>
+          <Feather name="grid" size={16} color={SHADES.carbon} />
+          <Text style={UI.btnSecondaryText}>Browse catalogue</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[s.chatBtn, fixable && s.chatBtnOutline]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
-          <Feather name="message-circle" size={16} color={COLORS.carbon} />
-          <Text style={s.chatBtnText}>Contact us</Text>
+        <TouchableOpacity style={[fixable ? UI.btnSecondary : UI.btnPrimary, s.fullBtn, { marginBottom: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+          <Feather name="message-circle" size={16} color={SHADES.carbon} />
+          <Text style={fixable ? UI.btnSecondaryText : UI.btnPrimaryText}>Contact us</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => signOut()} activeOpacity={0.7} style={s.signOutBtn}>
@@ -113,62 +117,26 @@ export default function BtobRejectedScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.porcelain },
-  content: { paddingHorizontal: 24, paddingTop: 40, alignItems: 'center' },
-  iconBox: {
-    width: 60, height: 60, borderRadius: 16,
-    backgroundColor: '#FEF2F2',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
-  },
+  content: { paddingHorizontal: 16, paddingTop: 40, alignItems: 'center' },
+  iconBox: { marginBottom: 18 },
   title: {
-    fontSize: 20, fontWeight: '800', color: COLORS.carbon,
+    fontSize: 22, fontWeight: '800', color: SHADES.carbon,
     letterSpacing: -0.3, textAlign: 'center', marginBottom: 10,
   },
   msg: {
-    fontSize: 14, fontWeight: '400', color: COLORS.fg2,
+    fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted,
     textAlign: 'center', lineHeight: 20, marginBottom: 24,
   },
-  reasonBox: {
-    width: '100%',
-    backgroundColor: '#FEF2F2',
-    borderRadius: 14, borderWidth: 1, borderColor: '#FECACA',
-    padding: 16, marginBottom: 24,
-  },
-  reasonBoxLabel: {
-    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
-    color: '#991B1B', marginBottom: 8,
-  },
-  reasonText: { fontSize: 14, fontWeight: '500', color: '#991B1B', lineHeight: 20 },
-  iconBoxAmber: { backgroundColor: '#FDF3D6' },
-  needBox: { backgroundColor: COLORS.white, borderColor: COLORS.softGray200, gap: 6 },
-  needLabel: { color: COLORS.fg3 },
-  needText: { color: COLORS.carbon, fontWeight: '600' },
+  // White card (no red / yellow background).
+  reasonBox: { width: '100%', gap: 6, marginBottom: 24 },
+  reasonBoxLabel: { fontSize: 15, fontWeight: '700', color: SHADES.carbon, marginBottom: 2 },
+  reasonText: { fontSize: 14, fontWeight: '500', color: SHADES.carbon, lineHeight: 20 },
+  needText: { fontWeight: '600' },
   detailText: { marginTop: 4, fontWeight: '500' },
   bulletRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bulletText: { flex: 1, fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 18 },
-  noteText: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: 17, marginTop: 6 },
-  primaryBtn: {
-    width: '100%', height: 50,
-    backgroundColor: COLORS.amber, borderRadius: 10,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginBottom: 12,
-  },
-  browseBtn: {
-    width: '100%', height: 50,
-    backgroundColor: COLORS.white, borderRadius: 10,
-    borderWidth: 1.5, borderColor: COLORS.carbon,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginBottom: 12,
-  },
-  browseBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
-  chatBtn: {
-    width: '100%', height: 50,
-    backgroundColor: COLORS.amber, borderRadius: 10,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginBottom: 16,
-  },
-  chatBtnOutline: { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.carbon },
-  chatBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
+  bulletText: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 18 },
+  noteText: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 17, marginTop: 6 },
+  fullBtn: { alignSelf: 'stretch', height: 50, marginBottom: 12 },
   signOutBtn: { paddingVertical: 8 },
-  signOutText: { fontSize: 13, fontWeight: '600', color: COLORS.fg3 },
+  signOutText: { fontSize: 14, fontWeight: '600', color: SHADES.carbonMuted },
 });

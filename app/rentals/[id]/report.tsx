@@ -3,9 +3,10 @@ import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { IconCircle } from '@/components/account/ui';
 import { ChecklistSummary } from '@/components/ChecklistSummary';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { displayOrderId, fmtDay } from '@/utils/rentalDocs';
@@ -39,10 +40,10 @@ export default function RentalReportScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
       ) : !rental || !checklist?.confirmedAt ? (
         <View style={s.emptyBox}>
-          <Feather name="clipboard" size={28} color={COLORS.fg3} />
+          <IconCircle icon={{ name: 'clipboard' }} size={56} />
           <Text style={s.emptyText}>This report isn&apos;t available yet.</Text>
         </View>
       ) : (
@@ -82,9 +83,9 @@ const s = StyleSheet.create({
     borderBottomColor: COLORS.softGray200,
   },
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
-  content: { paddingHorizontal: 20, paddingTop: 20 },
-  productName: { fontSize: 20, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.4, marginBottom: 4 },
-  meta: { fontSize: 13, fontWeight: '500', color: COLORS.fg3, marginBottom: 16 },
+  content: { paddingHorizontal: 16, paddingTop: 20 },
+  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 4 },
+  meta: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginBottom: 16 },
   emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40 },
-  emptyText: { fontSize: 14, fontWeight: '500', color: COLORS.fg3, textAlign: 'center' },
+  emptyText: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
 });

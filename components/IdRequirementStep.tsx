@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import { IdUploadPanel } from '@/components/IdUploadPanel';
 
 // Shown when a renter without an ID document taps "Confirm booking" (single booking and
@@ -26,14 +27,16 @@ export function IdRequirementStep({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <View style={s.backdrop}>
         <View style={[s.sheet, { paddingBottom: insets.bottom + 20 }]}>
+          <View style={s.handle} />
           <View style={s.headerRow}>
+            <IconCircle icon={{ set: 'mci', name: 'card-account-details-outline' }} tone="amber" />
             <Text style={s.title}>{rejected ? 'Please add a new ID' : 'One last step: your ID'}</Text>
             <TouchableOpacity onPress={close} hitSlop={10}>
-              <Feather name="x" size={20} color={COLORS.fg2} />
+              <Feather name="x" size={20} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={s.body}>
+            <Text style={[UI.body, s.body]}>
               {rejected
                 ? 'Your previous ID document was declined. Add a new one to confirm this booking.'
                 : 'An ID document (passport or ID card) is needed to rent. Add it now, or show it at the shop when you pick up.'}
@@ -45,15 +48,15 @@ export function IdRequirementStep({
               />
             ) : (
               <>
-                <TouchableOpacity style={s.primary} onPress={() => setUploading(true)} activeOpacity={0.85}>
-                  <Feather name="camera" size={16} color={COLORS.carbon} />
-                  <Text style={s.primaryText}>Add my ID now</Text>
+                <TouchableOpacity style={UI.btnPrimary} onPress={() => setUploading(true)} activeOpacity={0.85}>
+                  <Feather name="camera" size={16} color={SHADES.carbon} />
+                  <Text style={UI.btnPrimaryText}>Add my ID now</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.secondary} onPress={onAtCounter} activeOpacity={0.85}>
-                  <Feather name="map-pin" size={16} color={COLORS.carbon} />
-                  <Text style={s.secondaryText}>I&apos;ll show my ID at the shop</Text>
+                <TouchableOpacity style={[UI.btnSecondary, { height: 50, marginTop: 10 }]} onPress={onAtCounter} activeOpacity={0.85}>
+                  <Feather name="map-pin" size={16} color={SHADES.carbon} />
+                  <Text style={UI.btnSecondaryText}>I&apos;ll show my ID at the shop</Text>
                 </TouchableOpacity>
-                <Text style={s.note}>Either way, we check your ID with you at your first pick-up.</Text>
+                <Text style={[UI.small, s.note]}>Either way, we check your ID with you at your first pick-up.</Text>
               </>
             )}
           </ScrollView>
@@ -64,23 +67,14 @@ export function IdRequirementStep({
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: COLORS.porcelain, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingHorizontal: 20, paddingTop: 18, maxHeight: '88%',
+    backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 10, maxHeight: '88%',
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  title: { fontSize: 18, fontWeight: '800', color: COLORS.carbon, flex: 1 },
-  body: { fontSize: 14, fontWeight: '500', color: COLORS.fg2, lineHeight: 20, marginBottom: 14 },
-  primary: {
-    height: 50, borderRadius: 12, backgroundColor: COLORS.amber,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
-  primaryText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
-  secondary: {
-    height: 50, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.carbon, backgroundColor: COLORS.white,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10,
-  },
-  secondaryText: { fontSize: 15, fontWeight: '700', color: COLORS.carbon },
-  note: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, textAlign: 'center', marginTop: 12 },
+  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  title: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, flex: 1 },
+  body: { marginBottom: 16 },
+  note: { textAlign: 'center', marginTop: 12 },
 });

@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { Timestamp } from 'firebase/firestore';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { CHECKLIST_CATEGORIES, type ChecklistData, type ChecklistRating } from '@/lib/firestore';
 
 export const RATING_LABELS: Record<ChecklistRating, string> = {
@@ -134,11 +135,13 @@ export function ChecklistSummary({
 }
 
 const s = StyleSheet.create({
+  // My Account card (components/account/ui.tsx). Rating pills keep their colours: small
+  // status signals, shared with the staff checklist selector.
   wrap: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     padding: 16,
   },
   header: {
@@ -182,8 +185,8 @@ const s = StyleSheet.create({
   },
   noteText: {
     fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
+    fontWeight: '500',
+    color: SHADES.carbonMuted,
     lineHeight: 17,
   },
   photoRow: {
@@ -195,12 +198,12 @@ const s = StyleSheet.create({
   photoThumb: {
     width: 64,
     height: 64,
-    borderRadius: 8,
-    backgroundColor: COLORS.softGray200,
+    borderRadius: 10,
+    backgroundColor: SHADES.carbonLight,
   },
   confirmBlock: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.softGray200,
+    borderTopWidth: 0.5,
+    borderTopColor: SHADES.border,
     paddingTop: 10,
     marginTop: 4,
     gap: 6,
@@ -213,6 +216,6 @@ const s = StyleSheet.create({
   confirmText: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
   },
 });

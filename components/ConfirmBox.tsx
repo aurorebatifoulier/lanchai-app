@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 
 // Inline replacement for Alert.alert — never fails silently on Android (Alert.alert is
 // silently blocked inside Modal-tree screens on Android SDK 54). Originally duplicated
@@ -65,36 +66,36 @@ export function ConfirmBox({
   );
 }
 
+// My Account design (components/account/ui.tsx): a white card; primary = amber,
+// secondary ("Keep") = white with a carbon outline, destructive = white button with the
+// label in COLORS.danger — never a red background; muted = white, light border.
 const cb = StyleSheet.create({
   box: {
-    backgroundColor: COLORS.warmBeige,
-    borderRadius: 10, padding: 14, gap: 12,
-    borderWidth: 1, borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white, borderRadius: 18, padding: 14, gap: 12,
+    borderWidth: 0.5, borderColor: SHADES.border,
   },
-  boxDestructive: {
-    backgroundColor: '#FEF2F2', borderColor: '#FCA5A5',
-  },
-  text: { fontSize: 13, fontWeight: '500', color: COLORS.carbon, lineHeight: 18 },
+  boxDestructive: {},
+  text: { fontSize: 14, fontWeight: '500', color: SHADES.carbon, lineHeight: 20 },
   btnRow: { flexDirection: 'row', gap: 10 },
   keepBtn: {
-    flex: 1, height: 42, borderRadius: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.softGray200,
+    flex: 1, height: 44, borderRadius: 12,
+    backgroundColor: SHADES.white,
+    borderWidth: 1.5, borderColor: SHADES.carbon,
     alignItems: 'center', justifyContent: 'center',
   },
-  keepText: { fontSize: 13, fontWeight: '700', color: COLORS.fg2 },
+  keepText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
   confirmBtn: {
-    flex: 1, height: 42, borderRadius: 8,
-    backgroundColor: COLORS.amber,
+    flex: 1, height: 44, borderRadius: 12,
+    backgroundColor: SHADES.amber,
     alignItems: 'center', justifyContent: 'center',
   },
-  confirmBtnDestructive: { backgroundColor: COLORS.danger },
+  confirmBtnDestructive: { backgroundColor: SHADES.white, borderWidth: 1, borderColor: SHADES.border },
   confirmBtnMuted: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderWidth: 1, borderColor: SHADES.border,
   },
   confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
-  confirmTextDestructive: { color: COLORS.white },
-  confirmTextMuted: { color: COLORS.fg2 },
+  confirmText: { fontSize: 14, fontWeight: '800', color: SHADES.carbon },
+  confirmTextDestructive: { color: COLORS.danger, fontWeight: '700' },
+  confirmTextMuted: { color: SHADES.carbonMuted },
 });

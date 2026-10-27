@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile } from '@/lib/firestore';
 
@@ -28,7 +30,7 @@ export default function BtobPendingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={s.iconBox}>
-          <Feather name="clock" size={26} color="#7A5F00" />
+          <IconCircle icon={{ name: 'clock' }} tone="amber" size={64} />
         </View>
         <Text style={s.title}>Your account is pending approval</Text>
         <Text style={s.msg}>
@@ -38,8 +40,8 @@ export default function BtobPendingScreen() {
         </Text>
 
         {!loading && profile && !profile.btobDocumentUrl && (
-          <View style={s.docReminderBox}>
-            <Feather name="alert-circle" size={14} color="#854F0B" />
+          <View style={[UI.card, s.docReminderBox]}>
+            <IconCircle icon={{ name: 'upload' }} tone="amber" />
             <View style={{ flex: 1 }}>
               <Text style={s.docReminderText}>
                 Don&apos;t forget to upload your business registration document to speed
@@ -57,8 +59,8 @@ export default function BtobPendingScreen() {
         )}
 
         {!loading && profile && !profile.idOnFile && (
-          <View style={s.docReminderBox}>
-            <Feather name="alert-circle" size={14} color="#854F0B" />
+          <View style={[UI.card, s.docReminderBox]}>
+            <IconCircle icon={{ set: 'mci', name: 'card-account-details-outline' }} tone="amber" />
             <View style={{ flex: 1 }}>
               <Text style={s.docReminderText}>
                 We also need the ID (passport or ID card) of the responsible person before we can approve your account.
@@ -71,9 +73,9 @@ export default function BtobPendingScreen() {
         )}
 
         {loading ? (
-          <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />
+          <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 20 }} />
         ) : profile ? (
-          <View style={s.infoBox}>
+          <View style={[UI.card, UI.cardPadded, s.infoBox]}>
             <Text style={s.infoBoxLabel}>Submitted information</Text>
             <InfoRow label="Company" value={profile.btobCompanyName} />
             <InfoRow label="License / registration number" value={profile.btobLicenseNumber} />
@@ -82,17 +84,17 @@ export default function BtobPendingScreen() {
         ) : null}
 
         <TouchableOpacity
-          style={s.browseBtn}
+          style={[UI.btnSecondary, s.fullBtn]}
           onPress={() => router.push('/')}
           activeOpacity={0.85}
         >
-          <Feather name="grid" size={16} color={COLORS.carbon} />
-          <Text style={s.browseBtnText}>Browse catalogue</Text>
+          <Feather name="grid" size={16} color={SHADES.carbon} />
+          <Text style={UI.btnSecondaryText}>Browse catalogue</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={s.chatBtn} onPress={() => router.push('/chat')} activeOpacity={0.85}>
-          <Feather name="message-circle" size={16} color={COLORS.carbon} />
-          <Text style={s.chatBtnText}>Contact us</Text>
+        <TouchableOpacity style={[UI.btnPrimary, s.fullBtn, { marginBottom: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+          <Feather name="message-circle" size={16} color={SHADES.carbon} />
+          <Text style={UI.btnPrimaryText}>Contact us</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => signOut()} activeOpacity={0.7} style={s.signOutBtn}>
@@ -115,71 +117,29 @@ function InfoRow({ label, value }: { label: string; value: string | undefined })
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.porcelain },
-  content: { paddingHorizontal: 24, paddingTop: 40, alignItems: 'center' },
-  iconBox: {
-    width: 60, height: 60, borderRadius: 16,
-    backgroundColor: '#FEF9E5',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
-  },
+  content: { paddingHorizontal: 16, paddingTop: 40, alignItems: 'center' },
+  iconBox: { marginBottom: 18 },
   title: {
-    fontSize: 20, fontWeight: '800', color: COLORS.carbon,
+    fontSize: 22, fontWeight: '800', color: SHADES.carbon,
     letterSpacing: -0.3, textAlign: 'center', marginBottom: 10,
   },
   msg: {
-    fontSize: 14, fontWeight: '400', color: COLORS.fg2,
+    fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted,
     textAlign: 'center', lineHeight: 20, marginBottom: 24,
   },
+  // White card, amber icon circle (action needed) — no yellow banner.
   docReminderBox: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 20,
+    width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    padding: 14, marginBottom: 12,
   },
-  docReminderText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#92400E',
-    lineHeight: 18,
-  },
-  docReminderLink: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    textDecorationLine: 'underline',
-  },
-  infoBox: {
-    width: '100%',
-    backgroundColor: COLORS.white,
-    borderRadius: 14, borderWidth: 1, borderColor: COLORS.softGray200,
-    padding: 16, marginBottom: 24,
-  },
-  infoBoxLabel: {
-    fontSize: 11, fontWeight: '800', letterSpacing: 0.2,
-    color: COLORS.fg3, marginBottom: 10,
-  },
+  docReminderText: { fontSize: 13, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
+  docReminderLink: { fontSize: 14, fontWeight: '700', color: SHADES.carbon, textDecorationLine: 'underline' },
+  infoBox: { width: '100%', marginTop: 12, marginBottom: 24 },
+  infoBoxLabel: { fontSize: 15, fontWeight: '700', color: SHADES.carbon, marginBottom: 6 },
   infoRow: { paddingVertical: 7, gap: 2 },
-  infoRowLabel: { fontSize: 11, fontWeight: '600', color: COLORS.fg3 },
-  infoRowValue: { fontSize: 14, fontWeight: '600', color: COLORS.carbon },
-  browseBtn: {
-    width: '100%', height: 50,
-    backgroundColor: COLORS.white, borderRadius: 10,
-    borderWidth: 1.5, borderColor: COLORS.carbon,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginBottom: 12,
-  },
-  browseBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
-  chatBtn: {
-    width: '100%', height: 50,
-    backgroundColor: COLORS.amber, borderRadius: 10,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    marginBottom: 16,
-  },
-  chatBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
+  infoRowLabel: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
+  infoRowValue: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
+  fullBtn: { alignSelf: 'stretch', height: 50, marginBottom: 12 },
   signOutBtn: { paddingVertical: 8 },
-  signOutText: { fontSize: 13, fontWeight: '600', color: COLORS.fg3 },
+  signOutText: { fontSize: 14, fontWeight: '600', color: SHADES.carbonMuted },
 });

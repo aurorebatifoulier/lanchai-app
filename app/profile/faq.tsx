@@ -12,6 +12,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, IconCircle } from '@/components/account/ui';
 import { useShopInfo, openHoursText } from '@/lib/shop';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
@@ -127,16 +129,14 @@ export default function FaqScreen() {
         {ITEMS.map((item, idx) => {
           const open = openSet.has(idx);
           return (
-            <View key={idx} style={s.card} accessible={false}>
+            <View key={idx} style={[UI.card, s.card]} accessible={false}>
               <TouchableOpacity
                 style={s.cardHeader}
                 onPress={() => toggle(idx)}
                 activeOpacity={0.7}
               >
                 {/* Icon */}
-                <View style={[s.iconBox, open && s.iconBoxOpen]}>
-                  <Feather name={item.icon as never} size={15} color={open ? '#854F0B' : COLORS.fg2} />
-                </View>
+                <IconCircle icon={{ name: item.icon as never }} />
 
                 {/* Question */}
                 <Text style={s.question}>{item.q}</Text>
@@ -145,7 +145,7 @@ export default function FaqScreen() {
                 <Feather
                   name={open ? 'chevron-up' : 'chevron-down'}
                   size={17}
-                  color={open ? COLORS.amber : COLORS.fg3}
+                  color={open ? SHADES.carbon : SHADES.carbonFaint}
                   style={s.chevron}
                 />
               </TouchableOpacity>
@@ -163,6 +163,7 @@ export default function FaqScreen() {
           title="Didn't find your answer?"
           message="Hi LANCHAI, I couldn't find the answer to my question in the FAQ."
           style={s.whatsapp}
+          variant="row"
         />
       </ScrollView>
     </View>
@@ -197,77 +198,15 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  // Scroll content
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-  },
-  subtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginBottom: 16,
-    marginLeft: 2,
-  },
-
-  // Card per item
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: 'rgba(30,30,30,0.15)',
-    marginBottom: 10,
-    overflow: 'hidden',
-  },
-
-  // Question row
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  iconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
-    backgroundColor: COLORS.warmBeige,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  iconBoxOpen: {
-    backgroundColor: '#FBE8C4',
-  },
-  question: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    letterSpacing: -0.1,
-    lineHeight: 20,
-  },
-  chevron: {
-    flexShrink: 0,
-  },
-
-  // Answer inset box
-  answerBox: {
-    backgroundColor: '#F4F1EA',
-    borderRadius: 9,
-    marginHorizontal: 12,
-    marginBottom: 12,
-    marginTop: 0,
-    padding: 13,
-  },
-  whatsapp: {
-    marginTop: 14,
-  },
-  answerText: {
-    fontSize: 13.5,
-    fontWeight: '400',
-    color: COLORS.fg2,
-    lineHeight: 21,
-  },
+  // Scroll content (My Account design — components/account/ui.tsx)
+  content: { paddingHorizontal: 16, paddingTop: 20 },
+  subtitle: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginBottom: 14, marginLeft: 2 },
+  card: { marginBottom: 10, overflow: 'hidden' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 12 },
+  question: { flex: 1, fontSize: 15, fontWeight: '700', color: SHADES.carbon, lineHeight: 20 },
+  chevron: { flexShrink: 0 },
+  // Answer: cream inset inside the white card.
+  answerBox: { backgroundColor: SHADES.cream, borderRadius: 12, marginHorizontal: 12, marginBottom: 12, padding: 13 },
+  whatsapp: { marginTop: 16 },
+  answerText: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 21 },
 });

@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { Timestamp } from 'firebase/firestore';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { ChatMessage } from '@/lib/chat';
 
 const BUBBLE_RADIUS = 16;
@@ -135,8 +136,11 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
   },
+  // Incoming: white card bubble (My Account cards), outgoing: carbon.
   bubbleOther: {
-    backgroundColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     borderTopLeftRadius: 4,
   },
   bubbleOwn: {
@@ -179,7 +183,7 @@ const styles = StyleSheet.create({
   msgTime: {
     fontSize: 10,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginLeft: 4,
   },
   msgTimeOwn: {

@@ -3,16 +3,16 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
+import { UI } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { InitialAvatar, MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
@@ -244,8 +244,7 @@ export default function ChatScreen() {
         {/* Inline error banner — appears transiently above the input bar */}
         {chatError ? (
           <View style={styles.errorBanner}>
-            <Feather name="alert-circle" size={13} color={COLORS.danger} />
-            <Text style={styles.errorBannerText}>{chatError}</Text>
+            <Text style={UI.errorText}>{chatError}</Text>
           </View>
         ) : null}
 
@@ -287,7 +286,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 12,
-    backgroundColor: COLORS.porcelain,
+    backgroundColor: SHADES.white,
   },
   headerInfo: {
     flex: 1,
@@ -299,32 +298,24 @@ const styles = StyleSheet.create({
     color: COLORS.carbon,
   },
   headerSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
-    color: COLORS.fg3,
+    color: SHADES.carbonMuted,
     marginTop: 1,
   },
   headerDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.softGray,
+    height: 0.5,
+    backgroundColor: SHADES.border,
   },
 
   // ── Inline error banner ────────────────────────────────────────────────────
+  // One-line error (no red background), right above the input bar.
   errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: '#FEE2E2',
-    borderTopWidth: 1,
-    borderTopColor: '#FECACA',
+    backgroundColor: SHADES.white,
+    borderTopWidth: 0.5,
+    borderTopColor: SHADES.border,
     paddingHorizontal: 16,
-    paddingVertical: 9,
-  },
-  errorBannerText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.danger,
+    paddingVertical: 8,
   },
 
   // ── Message list ───────────────────────────────────────────────────────────

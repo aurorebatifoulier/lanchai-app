@@ -3,9 +3,10 @@ import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { IconCircle } from '@/components/account/ui';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { useVatPercent } from '@/lib/exchangeRate';
 import { RentalReceipt } from '@/components/RentalReceipt';
@@ -42,15 +43,15 @@ export default function RentalReceiptScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
       ) : error || !rental ? (
         <View style={s.errorBox}>
-          <Feather name="alert-circle" size={28} color={COLORS.fg3} />
+          <IconCircle icon={{ name: 'alert-circle' }} size={56} />
           <Text style={s.errorText}>Receipt not found.</Text>
         </View>
       ) : notReady ? (
         <View style={s.errorBox}>
-          <Feather name="clock" size={28} color={COLORS.fg3} />
+          <IconCircle icon={{ name: 'clock' }} size={56} />
           <Text style={s.errorText}>The receipt isn&apos;t ready yet — it&apos;s available once the return is complete and the deposit settled.</Text>
         </View>
       ) : (
@@ -85,9 +86,9 @@ const s = StyleSheet.create({
     borderBottomColor: COLORS.softGray200,
   },
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
-  content: { paddingHorizontal: 20, paddingTop: 20 },
-  productName: { fontSize: 20, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.4, marginBottom: 4 },
-  refId: { fontSize: 13, fontWeight: '500', color: COLORS.fg3, marginBottom: 4, lineHeight: 18 },
+  content: { paddingHorizontal: 16, paddingTop: 20 },
+  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 4 },
+  refId: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginBottom: 4, lineHeight: 18 },
   errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40 },
-  errorText: { fontSize: 14, fontWeight: '500', color: COLORS.fg3, textAlign: 'center' },
+  errorText: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
 });

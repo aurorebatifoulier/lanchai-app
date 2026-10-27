@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import type { RentalDoc } from '@/lib/firestore';
 import { buildReceiptSummary } from '@/utils/receiptSummary';
 import { downloadReceipt } from '@/lib/receiptPdf';
@@ -94,34 +95,35 @@ function Row({ label, value, danger, strong }: { label: string; value: string; d
 }
 
 const s = StyleSheet.create({
+  // My Account card (components/account/ui.tsx); green / red only in the small pills.
   card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
+    backgroundColor: SHADES.white,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
     padding: 16,
     marginTop: 12,
   },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: COLORS.carbon, marginBottom: 12 },
+  cardTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 10 },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginTop: 8 },
   rowLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.carbon },
   rowLabelStrong: { fontWeight: '700' },
   rowValue: { fontSize: 14, fontWeight: '600', color: COLORS.carbon, flexShrink: 0 },
   rowValueStrong: { fontWeight: '800' },
   rowValueDanger: { color: COLORS.danger },
-  detail: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 2 },
+  detail: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   pill: {
     alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4,
     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginTop: 8,
   },
-  pillSuccess: { backgroundColor: '#E8F5EE' },
-  pillDanger: { backgroundColor: '#FEE2E2' },
-  pillMuted: { backgroundColor: COLORS.softGray200 },
+  pillSuccess: { backgroundColor: '#E7F3EC' },
+  pillDanger: { backgroundColor: '#F9E7E3' },
+  pillMuted: { backgroundColor: SHADES.carbonLight },
   pillText: { fontSize: 12, fontWeight: '700' },
   pillTextSuccess: { color: COLORS.success },
   pillTextDanger: { color: COLORS.danger },
-  pillTextMuted: { color: COLORS.fg2 },
-  divider: { height: 1, backgroundColor: COLORS.softGray200, marginVertical: 14 },
+  pillTextMuted: { color: SHADES.carbonMuted },
+  divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 14 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   totalLabel: { flex: 1, fontSize: 15, fontWeight: '800', color: COLORS.carbon },
   totalValue: { fontSize: 18, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
@@ -130,11 +132,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 48,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: COLORS.carbon,
-    backgroundColor: COLORS.white,
+    borderColor: SHADES.carbon,
+    backgroundColor: SHADES.white,
     marginTop: 14,
   },
   downloadBtnDisabled: { opacity: 0.6 },
