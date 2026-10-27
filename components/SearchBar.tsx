@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 
 interface Props {
   value: string;
@@ -12,6 +13,8 @@ interface Props {
   showFilter?: boolean;
   onFilterPress?: () => void;
   filterActive?: boolean;
+  /** 'account' = the My Account field look (Home): white, thin border, radius 14, h50. */
+  variant?: 'default' | 'account';
 }
 
 export default function SearchBar({
@@ -23,6 +26,7 @@ export default function SearchBar({
   showFilter = false,
   onFilterPress,
   filterActive = false,
+  variant = 'default',
 }: Props) {
   const field = (
     <View style={[styles.field, value.length > 0 && styles.fieldActive, showFilter && styles.fieldFlex]}>
@@ -70,7 +74,7 @@ export default function SearchBar({
   }
 
   return (
-    <View style={[styles.field, value.length > 0 && styles.fieldActive, style]}>
+    <View style={[styles.field, variant === 'account' && styles.fieldAccount, value.length > 0 && styles.fieldActive, style]}>
       <Feather name="search" size={16} color={value ? COLORS.carbon : COLORS.fg3} />
       <TextInput
         style={styles.input}
@@ -111,6 +115,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: COLORS.softGray,
+  },
+  fieldAccount: {
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: SHADES.border,
+    paddingHorizontal: 16,
   },
   fieldFlex: {
     flex: 1,

@@ -1,3 +1,5 @@
+import { vteMinutesOfDay, vteWeekday } from './dates';
+
 // Display defaults for config/shop, used whenever that doc (or a field of it) is
 // missing — by the app (lib/shop.ts's SHOP_FALLBACK) and by the emails, so both always
 // show the same shop info. Dependency-free (see latePenalty.ts for why it lives here).
@@ -35,4 +37,49 @@ export function mapsUrl(shop: {
   }
   const q = encodeURIComponent(`${shop.name} ${shop.addressLine} ${shop.city} Laos`);
   return `https://maps.google.com/?q=${q}`;
+}
+
+/**
+ * Live shop status for the Home "Open now" line, in Vientiane time, from config/shop's
+ * structured hours (openTime/closeTime "HH:MM") and optional closedDays (0 = Sunday).
+ * null when the hours can't be read (the line is then hidden).
+ */
+export type ShopOpenState =
+  | { kind: 'open'; until: string }
+  | { kind: 'opensLater'; at: string } // today, before opening
+  // Closed now: all day today (closedDays) or past closing time. `next` = the next open
+  // day within a week (dayOffset 1 = tomorrow), null if every day is marked closed.
+  | { kind: 'closed'; allDay: boolean; next: { at: string; dayOffset: number; weekday: number } | null };
+
+const DOW_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const weekdayName = (d: number) => DOW_NAMES[((d % 7) + 7) % 7];
+
+function toMinutes(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = Number(m[1]), min = Number(m[2]);
+  return h <= 24 && min < 60 ? h * 60 + min : null;
+}
+
+export function shopOpenState(
+  shop: { openTime: string; closeTime: string; closedDays?: number[] },
+  nowMs: number = Date.now(),
+): ShopOpenState | null {
+  const open = toMinutes(shop.openTime);
+  const close = toMinutes(shop.closeTime);
+  if (open == null || close == null || close <= open) return null;
+  const closed = new Set(shop.closedDays ?? []);
+  const today = vteWeekday(nowMs);
+  const now = vteMinutesOfDay(nowMs);
+  const fmt = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+  if (!closed.has(today)) {
+    if (now >= open && now < close) return { kind: 'open', until: fmt(close) };
+    if (now < open) return { kind: 'opensLater', at: fmt(open) };
+  }
+  let next: { at: string; dayOffset: number; weekday: number } | null = null;
+  for (let offset = 1; offset <= 7 && !next; offset++) {
+    if (!closed.has((today + offset) % 7)) next = { at: fmt(open), dayOffset: offset, weekday: (today + offset) % 7 };
+  }
+  return { kind: 'closed', allDay: closed.has(today), next };
 }

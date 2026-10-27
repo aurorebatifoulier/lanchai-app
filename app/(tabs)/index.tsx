@@ -1,10 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-} from 'react-native-reanimated';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,47 +6,41 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  FlatList,
   ActivityIndicator,
-  Platform,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { listenBagItems } from '@/lib/bag';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
-import ProductSocialProof from '@/components/ProductSocialProof';
-import LanchaiIcon from '@/components/LanchaiIcon';
+import { SHADES } from '@/constants/brandShades';
+import { HOME_COPY } from '@/constants/homeCopy';
+import { UI, SectionTitle, CategoryBadge, SCREEN_BOTTOM_GAP } from '@/components/account/ui';
 import SearchBar from '@/components/SearchBar';
-import FavoriteHeart from '@/components/FavoriteHeart';
-import { getProducts, getFavorites, addFavorite, removeFavorite, type LoyaltyTier } from '@/lib/firestore';
-import { Product } from '@/lib/mockData';
-import { getMinPrice } from '@/utils/pricing';
-import { useExchangeRate } from '@/lib/exchangeRate';
-import { toLak } from '@/utils/currency';
-import { useLoyaltyTier } from '@/lib/loyalty';
-import { getProductAccessState } from '@/utils/productAccess';
+import ProductRailCard from '@/components/ProductRailCard';
+import InsetCarousel from '@/components/home/InsetCarousel';
+import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
+import ShopStatusLine from '@/components/home/ShopStatusLine';
+import RentReturnRepeat from '@/components/home/RentReturnRepeat';
 import WhyRentSection from '@/components/WhyRentSection';
-import TrustSection from '@/components/TrustSection';
+import {
+  getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc,
+} from '@/lib/firestore';
+import { CATEGORIES, type Product } from '@/lib/mockData';
+import { useExchangeRate } from '@/lib/exchangeRate';
+import { useLoyaltyTier } from '@/lib/loyalty';
 
-const CATEGORIES = [
-  { id: 'all',     name: 'All',     icon: 'grid-outline'      },
-  { id: 'home',    name: 'Home',    icon: 'home-outline'      },
-  { id: 'kids',    name: 'Kids',    icon: 'happy-outline'     },
-  { id: 'outdoor', name: 'Outdoor', icon: 'compass-outline'   },
-  { id: 'tools',   name: 'Tools',   icon: 'construct-outline' },
-  { id: 'sports',  name: 'Sports',  icon: 'trophy-outline'    },
-  { id: 'fun',     name: 'Fun',     icon: 'book-outline'      },
-] as const;
+// Home (validated mockup) — the My Account design language: white cards with a thin
+// border, radius 18, section titles, palette icon circles, a carbon highlight card.
+// Copy in constants/homeCopy.ts; category looks in constants/categoryStyle.ts.
 
 interface HeroSlide {
   // Local asset from assets/images/. null = placeholder tint shown until photo is added.
   // When ready: replace null with require('@/assets/images/FILENAME.jpg')
-  // Recommended size: 1080 × 480 px (16:7 ratio)
+  // Recommended size: 1080 × 540 px (2:1 ratio)
   image: number | null;
   tint: string;  // background color shown when image is null or loading
   title: string;
@@ -64,44 +52,54 @@ interface HeroSlide {
 const SLIDES: HeroSlide[] = [
   {
     image: null, // → assets/images/hero-lifestyle.jpg  (LANCHAI store or rental lifestyle scene)
-    tint: COLORS.carbon,
+    tint: SHADES.carbon,
     title: 'Why buy it when\nyou can rent it?',
     subtitle: 'Everything you need. Only when you need it.',
-    cta: 'Explore Now',
+    cta: 'Explore now',
     route: '/explore',
   },
   {
     image: null, // → assets/images/hero-outdoor.jpg   (outdoor / camping gear in nature)
-    tint: '#2D3A2E',
+    tint: SHADES.carbonSoft,
     title: 'Planning a weekend\noutdoors?',
     subtitle: 'Rent camping gear instead of buying it.',
-    cta: 'Explore Camping',
+    cta: 'Explore camping',
     route: '/category/outdoor',
   },
   {
     image: null, // → assets/images/hero-creator.jpg   (camera / content creation setup)
-    tint: COLORS.carbon,
+    tint: SHADES.carbon,
     title: 'Creating content?',
     subtitle: 'Access professional equipment instantly.',
-    cta: 'Explore Creator Gear',
+    cta: 'Explore creator gear',
     route: '/explore',
   },
   {
     image: null, // → assets/images/hero-tools.jpg     (power tools / DIY workshop)
-    tint: '#3A2A18',
+    tint: SHADES.carbonSoft,
     title: 'Working on a\nDIY project?',
     subtitle: 'Rent tools and get the job done.',
-    cta: 'Explore Tools',
+    cta: 'Explore tools',
     route: '/category/tools',
   },
 ];
 
-const STEPS = [
-  { n: '1', icon: 'search-outline',     title: 'Find',     duration: '30 sec', desc: 'Browse and discover what you need.' },
-  { n: '2', icon: 'calendar-outline',   title: 'Reserve',  duration: '1 min',  desc: 'Choose your rental dates and confirm your booking instantly.' },
-  { n: '3', icon: 'storefront-outline', title: 'Pick Up',  duration: '5 min',  desc: 'Collect your equipment from the LANCHAI store in Vientiane.' },
-  { n: '4', icon: 'refresh-outline',    title: 'Return',   duration: '2 min',  desc: 'Bring it back when you\'re done. Quick and easy return process.' },
-] as const;
+const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
+
+/** Distinct products of the renter's returned rentals, most recently returned first. */
+function rentAgainProducts(reservations: RentalDoc[], products: Product[]): Product[] {
+  const byId = new Map(products.map(p => [p.id, p]));
+  const seen = new Set<string>();
+  const out: Product[] = [];
+  [...reservations]
+    .filter(r => r.status === 'returned')
+    .sort((a, b) => (b.returnAt?.toMillis() ?? 0) - (a.returnAt?.toMillis() ?? 0))
+    .forEach(r => {
+      const p = byId.get(r.productId);
+      if (p && !seen.has(p.id)) { seen.add(p.id); out.push(p); }
+    });
+  return out;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -111,7 +109,7 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [activeCat, setActiveCat] = useState('all');
+  const [reservations, setReservations] = useState<RentalDoc[]>([]);
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bagCount, setBagCount] = useState(0);
@@ -131,8 +129,10 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) return;
+      if (!user) { setReservations([]); return; }
       getFavorites(user.uid).then(ids => setFavorites(new Set(ids)));
+      // Next pick-up card + "Rent again" (equality-only query, no index).
+      getMyReservations(user.uid).then(setReservations).catch(() => setReservations([]));
     }, [user])
   );
 
@@ -181,37 +181,30 @@ export default function HomeScreen() {
     return listenBagItems(user.uid, items => setBagCount(items.length), () => setBagCount(0));
   }, [user]);
 
-  const popularProducts = useMemo(
-    () => products.filter(p => p.showInPopular === true),
-    [products]
-  );
-
-  const newArrivals = useMemo(
-    () => products.filter(p => p.showInNew === true),
-    [products]
-  );
-
-  const premiumProducts = useMemo(
-    () => products.filter(p => p.isPremium === true),
-    [products]
-  );
-
+  const newArrivals = useMemo(() => products.filter(p => p.showInNew === true), [products]);
   const mostRented = useMemo(
     () => [...products].sort((a, b) => (b.rentalCount ?? b.bookingsCount ?? 0) - (a.rentalCount ?? a.bookingsCount ?? 0)).slice(0, 5),
     [products]
   );
+  const pickup = useMemo(() => nextPickup(reservations), [reservations]);
+  const hasRented = useMemo(() => reservations.some(r => r.status === 'returned'), [reservations]);
+  const rentAgain = useMemo(() => rentAgainProducts(reservations, products), [reservations, products]);
 
-  const handleProductPress = useCallback((id: string) => {
-    router.push(`/product/${id}`);
-  }, [router]);
-
-  const handleCategoryPress = useCallback((catId: string) => {
-    if (catId === 'all') {
-      router.push('/explore');
-    } else {
-      router.push(`/category/${catId}`);
-    }
-  }, [router]);
+  const rail = (items: Product[]) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.railScroll} contentContainerStyle={styles.rail}>
+      {items.map(p => (
+        <ProductRailCard
+          key={p.id}
+          product={p}
+          onPress={() => router.push(`/product/${p.id}`)}
+          exchangeRate={exchangeRate}
+          userTier={userTier ?? null}
+          isFavorite={favorites.has(p.id)}
+          onToggleFavorite={() => handleToggleFavorite(p.id)}
+        />
+      ))}
+    </ScrollView>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -260,335 +253,126 @@ export default function HomeScreen() {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: SCREEN_BOTTOM_GAP }}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Carousel */}
         <HeroCarousel />
 
-        {/* Search */}
-        <SearchBar
-          value={homeQuery}
-          onChangeText={setHomeQuery}
-          onSubmit={() => {
-            if (homeQuery.trim()) {
-              router.push({ pathname: '/explore', params: { q: homeQuery.trim() } } as never);
-            }
-          }}
-          placeholder={firstName ? `Hi ${firstName}, what do you need today?` : 'What do you need today?'}
-          style={{ marginBottom: 18 }}
-        />
+        <View style={styles.content}>
+          <SearchBar
+            variant="account"
+            value={homeQuery}
+            onChangeText={setHomeQuery}
+            onSubmit={() => {
+              if (homeQuery.trim()) {
+                router.push({ pathname: '/explore', params: { q: homeQuery.trim() } } as never);
+              }
+            }}
+            placeholder={HOME_COPY.searchPlaceholder(firstName)}
+            style={{ marginTop: 16 }}
+          />
 
-        {/* Category circles */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
-          {CATEGORIES.map(cat => (
-            <TouchableOpacity
-              key={cat.id}
-              style={styles.catItem}
-              onPress={() => {
-                setActiveCat(cat.id);
-                handleCategoryPress(cat.id);
-              }}
-            >
-              <View style={[styles.catCircle, activeCat === cat.id && styles.catCircleActive]}>
-                <Ionicons
-                  name={cat.icon as never}
-                  size={28}
-                  color={COLORS.carbon}
-                />
-              </View>
-              <Text style={[styles.catLabel, activeCat === cat.id && styles.catLabelActive]}>{cat.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* New arrivals — hides when no products are flagged showInNew */}
-        {!loading && newArrivals.length > 0 && (
-          <>
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>New arrivals</Text>
-              <TouchableOpacity onPress={() => router.push('/explore')}>
-                <Text style={styles.seeAll}>See all</Text>
-              </TouchableOpacity>
+          {pickup && (
+            <View style={{ marginTop: 14 }}>
+              <NextPickupCard rental={pickup} />
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-              {newArrivals.map(p => (
-                <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
-              ))}
-            </ScrollView>
-          </>
-        )}
+          )}
 
-        {/* Popular near you — hides when no products are flagged showInPopular */}
-        {(!loading && !loadError && popularProducts.length === 0) ? null : (
-          <>
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>Popular near you</Text>
-              <TouchableOpacity onPress={() => router.push('/explore')}>
-                <Text style={styles.seeAll}>See all</Text>
+          <View style={{ marginTop: 14 }}>
+            <ShopStatusLine />
+          </View>
+
+          {/* Categories — same circles as the My Account stickers */}
+          <SectionTitle>{HOME_COPY.categoriesTitle}</SectionTitle>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.railScroll} contentContainerStyle={styles.catRail}>
+            {HOME_CATEGORIES.map(cat => (
+              <TouchableOpacity key={cat.id} style={styles.catItem} onPress={() => router.push(`/category/${cat.id}`)} activeOpacity={0.75}>
+                <CategoryBadge cat={cat.id} size={64} />
+                <Text style={styles.catLabel} numberOfLines={1}>{cat.name}</Text>
               </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {loading ? (
+            <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 24 }} />
+          ) : loadError ? (
+            <View style={styles.loadError}>
+              <Feather name="alert-circle" size={14} color={COLORS.danger} />
+              <Text style={UI.errorText}>{HOME_COPY.loadError}</Text>
             </View>
-            {loading ? (
-              <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 20 }} />
-            ) : loadError ? (
-              <View style={styles.loadError}>
-                <Feather name="alert-circle" size={14} color={COLORS.danger} />
-                <Text style={styles.loadErrorText}>Couldn&apos;t load products. Check your connection and try again.</Text>
-              </View>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-                {popularProducts.map(p => (
-                  <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
-                ))}
-              </ScrollView>
-            )}
-          </>
-        )}
+          ) : null}
 
-        {/* How LANCHAI works */}
-        <HowItWorks />
+          {/* New arrivals */}
+          {!loading && newArrivals.length > 0 && (
+            <>
+              <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
+              {rail(newArrivals)}
+            </>
+          )}
 
-        {/* Premium — only shown when at least one product is flagged isPremium */}
-        {!loading && premiumProducts.length > 0 && (
-          <>
-            <View style={styles.sectionHead}>
-              <View style={styles.premiumSectionTitle}>
-                <Feather name="award" size={14} color={COLORS.amber} />
-                <Text style={styles.sectionTitle}>Premium</Text>
-              </View>
-              <TouchableOpacity onPress={() => router.push('/explore')}>
-                <Text style={styles.seeAll}>See all</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-              {premiumProducts.map(p => (
-                <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
-              ))}
-            </ScrollView>
-          </>
-        )}
+          {/* First-time renters: how it works. Returning renters: their past products. */}
+          {!hasRented ? (
+            <RentReturnRepeat />
+          ) : !loading && rentAgain.length > 0 ? (
+            <>
+              <RailHeader title={HOME_COPY.rentAgainTitle} />
+              {rail(rentAgain)}
+            </>
+          ) : null}
 
-        {/* Why Rent */}
-        <WhyRentSection />
+          {/* Most rented this month */}
+          {!loading && mostRented.length > 0 && (
+            <>
+              <RailHeader title={HOME_COPY.mostRentedTitle} onSeeAll={() => router.push('/explore')} />
+              {rail(mostRented)}
+            </>
+          )}
+        </View>
 
-        {/* Most rented this month */}
-        {!loading && mostRented.length > 0 && (
-          <>
-            <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>Most rented this month</Text>
-              <TouchableOpacity onPress={() => router.push('/explore')}>
-                <Text style={styles.seeAll}>See all</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productStrip}>
-              {mostRented.map(p => (
-                <ProductCard key={p.id} product={p} onPress={() => handleProductPress(p.id)} exchangeRate={exchangeRate} userTier={userTier ?? null} isFavorite={favorites.has(p.id)} onToggleFavorite={() => handleToggleFavorite(p.id)} />
-              ))}
-            </ScrollView>
-          </>
-        )}
-
-        {/* Trust */}
-        <TrustSection />
+        {/* Consume better */}
+        <View style={{ marginTop: 28 }}>
+          <WhyRentSection />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function ProductCard({ product, onPress, tagBgOverride, exchangeRate, userTier, isFavorite, onToggleFavorite }: { product: Product; onPress: () => void; tagBgOverride?: string; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void }) {
-  const bgColors: Record<string, string> = {
-    amber: COLORS.amber,
-    dark: COLORS.carbon,
-    beige: COLORS.warmBeige,
-    default: COLORS.warmBeige,
-  };
-  const bg = bgColors[product.cardBg] ?? COLORS.warmBeige;
-  const iconColor = product.cardBg === 'dark' ? COLORS.amber : COLORS.carbon;
-  const minPrice = getMinPrice(product);
-  const accessState = getProductAccessState(product, userTier);
-  const sectionBadge: { label: string; icon?: string; bg: string; text: string } | null =
-    accessState.badgeLabel ? {
-      label: accessState.badgeLabel,
-      bg:    accessState.badgeTone === 'unlocked' ? COLORS.amber : COLORS.carbon,
-      text:  accessState.badgeTone === 'unlocked' ? COLORS.carbon : COLORS.white,
-    } :
-    product.isPremium     ? { label: 'Premium', icon: 'award', bg: COLORS.amber,   text: COLORS.carbon } :
-    product.showInNew     ? { label: 'New',                    bg: COLORS.success, text: COLORS.white  } :
-    product.showInPopular ? { label: 'Popular',                bg: COLORS.carbon,  text: COLORS.white  } :
-    null;
-
+function RailHeader({ title, onSeeAll }: { title: string; onSeeAll?: () => void }) {
   return (
-    <TouchableOpacity style={styles.prodCard} onPress={onPress} activeOpacity={0.85}>
-      <View style={[styles.prodImg, { backgroundColor: bg }]}>
-        {product.images?.[0] ? (
-          <Image
-            source={{ uri: product.images[0] }}
-            style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
-          />
-        ) : null}
-        {product.tag && (
-          <View style={[
-            styles.prodTag,
-            product.tagStyle === 'dark' && styles.prodTagDark,
-            product.tagStyle === 'amber' && styles.prodTagAmber,
-            tagBgOverride ? { backgroundColor: tagBgOverride } : null,
-          ]}>
-            <Text style={[styles.prodTagText, (product.tagStyle === 'dark' || tagBgOverride) && styles.prodTagTextLight]}>
-              {product.tag}
-            </Text>
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.prodFav}
-          onPress={e => { e.stopPropagation(); onToggleFavorite(); }}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          activeOpacity={0.8}
-        >
-          <FavoriteHeart liked={isFavorite} size={13} />
+    <View style={styles.railHead}>
+      <SectionTitle style={styles.railTitle}>{title}</SectionTitle>
+      {onSeeAll && (
+        <TouchableOpacity onPress={onSeeAll} hitSlop={8} activeOpacity={0.7}>
+          <Text style={UI.link}>{HOME_COPY.seeAll}</Text>
         </TouchableOpacity>
-        {sectionBadge && (
-          <View style={[styles.sectionBadge, { backgroundColor: sectionBadge.bg }]}>
-            {sectionBadge.icon && (
-              <Feather name={sectionBadge.icon as never} size={9} color={sectionBadge.text} />
-            )}
-            <Text style={[styles.sectionBadgeText, { color: sectionBadge.text }]}>
-              {sectionBadge.label}
-            </Text>
-          </View>
-        )}
-        {!product.images?.[0] && (
-          <Feather name={product.iconName as never} size={44} color={iconColor} />
-        )}
-      </View>
-      <View style={styles.prodBody}>
-        <Text style={styles.prodName} numberOfLines={2}>{product.name}</Text>
-        {minPrice != null && exchangeRate != null
-          ? <Text style={styles.prodPrice}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} <Text style={styles.prodPriceUnit}>LAK / day</Text></Text>
-          : <Text style={styles.prodPriceUnavailable}>Price not set</Text>}
-        {/* Same thresholds as Explore/Liked — a single low review is never promoted here. */}
-        <ProductSocialProof product={product} />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-const STEP_DELAYS = [100, 250, 400, 550];
-
-function HowItWorks() {
-  const cardOpacity = useSharedValue(0);
-  const cardTranslateY = useSharedValue(30);
-  const sv0 = useSharedValue(0);
-  const sv1 = useSharedValue(0);
-  const sv2 = useSharedValue(0);
-  const sv3 = useSharedValue(0);
-
-  useEffect(() => {
-    cardOpacity.value = withTiming(1, { duration: 600 });
-    cardTranslateY.value = withTiming(0, { duration: 600 });
-    [sv0, sv1, sv2, sv3].forEach((sv, i) => {
-      sv.value = withDelay(STEP_DELAYS[i], withTiming(1, { duration: 400 }));
-    });
-  }, []);
-
-  const cardAnimStyle = useAnimatedStyle(() => ({
-    opacity: cardOpacity.value,
-    transform: [{ translateY: cardTranslateY.value }],
-  }));
-  const anim0 = useAnimatedStyle(() => ({ opacity: sv0.value }));
-  const anim1 = useAnimatedStyle(() => ({ opacity: sv1.value }));
-  const anim2 = useAnimatedStyle(() => ({ opacity: sv2.value }));
-  const anim3 = useAnimatedStyle(() => ({ opacity: sv3.value }));
-  const stepAnimStyles = [anim0, anim1, anim2, anim3];
-
-  return (
-    <View style={styles.howSection}>
-      <Text style={styles.howTitle}>How LANCHAI works</Text>
-      <Text style={styles.howSubtitle}>Renting equipment has never been easier.</Text>
-      <Animated.View style={[styles.howCard, cardAnimStyle]}>
-        {STEPS.map((step, i) => (
-          <Animated.View key={step.n} style={[styles.stepRow, stepAnimStyles[i]]}>
-            {/* Left column: number + vertical line */}
-            <View style={styles.stepLeft}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>{step.n}</Text>
-              </View>
-              {i < STEPS.length - 1 && <View style={styles.stepLine} />}
-            </View>
-            {/* Right column */}
-            <View style={styles.stepRight}>
-              <View style={styles.stepHeader}>
-                <View style={styles.stepIconCircle}>
-                  <Ionicons name={step.icon as never} size={22} color="#FFFFFF" />
-                </View>
-                <View style={styles.stepTitleRow}>
-                  <Text style={styles.stepTitle}>{step.title}</Text>
-                  <View style={styles.durationBadge}>
-                    <Text style={styles.durationText}>{step.duration}</Text>
-                  </View>
-                </View>
-              </View>
-              <Text style={styles.stepDesc}>{step.desc}</Text>
-            </View>
-          </Animated.View>
-        ))}
-      </Animated.View>
+      )}
     </View>
   );
 }
 
 function HeroCarousel() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const scrollRef = useRef<ScrollView>(null);
-  const [activeSlide, setActiveSlide] = useState(0);
-  const slideIndex = useRef(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const next = (slideIndex.current + 1) % SLIDES.length;
-      slideIndex.current = next;
-      setActiveSlide(next);
-      scrollRef.current?.scrollTo({ x: next * width, animated: true });
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [width]);
-
   return (
-    <View style={styles.carouselWrapper}>
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={e => {
-          const i = Math.round(e.nativeEvent.contentOffset.x / width);
-          slideIndex.current = i;
-          setActiveSlide(i);
-        }}
-        scrollEventThrottle={16}
-      >
-        {SLIDES.map((slide, i) => (
-          <View key={i} style={[styles.slide, { width, backgroundColor: slide.tint }]}>
-            {slide.image != null && (
-              <Image source={slide.image} style={styles.slideImage} resizeMode="cover" />
-            )}
-            <View style={styles.slideOverlay} />
-            <View style={styles.slideContent}>
-              <Text style={styles.slideTitle}>{slide.title}</Text>
-              <Text style={styles.slideSub}>{slide.subtitle}</Text>
-              <TouchableOpacity style={styles.slideCta} onPress={() => router.push(slide.route as never)}>
-                <Text style={styles.slideCtaText}>{slide.cta}</Text>
-              </TouchableOpacity>
-            </View>
+    <InsetCarousel
+      height={190}
+      intervalMs={10000}
+      slides={SLIDES.map((slide, i) => (
+        <View key={i} style={[styles.slide, { backgroundColor: slide.tint }]}>
+          {slide.image != null && (
+            <Image source={slide.image} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          )}
+          <View style={styles.slideOverlay} />
+          <View style={styles.slideContent}>
+            <Text style={styles.slideTitle}>{slide.title}</Text>
+            <Text style={styles.slideSub}>{slide.subtitle}</Text>
+            <TouchableOpacity style={styles.slideCta} onPress={() => router.push(slide.route as never)} activeOpacity={0.85}>
+              <Text style={styles.slideCtaText}>{slide.cta}</Text>
+            </TouchableOpacity>
           </View>
-        ))}
-      </ScrollView>
-      <View style={styles.dots}>
-        {SLIDES.map((_, i) => (
-          <View key={i} style={[styles.dot, i === activeSlide && styles.dotActive]} />
-        ))}
-      </View>
-    </View>
+        </View>
+      ))}
+    />
   );
 }
 
@@ -661,369 +445,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.porcelain,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  // Carousel
-  carouselWrapper: {
-    marginHorizontal: -20,
-    marginTop: 0, // sits directly under the 48px header band
-    marginBottom: 16,
-  },
-  slide: {
-    height: 220,
-    overflow: 'hidden',
-  },
-  slideImage: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-  },
-  slideOverlay: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  slideContent: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: 20,
-    paddingBottom: 16,
-  },
-  slideTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: -0.4,
-    lineHeight: 26,
-    marginBottom: 6,
-  },
-  slideSub: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  slideCta: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.amber,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 10,
-  },
-  slideCtaText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: 0.2,
-  },
-  dots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.disabledGray,
-  },
-  dotActive: {
-    width: 18,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.amber,
-  },
-  // Categories
-  catScroll: {
-    gap: 14,
-    paddingBottom: 4,
-    marginBottom: 22,
-    paddingLeft: 0,
-    paddingRight: 8,
-  },
-  catItem: {
-    alignItems: 'center',
-    gap: 6,
-    minWidth: 64,
-  },
-  catCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  catCircleActive: {
-    backgroundColor: COLORS.amber,
-    borderColor: COLORS.amber,
-  },
-  catLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.fg1,
-    textAlign: 'center',
-  },
-  catLabelActive: {
-    fontWeight: '700',
-  },
-  // Section head
-  sectionHead: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-    color: COLORS.carbon,
-  },
-  seeAll: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.amber,
-  },
-  // Product strip
-  productStrip: {
-    gap: 12,
-    paddingRight: 20,
-    paddingLeft: 20,
-    marginLeft: -20,
-    marginBottom: 22,
-  },
-  prodCard: {
-    width: 138,
-    height: 212,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    overflow: 'hidden',
-  },
-  prodImg: {
-    height: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  prodTag: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    height: 20,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: COLORS.porcelain,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  prodTagAmber: {
-    backgroundColor: COLORS.amber,
-  },
-  prodTagDark: {
-    backgroundColor: COLORS.carbon,
-  },
-  prodTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: 0.4,
-  },
-  prodTagTextLight: {
-    color: COLORS.amber,
-  },
-  prodFav: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  prodBody: {
-    padding: 10,
-  },
-  prodName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    lineHeight: 16,
-    height: 32,
-    marginBottom: 3,
-    letterSpacing: -0.1,
-  },
-  prodPrice: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginBottom: 6,
-  },
-  prodPriceUnit: {
-    fontSize: 10,
-  },
-  prodPriceUnavailable: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    fontStyle: 'italic',
-    marginBottom: 6,
-  },
-  // How it works
-  howSection: {
-    marginBottom: 24,
-  },
-  howTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.4,
-    marginBottom: 4,
-  },
-  howSubtitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginBottom: 16,
-  },
-  howCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  stepLeft: {
-    alignItems: 'center',
-    width: 32,
-  },
-  stepBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBadgeText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.white,
-  },
-  stepLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: COLORS.amber,
-    marginTop: 4,
-    marginBottom: 4,
-    minHeight: 24,
-  },
-  stepRight: {
-    flex: 1,
-    paddingBottom: 24,
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  stepIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepTitleRow: {
-    flex: 1,
-    gap: 4,
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  durationBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.amberTint,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  durationText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.amber,
-  },
-  stepDesc: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    lineHeight: 19,
-  },
-  sectionEmpty: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    textAlign: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 4,
-  },
-  premiumSectionTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  sectionBadge: {
-    position: 'absolute',
-    bottom: 7,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    height: 18,
-    paddingHorizontal: 6,
-    borderRadius: 5,
-  },
-  sectionBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  loadError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 20,
-    paddingHorizontal: 4,
-  },
-  loadErrorText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.danger,
-    flex: 1,
-    lineHeight: 18,
-  },
+  content: { paddingHorizontal: 16 },
+
+  // Hero slides (inside InsetCarousel)
+  slide: { flex: 1, overflow: 'hidden' },
+  slideOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.35)' },
+  slideContent: { flex: 1, justifyContent: 'flex-end', padding: 18 },
+  slideTitle: { fontSize: 21, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 25, marginBottom: 4 },
+  slideSub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 18, marginBottom: 12 },
+  slideCta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12 },
+  slideCtaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },
+
+  // Rails bleed to the screen edges, content stays on the 16px gutter.
+  railScroll: { marginHorizontal: -16 },
+  rail: { paddingHorizontal: 16, gap: 12 },
+  railHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 24, marginBottom: 12 },
+  railTitle: { marginTop: 0, marginBottom: 0 },
+
+  catRail: { paddingHorizontal: 12, gap: 4 },
+  catItem: { width: 76, alignItems: 'center' },
+  catLabel: { fontSize: 13, fontWeight: '600', color: SHADES.carbon, marginTop: 8 },
+
+  loadError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20 },
 });

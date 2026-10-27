@@ -32,10 +32,11 @@ const DECOR_TOP = 4;
 const BUBBLE = 36;
 // Background-only style: small round dots (round caps), amber ≤ 30% opacity, fading in
 // from the left edge (3% → 30% just before the bike loop, a continuous gradient).
-const DASH: [number, number] = [0.1, 7];
-const DASH_PERIOD = DASH[0] + DASH[1];
+// Exported: the Home "Rent. Return. Repeat." trail uses the same bee-trail style.
+export const DASH: [number, number] = [0.1, 7];
+export const DASH_PERIOD = DASH[0] + DASH[1];
 const PATH_OPACITY_START = 0.03;
-const PATH_OPACITY = 0.3;
+export const PATH_OPACITY = 0.3;
 // Hexagon centre in decor coordinates (top-right corner).
 // ≈16px tall, light amber, ~20px of white space to the right edge of the screen
 // (decor right edge = screen edge + 6 → centre at 244 − 20 − 7).

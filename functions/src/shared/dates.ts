@@ -56,6 +56,11 @@ export function vteMinutesOfDay(ms: number): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
+/** Local (Vientiane) day of the week, 0 = Sunday … 6 = Saturday. */
+export function vteWeekday(ms: number): number {
+  return local(ms).getUTCDay();
+}
+
 /** Local (Vientiane) date stamp "261024" (YYMMDD) — order IDs. */
 export function vteDateStamp(ms: number): string {
   const d = local(ms);

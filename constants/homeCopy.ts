@@ -1,0 +1,49 @@
+import { weekdayName, type ShopOpenState } from '@/functions/src/shared/shop';
+
+// Every Home string (validated mockup) — edit here only. Renter-facing, sentence case.
+export const HOME_COPY = {
+  searchPlaceholder: (firstName: string) =>
+    firstName ? `Hi ${firstName}, what do you need today?` : 'What do you need today?',
+
+  nextPickupTitle: 'Your next pick-up',
+
+  directions: 'Directions',
+  shopStatus: (st: ShopOpenState): string => {
+    switch (st.kind) {
+      case 'open': return `Open now · until ${st.until}`;
+      case 'opensLater': return `Opens at ${st.at}`;
+      case 'closed': {
+        const head = st.allDay ? 'Closed today' : 'Closed now';
+        if (!st.next) return head;
+        const when = st.next.dayOffset === 1 ? 'tomorrow' : weekdayName(st.next.weekday);
+        return `${head} · opens ${when} at ${st.next.at}`;
+      }
+    }
+  },
+
+  categoriesTitle: 'Categories',
+  collectionsTitle: 'Got plans?',
+  newArrivalsTitle: 'New arrivals',
+  rentAgainTitle: 'Rent again',
+  mostRentedTitle: 'Most rented this month',
+  seeAll: 'See all',
+  loadError: "Couldn't load products. Check your connection and try again.",
+
+  stepsTitle: 'Rent. Return. Repeat.',
+  steps: [
+    { title: 'Rent.', text: 'Pick your dates in a minute. Your card can relax.' },
+    { title: 'Pick up.', text: 'Show your QR at the shop. Every item checked.' },
+    { title: 'Return. Repeat.', text: 'Deposit back on the spot. Then rent again. Obviously.' },
+  ],
+
+  collectionEmpty: 'Nothing here yet — check back soon.',
+  collectionUnavailable: 'This collection is not available.',
+} as const;
+
+// Seed drafts for Admin → Collections ("Create example drafts"): no products, unpublished.
+export const COLLECTION_SEEDS: { title: string; subtitle: string; icon: string; shade: string }[] = [
+  { title: 'Weekend by the river', subtitle: 'Tent, cooler, speaker. Sunset not included.', icon: 'tent', shade: 'amberLight' },
+  { title: 'Family visiting?', subtitle: 'Cot, stroller, extra chairs.', icon: 'baby-carriage', shade: 'carbon' },
+  { title: 'Moving day', subtitle: 'Drill, ladder, trolley. Friends sold separately.', icon: 'truck-outline', shade: 'amberMid' },
+  { title: 'Party at home', subtitle: 'Speakers, lights, chairs. The neighbours will cope.', icon: 'party-popper', shade: 'carbonLight' },
+];
