@@ -64,6 +64,12 @@ export function isBeforePickupDay(pickupAtMs: number, nowMs: number = Date.now()
   return pickupAtMs > 0 && vteEndOfDayMs(nowMs) < vteEndOfDayMs(pickupAtMs);
 }
 
+/** Local (Vientiane) month key "2026-10" — products.rentalsByMonth (Home podium). */
+export function vteMonthKey(ms: number): string {
+  const d = local(ms);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}`;
+}
+
 /** Local (Vientiane) day of the week, 0 = Sunday … 6 = Saturday. */
 export function vteWeekday(ms: number): number {
   return local(ms).getUTCDay();

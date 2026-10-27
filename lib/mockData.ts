@@ -21,6 +21,8 @@ export interface Product {
   price14to29: number;       // 14–29 day rate — USD
   price30plus: number;       // 30+ day rate — USD
   deposit: number;           // USD
+  /** Returned rentals per Vientiane month, "2026-10" → n (applyRentalCount). Home podium. */
+  rentalsByMonth?: Record<string, number>;
   retailPrice?: number;          // approximate new retail price — USD
   reviewCount: number;
   rentalCount: number;

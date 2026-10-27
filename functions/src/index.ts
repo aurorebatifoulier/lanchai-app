@@ -14,7 +14,7 @@ import {
   loyaltyPointsFor, isLoyaltyExcluded, applyLoyaltyPointsChange, DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_REFERRAL_REWARD_POINTS,
   TIER_ORDER, TIER_LABELS, type LoyaltyChangeConfig, type LoyaltyTierKey,
 } from './shared/loyalty';
-import { isPickupMissed, vteDateStamp, vteMinutesOfDay, vteTime } from './shared/dates';
+import { isPickupMissed, vteDateStamp, vteMinutesOfDay, vteTime, vteMonthKey } from './shared/dates';
 import { HANDOFF_BUFFER_MS } from './shared/availability';
 import { sendLateReturnEmail } from './email/triggers';
 import { dueLateAlerts, planLateEmails, type LateAlertKey, type LateRow } from './lateAlerts';
@@ -355,9 +355,13 @@ export const applyRentalCount = onDocumentUpdated(
     const productSnap = await productRef.get();
 
     if (productSnap.exists) {
+      // rentalsByMonth.{YYYY-MM} (Vientiane month of the return) feeds the Home
+      // "Most rented this month" podium; rentalCount stays the all-time total.
+      const returnedMs = after.returnedAt?.toMillis?.() ?? Date.now();
       await productRef.update({
         rentalCount:   FieldValue.increment(1),
         bookingsCount: FieldValue.increment(1),
+        [`rentalsByMonth.${vteMonthKey(returnedMs)}`]: FieldValue.increment(1),
       });
     }
 
