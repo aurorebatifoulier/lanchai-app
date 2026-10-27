@@ -994,6 +994,23 @@ a snapshot indefinitely).
     `getEffectiveRate`. `addToBag(uid, product, { pickupAt, returnAt })` (dates optional),
     quantity 1. Checkout still runs every check (holds, ID, server).
 
+- **Product detail (validated mockup, 2026-10-27).** `app/product/[id].tsx` assembles
+  `components/product/*` — copy in `constants/productCopy.ts`. Gallery on carbonLight
+  (share via RN `Share`, heart, admin Edit) scrolls away → `ProductStickyBar` overlay.
+  `AvailabilityCard` = real occupancy (`fetchOccupancy`, full-day rule; the manual
+  `available` flag only forces "Not available right now"), 7-day strip, calendar sheet →
+  `openQuickAdd(product, { range })`. Signal "★ · n reviews · ↻ n rentals · n this month"
+  (rating from the first review HERE, unlike the cards). Tier cells (K format, 1–2 d
+  carbon, cheapest light amber), full week = 7 × `getEffectiveRate(7)`. How it works:
+  the renter's ACTUAL deposit = `toLak(deposit) × depositPercentFor(type, tier) / 100`
+  (same as booking), resident hint (`useResidentPromo`), weekend points
+  (`loyaltyPointsFor`), pick-up street from `config/shop`. Reviews: 1 read (latest) +
+  `/reviews/[productId]` (paged, NOT under app/product/[id]/). Pairs well with: same
+  published collections, then category, cached products. Question → `/chat?about=…`.
+  Bottom bar: bag → quick add (no dateless add), Rent it → booking/new. The user doc is
+  read once through `useMyLoyalty().profile` (type, tier, BtoB fields). Per-product
+  `cardBg` is gone everywhere (optional legacy field only).
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the
