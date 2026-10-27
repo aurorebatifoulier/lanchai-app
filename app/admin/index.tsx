@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides';
 }
 
 const CARDS: HubCard[] = [
@@ -32,6 +32,13 @@ const CARDS: HubCard[] = [
     title: 'Reservations',
     sub: 'View and manage bookings',
     route: '/admin/reservations',
+  },
+  {
+    icon: 'image',
+    iconBg: COLORS.warmBeige,
+    title: 'Home slides',
+    sub: 'Hero carousel and mid-page banner photos',
+    route: '/admin/home-slides',
   },
   {
     icon: 'layers',

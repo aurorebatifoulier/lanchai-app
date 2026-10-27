@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDocs, getDoc, query, where, addDoc, updateDoc, deleteDoc, writeBatch,
+  collection, doc, getDocs, getDoc, query, where, addDoc, setDoc, updateDoc, deleteDoc, writeBatch,
   serverTimestamp, Timestamp,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -107,6 +107,17 @@ export async function getAllSlides(): Promise<HomeSlide[]> {
 export async function getSlide(id: string): Promise<HomeSlide | null> {
   const snap = await getDoc(doc(db, 'homeSlides', id));
   return snap.exists() ? fromSnap(snap.id, snap.data()) : null;
+}
+
+/** A new slide id without a network call (so its photo can be uploaded first). */
+export function newSlideId(): string {
+  return doc(collection(db, 'homeSlides')).id;
+}
+
+/** Creates the slide under a given id (newSlideId) — used by the form. */
+export async function createSlideWithId(id: string, input: HomeSlideInput): Promise<void> {
+  clearHomeCache('slides');
+  await setDoc(doc(db, 'homeSlides', id), { ...input, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
 }
 
 export async function createSlide(input: HomeSlideInput): Promise<string> {
