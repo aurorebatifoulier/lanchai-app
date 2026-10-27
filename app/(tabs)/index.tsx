@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  ActivityIndicator,
   Animated,
   useWindowDimensions,
   RefreshControl,
@@ -34,6 +33,9 @@ import MostRentedPodium from '@/components/home/MostRentedPodium';
 import WhyBuyCard from '@/components/home/WhyBuyCard';
 import ReferralPromoCard from '@/components/home/ReferralPromoCard';
 import { RailHeader } from '@/components/home/RailHeader';
+import {
+  HomeSection, RailSkeleton, ThumbsSkeleton, TilesSkeleton, ListSkeleton, PodiumSkeleton, CardSkeleton,
+} from '@/components/home/Skeletons';
 import { useReduceMotion } from '@/components/account/AccountHeader';
 import {
   rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue, whyBuyMineRanked, whyBuyCatalogueRanked,
@@ -122,7 +124,6 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState(false);
   // Per-source "loaded" flags — each section waits only for its own data (skeletons).
   const [ready, setReady] = useState({ products: false, mine: false, collections: false, occupancy: false });
-  const loading = !ready.products;
   const [refreshing, setRefreshing] = useState(false);
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
   const [collections, setCollections] = useState<CollectionDoc[]>([]);
@@ -448,9 +449,7 @@ export default function HomeScreen() {
               </ScrollView>
             )}
 
-            {loading ? (
-              <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 24 }} />
-            ) : loadError ? (
+            {loadError ? (
               <View style={styles.loadError}>
                 <Feather name="alert-circle" size={14} color={COLORS.danger} />
                 <Text style={UI.errorText}>{HOME_COPY.loadError}</Text>
@@ -458,36 +457,44 @@ export default function HomeScreen() {
             ) : null}
 
             {/* New arrivals — the product-card rail (the showcase) */}
-            {!loading && picked.newArrivals.length > 0 && (
-              <>
-                <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
-                {rail(picked.newArrivals)}
-              </>
-            )}
+            <HomeSection loading={!ready.products} skeleton={<RailSkeleton />}>
+              {picked.newArrivals.length > 0 && (
+                <>
+                  <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
+                  {rail(picked.newArrivals)}
+                </>
+              )}
+            </HomeSection>
 
-            {/* New renters: how it works, early on the page */}
-            {(preview || !returning) && <RentReturnRepeat />}
+            {/* New renters: how it works, early on the page (waits for their rentals) */}
+            <HomeSection loading={!ready.mine} skeleton={<CardSkeleton height={220} />}>
+              {(preview || !returning) && <RentReturnRepeat />}
+            </HomeSection>
 
             {/* Got plans? — 2-column tiles */}
-            {preview ? (
-              <>
-                <CollectionTiles collections={allCollections} />
-                {allCollections.length > 0 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminDraftsIncluded}</Text>}
-                {allCollections.length === 0 && <AdminHint />}
-              </>
-            ) : !loading && visibleCollections.length > 0 ? (
-              <CollectionTiles collections={visibleCollections} />
-            ) : !loading && isAdmin ? (
-              <AdminHint />
-            ) : null}
+            <HomeSection loading={!ready.products || !ready.collections} skeleton={<TilesSkeleton />}>
+              {preview ? (
+                <>
+                  <CollectionTiles collections={allCollections} />
+                  {allCollections.length > 0 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminDraftsIncluded}</Text>}
+                  {allCollections.length === 0 && <AdminHint />}
+                </>
+              ) : visibleCollections.length > 0 ? (
+                <CollectionTiles collections={visibleCollections} />
+              ) : isAdmin ? (
+                <AdminHint />
+              ) : null}
+            </HomeSection>
 
             {/* Free this weekend — products free for the whole weekend window */}
-            {!loading && weekend && weekendShown.length >= 3 && (
-              <>
-                <FreeWeekend products={weekendShown} win={weekend} exchangeRate={exchangeRate} />
-                {preview && picked.weekend.length < 3 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
-              </>
-            )}
+            <HomeSection loading={!ready.products || !ready.occupancy} skeleton={<ThumbsSkeleton />}>
+              {weekend && weekendShown.length >= 3 && (
+                <>
+                  <FreeWeekend products={weekendShown} win={weekend} exchangeRate={exchangeRate} />
+                  {preview && picked.weekend.length < 3 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
+                </>
+              )}
+            </HomeSection>
           </View>
 
           {/* Banner — breaks the rhythm between the rails and the lists */}
@@ -497,15 +504,18 @@ export default function HomeScreen() {
 
           <View style={styles.content}>
             {/* Rent again — compact list (returning renters) */}
-            {!loading && (preview || rentAgain.length > 0) && (
-              <>
-                <RentAgainList rows={rentAgain} />
-                {preview && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminRentAgainStats(returnedCount, rentAgain.length)}</Text>}
-              </>
-            )}
+            <HomeSection loading={!ready.products || !ready.mine} skeleton={<ListSkeleton />}>
+              {(preview || rentAgain.length > 0) && (
+                <>
+                  <RentAgainList rows={rentAgain} />
+                  {preview && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminRentAgainStats(returnedCount, rentAgain.length)}</Text>}
+                </>
+              )}
+            </HomeSection>
 
             {/* Most rented — podium (this month, else all-time), else the rail */}
-            {!loading && podium ? (
+            <HomeSection loading={!ready.products} skeleton={<PodiumSkeleton />}>
+            {podium ? (
               <>
                 <RailHeader
                   title={podium.scope === 'month' ? HOME_COPY.mostRentedTitle : HOME_COPY.mostRentedAllTimeTitle}
@@ -514,23 +524,27 @@ export default function HomeScreen() {
                 <MostRentedPodium top={podium.top} />
                 {preview && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPodiumScope(podium.scope)}</Text>}
               </>
-            ) : !loading && mostRented.length > 0 ? (
+            ) : mostRented.length > 0 ? (
               <>
                 <RailHeader title={HOME_COPY.mostRentedAllTimeTitle} onSeeAll={() => router.push('/explore')} />
                 {rail(mostRented)}
               </>
             ) : null}
+            </HomeSection>
 
             {/* Under {X} LAK a day — budget picks */}
-            {!loading && budgetShown.length >= 2 && (
-              <>
-                <BudgetPicks products={budgetShown} thresholdLak={budgetLak} exchangeRate={exchangeRate} />
-                {preview && picked.budget.length < 2 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
-              </>
-            )}
+            <HomeSection loading={!ready.products} skeleton={<TilesSkeleton />}>
+              {budgetShown.length >= 2 && (
+                <>
+                  <BudgetPicks products={budgetShown} thresholdLak={budgetLak} exchangeRate={exchangeRate} />
+                  {preview && picked.budget.length < 2 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
+                </>
+              )}
+            </HomeSection>
 
             {/* Why buy it? — a real comparison */}
-            {!loading && (preview ? (
+            <HomeSection loading={!ready.products || !ready.mine} skeleton={<CardSkeleton />}>
+            {preview ? (
               <>
                 {whyMine && <Text style={[UI.small, styles.adminLabel]}>{HOME_COPY.adminWhyBuyMine}</Text>}
                 {whyMine && <WhyBuyCard pick={whyMine} />}
@@ -539,12 +553,15 @@ export default function HomeScreen() {
               </>
             ) : whyBuy ? (
               <View style={{ marginTop: 24 }}><WhyBuyCard pick={whyBuy} /></View>
-            ) : null)}
+            ) : null}
+            </HomeSection>
 
             {/* Bottom: returning renters → referral card */}
-            {(preview || (returning && !loyalty.excluded)) && (
-              <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} /></View>
-            )}
+            <HomeSection loading={!ready.mine} skeleton={null}>
+              {(preview || (returning && !loyalty.excluded)) && (
+                <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} /></View>
+              )}
+            </HomeSection>
           </View>
         </Animated.ScrollView>
 
