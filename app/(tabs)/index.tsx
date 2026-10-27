@@ -52,6 +52,7 @@ import { getPublishedCollections, getAllCollections, type CollectionDoc } from '
 import WhyRentSection from '@/components/WhyRentSection';
 import { HERO_BUILT_IN } from '@/components/home/builtInSlides';
 import SlideCarousel from '@/components/home/SlideCarousel';
+import BagButton from '@/components/home/BagButton';
 import { getPublishedSlides, getAllSlides, type HomeSlide } from '@/lib/homeSlides';
 import {
   getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc, type LoyaltyTier,
@@ -90,7 +91,8 @@ export default function HomeScreen() {
   const [previewAll, setPreviewAll] = useState(false);
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
-  const [bagCount, setBagCount] = useState(0);
+  // null until the bag listener answers (BagButton animates only later increases).
+  const [bagCount, setBagCount] = useState<number | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   // ONE live users/{uid} read (loyalty snapshot) also gives the first name and tier.
   const loyalty = useMyLoyalty();
@@ -206,8 +208,8 @@ export default function HomeScreen() {
 
   // Real-time bag item count for bag badge
   useEffect(() => {
-    if (!user) { setBagCount(0); return; }
-    return listenBagItems(user.uid, items => setBagCount(items.length), () => setBagCount(0));
+    if (!user) { setBagCount(null); return; }
+    return listenBagItems(user.uid, items => setBagCount(items.length), () => setBagCount(null));
   }, [user]);
 
   const newArrivals = useMemo(() => products.filter(p => p.showInNew === true), [products]);
@@ -355,14 +357,7 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/liked')}>
             <Feather name="heart" size={22} color={COLORS.carbon} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/bag')}>
-            <Feather name="shopping-bag" size={22} color={COLORS.carbon} />
-            {bagCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{bagCount > 9 ? '9+' : bagCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <BagButton count={bagCount} onPress={() => router.push('/bag')} />
         </View>
       </View>
 
