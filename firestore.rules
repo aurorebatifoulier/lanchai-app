@@ -76,6 +76,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── collections/{id} (Home "Got plans?") ─────────────────────────────
+    // Signed-in renters read published collections only (the app queries
+    // where('published','==',true)); drafts are admin-only. Admin-managed.
+    match /collections/{collectionId} {
+      allow read:  if (isAuthed() && resource.data.published == true) || isAdmin();
+      allow write: if isAdmin();
+    }
+
     // ── stockAdjustments ─────────────────────────────────────────────────
     // Append-only audit log of inRepairUnits/lostUnits changes on the parent
     // product (utils/availability.ts's effectiveStock reads those two count

@@ -25,6 +25,8 @@ import InsetCarousel from '@/components/home/InsetCarousel';
 import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
 import ShopStatusLine from '@/components/home/ShopStatusLine';
 import RentReturnRepeat from '@/components/home/RentReturnRepeat';
+import CollectionCards from '@/components/home/CollectionCards';
+import { getPublishedCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
 import {
   getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc,
@@ -110,6 +112,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
+  const [collections, setCollections] = useState<CollectionDoc[]>([]);
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bagCount, setBagCount] = useState(0);
@@ -133,6 +136,7 @@ export default function HomeScreen() {
       getFavorites(user.uid).then(ids => setFavorites(new Set(ids)));
       // Next pick-up card + "Rent again" (equality-only query, no index).
       getMyReservations(user.uid).then(setReservations).catch(() => setReservations([]));
+      getPublishedCollections().then(setCollections).catch(() => setCollections([]));
     }, [user])
   );
 
@@ -186,6 +190,11 @@ export default function HomeScreen() {
     () => [...products].sort((a, b) => (b.rentalCount ?? b.bookingsCount ?? 0) - (a.rentalCount ?? a.bookingsCount ?? 0)).slice(0, 5),
     [products]
   );
+  // "Got plans?": hide a collection with no product the renter can see.
+  const visibleCollections = useMemo(() => {
+    const ids = new Set(products.map(p => p.id));
+    return collections.filter(c => c.productIds.some(id => ids.has(id)));
+  }, [collections, products]);
   const pickup = useMemo(() => nextPickup(reservations), [reservations]);
   const hasRented = useMemo(() => reservations.some(r => r.status === 'returned'), [reservations]);
   const rentAgain = useMemo(() => rentAgainProducts(reservations, products), [reservations, products]);
@@ -301,6 +310,9 @@ export default function HomeScreen() {
               <Text style={UI.errorText}>{HOME_COPY.loadError}</Text>
             </View>
           ) : null}
+
+          {/* Got plans? — admin-managed occasion collections */}
+          {!loading && <CollectionCards collections={visibleCollections} />}
 
           {/* New arrivals */}
           {!loading && newArrivals.length > 0 && (
