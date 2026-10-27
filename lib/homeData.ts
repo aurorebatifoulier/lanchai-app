@@ -1,5 +1,7 @@
 import type { Product } from '@/lib/mockData';
-import type { RentalDoc } from '@/lib/firestore';
+import type { RentalDoc, LoyaltyTier } from '@/lib/firestore';
+import { computeAvailableUnits, effectiveStock, type OccupancyRecord } from '@/utils/availability';
+import { getProductAccessState } from '@/utils/productAccess';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
 import { vteMonthKey } from '@/functions/src/shared/dates';
@@ -91,4 +93,72 @@ export function whyBuyCatalogue(products: Product[], rate: number | null): WhyBu
   }
   if (!best) return null;
   return { kind: 'catalogue', product: best.p, retailLak: toLak(best.p.retailPrice!, rate), perDayLak: toLak(best.perDay, rate) };
+}
+
+// ── Free this weekend ────────────────────────────────────────────────────────
+
+export interface WeekendWindow {
+  /** Pick-up = first open slot that day; return = Sunday at the same time (2-day-style
+   *  24h blocks, like useLinkedReturnTime). Device-local dates, like the booking flow. */
+  pickupAt: Date;
+  returnAt: Date;
+  slot: string;
+}
+
+const atSlot = (day: Date, slot: string) => {
+  const d = new Date(day);
+  const [h, m] = slot.split(':').map(Number);
+  d.setHours(h, m, 0, 0);
+  return d;
+};
+
+/**
+ * Mon–Thu → the coming Fri–Sun; Fri–Sat → today to Sunday; Sunday → next Fri–Sun. If no
+ * pick-up slot is left today, start the next day; if that would be Sunday, next weekend.
+ * `availableSlots(day)` = getAvailableTimeSlots(day, shop slots) (2h lead time today).
+ */
+export function weekendWindow(now: Date, availableSlots: (day: Date) => string[]): WeekendWindow | null {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dow = today.getDay();
+  let offset = dow >= 1 && dow <= 4 ? 5 - dow : dow === 0 ? 5 : 0;
+  for (let guard = 0; guard < 10; guard++) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+    if (day.getDay() === 0) { offset += 5; continue; } // never start on a Sunday
+    const slot = availableSlots(day)[0];
+    if (!slot) { offset += 1; continue; }
+    const sunday = new Date(day.getFullYear(), day.getMonth(), day.getDate() + (7 - day.getDay()) % 7);
+    return { pickupAt: atSlot(day, slot), returnAt: atSlot(sunday, slot), slot };
+  }
+  return null;
+}
+
+/** Products a renter could book for the whole window (same rule as the booking check). */
+export function freeThisWeekend(
+  products: Product[],
+  occupancy: Map<string, OccupancyRecord[]>,
+  win: WeekendWindow,
+  userTier: LoyaltyTier | null,
+  { candidates = 12, max = 8 }: { candidates?: number; max?: number } = {},
+): Product[] {
+  return bookableByPopularity(products, userTier)
+    .slice(0, candidates)
+    .filter(p => computeAvailableUnits(occupancy.get(p.id) ?? [], win.pickupAt, win.returnAt, effectiveStock(p)) >= 1)
+    .slice(0, max);
+}
+
+// ── Under {X} LAK a day ──────────────────────────────────────────────────────
+
+/** Products whose 1-day price (pricePerDay → LAK) is ≤ the threshold, most popular first. */
+export function budgetPicks(products: Product[], thresholdLak: number, rate: number | null, userTier: LoyaltyTier | null): Product[] {
+  if (rate == null) return [];
+  return bookableByPopularity(products, userTier)
+    .filter(p => p.pricePerDay > 0 && toLak(p.pricePerDay, rate) <= thresholdLak);
+}
+
+/** Bookable for this renter (visible list already), most rented first. */
+export function bookableByPopularity(products: Product[], userTier: LoyaltyTier | null): Product[] {
+  return products
+    .filter(p => p.available !== false && effectiveStock(p) > 0 && getMinPrice(p) != null)
+    .filter(p => !getProductAccessState(p, userTier).locked)
+    .sort((a, b) => (b.rentalCount ?? b.bookingsCount ?? 0) - (a.rentalCount ?? a.bookingsCount ?? 0));
 }

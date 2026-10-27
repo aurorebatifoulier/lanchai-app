@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -52,7 +52,9 @@ function buildDateTime(date: Date, timeStr: string): Date {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function BookingNewScreen() {
-  const { productId } = useLocalSearchParams<{ productId: string }>();
+  // pickupAt / returnAt (ms, optional): pre-filled dates, e.g. Home "Free this weekend".
+  const { productId, pickupAt: prefillPickup, returnAt: prefillReturn } =
+    useLocalSearchParams<{ productId: string; pickupAt?: string; returnAt?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -75,7 +77,7 @@ export default function BookingNewScreen() {
   const [loading, setLoading]               = useState(true);
   const [startDate, setStartDate]           = useState<Date | null>(null);
   const [endDate, setEndDate]               = useState<Date | null>(null);
-  const { pickupTime, returnTime, selectPickupTime, selectReturnTime } = useLinkedReturnTime();
+  const { pickupTime, returnTime, selectPickupTime, selectReturnTime, resetTimes } = useLinkedReturnTime();
   const [quantity, setQuantity]             = useState(1);
   const [notes, setNotes]                   = useState('');
   const [availableStock, setAvailableStock] = useState(1);
@@ -83,6 +85,24 @@ export default function BookingNewScreen() {
   const [showDateModal,        setShowDateModal]        = useState(false);
   const [showPickupTimeModal,  setShowPickupTimeModal]  = useState(false);
   const [showReturnTimeModal,  setShowReturnTimeModal]  = useState(false);
+
+  // Pre-fill once from the params when still valid (slot open, return after pick-up);
+  // otherwise ignored and the normal flow applies. The renter can change everything.
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (prefilled.current || !prefillPickup || !prefillReturn) return;
+    prefilled.current = true;
+    const p = new Date(Number(prefillPickup));
+    const r = new Date(Number(prefillReturn));
+    if (!Number.isFinite(p.getTime()) || !Number.isFinite(r.getTime()) || r <= p) return;
+    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const pDay = new Date(p.getFullYear(), p.getMonth(), p.getDate());
+    const rDay = new Date(r.getFullYear(), r.getMonth(), r.getDate());
+    if (!getAvailableTimeSlots(pDay, timeSlots).includes(hhmm(p)) || !timeSlots.includes(hhmm(r))) return;
+    setStartDate(pDay);
+    setEndDate(rDay);
+    resetTimes(hhmm(p), hhmm(r));
+  }, [prefillPickup, prefillReturn, timeSlots, resetTimes]);
 
   useEffect(() => {
     if (!productId) return;

@@ -19,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { UI } from '@/components/account/ui';
+import { getHomeConfig, saveHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK, BUDGET_THRESHOLD_LIMITS } from '@/lib/homeConfig';
 import {
   SHOP_FALLBACK,
   saveShopInfo,
@@ -221,6 +222,50 @@ function RetentionSection() {
       {status === 'error' && <Text style={s.flagError}>Could not save. Please try again.</Text>}
       <TouchableOpacity style={s.retentionBtn} onPress={save} disabled={status === 'saving'} activeOpacity={0.85}>
         <Text style={s.retentionBtnText}>{status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save retention'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// Home settings (config/home) — the "Under X LAK a day" section. Own Save.
+function HomeSection() {
+  const [threshold, setThreshold] = useState(String(DEFAULT_BUDGET_THRESHOLD_LAK));
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    getHomeConfig().then(c => setThreshold(String(c.budgetThresholdLak)));
+  }, []);
+  const save = async () => {
+    const v = Number(threshold.replace(/[\s,]/g, ''));
+    if (!Number.isInteger(v) || v < BUDGET_THRESHOLD_LIMITS.min || v > BUDGET_THRESHOLD_LIMITS.max) {
+      setError(`Between ${BUDGET_THRESHOLD_LIMITS.min.toLocaleString('en-US')} and ${BUDGET_THRESHOLD_LIMITS.max.toLocaleString('en-US')} LAK.`);
+      return;
+    }
+    setError(null);
+    setStatus('saving');
+    try {
+      await saveHomeConfig({ budgetThresholdLak: v });
+      setThreshold(String(v));
+      setStatus('saved');
+    } catch {
+      setStatus('error');
+    }
+  };
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionLabel}>Home</Text>
+      <Field
+        label="Budget section threshold (LAK per day)"
+        hint={'Home shows "Under {this} LAK a day" with products whose 1-day price is at or below it.'}
+        value={threshold}
+        onChangeText={t => { setThreshold(t); setStatus('idle'); }}
+        keyboardType="number-pad"
+        editable={status !== 'saving'}
+      />
+      {error && <Text style={s.flagError}>{error}</Text>}
+      {status === 'error' && <Text style={s.flagError}>Could not save. Please try again.</Text>}
+      <TouchableOpacity style={s.retentionBtn} onPress={save} disabled={status === 'saving'} activeOpacity={0.85}>
+        <Text style={s.retentionBtnText}>{status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Save home settings'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -465,6 +510,7 @@ export default function AdminShopSettingsScreen() {
 
             <FeatureFlagsSection />
 
+            <HomeSection />
             <RetentionSection />
 
             <EmailSettingsSection />

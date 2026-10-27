@@ -67,7 +67,8 @@ export default function ExploreScreen() {
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
   const CURRENT_USER = user?.uid ?? '';
-  const { q: initialQuery } = useLocalSearchParams<{ q?: string }>();
+  // maxPrice (LAK / day, optional): starts with the price filter set — Home "Under X LAK a day".
+  const { q: initialQuery, maxPrice } = useLocalSearchParams<{ q?: string; maxPrice?: string }>();
 
   // Data
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -114,6 +115,13 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (initialQuery) setSearchQuery(initialQuery as string);
   }, [initialQuery]);
+
+  // "See all" from Home "Under X LAK a day": start with the max-price filter (removable chip).
+  useEffect(() => {
+    const max = Number(maxPrice);
+    if (!maxPrice || !Number.isFinite(max) || max <= 0) return;
+    setFilters(f => ({ ...f, priceMax: Math.min(max, PRICE_CONFIG.max) }));
+  }, [maxPrice]);
 
   // ── Favorites ─────────────────────────────────────────────────────────────
 
