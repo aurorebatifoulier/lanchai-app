@@ -58,6 +58,8 @@ import { cached, HOME_TTL } from '@/lib/homeCache';
 import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
 import { CategoryBadge, UI } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
+import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
+import { getProductAccessState } from '@/utils/productAccess';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
@@ -352,7 +354,11 @@ export default function ExploreScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const renderCard = useCallback((item: Product) => (
+  const { openQuickAdd } = useQuickAdd();
+  const renderCard = useCallback((item: Product) => {
+    const availability = gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined);
+    const locked = getProductAccessState(item, userTier ?? null).locked;
+    return (
     <ProductGridCard
       key={item.id}
       product={item}
@@ -362,12 +368,15 @@ export default function ExploreScreen() {
       onToggleFavorite={() => handleToggleFavorite(item.id)}
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
-      availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
+      availability={availability}
       bestMatch={item.id === bestId}
       matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
       weekendUnits={quick.weekend ? (weekendUnitsById.get(item.id) ?? null) : null}
+      quickAdd={locked ? null : availability ? 'later' : 'now'}
+      onQuickAdd={() => openQuickAdd(item, { availableToday: !availability })}
     />
-  ), [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById]);
+    );
+  }, [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById, openQuickAdd]);
 
   const renderRow = useCallback(({ item }: { item: Row }) => (
     <View style={styles.row}>{item.items.map(renderCard)}</View>

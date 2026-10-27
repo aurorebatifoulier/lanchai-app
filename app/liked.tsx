@@ -34,6 +34,8 @@ import { toLak, formatLakRange } from '@/utils/currency';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import PressScale from '@/components/PressScale';
 import { useProductSearch, bestMatchId } from '@/hooks/useProductSearch';
+import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
+import { getProductAccessState } from '@/utils/productAccess';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD    = 16;
@@ -238,7 +240,11 @@ export default function LikedScreen() {
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
-  const renderItem = useCallback(({ item }: { item: Product }) => (
+  const { openQuickAdd } = useQuickAdd();
+  const renderItem = useCallback(({ item }: { item: Product }) => {
+    const availability = gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined);
+    const locked = getProductAccessState(item, userTier ?? null).locked;
+    return (
     <ProductGridCard
       product={item}
       width={CARD_WIDTH}
@@ -247,11 +253,14 @@ export default function LikedScreen() {
       onToggleFavorite={() => handleUnlike(item.id)}
       exchangeRate={exchangeRate}
       userTier={userTier ?? null}
-      availability={gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined)}
+      availability={availability}
       bestMatch={item.id === bestId}
       matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
+      quickAdd={locked ? null : availability ? 'later' : 'now'}
+      onQuickAdd={() => openQuickAdd(item, { availableToday: !availability })}
     />
-  ), [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search]);
+    );
+  }, [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, openQuickAdd]);
 
   const keyExtractor = useCallback((item: Product) => item.id, []);
 

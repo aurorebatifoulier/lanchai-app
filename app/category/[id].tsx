@@ -25,6 +25,10 @@ import { DEFAULT_FILTERS, type Filters } from '@/lib/filterConfig';
 import { filterProducts, sortProducts, sortProductsByRating } from '@/utils/productFilters';
 import { FavoriteButton } from '@/components/FavoriteHeart';
 import PressScale from '@/components/PressScale';
+import QuickAddButton from '@/components/QuickAddButton';
+import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
+import { cached, HOME_TTL } from '@/lib/homeCache';
+import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,6 +41,12 @@ export default function CategoryScreen() {
   const [loadError, setLoadError] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  // Quick add "+": amber when free today — same cached occupancy as Home / Explore.
+  const [occupancy, setOccupancy] = useState<Map<string, OccupancyRecord[]> | null>(null);
+  const { openQuickAdd } = useQuickAdd();
+  useEffect(() => {
+    cached('occupancy', HOME_TTL.occupancy, fetchAllOccupancy).then(setOccupancy).catch(() => setOccupancy(null));
+  }, []);
 
   const catId = id as ProductCategory;
   const catDetails = CATEGORY_DETAILS[catId];
@@ -204,6 +214,8 @@ export default function CategoryScreen() {
                 userTier={userTier ?? null}
                 isFavorite={favorites.has(p.id)}
                 onToggleFavorite={() => handleToggleFavorite(p.id)}
+                availableToday={!gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined)}
+                onQuickAdd={avail => openQuickAdd(p, { availableToday: avail })}
               />
             ))}
           </View>
@@ -213,7 +225,7 @@ export default function CategoryScreen() {
   );
 }
 
-function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite }: { product: Product; onPress: () => void; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void }) {
+function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, availableToday, onQuickAdd }: { product: Product; onPress: () => void; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void; availableToday: boolean; onQuickAdd: (availableToday: boolean) => void }) {
   const bgColors: Record<string, string> = {
     amber: COLORS.amber,
     dark: COLORS.carbon,
@@ -274,6 +286,12 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
             </View>
           )}
         </View>
+        {/* Quick add — none on a tier-locked product (its lock badge says why). */}
+        {!accessState.locked && (
+          <View style={styles.quickAdd}>
+            <QuickAddButton state={availableToday ? 'now' : 'later'} onPress={() => onQuickAdd(availableToday)} size={30} />
+          </View>
+        )}
       </View>
     </PressScale>
   );
@@ -494,7 +512,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 8,
   },
+  quickAdd: { position: 'absolute', right: 8, bottom: 8 },
   prodBottom: {
+    paddingRight: 36,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { QuickAddProvider } from '@/components/quickadd/QuickAddProvider';
 import { getOnboardingComplete } from '@/lib/onboarding';
 import SplashOverlay from '@/components/SplashOverlay';
 
@@ -131,7 +132,10 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <AuthProvider>
-        <RootLayoutNav />
+        {/* Quick add sheet + "Added to your bag" toast for every product card. */}
+        <QuickAddProvider>
+          <RootLayoutNav />
+        </QuickAddProvider>
       </AuthProvider>
       <StatusBar style="dark" />
     </GestureHandlerRootView>

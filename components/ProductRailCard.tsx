@@ -12,6 +12,7 @@ import { getMinPrice } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
 import { getProductAccessState } from '@/utils/productAccess';
 import PressScale from '@/components/PressScale';
+import QuickAddButton, { type QuickAddState } from '@/components/QuickAddButton';
 
 // Horizontal-rail product card on the My Account design (Home rails: New arrivals, Rent
 // again, Most rented). White card, thin border, radius 18. Shows the access / Premium /
@@ -19,7 +20,7 @@ import PressScale from '@/components/PressScale';
 export const RAIL_CARD_WIDTH = 150;
 
 function ProductRailCard({
-  product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite,
+  product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, quickAdd = null, onQuickAdd,
 }: {
   product: Product;
   onPress: () => void;
@@ -27,6 +28,9 @@ function ProductRailCard({
   userTier: LoyaltyTier | null;
   isFavorite: boolean;
   onToggleFavorite: () => void;
+  /** Quick-add "+" state; null = no button (tier-locked). */
+  quickAdd?: QuickAddState | null;
+  onQuickAdd?: () => void;
 }) {
   const minPrice = getMinPrice(product);
   const access = getProductAccessState(product, userTier);
@@ -53,10 +57,13 @@ function ProductRailCard({
       </View>
       <View style={s.body}>
         <Text style={s.name} numberOfLines={2}>{product.name}</Text>
-        {minPrice != null && exchangeRate != null
-          ? <Text style={s.price}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
-          : <Text style={[s.price, s.priceMissing]}>Price not set</Text>}
-        <ProductSocialProof product={product} />
+        <View style={quickAdd && onQuickAdd ? s.withQuickAdd : undefined}>
+          {minPrice != null && exchangeRate != null
+            ? <Text style={s.price}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
+            : <Text style={[s.price, s.priceMissing]}>Price not set</Text>}
+          <ProductSocialProof product={product} />
+        </View>
+        {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} size={32} /></View>}
       </View>
     </PressScale>
   );
@@ -73,6 +80,8 @@ const s = StyleSheet.create({
   badgeDark: { backgroundColor: SHADES.carbon },
   badgeText: { fontSize: 10, fontWeight: '800', color: SHADES.carbon },
   body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 3 },
+  withQuickAdd: { paddingRight: 36, gap: 3 },
+  quickAdd: { position: 'absolute', right: 8, bottom: 8 },
   name: { fontSize: 14, fontWeight: '700', color: SHADES.carbon, lineHeight: 18 },
   price: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted },
   priceMissing: { fontStyle: 'italic' },
@@ -80,5 +89,5 @@ const s = StyleSheet.create({
 
 // Memoised for long lists: re-render only when what the card shows changes. Handlers are
 // per-render closures bound to this product's id, so ignoring their identity is safe.
-const SHOWN_PROPS = ['product', 'isFavorite', 'exchangeRate', 'userTier'] as const;
+const SHOWN_PROPS = ['product', 'isFavorite', 'exchangeRate', 'userTier', 'quickAdd'] as const;
 export default React.memo(ProductRailCard, (a, b) => SHOWN_PROPS.every(k => a[k] === b[k]));

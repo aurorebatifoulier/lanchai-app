@@ -46,7 +46,7 @@ import BudgetPicks from '@/components/home/BudgetPicks';
 import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
-import { fetchAllOccupancy, type OccupancyRecord } from '@/utils/availability';
+import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
@@ -62,6 +62,8 @@ import { useExchangeRate } from '@/lib/exchangeRate';
 import { cached, clearHomeCache, HOME_TTL } from '@/lib/homeCache';
 import { DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
 import PressScale from '@/components/PressScale';
+import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
+import { getProductAccessState } from '@/utils/productAccess';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -286,19 +288,27 @@ export default function HomeScreen() {
   const catItemW = catFit ? (screenW - 32) / HOME_CATEGORIES.length : 72;
   const catCircle = Math.min(52, Math.floor(catItemW - 6));
 
+  const { openQuickAdd } = useQuickAdd();
   const rail = (items: Product[]) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.railScroll} contentContainerStyle={styles.rail}>
-      {items.map(p => (
-        <ProductRailCard
-          key={p.id}
-          product={p}
-          onPress={() => router.push(`/product/${p.id}`)}
-          exchangeRate={exchangeRate}
-          userTier={userTier ?? null}
-          isFavorite={favorites.has(p.id)}
-          onToggleFavorite={() => handleToggleFavorite(p.id)}
-        />
-      ))}
+      {items.map(p => {
+        // "+" amber when free today (grid rule on the cached occupancy), outline otherwise.
+        const availability = gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined);
+        const locked = getProductAccessState(p, userTier ?? null).locked;
+        return (
+          <ProductRailCard
+            key={p.id}
+            product={p}
+            onPress={() => router.push(`/product/${p.id}`)}
+            exchangeRate={exchangeRate}
+            userTier={userTier ?? null}
+            isFavorite={favorites.has(p.id)}
+            onToggleFavorite={() => handleToggleFavorite(p.id)}
+            quickAdd={locked ? null : availability ? 'later' : 'now'}
+            onQuickAdd={() => openQuickAdd(p, { availableToday: !availability })}
+          />
+        );
+      })}
     </ScrollView>
   );
 
