@@ -955,6 +955,36 @@ a snapshot indefinitely).
   ones only a Suggested row). Saving a product clears the products cache. No read per
   keystroke; `config/search` covered by the config/* rule.
 
+- **Explore (validated mockup, 2026-10-27).** Copy in `constants/exploreCopy.ts`. White
+  header band: title, `<RotatingLine>` (4s, static with reduce motion), "{n} ready
+  today" (`gridAvailability(...) === null` on the cached occupancy, `CountUpText`),
+  `SearchBar variant="account"` + carbon/amber filter button, `<CategoryFilterRow>` (All +
+  `CategoryBadge`, selected = amber). Scrolling pins an overlay copy of search +
+  categories (Home sticky pattern). Quick chips: Free this weekend (`weekendWindow` +
+  `computeAvailableUnits`), Under {X} (`config/home`), New, Popular (≥ 3 returns this
+  month via `rentalsByMonth` OR `showInPopular`) — combinable with category, search and
+  the filter sheet; witty results line + dark amber sort. The list is ONE column of rows
+  (card pairs or full-width surprise cards — keep it that way, numColumns can't host
+  full-width items). Surprise cards (`components/explore/SurpriseCards.tsx`): every 8
+  products, never in the first 4, never two in a row, none during a search; collection →
+  review quote (`lib/reviewQuotes.ts`: 5 most-reviewed products rated ≥ 4, 5 latest each,
+  per-product reads, ≤ 110 chars, first name only, cached) → Why buy it? → resident hint
+  → loyalty nudge; no data → skipped. `<AskCard>` at the end and in empty states → the
+  request flow.
+  - **Cards:** `ProductGridCard` = Home/My Account style, price "126,000 LAK / day"
+    (`formatKip` now prints "… LAK" — never "₭"), ONE signal line from
+    `lib/productSignal.ts` (back on / fully booked / not available; only 1 left this
+    weekend while that chip is on; rented n× this month (≥ 3); ★ rating · n rentals;
+    n rentals) — real data only, never invented urgency.
+  - **Quick add:** `QuickAddProvider` (root layout, `useQuickAdd().openQuickAdd`) owns one
+    sheet + toast. "+" (`QuickAddButton`: amber = free today, outline = not → Pick dates
+    pre-filled with the next free day; none when tier-locked) on Explore, Liked, category
+    pages and the Home rail cards. Shortcuts: this weekend / tomorrow (first slot, 1 day) /
+    pick dates (DateRangeCalendar, first slot, return at the same time). Availability =
+    `computeAvailableUnits` on the product's occupancy; total = 24h blocks ×
+    `getEffectiveRate`. `addToBag(uid, product, { pickupAt, returnAt })` (dates optional),
+    quantity 1. Checkout still runs every check (holds, ID, server).
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the
