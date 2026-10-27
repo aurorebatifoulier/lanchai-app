@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
@@ -56,6 +56,11 @@ export const UI = StyleSheet.create({
   btnSecondaryText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
   btnDisabled: { opacity: 0.45 },
   dangerText: { fontSize: 14, fontWeight: '700', color: COLORS.danger },
+  /** Destructive button: white, light border, label in UI.dangerText (never a red fill). */
+  btnDestructive: {
+    height: 50, borderRadius: 14, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.white,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
   errorText: { fontSize: 12, fontWeight: '500', color: COLORS.danger, lineHeight: 17 },
   /** Choice chips (forms): grey, carbon when selected. */
   choice: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: SHADES.carbonLight },
@@ -191,6 +196,28 @@ export function Row({
   );
   if (soon || !onPress) return <View style={s.row}>{content}</View>;
   return <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>;
+}
+
+/** Row with a switch (same layout as <Row>): amber track when on. */
+export function ToggleRow({
+  icon, title, sub, value, onValueChange,
+}: { icon?: AnyIcon; title: string; sub?: string; value: boolean; onValueChange: (v: boolean) => void }) {
+  return (
+    <View style={s.row}>
+      {icon && <IconCircle icon={icon} />}
+      <View style={{ flex: 1 }}>
+        <Text style={UI.title}>{title}</Text>
+        {!!sub && <Text style={UI.subtitle}>{sub}</Text>}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: SHADES.carbonLight, true: SHADES.amber }}
+        thumbColor={SHADES.white}
+        ios_backgroundColor={SHADES.carbonLight}
+      />
+    </View>
+  );
 }
 
 const s = StyleSheet.create({

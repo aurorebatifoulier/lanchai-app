@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
+import { UI, StatusChip } from '@/components/account/ui';
 import type { RentalDoc } from '@/lib/firestore';
 import { formatLakAmount } from '@/utils/currency';
 import {
@@ -28,16 +29,16 @@ export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; 
   ];
 
   return (
-    <View style={s.card}>
+    <View style={[UI.card, UI.cardPadded, s.card]}>
       <View style={s.topRow}>
-        <Text style={s.name} numberOfLines={1}>{name}</Text>
+        <Text style={[UI.title, { flex: 1 }]} numberOfLines={1}>{name}</Text>
         {receipt ? (
           <Text style={s.amount}>{formatLakAmount(r.total)}</Text>
         ) : r.status === 'active' ? (
-          <Text style={s.ongoing}>Ongoing</Text>
+          <StatusChip label="Ongoing" tone="grey" />
         ) : null}
       </View>
-      <Text style={s.sub} numberOfLines={1}>{orderId ? `${when} · ${orderId}` : when}</Text>
+      <Text style={UI.subtitle} numberOfLines={1}>{orderId ? `${when} · ${orderId}` : when}</Text>
       <View style={s.btnRow}>
         {buttons.map(b => (
           <TouchableOpacity
@@ -47,7 +48,7 @@ export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; 
             onPress={() => router.push(b.route as never)}
             activeOpacity={0.75}
           >
-            {icons && <Feather name={b.icon} size={13} color={b.enabled ? COLORS.amberTintText : COLORS.fg3} />}
+            {icons && <Feather name={b.icon} size={13} color={b.enabled ? SHADES.carbon : SHADES.carbonFaint} />}
             <Text style={[s.btnText, !b.enabled && s.btnTextDisabled]} numberOfLines={1}>{b.label}</Text>
           </TouchableOpacity>
         ))}
@@ -57,33 +58,16 @@ export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; 
 }
 
 const s = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    padding: 14,
-    marginBottom: 10,
-  },
+  card: { marginBottom: 10 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { flex: 1, fontSize: 15, fontWeight: '700', color: COLORS.carbon },
-  amount: { fontSize: 14, fontWeight: '800', color: COLORS.carbon, flexShrink: 0 },
-  ongoing: { fontSize: 13, fontWeight: '600', color: COLORS.fg3, flexShrink: 0 },
-  sub: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 3 },
+  amount: { fontSize: 15, fontWeight: '800', color: SHADES.carbon, flexShrink: 0 },
   btnRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  // Compact secondary buttons (white, carbon outline); greyed when the document doesn't exist.
   btn: {
-    flex: 1,
-    height: 36,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.carbon,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingHorizontal: 4,
+    flex: 1, height: 38, borderRadius: 12, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 4,
   },
-  btnDisabled: { borderColor: COLORS.softGray200 },
-  btnText: { fontSize: 13, fontWeight: '700', color: COLORS.carbon },
-  btnTextDisabled: { color: COLORS.fg3 },
+  btnDisabled: { borderColor: SHADES.border, borderWidth: 1 },
+  btnText: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
+  btnTextDisabled: { color: SHADES.carbonFaint },
 });

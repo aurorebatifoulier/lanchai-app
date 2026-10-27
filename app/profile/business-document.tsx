@@ -19,6 +19,10 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import {
+  UI, SectionTitle, RowGroup, Row, IconCircle, StatusBlock, StatusChip, CheckLine,
+} from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { storage, functions } from '@/lib/firebase';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
@@ -136,7 +140,7 @@ export default function BusinessDocumentScreen() {
       <View style={[s.root, { paddingTop: insets.top }]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
       </View>
     );
   }
@@ -149,104 +153,96 @@ export default function BusinessDocumentScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: insets.bottom + 32 }]}
       >
-        {rejection === 'final' ? (
-          <View style={s.bannerInfo}>
-            <Feather name="info" size={16} color={COLORS.fg2} />
-            <Text style={s.bannerInfoText}>
-              This application can&apos;t be resubmitted. If you think this is a mistake, please message us.
+        <View style={[UI.card, UI.cardPadded]}>
+          {rejection === 'final' ? (
+            <StatusBlock icon={{ name: 'info' }} title="Application closed" chip={<StatusChip label="Declined" tone="danger" />}>
+              <Text style={UI.body}>
+                This application can&apos;t be resubmitted. If you think this is a mistake, please message us.
+              </Text>
+            </StatusBlock>
+          ) : rejection === 'fixable' ? (
+            <Text style={UI.body}>
+              Check your company details and attach a clear photo of your registration
+              document, then resubmit — our team will review it again.
             </Text>
-          </View>
-        ) : rejection === 'fixable' ? (
-          <Text style={s.intro}>
-            Check your company details and attach a clear photo of your registration
-            document, then resubmit — our team will review it again.
-          </Text>
-        ) : (
-          <Text style={s.intro}>
-            Upload a photo of your business license, KBIS, or registration document.
-            This is required before you can book, and helps our team verify your
-            business account faster.
-          </Text>
-        )}
+          ) : (
+            <Text style={UI.body}>
+              Upload a photo of your business license, KBIS, or registration document.
+              This is required before you can book, and helps our team verify your
+              business account faster.
+            </Text>
+          )}
+        </View>
 
         {rejection === 'fixable' && (
           <>
-            <Text style={s.fieldLabel}>Company name</Text>
-            <TextInput style={s.input} value={companyName} onChangeText={setCompanyName} maxLength={120} placeholder="Company name" placeholderTextColor={COLORS.fg3} />
-            <Text style={s.fieldLabel}>Licence / registration number</Text>
-            <TextInput style={s.input} value={licenseNumber} onChangeText={setLicenseNumber} maxLength={80} placeholder="Licence number" placeholderTextColor={COLORS.fg3} autoCapitalize="characters" />
-            <Text style={s.fieldLabel}>Responsible person</Text>
-            <TextInput style={s.input} value={responsibleName} onChangeText={setResponsibleName} maxLength={120} placeholder="Full name" placeholderTextColor={COLORS.fg3} />
+            <SectionTitle>Company details</SectionTitle>
+            <View style={[UI.card, UI.cardPadded]}>
+              <Text style={UI.fieldLabel}>Company name</Text>
+              <TextInput style={UI.input} value={companyName} onChangeText={setCompanyName} maxLength={120} placeholder="Company name" placeholderTextColor={SHADES.carbonFaint} />
+              <Text style={[UI.fieldLabel, s.nextField]}>Licence / registration number</Text>
+              <TextInput style={UI.input} value={licenseNumber} onChangeText={setLicenseNumber} maxLength={80} placeholder="Licence number" placeholderTextColor={SHADES.carbonFaint} autoCapitalize="characters" />
+              <Text style={[UI.fieldLabel, s.nextField]}>Responsible person</Text>
+              <TextInput style={UI.input} value={responsibleName} onChangeText={setResponsibleName} maxLength={120} placeholder="Full name" placeholderTextColor={SHADES.carbonFaint} />
+            </View>
           </>
         )}
 
-        <Text style={s.fieldLabel}>Responsible person&apos;s ID</Text>
-        <TouchableOpacity style={s.docPicker} onPress={() => router.push('/profile/id-residency')} activeOpacity={0.8}>
-          <Feather name={idOnFile ? 'check-circle' : 'credit-card'} size={18} color={idOnFile ? COLORS.success : COLORS.fg3} />
-          <Text style={s.docPickerText}>
-            {idOnFile
+        {/* Icon rule: amber = still needed, grey = on file. */}
+        <SectionTitle>Documents</SectionTitle>
+        <RowGroup>
+          <Row
+            icon={{ set: 'mci', name: 'card-account-details-outline' }}
+            tone={idOnFile ? 'grey' : 'amber'}
+            title="Responsible person's ID"
+            sub={idOnFile
               ? `${ID_DOC_TYPES.find(t => t.key === identity?.docType)?.label ?? 'ID'} on file — tap to see or replace`
               : 'Required before approval — tap to add a passport or ID card'}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={[s.fieldLabel, { marginTop: 18 }]}>Business registration document</Text>
-        <TouchableOpacity style={s.docPicker} onPress={handlePick} activeOpacity={0.8} disabled={uploading || rejection === 'final' || !canReplace}>
-          {uploading ? (
-            <ActivityIndicator size="small" color={COLORS.carbon} />
-          ) : documentUrl ? (
-            <>
+            onPress={() => router.push('/profile/id-residency')}
+          />
+          <TouchableOpacity style={s.docRow} onPress={handlePick} activeOpacity={0.7} disabled={uploading || rejection === 'final' || !canReplace}>
+            {uploading ? (
+              <View style={s.docIcon}><ActivityIndicator size="small" color={SHADES.carbon} /></View>
+            ) : documentUrl ? (
               <Image source={{ uri: documentUrl }} style={s.docThumb} />
-              <Text style={s.docPickerText}>{canReplace ? 'Document attached — tap to replace' : 'Document on file'}</Text>
-            </>
-          ) : (
-            <>
-              <Feather name="upload" size={18} color={COLORS.fg3} />
-              <Text style={s.docPickerText}>
-                Tap to attach a photo of your registration document
+            ) : (
+              <IconCircle icon={{ name: 'upload' }} tone="amber" />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={UI.title}>Business registration document</Text>
+              <Text style={UI.subtitle}>
+                {documentUrl
+                  ? (canReplace ? 'Document attached — tap to replace' : 'Document on file')
+                  : 'Tap to attach a photo of your registration document'}
               </Text>
-            </>
-          )}
-        </TouchableOpacity>
+            </View>
+            {!(uploading || rejection === 'final' || !canReplace) && <Feather name="chevron-right" size={16} color={SHADES.carbonFaint} />}
+          </TouchableOpacity>
+        </RowGroup>
 
         {!canReplace && (
-          <Text style={s.lockedNote}>
+          <Text style={[UI.small, { marginTop: 10 }]}>
             Your account is approved — contact us if your registration document changes.
           </Text>
         )}
 
-        {uploadSuccess && (
-          <View style={s.bannerSuccess}>
-            <Feather name="check-circle" size={16} color="#0F6E56" />
-            <Text style={s.bannerSuccessText}>Document uploaded successfully.</Text>
-          </View>
-        )}
-        {uploadError && (
-          <View style={s.bannerError}>
-            <Feather name="alert-circle" size={16} color="#B91C1C" />
-            <Text style={s.bannerErrorText}>Could not upload. Please try again.</Text>
-          </View>
-        )}
+        {uploadSuccess && <View style={s.feedback}><CheckLine text="Document uploaded successfully." /></View>}
+        {uploadError && <Text style={[UI.errorText, s.feedback]}>Could not upload. Please try again.</Text>}
 
         {rejection === 'fixable' && (
           <>
-            {submitError && (
-              <View style={s.bannerError}>
-                <Feather name="alert-circle" size={16} color="#B91C1C" />
-                <Text style={s.bannerErrorText}>{submitError}</Text>
-              </View>
-            )}
+            {submitError && <Text style={[UI.errorText, s.feedback]}>{submitError}</Text>}
             <TouchableOpacity
-              style={[s.submitBtn, !canResubmit && s.submitBtnDisabled]}
+              style={[UI.btnPrimary, { marginTop: 20 }, !canResubmit && UI.btnDisabled]}
               onPress={handleResubmit}
               disabled={!canResubmit}
               activeOpacity={0.85}
             >
               {submitting
-                ? <ActivityIndicator size="small" color={COLORS.carbon} />
-                : <Text style={s.submitBtnText}>Resubmit application</Text>}
+                ? <ActivityIndicator size="small" color={SHADES.carbon} />
+                : <Text style={UI.btnPrimaryText}>Resubmit application</Text>}
             </TouchableOpacity>
           </>
         )}
@@ -293,128 +289,9 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-  },
-
-  intro: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: COLORS.fg2,
-    lineHeight: 19,
-    marginBottom: 24,
-  },
-
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-    marginBottom: 8,
-  },
-
-  input: {
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.carbon,
-    marginBottom: 16,
-  },
-  submitBtn: {
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  submitBtnDisabled: { opacity: 0.45 },
-  submitBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.carbon },
-  bannerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 24,
-  },
-  bannerInfoText: { flex: 1, fontSize: 13, fontWeight: '500', color: COLORS.fg2, lineHeight: 19 },
-
-  docPicker: {
-    minHeight: 64,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    borderStyle: 'dashed',
-    backgroundColor: COLORS.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  docThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: COLORS.softGray200,
-  },
-  docPickerText: {
-    flex: 1,
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    lineHeight: 17,
-  },
-
-  lockedNote: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    lineHeight: 18,
-    marginTop: 10,
-  },
-
-  bannerSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#E1F5EE',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 16,
-  },
-  bannerSuccessText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F6E56',
-  },
-  bannerError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 16,
-  },
-  bannerErrorText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#B91C1C',
-  },
+  nextField: { marginTop: 14 },
+  docRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 },
+  docIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  docThumb: { width: 36, height: 36, borderRadius: 10, backgroundColor: SHADES.carbonLight },
+  feedback: { marginTop: 12 },
 });

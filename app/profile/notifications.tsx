@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, SectionTitle, RowGroup, Row, ToggleRow } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { getUserProfile, saveUserProfile, setMarketingOptIn } from '@/lib/firestore';
 import { useFeatureFlags } from '@/lib/features';
@@ -58,56 +60,41 @@ export default function NotificationsScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
         >
-          <Text style={s.sectionTitle}>Email</Text>
-          <View style={s.toggleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.toggleTitle}>Email reminders</Text>
-              <Text style={s.toggleSub}>
-                Pick-up and return reminders the day before, and a short follow-up after your rental.
-              </Text>
-            </View>
-            <Switch
+          <SectionTitle style={{ marginTop: 16 }}>Email</SectionTitle>
+          <RowGroup>
+            <ToggleRow
+              icon={{ name: 'mail' }}
+              title="Email reminders"
+              sub="Pick-up and return reminders the day before, and a short follow-up after your rental."
               value={reminders}
               onValueChange={v => toggle(v, setReminders, uid => saveUserProfile(uid, { emailRemindersOptOut: !v }))}
-              trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
-              thumbColor={COLORS.white}
             />
-          </View>
-          <Text style={s.info}>
+            {newsletter && (
+              <ToggleRow
+                icon={{ name: 'gift' }}
+                title="News and offers"
+                sub="Send me news, new items and offers by email. You can unsubscribe anytime."
+                value={marketing}
+                onValueChange={v => toggle(v, setMarketing, uid => setMarketingOptIn(uid, v))}
+              />
+            )}
+          </RowGroup>
+          {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
+          <Text style={[UI.small, { marginTop: 10 }]}>
             Booking confirmations, cancellations, late returns and receipts are always sent — they&apos;re about your rentals.
           </Text>
 
-          {newsletter && (
-            <>
-              <Text style={s.sectionTitle}>News and offers</Text>
-              <View style={s.toggleRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.toggleTitle}>News and offers</Text>
-                  <Text style={s.toggleSub}>
-                    Send me news, new items and offers by email. You can unsubscribe anytime.
-                  </Text>
-                </View>
-                <Switch
-                  value={marketing}
-                  onValueChange={v => toggle(v, setMarketing, uid => setMarketingOptIn(uid, v))}
-                  trackColor={{ false: COLORS.softGray200, true: COLORS.amber }}
-                  thumbColor={COLORS.white}
-                />
-              </View>
-            </>
-          )}
-
-          {error && <Text style={s.error}>{error}</Text>}
-
-          <Text style={s.sectionTitle}>Push notifications</Text>
-          <Text style={s.info}>Push notifications will be available in the app version.</Text>
+          <SectionTitle>Push notifications</SectionTitle>
+          <RowGroup>
+            <Row icon={{ name: 'bell' }} title="Push notifications" sub="Available in the app version." soon />
+          </RowGroup>
         </ScrollView>
       )}
     </View>
@@ -128,15 +115,4 @@ const s = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, textAlign: 'center',
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
-  content: { paddingHorizontal: 20, paddingTop: 24 },
-  sectionTitle: { fontSize: 13, fontWeight: '800', color: COLORS.carbon, marginBottom: 10, marginTop: 8 },
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.softGray200,
-    borderRadius: 12, padding: 14, marginBottom: 10,
-  },
-  toggleTitle: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
-  toggleSub: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, marginTop: 2, lineHeight: 17 },
-  info: { fontSize: 12, fontWeight: '500', color: COLORS.fg3, lineHeight: 17, marginBottom: 20 },
-  error: { fontSize: 12, fontWeight: '500', color: COLORS.danger, marginBottom: 16 },
 });

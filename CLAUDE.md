@@ -791,10 +791,14 @@ a snapshot indefinitely).
   padding 16, `SectionTitle` + `UI.card`, `UI.btnPrimary` amber / `UI.btnSecondary` white
   + carbon outline / `UI.dangerText`, `UI.input`, `UI.choice` chips, `StatusBlock`,
   `<StatusChip>` — the ONLY place green/red appear, small —, `<CheckLine>` for
-  successes, never coloured banners). Done: Loyalty (+ `ReferralCard`), ID & residency
-  (+ `IdUploadPanel`, also used by the booking ID step), Personal info. Still old style:
-  see batches 2–3 (Receipts & reports, All rentals, Notifications, Pick-up location,
-  Security, Delete account, Invite code, Business document, FAQ / legal, chat).
+  successes, never coloured banners). Also `ToggleRow` (switch rows) and
+  `UI.btnDestructive` (white, label in danger text — never a red fill). Done: batch 1 —
+  Loyalty (+ `ReferralCard`), ID & residency (+ `IdUploadPanel`, also used by the booking
+  ID step), Personal info; batch 2 — Receipts & reports (+ `RentalDocCard`), All rentals,
+  Notifications, Pick-up location, Security, Delete account, Invite code, Business
+  document. Still old style (batch 3): FAQ / legal screens, chat, receipt + condition
+  report screens, `ConfirmBox`, `IdRequirementStep`, `TierUpCelebration`, BtoB pending /
+  rejected screens.
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled

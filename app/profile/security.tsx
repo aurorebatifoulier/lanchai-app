@@ -21,6 +21,8 @@ import {
 } from 'firebase/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, SectionTitle, CheckLine } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { requestPasswordReset, AuthEmailRateLimitError } from '@/lib/authEmails';
 
@@ -146,149 +148,137 @@ export default function ChangePasswordScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Current password ── */}
-        <Text style={s.fieldLabel}>Current password</Text>
-        <View style={s.passwordRow}>
-          <TextInput
-            style={[s.input, { flex: 1 }]}
+        <SectionTitle style={{ marginTop: 16 }}>Change password</SectionTitle>
+        <View style={[UI.card, UI.cardPadded]}>
+          {/* ── Current password ── */}
+          <PasswordField
+            label="Current password"
             value={currentPw}
             onChangeText={setCurrentPw}
             placeholder="Your current password"
-            placeholderTextColor={COLORS.fg3}
-            secureTextEntry={!showCurrent}
-            autoCapitalize="none"
-            autoCorrect={false}
+            visible={showCurrent}
+            onToggle={() => setShowCurrent(v => !v)}
             returnKeyType="next"
           />
-          <TouchableOpacity
-            style={s.eyeBtn}
-            onPress={() => setShowCurrent(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Feather name={showCurrent ? 'eye-off' : 'eye'} size={18} color={COLORS.fg3} />
-          </TouchableOpacity>
-        </View>
 
-        {/* ── New password ── */}
-        <Text style={s.fieldLabel}>New password</Text>
-        <View style={s.passwordRow}>
-          <TextInput
-            style={[s.input, { flex: 1 }]}
-            value={newPw}
-            onChangeText={setNewPw}
-            placeholder="Min 8 characters"
-            placeholderTextColor={COLORS.fg3}
-            secureTextEntry={!showNew}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
-          />
-          <TouchableOpacity
-            style={s.eyeBtn}
-            onPress={() => setShowNew(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Feather name={showNew ? 'eye-off' : 'eye'} size={18} color={COLORS.fg3} />
-          </TouchableOpacity>
-        </View>
-        {pwValidation.error ? (
-          <Text style={s.fieldError}>{pwValidation.error}</Text>
-        ) : (
-          <Text style={s.fieldHint}>At least 8 characters, with letters and numbers.</Text>
-        )}
-
-        {/* ── Confirm new password ── */}
-        <Text style={s.fieldLabel}>Confirm new password</Text>
-        <View style={s.passwordRow}>
-          <TextInput
-            style={[s.input, { flex: 1 }]}
-            value={confirm}
-            onChangeText={setConfirm}
-            placeholder="Repeat password"
-            placeholderTextColor={COLORS.fg3}
-            secureTextEntry={!showConf}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={handleUpdate}
-          />
-          <TouchableOpacity
-            style={s.eyeBtn}
-            onPress={() => setShowConf(v => !v)}
-            activeOpacity={0.7}
-          >
-            <Feather name={showConf ? 'eye-off' : 'eye'} size={18} color={COLORS.fg3} />
-          </TouchableOpacity>
-        </View>
-        {confirmError && (
-          <Text style={s.fieldError}>{confirmError}</Text>
-        )}
-
-        {/* ── Feedback banners ── */}
-        {saveStatus === 'success' && (
-          <View style={s.bannerSuccess}>
-            <Feather name="check-circle" size={15} color="#0F6E56" />
-            <Text style={s.bannerSuccessText}>Your password has been updated.</Text>
+          {/* ── New password ── */}
+          <View style={{ marginTop: 16 }}>
+            <PasswordField
+              label="New password"
+              value={newPw}
+              onChangeText={setNewPw}
+              placeholder="Min 8 characters"
+              visible={showNew}
+              onToggle={() => setShowNew(v => !v)}
+              returnKeyType="next"
+            />
           </View>
-        )}
-        {saveStatus === 'error' && (
-          <View style={s.bannerError}>
-            <Feather name="alert-circle" size={15} color="#B91C1C" />
-            <Text style={s.bannerErrorText}>{feedbackMsg}</Text>
-          </View>
-        )}
-
-        {/* ── Update button ── */}
-        <TouchableOpacity
-          style={[s.saveBtn, !canSubmit && s.saveBtnOff]}
-          onPress={handleUpdate}
-          disabled={!canSubmit}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <>
-              <ActivityIndicator size="small" color={COLORS.carbon} />
-              <Text style={s.saveBtnText}>Updating…</Text>
-            </>
+          {pwValidation.error ? (
+            <Text style={[UI.errorText, s.fieldNote]}>{pwValidation.error}</Text>
           ) : (
-            <Text style={s.saveBtnText}>Update password</Text>
+            <Text style={[UI.small, s.fieldNote]}>At least 8 characters, with letters and numbers.</Text>
           )}
-        </TouchableOpacity>
 
-        {/* ── Divider ── */}
-        <View style={s.divider} />
+          {/* ── Confirm new password ── */}
+          <View style={{ marginTop: 16 }}>
+            <PasswordField
+              label="Confirm new password"
+              value={confirm}
+              onChangeText={setConfirm}
+              placeholder="Repeat password"
+              visible={showConf}
+              onToggle={() => setShowConf(v => !v)}
+              returnKeyType="done"
+              onSubmitEditing={handleUpdate}
+            />
+          </View>
+          {confirmError && <Text style={[UI.errorText, s.fieldNote]}>{confirmError}</Text>}
 
-        {/* ── Reset email feedback ── */}
-        {resetStatus === 'success' && (
-          <View style={s.bannerSuccess}>
-            <Feather name="check-circle" size={15} color="#0F6E56" />
-            <Text style={s.bannerSuccessText}>{resetMsg}</Text>
-          </View>
-        )}
-        {resetStatus === 'error' && (
-          <View style={s.bannerError}>
-            <Feather name="alert-circle" size={15} color="#B91C1C" />
-            <Text style={s.bannerErrorText}>{resetMsg}</Text>
-          </View>
-        )}
+          {/* ── Feedback: subtle line, no banner ── */}
+          {saveStatus === 'success' && <View style={s.feedback}><CheckLine text="Your password has been updated." /></View>}
+          {saveStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{feedbackMsg}</Text>}
+
+          {/* ── Update button ── */}
+          <TouchableOpacity
+            style={[UI.btnPrimary, { marginTop: 18 }, !canSubmit && UI.btnDisabled]}
+            onPress={handleUpdate}
+            disabled={!canSubmit}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <>
+                <ActivityIndicator size="small" color={SHADES.carbon} />
+                <Text style={UI.btnPrimaryText}>Updating…</Text>
+              </>
+            ) : (
+              <Text style={UI.btnPrimaryText}>Update password</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* ── Reset email ── */}
-        <TouchableOpacity
-          style={s.resetBtn}
-          onPress={handleResetEmail}
-          disabled={resetting}
-          activeOpacity={0.7}
-        >
-          {resetting
-            ? <ActivityIndicator size="small" color={COLORS.fg3} />
-            : <Text style={s.resetBtnText}>Send me a reset email instead</Text>
-          }
-        </TouchableOpacity>
+        <SectionTitle>Forgot your password?</SectionTitle>
+        <View style={[UI.card, UI.cardPadded]}>
+          <TouchableOpacity
+            style={[UI.btnSecondary, resetting && UI.btnDisabled]}
+            onPress={handleResetEmail}
+            disabled={resetting}
+            activeOpacity={0.7}
+          >
+            {resetting
+              ? <ActivityIndicator size="small" color={SHADES.carbon} />
+              : (
+                <>
+                  <Feather name="mail" size={15} color={SHADES.carbon} />
+                  <Text style={UI.btnSecondaryText}>Send me a reset email instead</Text>
+                </>
+              )}
+          </TouchableOpacity>
+          {resetStatus === 'success' && <View style={s.feedback}><CheckLine text={resetMsg} /></View>}
+          {resetStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{resetMsg}</Text>}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+// Password input with the show / hide eye inside the field.
+function PasswordField({
+  label, value, onChangeText, placeholder, visible, onToggle, returnKeyType, onSubmitEditing,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  visible: boolean;
+  onToggle: () => void;
+  returnKeyType: 'next' | 'done';
+  onSubmitEditing?: () => void;
+}) {
+  return (
+    <>
+      <Text style={UI.fieldLabel}>{label}</Text>
+      <View style={[UI.input, s.passwordRow]}>
+        <TextInput
+          style={s.passwordInput}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={SHADES.carbonFaint}
+          secureTextEntry={!visible}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+        />
+        <TouchableOpacity onPress={onToggle} activeOpacity={0.7} hitSlop={10}>
+          <Feather name={visible ? 'eye-off' : 'eye'} size={18} color={SHADES.carbonMuted} />
+        </TouchableOpacity>
+      </View>
+    </>
   );
 }
 
@@ -319,129 +309,8 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-  },
-
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-    marginBottom: 8,
-  },
-  fieldHint: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    marginTop: 6,
-    marginBottom: 16,
-  },
-  fieldError: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#B91C1C',
-    marginTop: 6,
-    marginBottom: 16,
-  },
-
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  input: {
-    height: 50,
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.carbon,
-  },
-  eyeBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-
-  bannerSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#E1F5EE',
-    borderRadius: 10,
-    padding: 13,
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  bannerSuccessText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: '#0F6E56',
-    flex: 1,
-  },
-  bannerError: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    padding: 13,
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  bannerErrorText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: '#B91C1C',
-    flex: 1,
-  },
-
-  saveBtn: {
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 20,
-  },
-  saveBtnOff: {
-    opacity: 0.45,
-  },
-  saveBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.softGray200,
-    marginVertical: 28,
-  },
-
-  resetBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  resetBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.fg2,
-    textDecorationLine: 'underline',
-  },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 14 },
+  passwordInput: { flex: 1, height: '100%', fontSize: 15, fontWeight: '500', color: SHADES.carbon, paddingVertical: 0 },
+  fieldNote: { marginTop: 6 },
+  feedback: { marginTop: 14 },
 });

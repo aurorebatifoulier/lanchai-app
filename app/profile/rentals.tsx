@@ -8,6 +8,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI } from '@/components/account/ui';
 import { RentalDocCard } from '@/components/RentalDocCard';
 import { auth } from '@/lib/auth';
 import { getMyReservations, type RentalDoc } from '@/lib/firestore';
@@ -67,20 +69,20 @@ export default function AllRentalsScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
+        <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
       ) : (
         <ScrollView
           style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, s.content, { paddingBottom: insets.bottom + 32 }]}
         >
-          <View style={s.search}>
-            <Feather name="search" size={16} color={COLORS.fg3} />
+          <View style={[UI.input, s.search]}>
+            <Feather name="search" size={16} color={SHADES.carbonMuted} />
             <TextInput
               style={s.searchInput}
               placeholder="Search an item"
-              placeholderTextColor={COLORS.fg3}
+              placeholderTextColor={SHADES.carbonFaint}
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
@@ -88,7 +90,7 @@ export default function AllRentalsScreen() {
             />
             {!!query && (
               <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-                <Feather name="x" size={16} color={COLORS.fg3} />
+                <Feather name="x" size={16} color={SHADES.carbonMuted} />
               </TouchableOpacity>
             )}
           </View>
@@ -97,36 +99,38 @@ export default function AllRentalsScreen() {
             {PERIODS.map(p => (
               <TouchableOpacity
                 key={p.key}
-                style={[s.chip, period === p.key && s.chipActive]}
+                style={[UI.choice, period === p.key && UI.choiceOn]}
                 onPress={() => setPeriod(p.key)}
                 activeOpacity={0.8}
               >
-                <Text style={[s.chipText, period === p.key && s.chipTextActive]}>{p.label}</Text>
+                <Text style={[UI.choiceText, period === p.key && UI.choiceTextOn]}>{p.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           {error ? (
-            <Text style={s.error}>Could not load your rentals. Please try again later.</Text>
+            <Text style={[UI.errorText, s.count]}>Could not load your rentals. Please try again later.</Text>
           ) : (
-            <Text style={s.count}>
+            <Text style={[UI.small, s.count]}>
               {filtered.length} {filtered.length === 1 ? 'rental' : 'rentals'}
             </Text>
           )}
 
           {!error && filtered.length === 0 && (
-            <Text style={s.empty}>
-              {rentals.length === 0
-                ? 'Your receipts and condition reports will appear here after your first rental.'
-                : 'No rentals match your search.'}
-            </Text>
+            <View style={[UI.card, UI.cardPadded]}>
+              <Text style={UI.body}>
+                {rentals.length === 0
+                  ? 'Your receipts and condition reports will appear here after your first rental.'
+                  : 'No rentals match your search.'}
+              </Text>
+            </View>
           )}
 
           {visible.map(r => <RentalDocCard key={r.id} rental={r} icons={false} />)}
 
           {visible.length < filtered.length && (
-            <TouchableOpacity style={s.loadMore} onPress={() => setPages(p => p + 1)} activeOpacity={0.8}>
-              <Text style={s.loadMoreText}>Load more</Text>
+            <TouchableOpacity style={[UI.btnSecondary, { marginTop: 4 }]} onPress={() => setPages(p => p + 1)} activeOpacity={0.8}>
+              <Text style={UI.btnSecondaryText}>Load more</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -149,27 +153,9 @@ const s = StyleSheet.create({
     position: 'absolute', left: 0, right: 0, textAlign: 'center',
     fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
   },
-  content: { paddingHorizontal: 20, paddingTop: 16 },
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    height: 46, borderRadius: 12, borderWidth: 1, borderColor: COLORS.softGray200,
-    backgroundColor: COLORS.white, paddingHorizontal: 14,
-  },
-  searchInput: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.carbon, paddingVertical: 0 },
+  content: { paddingTop: 16 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: SHADES.white },
+  searchInput: { flex: 1, fontSize: 15, fontWeight: '500', color: SHADES.carbon, paddingVertical: 0 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  chip: {
-    borderRadius: 10, borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white,
-    paddingHorizontal: 14, paddingVertical: 8,
-  },
-  chipActive: { backgroundColor: COLORS.carbon, borderColor: COLORS.carbon },
-  chipText: { fontSize: 13, fontWeight: '600', color: COLORS.carbon },
-  chipTextActive: { color: COLORS.white },
-  count: { fontSize: 13, fontWeight: '500', color: COLORS.fg3, marginTop: 16, marginBottom: 10 },
-  empty: { fontSize: 13, fontWeight: '500', color: COLORS.fg3, lineHeight: 19 },
-  error: { fontSize: 13, fontWeight: '500', color: COLORS.danger, marginTop: 16 },
-  loadMore: {
-    height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.carbon,
-    alignItems: 'center', justifyContent: 'center', marginTop: 4,
-  },
-  loadMoreText: { fontSize: 14, fontWeight: '700', color: COLORS.carbon },
+  count: { marginTop: 16, marginBottom: 10 },
 });

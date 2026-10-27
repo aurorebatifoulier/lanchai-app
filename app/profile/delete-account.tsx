@@ -19,6 +19,8 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { SHADES } from '@/constants/brandShades';
+import { UI, StatusBlock } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -120,12 +122,19 @@ export default function DeleteAccountScreen() {
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <View style={s.centerBox}>
-          <ActivityIndicator color={COLORS.amber} />
-          <Text style={s.centerText}>Checking your rentals…</Text>
+          <ActivityIndicator color={SHADES.amber} />
+          <Text style={UI.body}>Checking your rentals…</Text>
         </View>
       </View>
     );
   }
+
+  const contactButton = (
+    <TouchableOpacity style={[UI.btnPrimary, { marginTop: 16 }]} onPress={() => router.push('/chat')} activeOpacity={0.85}>
+      <Feather name="message-circle" size={16} color={SHADES.carbon} />
+      <Text style={UI.btnPrimaryText}>Contact us</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -135,108 +144,77 @@ export default function DeleteAccountScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
       >
         {checkError ? (
           /* ── BLOCKED: couldn't verify rental status ───────────────────── */
-          <>
-            <View style={s.blockBox}>
-              <Feather name="alert-triangle" size={22} color={COLORS.danger} style={s.boxIcon} />
-              <Text style={s.blockTitle}>Couldn&apos;t verify your rentals</Text>
-              <Text style={s.blockMsg}>
-                Unable to verify your active rentals. Please try again or contact us.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={s.chatBtn}
-              onPress={() => router.push('/chat')}
-              activeOpacity={0.85}
-            >
-              <Feather name="message-circle" size={16} color={COLORS.carbon} />
-              <Text style={s.chatBtnText}>Contact us</Text>
-            </TouchableOpacity>
-          </>
+          <View style={[UI.card, UI.cardPadded]}>
+            <StatusBlock icon={{ name: 'alert-triangle' }} tone="amber" title="Couldn't verify your rentals">
+              <Text style={UI.body}>Unable to verify your active rentals. Please try again or contact us.</Text>
+            </StatusBlock>
+            {contactButton}
+          </View>
         ) : activeRentals.length > 0 ? (
           /* ── BLOCKED: active / upcoming rental ────────────────────────── */
-          <>
-            <View style={s.blockBox}>
-              <Feather name="alert-triangle" size={22} color={COLORS.danger} style={s.boxIcon} />
-              <Text style={s.blockTitle}>Active rental in progress</Text>
-              <Text style={s.blockMsg}>
+          <View style={[UI.card, UI.cardPadded]}>
+            <StatusBlock icon={{ name: 'alert-triangle' }} tone="amber" title="Active rental in progress">
+              <Text style={UI.body}>
                 You still have an active or upcoming rental. Please return your items and settle any
                 deposit, or contact us, before deleting your account.
               </Text>
-            </View>
-
-            <TouchableOpacity
-              style={s.chatBtn}
-              onPress={() => router.push('/chat')}
-              activeOpacity={0.85}
-            >
-              <Feather name="message-circle" size={16} color={COLORS.carbon} />
-              <Text style={s.chatBtnText}>Contact us</Text>
-            </TouchableOpacity>
-          </>
+            </StatusBlock>
+            {contactButton}
+          </View>
         ) : (
           /* ── CONFIRMATION: warning + password ─────────────────────────── */
-          <>
-            <View style={s.warnBox}>
-              <Feather name="alert-triangle" size={20} color="#7A5F00" style={s.boxIcon} />
-              <Text style={s.warnTitle}>This can&apos;t be undone</Text>
-              <Text style={s.warnMsg}>
+          <View style={[UI.card, UI.cardPadded]}>
+            <StatusBlock icon={{ name: 'alert-triangle' }} title="This can't be undone">
+              <Text style={UI.body}>
                 Deleting your account permanently removes your personal information and login. Your
                 rental history is retained as a business record and will not be deleted.
               </Text>
-            </View>
+            </StatusBlock>
 
-            <Text style={s.fieldLabel}>Confirm with your password</Text>
-            <View style={s.passwordRow}>
+            <View style={UI.divider} />
+            <Text style={UI.fieldLabel}>Confirm with your password</Text>
+            <View style={[UI.input, s.passwordRow]}>
               <TextInput
-                style={[s.input, { flex: 1 }]}
+                style={s.passwordInput}
                 value={password}
                 onChangeText={v => { setPassword(v); setError(null); }}
                 placeholder="Your current password"
-                placeholderTextColor={COLORS.fg3}
+                placeholderTextColor={SHADES.carbonFaint}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="done"
                 onSubmitEditing={handleDelete}
               />
-              <TouchableOpacity
-                style={s.eyeBtn}
-                onPress={() => setShowPassword(v => !v)}
-                activeOpacity={0.7}
-              >
-                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={COLORS.fg3} />
+              <TouchableOpacity onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={10}>
+                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={SHADES.carbonMuted} />
               </TouchableOpacity>
             </View>
 
-            {error && (
-              <View style={s.errorBanner}>
-                <Feather name="alert-circle" size={15} color="#B91C1C" />
-                <Text style={s.errorText}>{error}</Text>
-              </View>
-            )}
+            {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
 
+            {/* Destructive = text in the danger colour, never a red fill. */}
             <TouchableOpacity
-              style={[s.deleteBtn, !canSubmit && s.deleteBtnOff]}
+              style={[UI.btnDestructive, { marginTop: 16 }, !canSubmit && UI.btnDisabled]}
               onPress={handleDelete}
               disabled={!canSubmit}
               activeOpacity={0.85}
             >
               {deleting ? (
                 <>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={s.deleteBtnText}>Deleting…</Text>
+                  <ActivityIndicator size="small" color={COLORS.danger} />
+                  <Text style={UI.dangerText}>Deleting…</Text>
                 </>
               ) : (
-                <Text style={s.deleteBtnText}>Delete my account</Text>
+                <Text style={UI.dangerText}>Delete my account</Text>
               )}
             </TouchableOpacity>
-          </>
+          </View>
         )}
       </ScrollView>
     </View>
@@ -271,162 +249,7 @@ const s = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  // Shared
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-  },
-  centerBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  centerText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  boxIcon: {
-    marginBottom: 10,
-  },
-
-  // Blocked state
-  blockBox: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  blockTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.danger,
-    marginBottom: 8,
-    letterSpacing: -0.2,
-    textAlign: 'center',
-  },
-  blockMsg: {
-    fontSize: 13.5,
-    fontWeight: '400',
-    color: '#991B1B',
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  chatBtn: {
-    height: 50,
-    backgroundColor: COLORS.amber,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  chatBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
-
-  // Warning box
-  warnBox: {
-    backgroundColor: '#FEF9E5',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#F0D56A',
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  warnTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#7A5F00',
-    marginBottom: 6,
-    letterSpacing: -0.2,
-  },
-  warnMsg: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#5C4400',
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-
-  // Password field
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    color: COLORS.fg3,
-    marginBottom: 8,
-  },
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  input: {
-    height: 50,
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.carbon,
-  },
-  eyeBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.softGray200,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-
-  // Error banner
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    padding: 13,
-    marginBottom: 16,
-  },
-  errorText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: '#B91C1C',
-    flex: 1,
-  },
-
-  // Delete button
-  deleteBtn: {
-    height: 52,
-    backgroundColor: COLORS.danger,
-    borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  deleteBtnOff: {
-    opacity: 0.45,
-  },
-  deleteBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
+  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 14 },
+  passwordInput: { flex: 1, height: '100%', fontSize: 15, fontWeight: '500', color: SHADES.carbon, paddingVertical: 0 },
 });
