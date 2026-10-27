@@ -16,7 +16,7 @@ import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { weekendWindow } from '@/lib/homeData';
 import type { Product } from '@/lib/mockData';
-import { fetchOccupancy, computeAvailableUnits, effectiveStock, type OccupancyRecord } from '@/utils/availability';
+import { fetchOccupancy, computeAvailableUnits, effectiveStock, nextAvailableDay, type OccupancyRecord } from '@/utils/availability';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { getEffectiveRate, billableDaysFromDates } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
@@ -134,13 +134,19 @@ function QuickAddSheet({ product, startOnPick, onClose, onAdded }: {
   const free = useCallback((w: { pickupAt: Date; returnAt: Date } | null) =>
     !!w && occ != null && computeAvailableUnits(occ, w.pickupAt, w.returnAt, stock) >= 1, [occ, stock]);
 
-  // Default to the first free shortcut once availability is known.
+  // Default once availability is known: the first free shortcut; not free today ("+"
+  // in outline) → Pick dates, pre-filled with the next free day (1 day).
   const defaulted = useRef(false);
   useEffect(() => {
-    if (occ == null || defaulted.current || startOnPick) return;
+    if (occ == null || defaulted.current) return;
     defaulted.current = true;
+    if (startOnPick) {
+      const next = nextAvailableDay(occ, stock);
+      if (next instanceof Date) setRange({ start: next, end: new Date(next.getFullYear(), next.getMonth(), next.getDate() + 1) });
+      return;
+    }
     if (!free(windows.weekend)) setChoice(free(windows.tomorrow) ? 'tomorrow' : 'pick');
-  }, [occ, free, windows, startOnPick]);
+  }, [occ, free, windows, startOnPick, stock]);
 
   const sel = windows[choice];
   const selFree = free(sel);

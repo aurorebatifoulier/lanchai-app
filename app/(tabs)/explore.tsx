@@ -46,7 +46,7 @@ import RotatingLine from '@/components/explore/RotatingLine';
 import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
 import CountUpText from '@/components/CountUpText';
 import { MOTION, useReducedMotion } from '@/constants/motion';
-import { weekendWindow } from '@/lib/homeData';
+import { weekendWindow, whyBuyCatalogueRanked } from '@/lib/homeData';
 import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
@@ -60,6 +60,10 @@ import { CategoryBadge, UI } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
+import { SurpriseCard, AskCard, type Surprise } from '@/components/explore/SurpriseCards';
+import { getReviewQuotes, type ReviewQuote } from '@/lib/reviewQuotes';
+import { useResidentPromo } from '@/lib/residency';
+import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
@@ -81,8 +85,12 @@ const NO_QUICK: Record<QuickKey, boolean> = { weekend: false, under: false, newI
 // Sticky search + categories: overlay vertical padding (like the Home sticky search).
 const STICKY_PAD = 8;
 
-/** Product rows for the one-column list: pairs of cards (surprise cards come later). */
-type Row = { key: string; kind: 'pair'; items: Product[] };
+/** One-column list rows: pairs of cards, or a full-width surprise card. */
+type Row = { key: string; kind: 'pair'; items: Product[] } | { key: string; kind: 'surprise'; item: Surprise };
+// Surprise cards: after every SURPRISE_EVERY pairs (8 products — never in the first 4),
+// rotating types, a type with no data skipped, never two in a row, none during a search.
+const SURPRISE_EVERY = 4;
+const SURPRISE_ORDER: Surprise['kind'][] = ['collection', 'review', 'whyBuy', 'resident', 'loyalty'];
 
 
 export default function ExploreScreen() {
@@ -344,13 +352,52 @@ export default function ExploreScreen() {
     : EXPLORE_COPY.results.base(n);
   const sortLabel = search.active && filters.sort === 'popular' ? EXPLORE_COPY.bestMatchSort : SORT_LABELS[filters.sort];
 
+  // Surprise card data (real only).
+  const [quotes, setQuotes] = useState<ReviewQuote[]>([]);
+  useEffect(() => {
+    if (allProducts.length === 0) return;
+    getReviewQuotes(allProducts).then(setQuotes).catch(() => setQuotes([]));
+  }, [allProducts]);
+  const residentPct = useResidentPromo();
+  const loyalty = useMyLoyalty();
+  const avgPoints = useAveragePointsPerRental();
+  const surprisePools = useMemo(() => {
+    const why = whyBuyCatalogueRanked(allProducts, exchangeRate)[0];
+    const loyaltyLine = !loyalty.loading && !loyalty.excluded && loyalty.progress?.next
+      ? loyaltyCardSubline(loyalty.progress, avgPoints, loyalty.config) : null;
+    return {
+      collection: search.collections.map(c => ({ kind: 'collection', collection: c }) as Surprise),
+      review: quotes.map(q => ({ kind: 'review', quote: q }) as Surprise),
+      whyBuy: why ? [{ kind: 'whyBuy', pick: why } as Surprise] : [],
+      resident: residentPct ? [{ kind: 'resident', percent: residentPct } as Surprise] : [],
+      loyalty: loyaltyLine ? [{ kind: 'loyalty', line: loyaltyLine } as Surprise] : [],
+    } satisfies Record<Surprise['kind'], Surprise[]>;
+  }, [allProducts, exchangeRate, search.collections, quotes, residentPct, loyalty, avgPoints]);
+
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
-    for (let i = 0; i < filteredProducts.length; i += 2) {
+    const used: Record<Surprise['kind'], number> = { collection: 0, review: 0, whyBuy: 0, resident: 0, loyalty: 0 };
+    let turn = 0;
+    const nextSurprise = (): Surprise | null => {
+      for (let k = 0; k < SURPRISE_ORDER.length; k++) {
+        const kind = SURPRISE_ORDER[(turn + k) % SURPRISE_ORDER.length];
+        const pool = surprisePools[kind];
+        if (pool.length === 0) continue;
+        turn = (turn + k + 1) % SURPRISE_ORDER.length;
+        return pool[used[kind]++ % pool.length];
+      }
+      return null;
+    };
+    for (let i = 0, pair = 0; i < filteredProducts.length; i += 2, pair++) {
       out.push({ key: `p${filteredProducts[i].id}`, kind: 'pair', items: filteredProducts.slice(i, i + 2) });
+      const more = i + 2 < filteredProducts.length;
+      if (!search.active && more && (pair + 1) % SURPRISE_EVERY === 0) {
+        const item = nextSurprise();
+        if (item) out.push({ key: `s${pair}`, kind: 'surprise', item });
+      }
     }
     return out;
-  }, [filteredProducts]);
+  }, [filteredProducts, search.active, surprisePools]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -379,7 +426,9 @@ export default function ExploreScreen() {
   }, [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById, openQuickAdd]);
 
   const renderRow = useCallback(({ item }: { item: Row }) => (
-    <View style={styles.row}>{item.items.map(renderCard)}</View>
+    item.kind === 'pair'
+      ? <View style={styles.row}>{item.items.map(renderCard)}</View>
+      : <View style={styles.surprise}><SurpriseCard item={item.item} /></View>
   ), [renderCard]);
 
   const toggleQuick = (k: QuickKey) => setQuick(q => ({ ...q, [k]: !q[k] }));
@@ -487,6 +536,7 @@ export default function ExploreScreen() {
             keyboardShouldPersistTaps="handled"
             extraData={{ favorites, productCount: allProducts.length }}
             ListHeaderComponent={header}
+            ListFooterComponent={!loading && rows.length > 0 ? <View style={{ marginTop: 4 }}><AskCard onPress={openRequest} /></View> : null}
             scrollEventThrottle={16}
             onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
               useNativeDriver: true,
@@ -649,9 +699,7 @@ function SearchEmptyState({ query, collections, onRequestItem }: { query: string
           </View>
         </>
       )}
-      <TouchableOpacity style={[styles.requestItemBtn, { marginTop: 22 }]} onPress={onRequestItem}>
-        <Text style={styles.requestItemBtnText}>Request this item</Text>
-      </TouchableOpacity>
+      <View style={{ marginTop: 22, alignSelf: 'stretch' }}><AskCard onPress={onRequestItem} /></View>
     </View>
   );
 }
@@ -675,9 +723,7 @@ function SmartEmptyState({
         <Text style={styles.emptySub}>
           We&apos;re adding new items soon — check back later.
         </Text>
-        <TouchableOpacity style={styles.requestItemBtn} onPress={onRequestItem}>
-          <Text style={styles.requestItemBtnText}>Request this item</Text>
-        </TouchableOpacity>
+        <View style={{ marginTop: 22, alignSelf: 'stretch' }}><AskCard onPress={onRequestItem} /></View>
       </View>
     );
   }
@@ -694,9 +740,7 @@ function SmartEmptyState({
       <TouchableOpacity style={styles.clearFiltersBtn} onPress={onClearFilters}>
         <Text style={styles.clearFiltersBtnText}>Clear filters</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.requestItemBtn} onPress={onRequestItem}>
-        <Text style={styles.requestItemBtnText}>Request this item</Text>
-      </TouchableOpacity>
+      <View style={{ marginTop: 22, alignSelf: 'stretch' }}><AskCard onPress={onRequestItem} /></View>
     </View>
   );
 }
@@ -870,6 +914,7 @@ const styles = StyleSheet.create({
   grid: { flex: 1, backgroundColor: COLORS.porcelain },
   gridContent: { paddingHorizontal: H_PAD, paddingBottom: 36 },
   row: { flexDirection: 'row', gap: COL_GAP, marginBottom: COL_GAP },
+  surprise: { marginBottom: COL_GAP },
 
   // ── Smart empty state ─────────────────────────────────────────────────────
   empty: {
