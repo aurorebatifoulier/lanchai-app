@@ -52,7 +52,7 @@ export function normalize(text: string): string {
   return text
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // accents (Lao script untouched)
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ') // keep combining marks: Lao vowels / tones
     .trim();
 }
 

@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/search-vocabulary';
 }
 
 const CARDS: HubCard[] = [
@@ -32,6 +32,13 @@ const CARDS: HubCard[] = [
     title: 'Reservations',
     sub: 'View and manage bookings',
     route: '/admin/reservations',
+  },
+  {
+    icon: 'search',
+    iconBg: COLORS.warmBeige,
+    title: 'Search vocabulary',
+    sub: 'Related words the app search understands',
+    route: '/admin/search-vocabulary',
   },
   {
     icon: 'image',

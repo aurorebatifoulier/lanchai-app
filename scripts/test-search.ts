@@ -29,6 +29,7 @@ let failed = 0;
 const check = (name: string, fn: () => void) => { try { fn(); } catch (e) { failed++; console.error('✗', name, (e as Error).message); } };
 
 check('normalize', () => assert.equal(normalize('Café  Crème!'), 'cafe creme'));
+check('lao kept', () => assert.equal(normalize('ເຕັ້ນ'), 'ເຕັ້ນ'));
 check('stem', () => { assert.equal(stem('drills'), 'drill'); assert.equal(stem('batteries'), 'battery'); assert.equal(stem('boxes'), 'box'); assert.equal(stem('glass'), 'glass'); });
 check('distance', () => { assert.ok(withinDistance('tnet', 'tent', 1)); assert.ok(!withinDistance('tnet', 'tent', 0)); assert.ok(withinDistance('strroler', 'stroller', 2)); });
 check('party', () => { const r = ids('party'); assert.equal(r[0], 'speaker'); assert.ok(r.includes('lights')); });
