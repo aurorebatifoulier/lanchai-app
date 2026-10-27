@@ -30,6 +30,8 @@ export interface ShopInfo {
   paymentMethods: string;
   latitude?: number;
   longitude?: number;
+  /** Weekly closing days, 0 = Sunday … 6 (Vientiane). Home "Open now" line only — does not block bookings. */
+  closedDays?: number[];
 }
 
 export const SHOP_FALLBACK: ShopInfo = {

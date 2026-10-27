@@ -819,8 +819,8 @@ a snapshot indefinitely).
   `BookingHoldNotice` = white card + amber pause icon + WhatsApp row. `WhatsAppButton` has
   no green anywhere (button variant = white, carbon outline; row variant on the booking
   confirmation, hold notice, overdue rental). Small stock dots / chips keep green / red.
-  Main app screens (Home, Explore, product, category, Reservations tab, login, onboarding)
-  are NOT on this design yet.
+  Main app screens (Explore, product, category, Reservations tab, login, onboarding) are
+  NOT on this design yet — Home is (see "Home" below).
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled
@@ -842,6 +842,33 @@ a snapshot indefinitely).
   hidden (never shrunk). The tent bubble is placed in the gap right of the chips, before
   the bike. Other tab screens apply the top inset
   on a non-scrolling root — not affected.
+
+- **Home (validated mockup, 2026-10-27) — My Account design.** Copy in
+  `constants/homeCopy.ts`. Top to bottom: header (unchanged) → hero `InsetCarousel`
+  (`components/home/`, 16px margins, radius 18, only the active dot amber) → search
+  (`SearchBar variant="account"`) → `<NextPickupCard>` (carbon card, nearest
+  `pending_payment`/`confirmed` line whose pick-up day isn't over — `nextPickup()`, tap →
+  `/rentals/{id}`) → `<ShopStatusLine>` (`shopOpenState()` in `functions/src/shared/shop.ts`,
+  Vientiane time, from `config/shop` openTime/closeTime + optional `closedDays` (0 = Sun,
+  Shop settings chips — display only, does NOT block bookings) + Directions) → categories
+  → "Got plans?" → New arrivals → `<RentReturnRepeat>` (no `returned` rental yet; dotted
+  bee trail with the header's `DASH`/`PATH_OPACITY`) or "Rent again" (distinct returned
+  products, latest first) → Most rented → "Consume better" (`WhyRentSection`, inset).
+  Removed: Popular near you, Premium rail, How LANCHAI works, `TrustSection`.
+  - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
+    fun = speaker, sports = bike — + palette shades) via `<CategoryBadge>`; used by Home,
+    the stickers AND the My Account header bubbles. Never re-map a category locally.
+  - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
+    `ProductGridCard` keeps "New" in amber-light. `<FavoriteHeart>` everywhere (cards +
+    product detail): carbon outline, filled AMBER when liked — never red.
+  - Links ("See all", "Directions") = `UI.link` (`SHADES.amberText` #BA7517).
+  - **Collections** (`collections/{id}`, `lib/collections.ts`): title, subtitle, MCI
+    icon, palette shade, `productIds`, optional `activeFrom`/`activeTo` (whole Vientiane
+    days), `order`, `published`. Rule: signed-in renters read `published == true` only
+    (queries must filter on it), admins read/write. Hidden on Home without a visible
+    product. Renter screen `app/collection/[id].tsx`; admin `app/admin/collections.tsx`
+    + `app/admin/collection-form.tsx?id=` (flat files, no `[id]` folder), "Create example
+    drafts" seeds `COLLECTION_SEEDS`.
 
 ## Security follow-ups
 

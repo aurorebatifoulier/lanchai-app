@@ -18,6 +18,7 @@ import { doc, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { UI } from '@/components/account/ui';
 import {
   SHOP_FALLBACK,
   saveShopInfo,
@@ -235,11 +236,15 @@ export default function AdminShopSettingsScreen() {
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [saved,      setSaved]      = useState(false);
+  // Weekly closing days (0 = Sunday), Vientiane — the Home "Open now" line only.
+  const [closedDays, setClosedDays] = useState<number[]>([]);
 
   useEffect(() => {
     Promise.all([getDoc(doc(db, 'config', 'shop')), getGraceHours()])
       .then(([snap, graceHours]) => {
         if (snap.exists()) setConfigured(true);
+        const cd = snap.exists() ? (snap.data() as Partial<ShopInfo>).closedDays : undefined;
+        setClosedDays(Array.isArray(cd) ? cd.filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : []);
         setForm(toForm(
           snap.exists() ? { ...SHOP_FALLBACK, ...(snap.data() as Partial<ShopInfo>) } : SHOP_FALLBACK,
           graceHours,
@@ -272,6 +277,7 @@ export default function AdminShopSettingsScreen() {
         openTime:            form.openTime.trim(),
         closeTime:           form.closeTime.trim(),
         lastPickupOffsetMin: Number(form.lastPickupOffsetMin),
+        closedDays:          [...closedDays].sort((a, b) => a - b),
         whatsappNumber:      normalizeWhatsappNumber(form.whatsappNumber),
         paymentMethods:      form.paymentMethods.trim(),
         // Exact pin for "Get directions" (app + emails, shared mapsUrl); cleared → address search.
@@ -287,7 +293,13 @@ export default function AdminShopSettingsScreen() {
     } finally {
       setSaving(false);
     }
-  }, [form]);
+  }, [form, closedDays]);
+
+  const toggleDay = (d: number) => {
+    setClosedDays(prev => (prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]));
+    setError(null);
+    setSaved(false);
+  };
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -383,6 +395,26 @@ export default function AdminShopSettingsScreen() {
                 {slots && slots.length > 0
                   ? `Renters can pick ${slots[0]} to ${slots[slots.length - 1]}, every 30 min (${slots.length} slots).`
                   : 'Fix the times above to preview the slots.'}
+              </Text>
+              <Text style={[s.fieldLabel, { marginTop: 14 }]}>Closed days</Text>
+              <View style={s.dayRow}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, d) => {
+                  const on = closedDays.includes(d);
+                  return (
+                    <TouchableOpacity
+                      key={label}
+                      style={[UI.choice, on && UI.choiceOn]}
+                      onPress={() => toggleDay(d)}
+                      disabled={saving}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[UI.choiceText, on && UI.choiceTextOn]}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={s.hint}>
+                Only drives the Home &quot;Open now / Closed today&quot; line. It does not block bookings on those days.
               </Text>
             </View>
 
@@ -485,6 +517,7 @@ const s = StyleSheet.create({
   },
   sectionLabel: { fontSize: 13, fontWeight: '800', color: COLORS.carbon, marginBottom: 12 },
   row: { flexDirection: 'row', gap: 12 },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 
   field: { marginBottom: 12 },
   fieldLabel: { fontSize: 12, fontWeight: '700', color: COLORS.carbon, marginBottom: 6 },
