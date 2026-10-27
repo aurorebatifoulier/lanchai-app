@@ -981,9 +981,10 @@ a snapshot indefinitely).
     weekend while that chip is on; rented n× this month (≥ 3); ★ rating · ↻ n rentals;
     ↻ n rentals) — real data only, never invented urgency. ONE renderer `<SignalLine>`
     on every card (Home rail, Explore, Liked, category page), amber star / repeat icons,
-    the "+" width reserved on that line; a rating only from `MIN_REVIEWS_FOR_RATING` (3)
-    reviews; Home rail cards are narrow → `compact`: ONE piece (back on / ★ rating /
-    ↻ n rentals). Price digits in the same grey as "LAK / day" on every card.
+    the "+" width reserved on that line. Grid cards (Explore, Liked, category page) show
+    the rating from `MIN_REVIEWS_GRID` (1) review, combined with the rentals; Home rail
+    cards are narrow → `compact`: ONE piece (back on / ★ rating from
+    `MIN_REVIEWS_HOME_RAIL` (3) reviews / ↻ n rentals). Price digits in the same grey as "LAK / day" on every card.
   - **Quick add:** `QuickAddProvider` (root layout, `useQuickAdd().openQuickAdd`) owns one
     sheet + toast. "+" (`QuickAddButton`: amber = free today, outline = not → Pick dates
     pre-filled with the next free day; none when tier-locked) on Explore, Liked, category

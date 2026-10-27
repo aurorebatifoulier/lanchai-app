@@ -8,8 +8,10 @@ import { EXPLORE_COPY } from '@/constants/exploreCopy';
 // "Free this weekend" window has 1 unit left → "Only 1 left this weekend"; ≥ 3 returns
 // this month (rentalsByMonth) → "Rented n× this month"; a rating → "★ r · n rentals";
 // rentals → "n rentals"; else nothing.
-/** A rating is shown on a product card only from this many reviews (every card). */
-export const MIN_REVIEWS_FOR_RATING = 3;
+/** Home rail cards (narrow, one-piece line): a rating only from this many reviews. */
+export const MIN_REVIEWS_HOME_RAIL = 3;
+/** Grid cards (Explore, Liked, category page): a rating from the first review. */
+export const MIN_REVIEWS_GRID = 1;
 
 export type SignalTone = 'muted' | 'amber' | 'plain';
 /** One piece of the line: an optional icon (star / repeat = amber, clock = grey) + text. */
@@ -32,7 +34,8 @@ export function productSignal(
     if (availability.kind === 'backOn') return { tone: 'muted', parts: [{ icon: 'clock', text: c.backOn(fmtDay(availability.date)) }] };
     return { tone: 'muted', parts: [{ text: availability.kind === 'fullyBooked' ? c.fullyBooked : c.unavailable }] };
   }
-  const rated = p.averageRating != null && p.averageRating > 0 && (p.reviewCount ?? 0) >= MIN_REVIEWS_FOR_RATING;
+  const minReviews = compact ? MIN_REVIEWS_HOME_RAIL : MIN_REVIEWS_GRID;
+  const rated = p.averageRating != null && p.averageRating > 0 && (p.reviewCount ?? 0) >= minReviews;
   const rentalsN = p.rentalCount ?? p.bookingsCount ?? 0;
   if (compact) {
     if (rated) return { tone: 'plain', parts: [{ icon: 'star', text: p.averageRating!.toFixed(1), strong: true }] };
