@@ -9,7 +9,7 @@ import { EXPLORE_COPY } from '@/constants/exploreCopy';
 // this month (rentalsByMonth) → "Rented n× this month"; a rating → "★ r · n rentals";
 // rentals → "n rentals"; else nothing.
 /** A rating shows on every product card (Home rails included) from this many reviews. */
-export const MIN_REVIEWS_FOR_RATING = 1;
+export const MIN_REVIEWS_FOR_RATING = 3;
 
 export type SignalTone = 'muted' | 'amber' | 'plain';
 /** One piece of the line: an optional icon (star / repeat = amber, clock = grey) + text. */

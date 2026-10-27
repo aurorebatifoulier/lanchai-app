@@ -982,7 +982,7 @@ a snapshot indefinitely).
     ↻ n rentals) — real data only, never invented urgency. ONE renderer `<SignalLine>`
     on every card (Home rail, Explore, Liked, category page), amber star / repeat icons,
     the "+" width reserved on that line. A rating shows from `MIN_REVIEWS_FOR_RATING`
-    (1) review on every card. Grid cards (Explore, Liked, category page) combine it with
+    (3) reviews on every card. Grid cards (Explore, Liked, category page) combine it with
     the rentals; Home rail cards are narrow → `compact`: ONE piece (back on → ★ rating →
     ↻ n rentals → nothing). Price digits in the same grey as "LAK / day" on every card.
   - **Quick add:** `QuickAddProvider` (root layout, `useQuickAdd().openQuickAdd`) owns one
