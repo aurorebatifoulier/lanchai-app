@@ -923,6 +923,23 @@ a snapshot indefinitely).
     + `app/admin/collection-form.tsx?id=` (flat files, no `[id]` folder), "Create example
     drafts" seeds `COLLECTION_SEEDS`.
 
+- **Motion system (2026-10-27).** `constants/motion.ts` is the ONE source: durations
+  (fast 120 / base 220 / slow 450 / count 500 ms), easings, springs (`press`, `bounce`),
+  `pressScale` 0.97, `riseY` 8, and `useReducedMotion()` (the old AccountHeader
+  `useReduceMotion` is an alias). Every animation checks it (and Reanimated's
+  `ReduceMotion.System`) and jumps to its end state. Pieces: `<PressScale>` (Pressable +
+  UI-thread scale — product cards, Home cards / tiles / rows, `Row`, every
+  `UI.btnPrimary` / `UI.btnSecondary` button and the renter CTAs; use it for new
+  tappable cards / buttons instead of TouchableOpacity), `<FavoriteHeart>` (bounce +
+  fill on like, dip on unlike, only on a change after mount), Home `<BagButton>` (bounce
+  + badge pop when the count goes UP, not on first load), `<CountUpText>` (My Account
+  stats, once per app session), `<DrawnCheck>` (booking confirmation), Home
+  `<HomeSection>` fade + 8px rise once per section. Pull-to-refresh stays the native
+  amber spinner (a custom indicator isn't reliable on Android / Expo Go). Product cards
+  are `React.memo` (compare shown props only) for long lists. Not converted (admin, own
+  local styles): `AdminDateTimePicker`, `SettlementActions`, `CropScreen`,
+  `RenterIdCard`, `RenterNameBlock`, `admin/residency/[uid]` buttons.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

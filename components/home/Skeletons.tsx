@@ -1,19 +1,24 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, type DimensionValue, type StyleProp, type ViewStyle } from 'react-native';
 import Reanimated, {
-  FadeIn, FadeOut, LinearTransition, useSharedValue, useAnimatedStyle, withRepeat, withTiming,
+  FadeInUp, FadeOut, LinearTransition, useSharedValue, useAnimatedStyle, withRepeat, withTiming,
   ReduceMotion, Easing,
 } from 'react-native-reanimated';
 import { SHADES } from '@/constants/brandShades';
-import { useReduceMotion } from '@/components/account/AccountHeader';
+import { MOTION, useReducedMotion as useReduceMotion } from '@/constants/motion';
 
 // Home loading placeholders (palette greys, same shapes as each section) + the wrapper
 // that swaps a skeleton for the real section with a fade, and lets an empty section
 // collapse smoothly. Pulse and transitions are off with "reduce motion".
 
-const ENTER = FadeIn.duration(260).reduceMotion(ReduceMotion.System);
-const EXIT = FadeOut.duration(180).reduceMotion(ReduceMotion.System);
-const MOVE = LinearTransition.duration(260).reduceMotion(ReduceMotion.System);
+// Fade + slight rise (MOTION.riseY) when a section first appears after loading. It plays
+// once: a section stays mounted across focus reloads / pull-to-refresh (its data flag
+// stays true), so neither replays it — and scrolling never triggers anything.
+const ENTER = FadeInUp.duration(MOTION.duration.base)
+  .withInitialValues({ opacity: 0, transform: [{ translateY: MOTION.riseY }] })
+  .reduceMotion(ReduceMotion.System);
+const EXIT = FadeOut.duration(MOTION.duration.fast).reduceMotion(ReduceMotion.System);
+const MOVE = LinearTransition.duration(MOTION.duration.base).reduceMotion(ReduceMotion.System);
 
 /** Skeleton while `loading`; then the children (or nothing — the section collapses). */
 export function HomeSection({ loading, skeleton, children }: { loading: boolean; skeleton: React.ReactNode; children?: React.ReactNode }) {
