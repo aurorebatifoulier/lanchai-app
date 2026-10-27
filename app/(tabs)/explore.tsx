@@ -44,7 +44,6 @@ import {
 import { EXPLORE_COPY } from '@/constants/exploreCopy';
 import RotatingLine from '@/components/explore/RotatingLine';
 import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
-import CountUpText from '@/components/CountUpText';
 import { MOTION, useReducedMotion } from '@/constants/motion';
 import { weekendWindow, whyBuyCatalogueRanked } from '@/lib/homeData';
 import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
@@ -313,12 +312,6 @@ export default function ExploreScreen() {
     const n = p.rentalsByMonth?.[vteMonthKey(Date.now())] ?? 0;
     return n >= 3 || p.showInPopular === true;
   }, []);
-  // "{n} ready today": renter-visible products with a unit free today (grid rule).
-  const readyToday = useMemo(
-    () => (occupancy ? allProducts.filter(p => gridAvailability(p, occupancy.get(p.id) ?? []) === null).length : null),
-    [allProducts, occupancy],
-  );
-
   // Search (lib/search.ts, debounced): relevance order by default ("Popular" = the
   // default sort); an explicit other sort (price, newest, rating) is respected.
   const search = useProductSearch(allProducts, searchQuery);
@@ -341,15 +334,7 @@ export default function ExploreScreen() {
   }, [allProducts, activeCategory, filters, exchangeRate, search, quick, weekendUnitsById, budgetLak, isPopular]);
   const bestId = search.active && filters.sort === 'popular' ? bestMatchId(filteredProducts, search.scoreById) : null;
 
-  const n = filteredProducts.length;
-  const onlyQuick = (Object.keys(quick) as QuickKey[]).filter(k => quick[k]);
   const budgetLabel = budgetLak.toLocaleString('en-US');
-  const resultsLine = search.active ? EXPLORE_COPY.results.search(n)
-    : onlyQuick.length === 1 && onlyQuick[0] === 'weekend' ? EXPLORE_COPY.results.weekend(n)
-    : onlyQuick.length === 1 && onlyQuick[0] === 'under' ? EXPLORE_COPY.results.under(n, budgetLabel)
-    : onlyQuick.length === 1 && onlyQuick[0] === 'newItems' ? EXPLORE_COPY.results.newItems(n)
-    : onlyQuick.length === 1 && onlyQuick[0] === 'popular' ? EXPLORE_COPY.results.popular(n)
-    : EXPLORE_COPY.results.base(n);
   const sortLabel = search.active && filters.sort === 'popular' ? EXPLORE_COPY.bestMatchSort : SORT_LABELS[filters.sort];
 
   // Surprise card data (real only).
@@ -465,12 +450,6 @@ export default function ExploreScreen() {
             <Text style={styles.title}>{EXPLORE_COPY.title}</Text>
             <RotatingLine lines={EXPLORE_COPY.oneLiners} style={styles.oneLiner} />
           </View>
-          {readyToday != null && (
-            <View style={styles.counter}>
-              <CountUpText id="explore.readyToday" value={readyToday} style={styles.counterNum} />
-              <Text style={styles.counterLabel}>{EXPLORE_COPY.readyToday}</Text>
-            </View>
-          )}
         </View>
         <View onLayout={e => setPinY(e.nativeEvent.layout.y)}>{searchAndCategories}</View>
       </View>
@@ -500,12 +479,9 @@ export default function ExploreScreen() {
         </View>
       )}
 
+      {/* Sort selector alone on a small right-aligned line (no results count). */}
       {!loading && (
         <View style={styles.resultsBar}>
-          <Text style={styles.resultsLine} numberOfLines={1}>
-            <Text style={styles.resultsNum}>{resultsLine.split(' ')[0]}</Text>
-            {` ${resultsLine.split(' ').slice(1).join(' ')}`}
-          </Text>
           <TouchableOpacity onPress={openSheet} hitSlop={8} style={styles.sortBtn}>
             <Text style={UI.link}>{sortLabel}</Text>
             <Feather name="chevron-down" size={14} color={SHADES.amberText} />
@@ -756,9 +732,6 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
   oneLiner: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
-  counter: { alignItems: 'flex-end', paddingTop: 4 },
-  counterNum: { fontSize: 24, fontWeight: '800', color: SHADES.amberText, lineHeight: 28 },
-  counterLabel: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
   quickRow: { gap: 8, paddingVertical: 14 },
   quickChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 12,
@@ -767,7 +740,6 @@ const styles = StyleSheet.create({
   quickChipOn: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
   quickChipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
   quickChipTextOn: { color: SHADES.cream },
-  resultsLine: { flex: 1, fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   sticky: {
     position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: H_PAD, paddingVertical: STICKY_PAD,
@@ -842,7 +814,7 @@ const styles = StyleSheet.create({
   },
 
   // ── Results bar ───────────────────────────────────────────────────────────
-  resultsBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingBottom: 12 },
+  resultsBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingBottom: 10, marginTop: -4 },
   resultsCount: {
     fontSize: 12,
     fontWeight: '500',

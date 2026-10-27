@@ -909,7 +909,8 @@ a snapshot indefinitely).
     profile photos: owner or admin; chat, claims, checklist photos, business documents:
     never from the client (evidence).
   - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
-    fun = speaker, sports = bike — + palette shades) via `<CategoryBadge>`; used by Home,
+    fun = speaker, sports = bike — + palette shades; the row alternates Fun mid-amber · Tools
+    carbon · Outdoor light-amber · Sports mid-amber · Kids carbon · Home grey) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
   - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
     `ProductGridCard` keeps "New" in amber-light. `<FavoriteHeart>` everywhere (cards +
@@ -956,8 +957,8 @@ a snapshot indefinitely).
   keystroke; `config/search` covered by the config/* rule.
 
 - **Explore (validated mockup, 2026-10-27).** Copy in `constants/exploreCopy.ts`. White
-  header band: title, `<RotatingLine>` (4s, static with reduce motion), "{n} ready
-  today" (`gridAvailability(...) === null` on the cached occupancy, `CountUpText`),
+  header band: title, `<RotatingLine>` (4s, static with reduce motion) — no counter, no
+  results-count line (removed 2026-10-27; the sort selector sits alone, right-aligned) —
   `SearchBar variant="account"` + carbon/amber filter button, `<CategoryFilterRow>` (All +
   `CategoryBadge`, selected = amber). Scrolling pins an overlay copy of search +
   categories (Home sticky pattern). Quick chips: Free this weekend (`weekendWindow` +

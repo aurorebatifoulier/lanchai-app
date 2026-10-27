@@ -9,7 +9,9 @@ import { EXPLORE_COPY } from '@/constants/exploreCopy';
 // this month (rentalsByMonth) → "Rented n× this month"; a rating → "★ r · n rentals";
 // rentals → "n rentals"; else nothing.
 export type SignalTone = 'muted' | 'amber' | 'plain';
-export interface ProductSignal { text: string; tone: SignalTone; icon?: 'clock' }
+/** One piece of the line: an optional icon (star / repeat = amber, clock = grey) + text. */
+export interface SignalPart { icon?: 'clock' | 'star' | 'repeat'; text: string; strong?: boolean }
+export interface ProductSignal { tone: SignalTone; parts: SignalPart[] }
 
 const fmtDay = (d: Date) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${d.getDate()}`;
 
@@ -19,17 +21,23 @@ export function productSignal(
 ): ProductSignal | null {
   const c = EXPLORE_COPY.signal;
   if (availability) {
-    if (availability.kind === 'backOn') return { text: c.backOn(fmtDay(availability.date)), tone: 'muted', icon: 'clock' };
-    if (availability.kind === 'fullyBooked') return { text: c.fullyBooked, tone: 'muted' };
-    return { text: c.unavailable, tone: 'muted' };
+    if (availability.kind === 'backOn') return { tone: 'muted', parts: [{ icon: 'clock', text: c.backOn(fmtDay(availability.date)) }] };
+    return { tone: 'muted', parts: [{ text: availability.kind === 'fullyBooked' ? c.fullyBooked : c.unavailable }] };
   }
-  if (weekendUnits === 1) return { text: c.lastOneWeekend, tone: 'amber' };
+  if (weekendUnits === 1) return { tone: 'amber', parts: [{ text: c.lastOneWeekend }] };
   const month = p.rentalsByMonth?.[vteMonthKey(nowMs)] ?? 0;
-  if (month >= 3) return { text: c.rentedThisMonth(month), tone: 'amber' };
+  if (month >= 3) return { tone: 'amber', parts: [{ text: c.rentedThisMonth(month) }] };
+  // Same grammar as the Home cards (ProductSocialProof): amber icon + bold number + word.
   const rentals = p.rentalCount ?? p.bookingsCount ?? 0;
+  const rentalParts: SignalPart[] = rentals > 0
+    ? [{ icon: 'repeat', text: String(rentals), strong: true }, { text: c.rentalsWord(rentals) }]
+    : [];
   if (p.averageRating != null && p.averageRating > 0 && (p.reviewCount ?? 0) > 0) {
-    return { text: c.rated(p.averageRating.toFixed(1), rentals), tone: 'plain' };
+    return {
+      tone: 'plain',
+      parts: [{ icon: 'star', text: p.averageRating.toFixed(1), strong: true }, ...(rentalParts.length ? [{ text: '  ·  ' }, ...rentalParts] : [])],
+    };
   }
-  if (rentals > 0) return { text: c.rentals(rentals), tone: 'plain' };
+  if (rentalParts.length) return { tone: 'plain', parts: rentalParts };
   return null;
 }

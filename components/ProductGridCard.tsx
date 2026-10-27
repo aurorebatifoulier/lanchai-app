@@ -131,23 +131,38 @@ function ProductGridCard({
 
       <View style={s.cardBody}>
         <Text style={[s.cardName, { height: layout.name }]} numberOfLines={CARD_NAME_LINES}>{product.name}</Text>
-        <View style={quickAdd ? s.withQuickAdd : undefined}>
-          {minPrice != null && exchangeRate != null ? (
-            <Text style={s.cardPrice} numberOfLines={1}>
-              {toLak(minPrice, exchangeRate).toLocaleString('en-US')}
-              <Text style={s.cardPriceUnit}> LAK / day</Text>
-            </Text>
-          ) : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
-          <View style={[s.signalSlot, { height: layout.badge }]}>
-            {signal && (
-              <View style={s.signalRow}>
-                {signal.icon === 'clock' && <Feather name="clock" size={11} color={SHADES.carbonMuted} />}
-                <Text style={[s.signal, signal.tone === 'amber' && s.signalAmber, signal.tone === 'muted' && s.signalMuted]} numberOfLines={1}>
-                  {signal.text}
-                </Text>
-              </View>
-            )}
-          </View>
+        {minPrice != null && exchangeRate != null ? (
+          <Text style={s.cardPrice} numberOfLines={1}>
+            {toLak(minPrice, exchangeRate).toLocaleString('en-US')}
+            <Text style={s.cardPriceUnit}> LAK / day</Text>
+          </Text>
+        ) : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
+        <View style={[s.signalSlot, { height: layout.badge }, quickAdd ? s.withQuickAdd : undefined]}>
+          {signal && (
+            <View style={s.signalRow}>
+              {signal.parts.map((part, i) => (
+                <React.Fragment key={i}>
+                  {part.icon && (
+                    <Feather
+                      name={part.icon}
+                      size={part.icon === 'clock' ? 11 : 12}
+                      color={part.icon === 'clock' ? SHADES.carbonMuted : SHADES.amber}
+                      style={i > 0 ? { marginLeft: 1 } : undefined}
+                    />
+                  )}
+                  <Text
+                    style={[
+                      s.signal, signal.tone === 'amber' && s.signalAmber, signal.tone === 'muted' && s.signalMuted,
+                      part.strong && s.signalStrong, signal.tone === 'plain' && !part.strong && s.signalSecondary,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {part.text}
+                  </Text>
+                </React.Fragment>
+              ))}
+            </View>
+          )}
         </View>
         {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
       </View>
@@ -180,7 +195,7 @@ const s = StyleSheet.create({
     fontSize: 15, fontWeight: '700', color: SHADES.carbon, letterSpacing: -0.1,
     lineHeight: CARD_NAME_LH, marginBottom: CARD_NAME_GAP,
   },
-  withQuickAdd: { paddingRight: 40 },
+  withQuickAdd: { paddingRight: 30 },
   cardPrice: { fontSize: 13.5, fontWeight: '700', color: SHADES.carbon, lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP },
   cardPriceUnit: { fontWeight: '500', color: SHADES.carbonMuted },
   cardPriceUnavailable: {
@@ -188,11 +203,13 @@ const s = StyleSheet.create({
     lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP,
   },
   signalSlot: { justifyContent: 'center', flexShrink: 0 },
-  signalRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  signalRow: { flexDirection: 'row', alignItems: 'center', gap: 3, overflow: 'hidden' },
   signal: { fontSize: 12, fontWeight: '600', color: SHADES.carbon },
   signalAmber: { color: SHADES.amberText },
   signalMuted: { color: SHADES.carbonMuted, fontWeight: '500' },
-  quickAdd: { position: 'absolute', right: 10, bottom: CARD_PAD_BOTTOM - 4 },
+  signalStrong: { fontWeight: '700', color: SHADES.carbon },
+  signalSecondary: { fontWeight: '500', color: SHADES.carbonMuted },
+  quickAdd: { position: 'absolute', right: 10, bottom: CARD_PAD_BOTTOM },
 });
 
 // Memoised for long lists: re-render only when what the card shows changes. Handlers are

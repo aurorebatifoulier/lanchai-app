@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +29,8 @@ import QuickAddButton from '@/components/QuickAddButton';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { cached, HOME_TTL } from '@/lib/homeCache';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
+import { categoryStyle } from '@/constants/categoryStyle';
+import { SHADES } from '@/constants/brandShades';
 
 export default function CategoryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -88,14 +90,10 @@ export default function CategoryScreen() {
     });
   }, [user]);
 
-  const bgColors: Record<string, string> = {
-    amber: COLORS.amber,
-    dark: COLORS.carbon,
-    beige: COLORS.warmBeige,
-    default: COLORS.porcelain,
-  };
-  const heroBg = bgColors[catDetails?.cardBg ?? 'default'];
-  const isDark = catDetails?.cardBg === 'dark';
+  // Hero colours + icon from the ONE category mapping (constants/categoryStyle.ts).
+  const catStyle = categoryStyle(catId);
+  const heroBg = catStyle.bg;
+  const isDark = catStyle.bg === SHADES.carbon;
   const heroTextColor = isDark ? COLORS.porcelain : COLORS.carbon;
 
   const subFilters = ['All', 'Available now', 'Best rated', 'Lowest price'];
@@ -143,7 +141,7 @@ export default function CategoryScreen() {
             </Text>
           </View>
           <View style={[styles.heroIcon, isDark && styles.heroIconDark]}>
-            <Feather name={(cat?.icon ?? 'grid') as never} size={40} color={isDark ? COLORS.amber : COLORS.carbon} />
+            <MaterialCommunityIcons name={catStyle.icon} size={40} color={catStyle.fg} />
           </View>
         </View>
       </View>
@@ -289,7 +287,7 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
         {/* Quick add — none on a tier-locked product (its lock badge says why). */}
         {!accessState.locked && (
           <View style={styles.quickAdd}>
-            <QuickAddButton state={availableToday ? 'now' : 'later'} onPress={() => onQuickAdd(availableToday)} size={30} />
+            <QuickAddButton state={availableToday ? 'now' : 'later'} onPress={() => onQuickAdd(availableToday)} />
           </View>
         )}
       </View>
@@ -514,7 +512,7 @@ const styles = StyleSheet.create({
   },
   quickAdd: { position: 'absolute', right: 8, bottom: 8 },
   prodBottom: {
-    paddingRight: 36,
+    paddingRight: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

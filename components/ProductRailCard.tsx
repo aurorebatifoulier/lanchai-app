@@ -57,13 +57,14 @@ function ProductRailCard({
       </View>
       <View style={s.body}>
         <Text style={s.name} numberOfLines={2}>{product.name}</Text>
+        {/* Price on ONE full-width line; the "+" sits bottom-right, level with the proof line. */}
+        {minPrice != null && exchangeRate != null
+          ? <Text style={s.price} numberOfLines={1}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
+          : <Text style={[s.price, s.priceMissing]} numberOfLines={1}>Price not set</Text>}
         <View style={quickAdd && onQuickAdd ? s.withQuickAdd : undefined}>
-          {minPrice != null && exchangeRate != null
-            ? <Text style={s.price}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
-            : <Text style={[s.price, s.priceMissing]}>Price not set</Text>}
           <ProductSocialProof product={product} />
         </View>
-        {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} size={32} /></View>}
+        {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
       </View>
     </PressScale>
   );
@@ -80,10 +81,10 @@ const s = StyleSheet.create({
   badgeDark: { backgroundColor: SHADES.carbon },
   badgeText: { fontSize: 10, fontWeight: '800', color: SHADES.carbon },
   body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12, gap: 3 },
-  withQuickAdd: { paddingRight: 36, gap: 3 },
-  quickAdd: { position: 'absolute', right: 8, bottom: 8 },
+  withQuickAdd: { paddingRight: 28, minHeight: 24, justifyContent: 'center' },
+  quickAdd: { position: 'absolute', right: 10, bottom: 10 },
   name: { fontSize: 14, fontWeight: '700', color: SHADES.carbon, lineHeight: 18 },
-  price: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted },
+  price: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
   priceMissing: { fontStyle: 'italic' },
 });
 

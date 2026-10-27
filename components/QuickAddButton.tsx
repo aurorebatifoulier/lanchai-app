@@ -8,16 +8,17 @@ import { SHADES } from '@/constants/brandShades';
 export type QuickAddState = 'now' | 'later';
 
 // Round quick-add "+" on product cards (bottom-right of the card body).
-export default function QuickAddButton({ state, onPress, size = 34 }: { state: QuickAddState; onPress: () => void; size?: number }) {
+// ONE size everywhere (Explore, category page, Liked, Home): 24px, icon 14px.
+export default function QuickAddButton({ state, onPress, size = 24 }: { state: QuickAddState; onPress: () => void; size?: number }) {
   const now = state === 'now';
   return (
     <PressScale
       style={[s.btn, { width: size, height: size, borderRadius: size / 2 }, now ? s.now : s.later]}
       onPress={e => { e.stopPropagation(); onPress(); }}
-      hitSlop={6}
+      hitSlop={10}
       accessibilityLabel="Quick add to bag"
     >
-      <Feather name="plus" size={Math.round(size * 0.55)} color={SHADES.carbon} />
+      <Feather name="plus" size={Math.round(size * 0.58)} color={SHADES.carbon} />
     </PressScale>
   );
 }
