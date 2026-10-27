@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { cached, clearHomeCache, HOME_TTL } from './homeCache';
@@ -18,18 +19,21 @@ export async function getSearchGroups(force = false): Promise<SearchGroup[]> {
   }, force);
 }
 
+/** Re-read on every focus (from the cache — free unless an admin save cleared it), so
+ *  tab screens that stay mounted (Explore) pick up a vocabulary change at once. */
 export function useSearchGroups(): SearchGroup[] {
   const [groups, setGroups] = useState<SearchGroup[]>(DEFAULT_SEARCH_GROUPS);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let alive = true;
     getSearchGroups().then(g => { if (alive) setGroups(g); });
     return () => { alive = false; };
-  }, []);
+  }, []));
   return groups;
 }
 
 /** Admin-only (config/* write rule). */
 export async function saveSearchGroups(groups: SearchGroup[]): Promise<void> {
-  clearHomeCache('searchVocabulary');
   await setDoc(doc(db, 'config', 'search'), { groups: sanitizeGroups(groups), updatedAt: serverTimestamp() });
+  // After the write: the next read (any screen's next focus) gets the new vocabulary.
+  clearHomeCache('searchVocabulary');
 }

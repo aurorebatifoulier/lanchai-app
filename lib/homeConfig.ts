@@ -38,6 +38,6 @@ export function useHomeConfig(refreshKey?: unknown): HomeConfig {
 
 /** Admin-only (config/* write rule). Merges. */
 export async function saveHomeConfig(patch: Partial<HomeConfig>): Promise<void> {
-  clearHomeCache('homeConfig');
   await setDoc(doc(db, 'config', 'home'), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+  clearHomeCache('homeConfig'); // after the write (see lib/homeCache.ts)
 }

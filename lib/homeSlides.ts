@@ -116,34 +116,34 @@ export function newSlideId(): string {
 
 /** Creates the slide under a given id (newSlideId) — used by the form. */
 export async function createSlideWithId(id: string, input: HomeSlideInput): Promise<void> {
-  clearHomeCache('slides');
   await setDoc(doc(db, 'homeSlides', id), { ...input, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  clearHomeCache('slides'); // after the write (see lib/homeCache.ts)
 }
 
 export async function createSlide(input: HomeSlideInput): Promise<string> {
-  clearHomeCache('slides');
   const ref = await addDoc(collection(db, 'homeSlides'), { ...input, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  clearHomeCache('slides'); // after the write (see lib/homeCache.ts)
   return ref.id;
 }
 
 export async function updateSlide(id: string, input: Partial<HomeSlideInput>): Promise<void> {
-  clearHomeCache('slides');
   await updateDoc(doc(db, 'homeSlides', id), { ...input, updatedAt: serverTimestamp() });
+  clearHomeCache('slides'); // after the write (see lib/homeCache.ts)
 }
 
 /** Deletes the slide, then its photo (best effort — the slide goes even if that fails). */
 export async function deleteSlide(slide: HomeSlide): Promise<void> {
-  clearHomeCache('slides');
   await deleteDoc(doc(db, 'homeSlides', slide.id));
+  clearHomeCache('slides'); // after the write (see lib/homeCache.ts)
   if (slide.imagePath) await deleteObject(storageRef(storage, slide.imagePath)).catch(() => {});
 }
 
 /** Rewrites `order` as 0..n-1 for one placement's slides (one batch). */
 export async function saveSlideOrder(ids: string[]): Promise<void> {
-  clearHomeCache('slides');
   const batch = writeBatch(db);
   ids.forEach((id, i) => batch.update(doc(db, 'homeSlides', id), { order: i, updatedAt: serverTimestamp() }));
   await batch.commit();
+  clearHomeCache('slides'); // after the write (see lib/homeCache.ts)
 }
 
 /** Same pipeline as product photos: 1600px wide, JPEG 0.7. Returns path + URL. */

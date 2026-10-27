@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { buildSearchIndex, searchProducts, isBestMatch, type SearchResult } from '@/lib/search';
 import { useSearchGroups } from '@/lib/searchConfig';
 import { cached, HOME_TTL } from '@/lib/homeCache';
@@ -19,12 +20,13 @@ export function useDebouncedValue<T>(value: T, ms: number): T {
 /** Published collections, shared cache with the Home (collection titles feed the search). */
 export function usePublishedCollections(): CollectionDoc[] {
   const [cols, setCols] = useState<CollectionDoc[]>([]);
-  useEffect(() => {
+  // Re-read on focus (cached) so an admin change reaches mounted tab screens at once.
+  useFocusEffect(useCallback(() => {
     let alive = true;
     cached('collections:published', HOME_TTL.config, getPublishedCollections)
       .then(c => { if (alive) setCols(c); }, () => {});
     return () => { alive = false; };
-  }, []);
+  }, []));
   return cols;
 }
 

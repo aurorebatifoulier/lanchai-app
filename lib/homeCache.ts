@@ -25,4 +25,6 @@ export async function cached<T>(key: string, ttlMs: number, load: () => Promise<
 /** Clears everything, or only the keys starting with `prefix`. */
 export function clearHomeCache(prefix?: string): void {
   for (const k of [...store.keys()]) if (!prefix || k.startsWith(prefix)) store.delete(k);
+  // Also forget reads in flight: one started before an admin save must not be reused.
+  for (const k of [...inflight.keys()]) if (!prefix || k.startsWith(prefix)) inflight.delete(k);
 }
