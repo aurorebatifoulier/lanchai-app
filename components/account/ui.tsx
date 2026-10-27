@@ -4,6 +4,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
+import { categoryStyle } from '@/constants/categoryStyle';
 
 // My Account design language (validated mockup) — ONE place for the card, section title,
 // row, chip and icon-circle styles used by the whole screen (top + everything below), so
@@ -69,6 +70,8 @@ export const UI = StyleSheet.create({
   choiceText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
   choiceTextOn: { color: SHADES.cream },
   divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 14 },
+  /** Text link ("See all", "Directions"): dark amber, never the bright brand yellow. */
+  link: { fontSize: 14, fontWeight: '700', color: SHADES.amberText },
 });
 
 /** Gap under the last element of a stack screen's scroll content. */
@@ -112,6 +115,19 @@ export function IconCircle({ icon, tone = 'grey', size = 36 }: { icon: AnyIcon; 
       {icon.set === 'mci'
         ? <MaterialCommunityIcons name={icon.name} size={iconSize + 1} color={t.fg} />
         : <Feather name={icon.name} size={iconSize} color={t.fg} />}
+    </View>
+  );
+}
+
+/** A category's round badge (constants/categoryStyle.ts) — Home categories, stickers. */
+export function CategoryBadge({ cat, size = 64, rotate }: { cat: string; size?: number; rotate?: string }) {
+  const st = categoryStyle(cat);
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2, backgroundColor: st.bg,
+      alignItems: 'center', justifyContent: 'center', transform: rotate ? [{ rotate }] : undefined,
+    }}>
+      <MaterialCommunityIcons name={st.icon} size={Math.round(size * 0.44)} color={st.fg} />
     </View>
   );
 }

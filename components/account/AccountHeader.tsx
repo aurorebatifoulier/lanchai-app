@@ -8,6 +8,7 @@ import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Mask, Path, Polygon, Stop } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';
+import { categoryStyle, type CategoryIconName } from '@/constants/categoryStyle';
 import { UI } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { vteMinutesOfDay } from '@/functions/src/shared/dates';
@@ -44,13 +45,13 @@ const SPEAKER_LOOP_R = BUBBLE / 2 + 11;
 
 // x / y in decor coordinates. The tent has none: it sits in the gap right of the stacked
 // chips, between them and the bike (computed from the measured chips, see Decor).
-const BUBBLES: { icon: React.ComponentProps<typeof MaterialCommunityIcons>['name']; x?: number; y?: number; bg: string; fg: string; rot: string }[] = [
-  { icon: 'tent', bg: SHADES.amberLight, fg: SHADES.amberDeep, rot: '-8deg' },
-  { icon: 'speaker', x: 92, y: 24, bg: SHADES.carbonLight, fg: SHADES.carbon, rot: '6deg' },
+const BUBBLES: { cat: string; icon: CategoryIconName; x?: number; y?: number; bg: string; fg: string; rot: string }[] = ([
+  { cat: 'outdoor', rot: '-8deg' },
+  { cat: 'fun', x: 92, y: 24, rot: '6deg' },
   // Same ~20px right margin as the hexagon (244 − 20 − 36).
-  { icon: 'hammer-wrench', x: 188, y: 68, bg: SHADES.amberMid, fg: SHADES.carbon, rot: '-6deg' },
-  { icon: 'bike', x: 184, y: 128, bg: SHADES.carbon, fg: SHADES.amber, rot: '5deg' },
-];
+  { cat: 'tools', x: 188, y: 68, rot: '-6deg' },
+  { cat: 'sports', x: 184, y: 128, rot: '5deg' },
+] as const).map(b => ({ ...b, ...categoryStyle(b.cat) })); // one look per category, everywhere
 
 export function useReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
@@ -65,7 +66,7 @@ export function useReduceMotion(): boolean {
 /** One text line (greeting, name, chips) in header coordinates, from onLayout. */
 interface Box { left: number; top: number; right: number; bottom: number }
 const MARGIN = 8;
-const BIKE = BUBBLES.find(b => b.icon === 'bike');
+const BIKE = BUBBLES.find(b => b.cat === 'sports');
 
 type Rect = { x: number; y: number; w: number; h: number };
 const isNum = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
@@ -151,14 +152,14 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
     const pos = place(b);
     return pos && clear(pos) ? pos : null;
   });
-  const centre = (icon: string): Pt | null => {
-    const pos = placed[BUBBLES.findIndex(b => b.icon === icon)];
+  const centre = (cat: string): Pt | null => {
+    const pos = placed[BUBBLES.findIndex(b => b.cat === cat)];
     return pos ? { x: pos.left + BUBBLE / 2, y: pos.top + BUBBLE / 2 } : null;
   };
   const hex = { x: decorLeft + HEX.x, y: DECOR_TOP + HEX.y };
   const flight = ready ? buildFlightPath({
     width: headerWidth, height: headerHeight,
-    bike: centre('bike'), speaker: centre('speaker'), hexagon: hex, speakerLoopRadius: SPEAKER_LOOP_R,
+    bike: centre('sports'), speaker: centre('fun'), hexagon: hex, speakerLoopRadius: SPEAKER_LOOP_R,
   }) : null;
 
   return (
@@ -195,7 +196,7 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
         if (!pos) return null;
         return (
           <Animated.View
-            key={b.icon}
+            key={b.cat}
             style={[s.bubble, {
               left: pos.left, top: pos.top, backgroundColor: b.bg,
               transform: [

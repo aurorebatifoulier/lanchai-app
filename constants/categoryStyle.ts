@@ -1,0 +1,29 @@
+import type React from 'react';
+import type { MaterialCommunityIcons } from '@expo/vector-icons';
+import { SHADES } from './brandShades';
+
+// ONE look per category (validated Home mockup), used by the Home categories, the My
+// Account stickers and the My Account header bubbles — a category always looks the same
+// everywhere. Icons are rentable objects, never abstract symbols. Palette shades only.
+export type CategoryIconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+export interface CategoryStyle {
+  icon: CategoryIconName;
+  bg: string;
+  fg: string;
+}
+
+export const CATEGORY_STYLE: Record<string, CategoryStyle> = {
+  outdoor: { icon: 'tent', bg: SHADES.amberLight, fg: SHADES.amberDeep },
+  tools: { icon: 'hammer-wrench', bg: SHADES.carbon, fg: SHADES.amber },
+  fun: { icon: 'speaker', bg: SHADES.amberMid, fg: SHADES.carbon },
+  kids: { icon: 'baby-carriage', bg: SHADES.carbon, fg: SHADES.amber },
+  sports: { icon: 'bike', bg: SHADES.amberLight, fg: SHADES.amberDeep },
+  home: { icon: 'sofa-outline', bg: SHADES.carbonLight, fg: SHADES.carbon },
+};
+
+const FALLBACK: CategoryStyle = { icon: 'package-variant-closed', bg: SHADES.carbonLight, fg: SHADES.carbon };
+
+export function categoryStyle(cat: string): CategoryStyle {
+  return CATEGORY_STYLE[cat] ?? FALLBACK;
+}
