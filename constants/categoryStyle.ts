@@ -11,16 +11,21 @@ export interface CategoryStyle {
   icon: CategoryIconName;
   bg: string;
   fg: string;
+  /** Optional ring (Kids: white circle, 1.5px amber border). */
+  border?: string;
+  /** Dark background — text / icons on it must be light (category page header). */
+  dark?: boolean;
 }
 
+// Every category has a UNIQUE background + icon combination:
+// Fun mid-amber/carbon · Tools carbon/amber · Outdoor light-amber/dark-amber ·
+// Sports dark-amber/light-amber · Kids white + amber ring/dark-amber · Home grey/carbon.
 export const CATEGORY_STYLE: Record<string, CategoryStyle> = {
   outdoor: { icon: 'tent', bg: SHADES.amberLight, fg: SHADES.amberDeep },
-  tools: { icon: 'hammer-wrench', bg: SHADES.carbon, fg: SHADES.amber },
+  tools: { icon: 'hammer-wrench', bg: SHADES.carbon, fg: SHADES.amber, dark: true },
   fun: { icon: 'speaker', bg: SHADES.amberMid, fg: SHADES.carbon },
-  kids: { icon: 'baby-carriage', bg: SHADES.carbon, fg: SHADES.amber },
-  // Mid-amber (dark amber icon) so the row alternates: Fun mid · Tools carbon · Outdoor
-  // light · Sports mid · Kids carbon · Home grey.
-  sports: { icon: 'bike', bg: SHADES.amberMid, fg: SHADES.amberDeep },
+  kids: { icon: 'baby-carriage', bg: SHADES.white, fg: SHADES.amberDeep, border: SHADES.amber },
+  sports: { icon: 'bike', bg: SHADES.amberDeep, fg: SHADES.amberLight, dark: true },
   home: { icon: 'sofa-outline', bg: SHADES.carbonLight, fg: SHADES.carbon },
   // Explore's "All" filter circle (not a real category).
   all: { icon: 'view-grid-outline', bg: SHADES.carbonLight, fg: SHADES.carbon },

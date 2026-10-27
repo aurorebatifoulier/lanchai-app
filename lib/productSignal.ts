@@ -10,7 +10,8 @@ import { EXPLORE_COPY } from '@/constants/exploreCopy';
 // rentals → "n rentals"; else nothing.
 export type SignalTone = 'muted' | 'amber' | 'plain';
 /** One piece of the line: an optional icon (star / repeat = amber, clock = grey) + text. */
-export interface SignalPart { icon?: 'clock' | 'star' | 'repeat'; text: string; strong?: boolean }
+/** text (bold when strong) + optional grey suffix (" rentals"); sep = a "·" separator. */
+export interface SignalPart { icon?: 'clock' | 'star' | 'repeat'; text: string; strong?: boolean; suffix?: string; sep?: boolean }
 export interface ProductSignal { tone: SignalTone; parts: SignalPart[] }
 
 const fmtDay = (d: Date) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]} ${d.getDate()}`;
@@ -30,12 +31,12 @@ export function productSignal(
   // Same grammar as the Home cards (ProductSocialProof): amber icon + bold number + word.
   const rentals = p.rentalCount ?? p.bookingsCount ?? 0;
   const rentalParts: SignalPart[] = rentals > 0
-    ? [{ icon: 'repeat', text: String(rentals), strong: true }, { text: c.rentalsWord(rentals) }]
+    ? [{ icon: 'repeat', text: `${rentals}`, strong: true, suffix: c.rentalsWord(rentals) }]
     : [];
   if (p.averageRating != null && p.averageRating > 0 && (p.reviewCount ?? 0) > 0) {
     return {
       tone: 'plain',
-      parts: [{ icon: 'star', text: p.averageRating.toFixed(1), strong: true }, ...(rentalParts.length ? [{ text: '  ·  ' }, ...rentalParts] : [])],
+      parts: [{ icon: 'star', text: p.averageRating.toFixed(1), strong: true }, ...(rentalParts.length ? [{ text: '', sep: true }, ...rentalParts] : [])],
     };
   }
   if (rentalParts.length) return { tone: 'plain', parts: rentalParts };

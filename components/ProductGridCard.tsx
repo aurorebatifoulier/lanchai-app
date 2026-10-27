@@ -15,6 +15,7 @@ import { FavoriteButton } from '@/components/FavoriteHeart';
 import PressScale from '@/components/PressScale';
 import QuickAddButton, { type QuickAddState } from '@/components/QuickAddButton';
 import { SEARCH_COPY } from '@/constants/searchCopy';
+import SignalLine from '@/components/SignalLine';
 
 // Shared 2-column grid product card — Explore and Liked (category pages use their own).
 // My Account / Home language (validated mockup): white, radius 18, thin border, heart in a
@@ -132,37 +133,10 @@ function ProductGridCard({
       <View style={s.cardBody}>
         <Text style={[s.cardName, { height: layout.name }]} numberOfLines={CARD_NAME_LINES}>{product.name}</Text>
         {minPrice != null && exchangeRate != null ? (
-          <Text style={s.cardPrice} numberOfLines={1}>
-            {toLak(minPrice, exchangeRate).toLocaleString('en-US')}
-            <Text style={s.cardPriceUnit}> LAK / day</Text>
-          </Text>
+          <Text style={s.cardPrice} numberOfLines={1}>{`${toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day`}</Text>
         ) : <Text style={s.cardPriceUnavailable} numberOfLines={1}>Price not set</Text>}
         <View style={[s.signalSlot, { height: layout.badge }, quickAdd ? s.withQuickAdd : undefined]}>
-          {signal && (
-            <View style={s.signalRow}>
-              {signal.parts.map((part, i) => (
-                <React.Fragment key={i}>
-                  {part.icon && (
-                    <Feather
-                      name={part.icon}
-                      size={part.icon === 'clock' ? 11 : 12}
-                      color={part.icon === 'clock' ? SHADES.carbonMuted : SHADES.amber}
-                      style={i > 0 ? { marginLeft: 1 } : undefined}
-                    />
-                  )}
-                  <Text
-                    style={[
-                      s.signal, signal.tone === 'amber' && s.signalAmber, signal.tone === 'muted' && s.signalMuted,
-                      part.strong && s.signalStrong, signal.tone === 'plain' && !part.strong && s.signalSecondary,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {part.text}
-                  </Text>
-                </React.Fragment>
-              ))}
-            </View>
-          )}
+          <SignalLine signal={signal} />
         </View>
         {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
       </View>
@@ -196,19 +170,13 @@ const s = StyleSheet.create({
     lineHeight: CARD_NAME_LH, marginBottom: CARD_NAME_GAP,
   },
   withQuickAdd: { paddingRight: 30 },
-  cardPrice: { fontSize: 13.5, fontWeight: '700', color: SHADES.carbon, lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP },
-  cardPriceUnit: { fontWeight: '500', color: SHADES.carbonMuted },
+  // Price digits in the same grey as "LAK / day" (all product cards).
+  cardPrice: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP },
   cardPriceUnavailable: {
     fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted, fontStyle: 'italic',
     lineHeight: CARD_PRICE_LH, marginBottom: CARD_PRICE_GAP,
   },
   signalSlot: { justifyContent: 'center', flexShrink: 0 },
-  signalRow: { flexDirection: 'row', alignItems: 'center', gap: 3, overflow: 'hidden' },
-  signal: { fontSize: 12, fontWeight: '600', color: SHADES.carbon },
-  signalAmber: { color: SHADES.amberText },
-  signalMuted: { color: SHADES.carbonMuted, fontWeight: '500' },
-  signalStrong: { fontWeight: '700', color: SHADES.carbon },
-  signalSecondary: { fontWeight: '500', color: SHADES.carbonMuted },
   quickAdd: { position: 'absolute', right: 10, bottom: CARD_PAD_BOTTOM },
 });
 

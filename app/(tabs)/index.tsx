@@ -304,6 +304,7 @@ export default function HomeScreen() {
             userTier={userTier ?? null}
             isFavorite={favorites.has(p.id)}
             onToggleFavorite={() => handleToggleFavorite(p.id)}
+            availability={availability}
             quickAdd={locked ? null : availability ? 'later' : 'now'}
             onQuickAdd={() => openQuickAdd(p, { availableToday: !availability })}
           />

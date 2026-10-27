@@ -28,7 +28,9 @@ import PressScale from '@/components/PressScale';
 import QuickAddButton from '@/components/QuickAddButton';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { cached, HOME_TTL } from '@/lib/homeCache';
-import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
+import { fetchAllOccupancy, gridAvailability, type OccupancyRecord, type GridAvailability } from '@/utils/availability';
+import SignalLine from '@/components/SignalLine';
+import { productSignal } from '@/lib/productSignal';
 import { categoryStyle } from '@/constants/categoryStyle';
 import { SHADES } from '@/constants/brandShades';
 
@@ -93,7 +95,7 @@ export default function CategoryScreen() {
   // Hero colours + icon from the ONE category mapping (constants/categoryStyle.ts).
   const catStyle = categoryStyle(catId);
   const heroBg = catStyle.bg;
-  const isDark = catStyle.bg === SHADES.carbon;
+  const isDark = catStyle.dark === true;
   const heroTextColor = isDark ? COLORS.porcelain : COLORS.carbon;
 
   const subFilters = ['All', 'Available now', 'Best rated', 'Lowest price'];
@@ -114,7 +116,7 @@ export default function CategoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Hero */}
-      <View style={[styles.hero, { backgroundColor: heroBg }]}>
+      <View style={[styles.hero, { backgroundColor: heroBg }, catStyle.border ? { borderBottomWidth: 1.5, borderBottomColor: catStyle.border } : null]}>
         <View style={styles.heroTopBar}>
           <BackButton
             onPress={() => router.back()}
@@ -212,7 +214,7 @@ export default function CategoryScreen() {
                 userTier={userTier ?? null}
                 isFavorite={favorites.has(p.id)}
                 onToggleFavorite={() => handleToggleFavorite(p.id)}
-                availableToday={!gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined)}
+                availability={gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined)}
                 onQuickAdd={avail => openQuickAdd(p, { availableToday: avail })}
               />
             ))}
@@ -223,7 +225,8 @@ export default function CategoryScreen() {
   );
 }
 
-function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, availableToday, onQuickAdd }: { product: Product; onPress: () => void; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void; availableToday: boolean; onQuickAdd: (availableToday: boolean) => void }) {
+function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, availability, onQuickAdd }: { product: Product; onPress: () => void; exchangeRate: number | null; userTier: LoyaltyTier | null; isFavorite: boolean; onToggleFavorite: () => void; availability: GridAvailability; onQuickAdd: (availableToday: boolean) => void }) {
+  const availableToday = !availability;
   const bgColors: Record<string, string> = {
     amber: COLORS.amber,
     dark: COLORS.carbon,
@@ -270,19 +273,14 @@ function CategoryProductCard({ product, onPress, exchangeRate, userTier, isFavor
         <Text style={styles.prodSub} numberOfLines={1}>{product.shortDesc}</Text>
         <View style={styles.prodBottom}>
           {minPrice != null && exchangeRate != null ? (
-            <View style={styles.prodPriceRow}>
-              <Text style={styles.prodPrice}>From {toLak(minPrice, exchangeRate).toLocaleString('en-US')}</Text>
-              <Text style={styles.prodPriceUnit}> LAK/day</Text>
-            </View>
+            <Text style={styles.prodPrice} numberOfLines={1}>{`${toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day`}</Text>
           ) : (
             <Text style={styles.prodSub}>Price not set</Text>
           )}
-          {product.averageRating != null && (
-            <View style={styles.ratingRow}>
-              <Feather name="star" size={10} color={COLORS.amber} />
-              <Text style={styles.ratingText}>{product.averageRating.toFixed(1)}</Text>
-            </View>
-          )}
+        </View>
+        {/* Same signal line as every product card; the "+" width is reserved on it. */}
+        <View style={styles.signalLine}>
+          <SignalLine signal={productSignal(product, { availability })} />
         </View>
         {/* Quick add — none on a tier-locked product (its lock badge says why). */}
         {!accessState.locked && (
@@ -495,7 +493,7 @@ const styles = StyleSheet.create({
   },
   prodMeta: {
     padding: 12,
-    height: 80,
+    height: 104, // name, short description, price, signal line (+ the "+" button)
   },
   prodName: {
     fontSize: 13,
@@ -511,8 +509,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   quickAdd: { position: 'absolute', right: 8, bottom: 8 },
+  signalLine: { paddingRight: 30, minHeight: 24, justifyContent: 'center', marginTop: 2 },
   prodBottom: {
-    paddingRight: 30,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -521,12 +519,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
   },
-  prodPrice: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
+  // Same grey for the digits and "LAK / day" (all product cards).
+  prodPrice: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
   prodPriceUnit: {
     fontSize: 10,
     fontWeight: '500',

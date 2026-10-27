@@ -47,7 +47,7 @@ const SPEAKER_LOOP_R = BUBBLE / 2 + 11;
 
 // x / y in decor coordinates. The tent has none: it sits in the gap right of the stacked
 // chips, between them and the bike (computed from the measured chips, see Decor).
-const BUBBLES: { cat: string; icon: CategoryIconName; x?: number; y?: number; bg: string; fg: string; rot: string }[] = ([
+const BUBBLES: { cat: string; icon: CategoryIconName; x?: number; y?: number; bg: string; fg: string; border?: string; rot: string }[] = ([
   { cat: 'outdoor', rot: '-8deg' },
   { cat: 'fun', x: 92, y: 24, rot: '6deg' },
   // Same ~20px right margin as the hexagon (244 − 20 − 36).
@@ -194,6 +194,7 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
             key={b.cat}
             style={[s.bubble, {
               left: pos.left, top: pos.top, backgroundColor: b.bg,
+              ...(b.border ? { borderWidth: 1.5, borderColor: b.border } : null),
               transform: [
                 { rotate: b.rot },
                 { translateY: floats[i].interpolate({ inputRange: [0, 1], outputRange: [0, i % 2 ? 3 : -3] }) },

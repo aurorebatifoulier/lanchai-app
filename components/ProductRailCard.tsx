@@ -5,7 +5,9 @@ import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI } from '@/components/account/ui';
 import { FavoriteButton } from '@/components/FavoriteHeart';
-import ProductSocialProof from '@/components/ProductSocialProof';
+import SignalLine from '@/components/SignalLine';
+import { productSignal } from '@/lib/productSignal';
+import type { GridAvailability } from '@/utils/availability';
 import type { Product } from '@/lib/mockData';
 import type { LoyaltyTier } from '@/lib/firestore';
 import { getMinPrice } from '@/utils/pricing';
@@ -20,7 +22,7 @@ import QuickAddButton, { type QuickAddState } from '@/components/QuickAddButton'
 export const RAIL_CARD_WIDTH = 150;
 
 function ProductRailCard({
-  product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, quickAdd = null, onQuickAdd,
+  product, onPress, exchangeRate, userTier, isFavorite, onToggleFavorite, quickAdd = null, onQuickAdd, availability,
 }: {
   product: Product;
   onPress: () => void;
@@ -31,6 +33,8 @@ function ProductRailCard({
   /** Quick-add "+" state; null = no button (tier-locked). */
   quickAdd?: QuickAddState | null;
   onQuickAdd?: () => void;
+  /** gridAvailability() — the signal line says "Back on …" when not free today. */
+  availability?: GridAvailability;
 }) {
   const minPrice = getMinPrice(product);
   const access = getProductAccessState(product, userTier);
@@ -62,7 +66,7 @@ function ProductRailCard({
           ? <Text style={s.price} numberOfLines={1}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
           : <Text style={[s.price, s.priceMissing]} numberOfLines={1}>Price not set</Text>}
         <View style={quickAdd && onQuickAdd ? s.withQuickAdd : undefined}>
-          <ProductSocialProof product={product} />
+          <SignalLine signal={productSignal(product, { availability })} />
         </View>
         {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
       </View>
@@ -91,4 +95,6 @@ const s = StyleSheet.create({
 // Memoised for long lists: re-render only when what the card shows changes. Handlers are
 // per-render closures bound to this product's id, so ignoring their identity is safe.
 const SHOWN_PROPS = ['product', 'isFavorite', 'exchangeRate', 'userTier', 'quickAdd'] as const;
-export default React.memo(ProductRailCard, (a, b) => SHOWN_PROPS.every(k => a[k] === b[k]));
+const availKey = (a: GridAvailability | undefined) => (!a ? '' : a.kind === 'backOn' ? `b${a.date.getTime()}` : a.kind);
+export default React.memo(ProductRailCard, (a, b) =>
+  SHOWN_PROPS.every(k => a[k] === b[k]) && availKey(a.availability) === availKey(b.availability));

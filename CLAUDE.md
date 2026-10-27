@@ -909,8 +909,10 @@ a snapshot indefinitely).
     profile photos: owner or admin; chat, claims, checklist photos, business documents:
     never from the client (evidence).
   - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
-    fun = speaker, sports = bike — + palette shades; the row alternates Fun mid-amber · Tools
-    carbon · Outdoor light-amber · Sports mid-amber · Kids carbon · Home grey) via `<CategoryBadge>`; used by Home,
+    fun = speaker, sports = bike — + palette shades). Every category has a UNIQUE combination:
+    Fun mid-amber/carbon · Tools carbon/amber · Outdoor light-amber/dark-amber · Sports
+    dark-amber/light-amber · Kids white + 1.5px amber ring/dark-amber · Home grey/carbon
+    (`border` / `dark` flags in the mapping; selected in Explore = amber + 2px carbon ring) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
   - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
     `ProductGridCard` keeps "New" in amber-light. `<FavoriteHeart>` everywhere (cards +
