@@ -49,8 +49,11 @@ export function shadeOf(c: { shade: string }): { bg: string; fg: string } {
   return COLLECTION_SHADES[c.shade as CollectionShade] ?? COLLECTION_SHADES.carbonLight;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export function isCollectionActive(c: Pick<CollectionDoc, 'activeFrom' | 'activeTo'>, nowMs: number = Date.now()): boolean {
-  if (c.activeFrom && nowMs < c.activeFrom.toMillis()) return false;
+  // Whole Vientiane days: from the start of activeFrom's day through the end of activeTo's.
+  if (c.activeFrom && nowMs < vteEndOfDayMs(c.activeFrom.toMillis()) - DAY_MS) return false;
   if (c.activeTo && nowMs >= vteEndOfDayMs(c.activeTo.toMillis())) return false;
   return true;
 }
