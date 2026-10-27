@@ -39,6 +39,8 @@ export interface Product {
   perfectFor?:    string[];
   keyFeatures?:   { icon: string; text: string }[];
   whatsIncluded?: string[];
+  /** Search keywords (lowercase, ≤ 20) — Admin product form; lib/search.ts. */
+  keywords?: string[];
   basicInfo?:     { label: string; value: string }[];
   techSpecs?:     { label: string; value: string }[];
   goodToKnow?:    string[];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,9 @@ import { formatLak } from '@/utils/currency';
 import { TIER_ORDER, TIER_LABELS } from '@/lib/loyalty';
 import AdminDateTimePicker from '@/components/AdminDateTimePicker';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import KeywordsInput, { cleanKeyword } from '@/components/admin/KeywordsInput';
+import { suggestKeywords } from '@/lib/search';
+import { useSearchGroups } from '@/lib/searchConfig';
 
 type ProductAccessMode = 'public' | 'earlyAccess' | 'exclusive';
 
@@ -153,6 +156,11 @@ export default function AdminProductFormScreen() {
   const [shortDesc,   setShortDesc]   = useState('');
   const [category,    setCategory]    = useState<ProductCategory | ''>('');
   const [description, setDescription] = useState('');
+  // Search keywords. NEW product: auto-filled with the suggestions (name words + category
+  // vocabulary) until the admin edits them; existing products: untouched, Suggested row only.
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const keywordsTouched = useRef(false);
+  const searchGroups = useSearchGroups();
   const [pricePerDay, setPricePerDay] = useState('');
   const [price3to6,   setPrice3to6]   = useState('');
   const [price7to13,  setPrice7to13]  = useState('');
@@ -238,6 +246,7 @@ export default function AdminProductFormScreen() {
         setPerfectFor(d.perfectFor ?? []);
         setKeyFeatures(d.keyFeatures ?? []);
         setWhatsIncluded(d.whatsIncluded ?? []);
+        setKeywords(Array.isArray(d.keywords) ? d.keywords : []);
         setBasicInfo(d.basicInfo ?? []);
         setTechSpecs(d.techSpecs ?? []);
         setGoodToKnow(d.goodToKnow ?? []);
@@ -257,6 +266,16 @@ export default function AdminProductFormScreen() {
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, [id]);
+
+  // ── Search keywords ───────────────────────────────────────────────────────
+  const keywordSuggestions = useMemo(
+    () => (name.trim() && category ? suggestKeywords(name, category, searchGroups) : []),
+    [name, category, searchGroups],
+  );
+  useEffect(() => {
+    if (isEdit || keywordsTouched.current) return;
+    setKeywords(keywordSuggestions.map(cleanKeyword).filter(Boolean));
+  }, [isEdit, keywordSuggestions]);
 
   // ── Validation ─────────────────────────────────────────────────────────────
   const errors = submitted ? (() => {
@@ -466,6 +485,7 @@ export default function AdminProductFormScreen() {
         perfectFor:    perfectFor.filter(s => s.trim()),
         keyFeatures:   keyFeatures.filter(f => f.text.trim()).slice(0, 4).map(f => ({ icon: f.icon || 'check', text: f.text })),
         whatsIncluded: whatsIncluded.filter(s => s.trim()),
+        keywords,
         basicInfo:     basicInfo.filter(r => r.label.trim() && r.value.trim()),
         techSpecs:     techSpecs.filter(r => r.label.trim() && r.value.trim()),
         goodToKnow:    goodToKnow.filter(s => s.trim()),
@@ -507,6 +527,7 @@ export default function AdminProductFormScreen() {
     isPremium, showInPopular, showInNew,
     accessMode, minTierRequired, earlyAccessUntil,
     perfectFor, keyFeatures, whatsIncluded, basicInfo, techSpecs, goodToKnow, usageExamples,
+    keywords,
   ]);
 
   // ── Archive / Restore / Duplicate ─────────────────────────────────────────
@@ -670,6 +691,14 @@ export default function AdminProductFormScreen() {
               </Text>
               <Feather name="chevron-down" size={16} color={COLORS.fg3} />
             </TouchableOpacity>
+          </Field>
+
+          <Field label="Search keywords">
+            <KeywordsInput
+              keywords={keywords}
+              onChange={next => { keywordsTouched.current = true; setKeywords(next); }}
+              suggestions={keywordSuggestions}
+            />
           </Field>
 
           <Field label="Description">
