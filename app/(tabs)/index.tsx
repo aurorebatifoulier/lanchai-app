@@ -26,7 +26,6 @@ import SearchBar from '@/components/SearchBar';
 import ProductRailCard from '@/components/ProductRailCard';
 import InsetCarousel from '@/components/home/InsetCarousel';
 import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
-import ShopStatusLine from '@/components/home/ShopStatusLine';
 import RentReturnRepeat from '@/components/home/RentReturnRepeat';
 import CollectionTiles from '@/components/home/CollectionTiles';
 import RentAgainList from '@/components/home/RentAgainList';
@@ -358,10 +357,6 @@ export default function HomeScreen() {
               </View>
             )}
 
-            <View style={{ marginTop: 14 }}>
-              <ShopStatusLine />
-            </View>
-
             {/* Categories — same circles as the My Account stickers, all on one row */}
             <SectionTitle>{HOME_COPY.categoriesTitle}</SectionTitle>
             {catFit ? (
@@ -383,6 +378,17 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
+            {/* New arrivals — the product-card rail (the showcase) */}
+            {!loading && newArrivals.length > 0 && (
+              <>
+                <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
+                {rail(newArrivals)}
+              </>
+            )}
+
+            {/* New renters: how it works, early on the page */}
+            {(preview || !returning) && <RentReturnRepeat />}
+
             {/* Got plans? — 2-column tiles */}
             {preview ? (
               <>
@@ -396,13 +402,6 @@ export default function HomeScreen() {
               <AdminHint />
             ) : null}
 
-            {/* New arrivals — the product-card rail (the showcase) */}
-            {!loading && newArrivals.length > 0 && (
-              <>
-                <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
-                {rail(newArrivals)}
-              </>
-            )}
           </View>
 
           {/* Banner — breaks the rhythm between the rails and the lists */}
@@ -448,11 +447,10 @@ export default function HomeScreen() {
               <View style={{ marginTop: 24 }}><WhyBuyCard pick={whyBuy} /></View>
             ) : null)}
 
-            {/* Bottom: returning renters → referral; new renters → how it works */}
+            {/* Bottom: returning renters → referral card */}
             {(preview || (returning && !loyalty.excluded)) && (
               <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} /></View>
             )}
-            {(preview || !returning) && <RentReturnRepeat />}
           </View>
         </Animated.ScrollView>
 

@@ -855,20 +855,21 @@ a snapshot indefinitely).
   Order: header → hero `InsetCarousel` → search (`SearchBar variant="account"`, STICKY: an
   overlay copy fades in under the header once the inline field reaches the top — shared
   value, native-driver opacity, instant with reduce motion) → `<NextPickupCard>` (nearest
-  `pending_payment`/`confirmed` line whose pick-up day isn't over) + `<ShopStatusLine>`
-  (`shopOpenState()`, `config/shop` hours + optional `closedDays` — display only) →
-  categories (all on one row up to 6, circles ≤ 52px; scroll from 7) → "Got plans?"
-  `<CollectionTiles>` (2-col tiles in the collection's shade, `COLLECTION_TILE`, 4 max +
-  "See all" inline; admin-only dashed hint when none) → New arrivals rail → "Consume
-  better" banner → "Rent again" `<RentAgainList>` (one card, 3 rows, `rentAgainRows`) →
+  `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
+  one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
+  `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) → "Got
+  plans?" `<CollectionTiles>` (2-col tiles in the collection's shade, `COLLECTION_TILE`, 4
+  max + "See all" inline; admin-only dashed hint when none) → "Consume better" banner →
+  "Rent again" `<RentAgainList>` (one card, 3 rows, `rentAgainRows`) →
   `<MostRentedPodium>` (`podiumPick`: `products.rentalsByMonth.{YYYY-MM}` — written by
   `applyRentalCount`, Vientiane month of the return — when 3 products have some, else
   all-time `rentalCount` titled "Most rented", else the rail) → `<WhyBuyCard>` (returning:
   `whyBuyMine` = most-returned product with a `retailPrice`, total paid = sum of frozen
   `total` LAK; else `whyBuyCatalogue` = best retailPrice / daily price; hidden without a
-  retail value or rate) → bottom: returning (≥ 1 returned rental, not loyalty-excluded) →
-  `<ReferralPromoCard>` (→ `/profile/loyalty?section=referral`, scrolls to the referral
-  card); new renters → `<RentReturnRepeat>` (dotted bee trail, header's `DASH`). Admins see
+  retail value or rate) → returning renters (≥ 1 returned rental, not loyalty-excluded):
+  `<ReferralPromoCard>` (→ `/profile/loyalty?section=referral`). `<ShopStatusLine>` /
+  `shopOpenState()` / `closedDays` are kept but NOT on the Home (removed 2026-10-27, for
+  reuse later). Admins see
   the Home like a renter + "Preview all sections" (AsyncStorage `home.adminPreviewAll`)
   showing every variant (example pick-up, drafts, both Why-buy versions, both bottom
   cards, data-source notes).
