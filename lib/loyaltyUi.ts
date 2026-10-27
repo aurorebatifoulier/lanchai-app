@@ -26,6 +26,8 @@ export interface MyLoyalty {
   config: LoyaltyConfig | null;
   progress: TierProgress | null;
   coupons: { tier: string; percent: number; used: boolean }[];
+  /** The live users/{uid} doc (null while loading / signed out) — e.g. Home first name. */
+  profile: Record<string, unknown> | null;
 }
 
 export function useMyLoyalty(): MyLoyalty {
@@ -48,6 +50,7 @@ export function useMyLoyalty(): MyLoyalty {
     config,
     progress: tierProgress(points, config),
     coupons: Array.isArray(user?.coupons) ? (user!.coupons as MyLoyalty['coupons']) : [],
+    profile: user,
   };
 }
 

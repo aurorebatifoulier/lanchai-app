@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
   Animated,
   useWindowDimensions,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { listenBagItems } from '@/lib/bag';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,11 +49,12 @@ import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
 import {
-  getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc,
+  getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc, type LoyaltyTier,
 } from '@/lib/firestore';
 import { CATEGORIES, type Product } from '@/lib/mockData';
 import { useExchangeRate } from '@/lib/exchangeRate';
-import { useLoyaltyTier, DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
+import { cached, clearHomeCache, HOME_TTL } from '@/lib/homeCache';
+import { DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -115,11 +117,13 @@ const STICKY_PAD = 8;
 export default function HomeScreen() {
   const router = useRouter();
   const { user, isAdmin } = useAuth();
-  const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // Per-source "loaded" flags — each section waits only for its own data (skeletons).
+  const [ready, setReady] = useState({ products: false, mine: false, collections: false, occupancy: false });
+  const loading = !ready.products;
+  const [refreshing, setRefreshing] = useState(false);
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
   const [collections, setCollections] = useState<CollectionDoc[]>([]);
   const [allCollections, setAllCollections] = useState<CollectionDoc[]>([]);
@@ -127,9 +131,13 @@ export default function HomeScreen() {
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bagCount, setBagCount] = useState(0);
-  const [firstName, setFirstName] = useState<string>('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  // ONE live users/{uid} read (loyalty snapshot) also gives the first name and tier.
   const loyalty = useMyLoyalty();
+  const profile = loyalty.profile as { firstName?: string; displayName?: string; loyaltyTier?: LoyaltyTier } | null;
+  const firstName = profile?.firstName?.trim() || profile?.displayName?.trim().split(' ')[0]
+    || user?.displayName?.split(' ')[0] || '';
+  const userTier: LoyaltyTier | null | undefined = loyalty.loading ? undefined : (profile?.loyaltyTier ?? null);
   const shop = useShopInfo();
   const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
   // "Free this weekend": all live occupancy in ONE query (null = not loaded / failed →
@@ -147,29 +155,48 @@ export default function HomeScreen() {
   const [pinned, setPinned] = useState(false);
   const pinAt = searchY != null ? searchY + SEARCH_PAD_TOP - STICKY_PAD : Number.MAX_SAFE_INTEGER;
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) { setLoading(false); return; }
-      setLoading(true);
-      setLoadError(false);
-      getProducts()
-        .then(data => { setProducts(data); setLoading(false); })
-        .catch(() => { setLoadError(true); setLoading(false); });
-    }, [user])
-  );
+  // Every independent Home read in parallel. Admin-managed / slow data comes from a
+  // short in-memory cache (lib/homeCache.ts); `force` (pull-to-refresh) bypasses it.
+  // Reservations and favourites are always re-read (pick-up card, hearts).
+  const loadHome = useCallback(async (force: boolean) => {
+    if (!user) return;
+    const uid = user.uid;
+    setFocusTick(t => t + 1);
+    setLoadError(false);
+    await Promise.allSettled([
+      cached('products', HOME_TTL.products, getProducts, force)
+        .then(setProducts, () => setLoadError(true))
+        .finally(() => setReady(r => ({ ...r, products: true }))),
+      Promise.all([getMyReservations(uid).catch(() => [] as RentalDoc[]), getFavorites(uid)])
+        .then(([res, favs]) => { setReservations(res); setFavorites(new Set(favs)); })
+        .finally(() => setReady(r => ({ ...r, mine: true }))),
+      cached('collections:published', HOME_TTL.config, getPublishedCollections, force)
+        .then(setCollections, () => setCollections([]))
+        .finally(() => setReady(r => ({ ...r, collections: true }))),
+      cached('occupancy', HOME_TTL.occupancy, fetchAllOccupancy, force)
+        .then(setOccupancy, () => setOccupancy(null))
+        .finally(() => setReady(r => ({ ...r, occupancy: true }))),
+      cached('homeConfig', HOME_TTL.config, getHomeConfig, force).then(c => setBudgetLak(c.budgetThresholdLak)),
+    ]);
+  }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user) { setReservations([]); return; }
-      getFavorites(user.uid).then(ids => setFavorites(new Set(ids)));
-      // Next pick-up card + "Rent again" (equality-only query, no index).
-      getMyReservations(user.uid).then(setReservations).catch(() => setReservations([]));
-      getPublishedCollections().then(setCollections).catch(() => setCollections([]));
-      fetchAllOccupancy().then(setOccupancy).catch(() => setOccupancy(null));
-      getHomeConfig().then(c => setBudgetLak(c.budgetThresholdLak));
-      setFocusTick(t => t + 1);
-    }, [user])
-  );
+  useFocusEffect(useCallback(() => { loadHome(false); }, [loadHome]));
+
+  // Signed out / another account: nothing cached may leak to the next user.
+  useEffect(() => {
+    clearHomeCache();
+    setReady({ products: false, mine: false, collections: false, occupancy: false });
+  }, [user?.uid]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    clearHomeCache();
+    await Promise.all([
+      loadHome(true),
+      isAdmin && previewAll ? getAllCollections().then(setAllCollections, () => setAllCollections([])) : null,
+    ]);
+    setRefreshing(false);
+  }, [loadHome, isAdmin, previewAll]);
 
   const handleToggleFavorite = useCallback((productId: string) => {
     if (!user) return;
@@ -202,20 +229,6 @@ export default function HomeScreen() {
     }, [isAdmin, previewAll])
   );
   const preview = isAdmin && previewAll;
-
-  // Personalized greeting: firstName from users/{uid}, fallbacks to displayName first word
-  useEffect(() => {
-    if (!user) { setFirstName(''); return; }
-    getDoc(doc(db, 'users', user.uid)).then(snap => {
-      if (snap.exists()) {
-        const d = snap.data() as { firstName?: string; displayName?: string };
-        const name = d.firstName?.trim() || d.displayName?.trim().split(' ')[0] || '';
-        setFirstName(name || user.displayName?.split(' ')[0] || '');
-      } else {
-        setFirstName(user.displayName?.split(' ')[0] || '');
-      }
-    }).catch(() => setFirstName(''));
-  }, [user]);
 
   // Real-time unread notification count for bell badge
   useEffect(() => {
@@ -391,6 +404,9 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: SCREEN_BOTTOM_GAP }}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[SHADES.amber]} tintColor={SHADES.amber} progressBackgroundColor={SHADES.white} />
+          }
           scrollEventThrottle={16}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: true,

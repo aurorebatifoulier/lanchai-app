@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { clearHomeCache } from './homeCache';
 
 // Home settings — config/home (readable by signed-in users via the config/* rule,
 // written by admins in Admin → Shop settings → Home).
@@ -37,5 +38,6 @@ export function useHomeConfig(refreshKey?: unknown): HomeConfig {
 
 /** Admin-only (config/* write rule). Merges. */
 export async function saveHomeConfig(patch: Partial<HomeConfig>): Promise<void> {
+  clearHomeCache('homeConfig');
   await setDoc(doc(db, 'config', 'home'), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
 }

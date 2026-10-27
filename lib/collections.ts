@@ -7,6 +7,7 @@ import type { MaterialCommunityIcons } from '@expo/vector-icons';
 import { db } from './firebase';
 import { SHADES } from '@/constants/brandShades';
 import { vteEndOfDayMs } from '@/functions/src/shared/dates';
+import { clearHomeCache } from './homeCache';
 
 // Home "Got plans?" occasion collections — admin-managed (Admin → Collections). Renters
 // can read PUBLISHED ones only (firestore.rules), so every renter query filters
@@ -107,6 +108,7 @@ export async function getAllCollections(): Promise<CollectionDoc[]> {
 }
 
 export async function createCollection(input: CollectionInput): Promise<string> {
+  clearHomeCache('collections');
   const ref = await addDoc(collection(db, 'collections'), {
     ...input, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   });
@@ -114,15 +116,18 @@ export async function createCollection(input: CollectionInput): Promise<string> 
 }
 
 export async function updateCollection(id: string, input: Partial<CollectionInput>): Promise<void> {
+  clearHomeCache('collections');
   await updateDoc(doc(db, 'collections', id), { ...input, updatedAt: serverTimestamp() });
 }
 
 export async function deleteCollection(id: string): Promise<void> {
+  clearHomeCache('collections');
   await deleteDoc(doc(db, 'collections', id));
 }
 
 /** Rewrites `order` as 0..n-1 following the given id list (one batch). */
 export async function saveCollectionOrder(ids: string[]): Promise<void> {
+  clearHomeCache('collections');
   const batch = writeBatch(db);
   ids.forEach((id, i) => batch.update(doc(db, 'collections', id), { order: i, updatedAt: serverTimestamp() }));
   await batch.commit();
