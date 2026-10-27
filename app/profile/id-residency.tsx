@@ -1,23 +1,22 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { IdentitySection } from '@/components/profile/IdentitySection';
 import { ResidencySection } from '@/components/profile/ResidencySection';
-import { UI } from '@/components/account/ui';
+import { UI, useScreenInsets } from '@/components/account/ui';
 
 // ID & residency — ONE screen (Account → ID & residency, the header badge, emails,
 // notifications): the ID document required to rent (status, planned deletion, upload /
 // replace / delete) and the optional resident status (status, valid-until, request
 // flow). Old routes /profile/identity and /profile/residency redirect here.
 export default function IdResidencyScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -27,7 +26,7 @@ export default function IdResidencyScreen() {
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
       >
         {/* Each section renders its own section title + card (My Account style). */}
         <IdentitySection />

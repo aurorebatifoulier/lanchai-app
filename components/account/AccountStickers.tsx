@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
-import { SectionTitle, UI } from '@/components/account/ui';
+import { SectionTitle, UI, useScreenInsets } from '@/components/account/ui';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { CATEGORIES } from '@/lib/mockData';
 import type { StickerUnlock } from '@/lib/accountStats';
@@ -51,7 +50,7 @@ const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 
 // {date}", amber "Browse {category}"); locked → that category page directly.
 export function AccountStickers({ stickers, next, unlocks }: { stickers: string[]; next: string | null; unlocks: Record<string, StickerUnlock> }) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const [open, setOpen] = useState<string | null>(null);
   if (stickers.length === 0) return null;
   const nextName = next ? categoryName(next) : null;
@@ -80,7 +79,7 @@ export function AccountStickers({ stickers, next, unlocks }: { stickers: string[
       <Modal visible={!!open} transparent animationType="fade" onRequestClose={() => setOpen(null)} statusBarTranslucent>
         <Pressable style={s.overlay} onPress={() => setOpen(null)}>
           {open && (
-            <Pressable style={[s.sheet, { paddingBottom: insets.bottom + 20 }]} onPress={() => {}}>
+            <Pressable style={[s.sheet, { paddingBottom: screen.bottom + 20 }]} onPress={() => {}}>
               <View style={s.handle} />
               <StickerBadge cat={open} index={Math.max(0, openIndex)} size={96} />
               <Text style={s.sheetTitle}>{ACCOUNT_COPY.stickerNames[open] ?? open}</Text>

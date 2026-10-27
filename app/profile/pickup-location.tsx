@@ -6,27 +6,26 @@ import {
   StyleSheet,
   Linking,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, IconCircle } from '@/components/account/ui';
+import { UI, SectionTitle, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
 
 export default function PickupLocationScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const shop   = useShopInfo();
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
-      <View style={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}>
+      <View style={[UI.screenContent, { paddingBottom: screen.contentBottom }]}>
         <SectionTitle style={{ marginTop: 16 }}>Our shop</SectionTitle>
         <View style={[UI.card, UI.cardPadded]}>
           <View style={s.top}>

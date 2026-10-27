@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -17,7 +16,7 @@ import {
 } from '@/lib/loyalty';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, RowGroup, Row, Chip } from '@/components/account/ui';
+import { UI, SectionTitle, RowGroup, Row, Chip, useScreenInsets } from '@/components/account/ui';
 
 // Loyalty screen (validated mockup): the loyalty card, "Your path" (every tier: reached
 // ✓ with its coupon used / ready, current "You're here", locked with required points and
@@ -29,7 +28,7 @@ const fmtDate = (ts: Timestamp) => ts.toDate().toLocaleDateString('en-GB', { day
 const SOURCE_LABEL: Record<HistoryEntry['source'], string> = { rental: 'Rental', review: 'Review', referral: 'Invited friend' };
 
 export default function LoyaltyScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const loyalty = useMyLoyalty();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -49,7 +48,7 @@ export default function LoyaltyScreen() {
   const currentRank = TIER_ORDER.indexOf(tier);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -65,7 +64,7 @@ export default function LoyaltyScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
           showsVerticalScrollIndicator={false}
         >
           <LoyaltyCard interactive={false} />

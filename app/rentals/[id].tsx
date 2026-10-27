@@ -8,7 +8,6 @@ import {
   Linking,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -16,7 +15,7 @@ import { COLORS } from '@/constants/Colors';
 import { cancelTier as getCancelTier, cancellationOutcome } from '@/functions/src/shared/cancellation';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, RowGroup, Row, IconCircle } from '@/components/account/ui';
+import { UI, RowGroup, Row, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { getReservationById, getProduct, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
 import { Product } from '@/lib/mockData';
@@ -86,7 +85,7 @@ function getBadge(r: RentalDoc, cat: TabId): Badge {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function RentalDetailScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -132,7 +131,7 @@ export default function RentalDetailScreen() {
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, screen.root]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
@@ -142,7 +141,7 @@ export default function RentalDetailScreen() {
 
   if (error || !rental) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, screen.root]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <View style={s.errorBox}>
@@ -217,14 +216,14 @@ export default function RentalDetailScreen() {
   };
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
       >
         {/* ── Product name + badge ── */}
         <Text style={s.productName}>{rental.productName}</Text>

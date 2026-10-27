@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle } from '@/components/account/ui';
+import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { IdUploadPanel } from '@/components/IdUploadPanel';
 
 // Shown when a renter without an ID document taps "Confirm booking" (single booking and
@@ -19,14 +18,14 @@ export function IdRequirementStep({
   onAtCounter: () => void;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const [uploading, setUploading] = useState(false);
   const close = () => { setUploading(false); onClose(); };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <View style={s.backdrop}>
-        <View style={[s.sheet, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={[s.sheet, { paddingBottom: screen.bottom + 20 }]}>
           <View style={s.handle} />
           <View style={s.headerRow}>
             <IconCircle icon={{ set: 'mci', name: 'card-account-details-outline' }} tone="amber" />

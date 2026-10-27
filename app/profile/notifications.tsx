@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, RowGroup, Row, ToggleRow } from '@/components/account/ui';
+import { UI, SectionTitle, RowGroup, Row, ToggleRow, useScreenInsets } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { getUserProfile, saveUserProfile, setMarketingOptIn } from '@/lib/firestore';
 import { useFeatureFlags } from '@/lib/features';
@@ -16,7 +15,7 @@ import { useFeatureFlags } from '@/lib/features';
 // News & offers = explicit marketing consent, OFF by default, stored with server
 // timestamps (marketingOptInAt / marketingOptOutAt) — not synced to Brevo yet.
 export default function NotificationsScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -52,7 +51,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -65,7 +64,7 @@ export default function NotificationsScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
         >
           <SectionTitle style={{ marginTop: 16 }}>Email</SectionTitle>
           <RowGroup>

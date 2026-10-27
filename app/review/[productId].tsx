@@ -10,13 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle } from '@/components/account/ui';
+import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { getProduct, getReview, submitReview, getUserProfile, getReservationById } from '@/lib/firestore';
 import { isLoyaltyExcluded, useLoyaltyConfig, DEFAULT_REVIEW_REWARD_POINTS } from '@/lib/loyalty';
 import { Product } from '@/lib/mockData';
@@ -28,7 +28,7 @@ export default function ReviewScreen() {
   // Optional pre-selected rating from an email star link (1–5); the renter can still change it.
   const initialRating = /^[1-5]$/.test(ratingParam ?? '') ? Number(ratingParam) : 0;
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const { user } = useAuth();
 
   const [product,        setProduct]        = useState<Product | null>(null);
@@ -99,7 +99,7 @@ export default function ReviewScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center} edges={['top']}>
+      <SafeAreaView style={[styles.center, { paddingBottom: screen.bottom }]} edges={['top']}>
         <ActivityIndicator color={COLORS.amber} size="large" />
       </SafeAreaView>
     );
@@ -107,7 +107,7 @@ export default function ReviewScreen() {
 
   if (loadError || !product) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <IconCircle icon={{ name: 'alert-circle' }} size={64} />
@@ -122,7 +122,7 @@ export default function ReviewScreen() {
 
   if (alreadyReviewed) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <IconCircle icon={{ name: 'check' }} size={64} />
@@ -140,7 +140,7 @@ export default function ReviewScreen() {
 
   if (submitted) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
         <View style={styles.center}>
           <IconCircle icon={{ name: 'star' }} tone="amber" size={64} />
           <Text style={styles.stateTitle}>
@@ -160,7 +160,7 @@ export default function ReviewScreen() {
   // ── Review form ───────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
@@ -174,7 +174,7 @@ export default function ReviewScreen() {
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: screen.contentBottom }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

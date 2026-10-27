@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -22,7 +21,7 @@ import {
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, CheckLine } from '@/components/account/ui';
+import { UI, SectionTitle, CheckLine, useScreenInsets } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { requestPasswordReset, AuthEmailRateLimitError } from '@/lib/authEmails';
 
@@ -40,7 +39,7 @@ function validateNewPw(pw: string): { ok: boolean; error: string | null } {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function ChangePasswordScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [currentPw,   setCurrentPw]   = useState('');
@@ -134,7 +133,7 @@ export default function ChangePasswordScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[s.root, { paddingTop: insets.top }]}
+      style={[s.root, screen.root]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <StatusBar style="dark" />
@@ -148,7 +147,7 @@ export default function ChangePasswordScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
         keyboardShouldPersistTaps="handled"
       >
         <SectionTitle style={{ marginTop: 16 }}>Change password</SectionTitle>

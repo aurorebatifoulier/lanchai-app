@@ -12,14 +12,14 @@ import {
   Image,
   Modal,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle } from '@/components/account/ui';
+import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { getClaimsForReservation, submitClaim, type ClaimType, type ClaimMediaType } from '@/lib/claims';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,7 +37,7 @@ export default function ClaimScreen() {
   const { reservationId } = useLocalSearchParams<{ reservationId: string }>();
   const { type: presetType } = useLocalSearchParams<{ type?: ClaimType }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const { user } = useAuth();
 
   const [rental,       setRental]       = useState<RentalDoc | null>(null);
@@ -144,7 +144,7 @@ export default function ClaimScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center} edges={['top']}>
+      <SafeAreaView style={[styles.center, { paddingBottom: screen.bottom }]} edges={['top']}>
         <ActivityIndicator color={SHADES.amber} size="large" />
       </SafeAreaView>
     );
@@ -152,7 +152,7 @@ export default function ClaimScreen() {
 
   if (loadError || !rental) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <IconCircle icon={{ name: 'alert-circle' }} size={64} />
@@ -167,7 +167,7 @@ export default function ClaimScreen() {
 
   if (hasOpenClaim) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <IconCircle icon={{ name: 'clock' }} size={64} />
@@ -188,7 +188,7 @@ export default function ClaimScreen() {
 
   if (submitted) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
         <View style={styles.center}>
           <IconCircle icon={{ name: 'check' }} size={64} />
           <Text style={styles.stateTitle}>Claim submitted</Text>
@@ -206,7 +206,7 @@ export default function ClaimScreen() {
   // ── Form ─────────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { paddingBottom: screen.bottom }]} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
@@ -220,7 +220,7 @@ export default function ClaimScreen() {
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: screen.contentBottom }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >

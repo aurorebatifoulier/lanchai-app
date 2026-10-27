@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle, StatusChip } from '@/components/account/ui';
+import { UI, IconCircle, StatusChip, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile } from '@/lib/firestore';
 import {
@@ -14,7 +13,7 @@ import {
 } from '@/functions/src/shared/btob';
 
 export default function BtobRejectedScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -35,10 +34,10 @@ export default function BtobRejectedScreen() {
   const detail = profile?.btobRejectionText?.trim() || legacyText;
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (

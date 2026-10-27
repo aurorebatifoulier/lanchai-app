@@ -1,13 +1,12 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import Markdown from 'react-native-markdown-display';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI } from '@/components/account/ui';
+import { UI, useScreenInsets } from '@/components/account/ui';
 import { useShopInfo } from '@/lib/shop';
 import { fillLegalPlaceholders } from '@/lib/legalContent';
 
@@ -43,11 +42,11 @@ const MD_STYLES = {
 export default function LegalScreen({ title, content }: Props) {
   // Address + WhatsApp come from config/shop, so the legal texts follow Shop settings.
   const shop = useShopInfo();
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       <View style={s.header}>
@@ -58,7 +57,7 @@ export default function LegalScreen({ title, content }: Props) {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
       >
         <View style={[UI.card, s.card]}>
           <Markdown style={MD_STYLES as never}>{fillLegalPlaceholders(content, shop)}</Markdown>

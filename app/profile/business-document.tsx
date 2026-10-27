@@ -9,7 +9,6 @@ import {
   Image,
   TextInput,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -21,7 +20,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
 import {
-  UI, SectionTitle, RowGroup, Row, IconCircle, StatusBlock, StatusChip, CheckLine,
+  UI, SectionTitle, RowGroup, Row, IconCircle, StatusBlock, StatusChip, CheckLine, useScreenInsets,
 } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { storage, functions } from '@/lib/firebase';
@@ -30,7 +29,7 @@ import { canReplaceBtobDocument } from '@/utils/btob';
 import { useMyIdentity, ID_DOC_TYPES } from '@/lib/identity';
 
 export default function BusinessDocumentScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -137,7 +136,7 @@ export default function BusinessDocumentScreen() {
 
   if (loading) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, screen.root]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
@@ -146,14 +145,14 @@ export default function BusinessDocumentScreen() {
   }
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: screen.contentBottom }]}
       >
         <View style={[UI.card, UI.cardPadded]}>
           {rejection === 'final' ? (

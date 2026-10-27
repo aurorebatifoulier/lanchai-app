@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 
@@ -69,6 +70,28 @@ export const UI = StyleSheet.create({
   choiceTextOn: { color: SHADES.cream },
   divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 14 },
 });
+
+/** Gap under the last element of a stack screen's scroll content. */
+export const SCREEN_BOTTOM_GAP = 24;
+
+/**
+ * Safe-area handling for STACK screens (outside the tab bar), Android edge-to-edge:
+ * `root` pads the screen top (status bar) AND bottom (3-button / gesture bar, iOS home
+ * indicator), so scroll views stop ABOVE the system bar instead of scrolling under it;
+ * scroll content then only adds `contentBottom`. `bottom` is for fixed bottom bars /
+ * sheets. Falls back to the initial window metrics if the live inset reads 0.
+ * Tab screens don't use this — the tab bar already sits above the system bar.
+ */
+export function useScreenInsets() {
+  const insets = useSafeAreaInsets();
+  const bottom = Math.max(insets.bottom, initialWindowMetrics?.insets.bottom ?? 0);
+  return {
+    top: insets.top,
+    bottom,
+    root: { paddingTop: insets.top, paddingBottom: bottom },
+    contentBottom: SCREEN_BOTTOM_GAP,
+  };
+}
 
 export type IconTone = 'amber' | 'grey' | 'carbon';
 const TONES: Record<IconTone, { bg: string; fg: string }> = {

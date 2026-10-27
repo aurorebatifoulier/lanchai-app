@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -17,7 +16,7 @@ import { COLORS } from '@/constants/Colors';
 import ProductGridCard from '@/components/ProductGridCard';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle } from '@/components/account/ui';
+import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import SearchBar from '@/components/SearchBar';
 import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -88,7 +87,7 @@ function LikedEmptyState({
 
 export default function LikedScreen() {
   const router  = useRouter();
-  const insets  = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const { user } = useAuth();
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
@@ -287,7 +286,7 @@ export default function LikedScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* Header */}
@@ -340,7 +339,7 @@ export default function LikedScreen() {
           columnWrapperStyle={s.row}
           contentContainerStyle={[
             s.gridContent,
-            { paddingBottom: insets.bottom + 24 },
+            { paddingBottom: screen.contentBottom },
           ]}
           showsVerticalScrollIndicator={false}
           extraData={filteredLiked.length}

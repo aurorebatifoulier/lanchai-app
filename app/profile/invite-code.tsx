@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, StatusBlock, StatusChip } from '@/components/account/ui';
+import { UI, StatusBlock, StatusChip, useScreenInsets } from '@/components/account/ui';
 import { applyInviteCode } from '@/lib/referral';
 import { useLoyaltyConfig, DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
 
 // "Have an invite code?" — new renters, before their first booking (any booking, even
 // cancelled, closes the window — checked server-side by applyInviteCode).
 export default function InviteCodeScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const config = useLoyaltyConfig();
   const pts = config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
@@ -36,7 +35,7 @@ export default function InviteCodeScreen() {
   };
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />

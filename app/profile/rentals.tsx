@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI } from '@/components/account/ui';
+import { UI, useScreenInsets } from '@/components/account/ui';
 import { RentalDocCard } from '@/components/RentalDocCard';
 import { auth } from '@/lib/auth';
 import { getMyReservations, type RentalDoc } from '@/lib/firestore';
@@ -32,7 +31,7 @@ const PERIODS: { key: RentalPeriod; label: string }[] = [
 ];
 
 export default function AllRentalsScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -61,7 +60,7 @@ export default function AllRentalsScreen() {
   const visible = filtered.slice(0, pages * PAGE_SIZE);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -75,7 +74,7 @@ export default function AllRentalsScreen() {
           style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[UI.screenContent, s.content, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, s.content, { paddingBottom: screen.contentBottom }]}
         >
           <View style={[UI.input, s.search]}>
             <Feather name="search" size={16} color={SHADES.carbonMuted} />

@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -18,7 +17,7 @@ import { updateProfile } from 'firebase/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, RowGroup, Row, StatusChip, CheckLine } from '@/components/account/ui';
+import { UI, SectionTitle, RowGroup, Row, StatusChip, CheckLine, useScreenInsets } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { getUserProfile, saveUserProfile } from '@/lib/firestore';
 import { getCustomerTypeConfig } from '@/utils/customerType';
@@ -33,7 +32,7 @@ type SaveStatus = 'success' | 'error' | null;
 const normalizePhone = (value: string) => value.replace(/\s+/g, '');
 
 export default function PersonalInfoScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [firstName,   setFirstName]   = useState('');
@@ -179,7 +178,7 @@ export default function PersonalInfoScreen() {
 
   if (loading) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, screen.root]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <ActivityIndicator color={SHADES.amber} style={{ marginTop: 48 }} />
@@ -191,7 +190,7 @@ export default function PersonalInfoScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[s.root, { paddingTop: insets.top }]}
+      style={[s.root, screen.root]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <StatusBar style="dark" />
@@ -200,7 +199,7 @@ export default function PersonalInfoScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Account (read-only) ── */}

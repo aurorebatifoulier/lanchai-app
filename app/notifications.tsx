@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -25,7 +24,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle, type IconTone } from '@/components/account/ui';
+import { UI, IconCircle, type IconTone, useScreenInsets } from '@/components/account/ui';
 import BackButton from '@/components/BackButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -117,7 +116,7 @@ function getCtaLabel(type: NotifType): string {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function NotificationsScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const { user } = useAuth();
 
@@ -252,7 +251,7 @@ export default function NotificationsScreen() {
   }, [user, visibleUnreadIds]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* ── Fixed top bar ──────────────────────────────────────────────── */}
@@ -301,6 +300,7 @@ export default function NotificationsScreen() {
         style={s.list}
         contentContainerStyle={[
           s.listContent,
+          { paddingBottom: screen.contentBottom },
           !(loading || bLoading) && filtered.length === 0 && s.listContentCenter,
         ]}
         showsVerticalScrollIndicator={false}

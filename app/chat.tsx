@@ -12,7 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
-import { UI } from '@/components/account/ui';
+import { UI, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { InitialAvatar, MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
@@ -34,6 +34,7 @@ import {
 export default function ChatScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const { user } = useAuth();
   const RENTER_ID   = user!.uid;
   const RENTER_NAME = user!.displayName || user!.email || 'Renter';
@@ -259,7 +260,9 @@ export default function ChatScreen() {
           onPickVideo={handlePickVideo}
           sending={sending}
           uploading={uploading}
-          bottomPadding={keyboardShown ? 8 : insets.bottom + 8}
+          // The input bar is the fixed bottom bar: it sits above the system bar itself
+          // (the screen root has no bottom inset here).
+          bottomPadding={keyboardShown ? 8 : screen.bottom + 8}
         />
       </KeyboardAvoidingView>
 

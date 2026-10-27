@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle } from '@/components/account/ui';
+import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, type UserProfile } from '@/lib/firestore';
 
 export default function BtobPendingScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -23,10 +22,10 @@ export default function BtobPendingScreen() {
   }, [user]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <ScrollView
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.iconBox}>

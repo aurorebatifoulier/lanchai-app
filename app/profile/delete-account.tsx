@@ -8,7 +8,6 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -20,7 +19,7 @@ import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, StatusBlock } from '@/components/account/ui';
+import { UI, StatusBlock, useScreenInsets } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,7 +43,7 @@ function Header({ onBack }: { onBack: () => void }) {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function DeleteAccountScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router  = useRouter();
   const { user } = useAuth();
 
@@ -118,7 +117,7 @@ export default function DeleteAccountScreen() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (checking) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, screen.root]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <View style={s.centerBox}>
@@ -137,14 +136,14 @@ export default function DeleteAccountScreen() {
   );
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: screen.contentBottom }]}
         keyboardShouldPersistTaps="handled"
       >
         {checkError ? (

@@ -6,14 +6,13 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle } from '@/components/account/ui';
+import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { useShopInfo, openHoursText } from '@/lib/shop';
 import WhatsAppButton from '@/components/WhatsAppButton';
 
@@ -86,7 +85,7 @@ const ITEMS: FaqItem[] = [
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function FaqScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const shop   = useShopInfo();
 
@@ -110,7 +109,7 @@ export default function FaqScreen() {
   }
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* Header */}
@@ -122,7 +121,7 @@ export default function FaqScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
       >
         <Text style={s.subtitle}>Everything to know before you rent.</Text>
 

@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { IconCircle } from '@/components/account/ui';
+import { IconCircle, useScreenInsets } from '@/components/account/ui';
 import { ChecklistSummary } from '@/components/ChecklistSummary';
 import { getReservationById, type RentalDoc } from '@/lib/firestore';
 import { displayOrderId, fmtDay } from '@/utils/rentalDocs';
@@ -14,7 +13,7 @@ import { displayOrderId, fmtDay } from '@/utils/rentalDocs';
 // Read-only condition report (pick-up or return checklist) for the renter — opened from
 // the Receipts & reports / All rentals cards. Renter mode: no staff or typed names.
 export default function RentalReportScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
   const isReturn = type === 'return';
@@ -31,7 +30,7 @@ export default function RentalReportScreen() {
   const orderId = rental ? displayOrderId(rental) : null;
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -50,7 +49,7 @@ export default function RentalReportScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
         >
           <Text style={s.productName} numberOfLines={2}>
             {rental.quantity > 1 ? `${rental.productName} × ${rental.quantity}` : rental.productName}

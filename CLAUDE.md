@@ -159,6 +159,13 @@ a snapshot indefinitely).
   the reservation detail; switched to `router.replace('/admin/reservations/{id}')` so the
   destination is explicit and independent of navigation history. Use this pattern for any
   post-submit/post-action navigation, not just this screen.
+- **Stack screens + Android edge-to-edge — use `useScreenInsets()`** (`components/account/ui.tsx`).
+  Every stack screen (outside the tab bar) puts `screen.root` (paddingTop = top inset,
+  paddingBottom = bottom inset) on its root, so scroll views stop ABOVE the 3-button /
+  gesture bar instead of scrolling under it, and adds `paddingBottom: screen.contentBottom`
+  (24) to its scroll content. Fixed bottom bars / sheets use `screen.bottom` themselves
+  (chat input bar, ID step sheet, sticker sheet) — then the root gets no bottom inset.
+  Tab screens don't use it (the tab bar already sits above the system bar).
 - **Fabric/Android new-arch layout bug (SDK 54):** Sur Android avec la nouvelle
   architecture (Fabric renderer), une `ScrollView` ou `FlatList` avec `flex: 1` calcule
   mal l'espace disponible quand elle a **plusieurs frères directs** dans un flex column

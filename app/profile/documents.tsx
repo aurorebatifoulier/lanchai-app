@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, SectionTitle, RowGroup, Row } from '@/components/account/ui';
+import { UI, SectionTitle, RowGroup, Row, useScreenInsets } from '@/components/account/ui';
 import { RentalDocCard } from '@/components/RentalDocCard';
 import { auth } from '@/lib/auth';
 import { getMyReservations, type RentalDoc } from '@/lib/firestore';
@@ -22,7 +21,7 @@ const PREVIEW_COUNT = 3;
 
 
 export default function DocumentsScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -41,7 +40,7 @@ export default function DocumentsScreen() {
   const withDocs = useMemo(() => rentalsWithDocuments(rentals), [rentals]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -54,7 +53,7 @@ export default function DocumentsScreen() {
         <ScrollView
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[UI.screenContent, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
         >
           {/* ── Your rentals ── */}
           <SectionTitle style={{ marginTop: 16 }}>Your rentals</SectionTitle>
