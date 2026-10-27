@@ -116,7 +116,7 @@ export default function CategoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Hero */}
-      <View style={[styles.hero, { backgroundColor: heroBg }, catStyle.border ? { borderBottomWidth: 1.5, borderBottomColor: catStyle.border } : null]}>
+      <View style={[styles.hero, { backgroundColor: heroBg }]}>
         <View style={styles.heroTopBar}>
           <BackButton
             onPress={() => router.back()}

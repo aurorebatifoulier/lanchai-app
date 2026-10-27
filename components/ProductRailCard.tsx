@@ -66,7 +66,7 @@ function ProductRailCard({
           ? <Text style={s.price} numberOfLines={1}>{toLak(minPrice, exchangeRate).toLocaleString('en-US')} LAK / day</Text>
           : <Text style={[s.price, s.priceMissing]} numberOfLines={1}>Price not set</Text>}
         <View style={quickAdd && onQuickAdd ? s.withQuickAdd : undefined}>
-          <SignalLine signal={productSignal(product, { availability })} />
+          <SignalLine signal={productSignal(product, { availability, compact: true })} />
         </View>
         {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
       </View>
