@@ -911,8 +911,9 @@ a snapshot indefinitely).
   - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
     fun = speaker, sports = bike — + palette shades). Every category has a UNIQUE combination:
     Fun mid-amber/carbon · Tools carbon/amber · Outdoor light-amber/dark-amber · Sports
-    dark-amber/light-amber · Kids white + 1.5px amber ring/dark-amber · Home grey/carbon
-    (`border` / `dark` flags in the mapping; selected in Explore = amber + 2px carbon ring) via `<CategoryBadge>`; used by Home,
+    dark-amber/light-amber · Kids carbon-soft/soft-amber · Home grey/carbon — all filled
+    circles, no rings (`dark` flag → light text on the category page header; the only ring
+    is Explore's selection state: amber + 2px carbon ring) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
   - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
     `ProductGridCard` keeps "New" in amber-light. `<FavoriteHeart>` everywhere (cards +
@@ -977,8 +978,12 @@ a snapshot indefinitely).
   - **Cards:** `ProductGridCard` = Home/My Account style, price "126,000 LAK / day"
     (`formatKip` now prints "… LAK" — never "₭"), ONE signal line from
     `lib/productSignal.ts` (back on / fully booked / not available; only 1 left this
-    weekend while that chip is on; rented n× this month (≥ 3); ★ rating · n rentals;
-    n rentals) — real data only, never invented urgency.
+    weekend while that chip is on; rented n× this month (≥ 3); ★ rating · ↻ n rentals;
+    ↻ n rentals) — real data only, never invented urgency. ONE renderer `<SignalLine>`
+    on every card (Home rail, Explore, Liked, category page), amber star / repeat icons,
+    the "+" width reserved on that line; a rating only from `MIN_REVIEWS_FOR_RATING` (3)
+    reviews; Home rail cards are narrow → `compact`: ONE piece (back on / ★ rating /
+    ↻ n rentals). Price digits in the same grey as "LAK / day" on every card.
   - **Quick add:** `QuickAddProvider` (root layout, `useQuickAdd().openQuickAdd`) owns one
     sheet + toast. "+" (`QuickAddButton`: amber = free today, outline = not → Pick dates
     pre-filled with the next free day; none when tier-locked) on Explore, Liked, category
