@@ -36,6 +36,15 @@ export const HOME_COPY = {
     { title: 'Return. Repeat.', text: 'Deposit back on the spot. Then rent again. Obviously.' },
   ],
 
+  // Admin-only (never shown to renters)
+  adminPreviewToggle: 'Preview all sections',
+  adminPreviewSub: 'Admin only · shows every Home section, with example data when needed.',
+  adminNoCollections: 'No published collection yet — Admin › Collections',
+  adminPickupExample: 'Example data — no upcoming pick-up on this account.',
+  adminRentAgainStats: (returned: number, matched: number) =>
+    `${returned} returned rental${returned === 1 ? '' : 's'} · ${matched} product${matched === 1 ? '' : 's'} still in the catalogue`,
+  adminDraftsIncluded: 'Drafts and out-of-date collections included.',
+
   collectionEmpty: 'Nothing here yet — check back soon.',
   collectionUnavailable: 'This collection is not available.',
 } as const;

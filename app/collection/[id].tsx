@@ -28,7 +28,7 @@ export default function CollectionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const screen = useScreenInsets();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
   const [col, setCol] = useState<CollectionDoc | null>(null);
@@ -40,7 +40,8 @@ export default function CollectionScreen() {
     if (!id) return;
     Promise.all([getCollection(id), getProducts().catch(() => [] as Product[])])
       .then(([c, all]) => {
-        const usable = c && c.published && isCollectionActive(c) ? c : null;
+        // Admins can open drafts / out-of-date ones (Home "Preview all sections").
+        const usable = c && (isAdmin || (c.published && isCollectionActive(c))) ? c : null;
         setCol(usable);
         if (usable) {
           const byId = new Map(all.map(p => [p.id, p]));
@@ -48,7 +49,7 @@ export default function CollectionScreen() {
         }
       })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, isAdmin]);
 
   useEffect(() => {
     if (!user) return;

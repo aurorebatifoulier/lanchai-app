@@ -17,14 +17,22 @@ export function nextPickup(reservations: RentalDoc[], nowMs: number = Date.now()
   return upcoming[0] ?? null;
 }
 
+/** Tomorrow 10:00 Vientiane (UTC+7) — example date for the admin preview. */
+function exampleMs(): number {
+  const d = new Date(Date.now() + 7 * 3600_000 + 24 * 3600_000);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 10 - 7, 0);
+}
+
 // Carbon highlight card, same style as My Account's "LAK not spent on stuff" card.
-export default function NextPickupCard({ rental }: { rental: RentalDoc }) {
+// `rental` null = admin preview with example data (tomorrow 10:00, tap does nothing).
+export default function NextPickupCard({ rental }: { rental: RentalDoc | null }) {
   const router = useRouter();
-  const ms = rental.pickupAt.toMillis();
+  const ms = rental ? rental.pickupAt.toMillis() : exampleMs();
   return (
     <TouchableOpacity
       style={[UI.card, s.card]}
-      onPress={() => router.push(`/rentals/${rental.id}`)}
+      onPress={() => { if (rental) router.push(`/rentals/${rental.id}`); }}
+      disabled={!rental}
       activeOpacity={0.85}
     >
       <View style={s.circle}>

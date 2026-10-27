@@ -855,6 +855,14 @@ a snapshot indefinitely).
   bee trail with the header's `DASH`/`PATH_OPACITY`) or "Rent again" (distinct returned
   products, latest first) → Most rented → "Consume better" (`WhyRentSection`, inset).
   Removed: Popular near you, Premium rail, How LANCHAI works, `TrustSection`.
+  "Rent again" shows when at least one returned rental's product is still renter-visible;
+  otherwise (never rented, or every rented product gone) the 3-step card shows — the
+  section is never empty. Admins see the Home exactly like a renter, plus: a "Preview all
+  sections" toggle (AsyncStorage `home.adminPreviewAll`, per device, off by default) that
+  forces every conditional section (example next pick-up, all collections incl. drafts,
+  both 3-step card and Rent again with "N returned · M still in the catalogue"), and a
+  dashed admin-only hint where "Got plans?" will appear when nothing is published.
+  `<FavoriteButton>` = the ONE heart button on product cards (white circle, zIndex).
   - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
     fun = speaker, sports = bike — + palette shades) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.

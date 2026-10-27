@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
@@ -18,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { HOME_COPY } from '@/constants/homeCopy';
-import { UI, SectionTitle, CategoryBadge, SCREEN_BOTTOM_GAP } from '@/components/account/ui';
+import { UI, SectionTitle, CategoryBadge, ToggleRow, SCREEN_BOTTOM_GAP } from '@/components/account/ui';
 import SearchBar from '@/components/SearchBar';
 import ProductRailCard from '@/components/ProductRailCard';
 import InsetCarousel from '@/components/home/InsetCarousel';
@@ -26,7 +27,7 @@ import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
 import ShopStatusLine from '@/components/home/ShopStatusLine';
 import RentReturnRepeat from '@/components/home/RentReturnRepeat';
 import CollectionCards from '@/components/home/CollectionCards';
-import { getPublishedCollections, type CollectionDoc } from '@/lib/collections';
+import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
 import {
   getProducts, getFavorites, addFavorite, removeFavorite, getMyReservations, type RentalDoc,
@@ -87,6 +88,8 @@ const SLIDES: HeroSlide[] = [
 ];
 
 const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
+// Admin "Preview all sections" toggle, remembered per device.
+const PREVIEW_KEY = 'home.adminPreviewAll';
 
 /** Distinct products of the renter's returned rentals, most recently returned first. */
 function rentAgainProducts(reservations: RentalDoc[], products: Product[]): Product[] {
@@ -105,7 +108,7 @@ function rentAgainProducts(reservations: RentalDoc[], products: Product[]): Prod
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
   const [products, setProducts] = useState<Product[]>([]);
@@ -113,6 +116,8 @@ export default function HomeScreen() {
   const [loadError, setLoadError] = useState(false);
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
   const [collections, setCollections] = useState<CollectionDoc[]>([]);
+  const [allCollections, setAllCollections] = useState<CollectionDoc[]>([]);
+  const [previewAll, setPreviewAll] = useState(false);
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bagCount, setBagCount] = useState(0);
@@ -155,6 +160,23 @@ export default function HomeScreen() {
     });
   }, [user]);
 
+  // Admin preview: read the remembered toggle; load drafts too while it's on.
+  useEffect(() => {
+    if (!isAdmin) { setPreviewAll(false); return; }
+    AsyncStorage.getItem(PREVIEW_KEY).then(v => setPreviewAll(v === '1')).catch(() => {});
+  }, [isAdmin]);
+  const togglePreview = useCallback((on: boolean) => {
+    setPreviewAll(on);
+    AsyncStorage.setItem(PREVIEW_KEY, on ? '1' : '0').catch(() => {});
+  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAdmin || !previewAll) return;
+      getAllCollections().then(setAllCollections).catch(() => setAllCollections([]));
+    }, [isAdmin, previewAll])
+  );
+  const preview = isAdmin && previewAll;
+
   // Personalized greeting: firstName from users/{uid}, fallbacks to displayName first word
   useEffect(() => {
     if (!user) { setFirstName(''); return; }
@@ -196,7 +218,7 @@ export default function HomeScreen() {
     return collections.filter(c => c.productIds.some(id => ids.has(id)));
   }, [collections, products]);
   const pickup = useMemo(() => nextPickup(reservations), [reservations]);
-  const hasRented = useMemo(() => reservations.some(r => r.status === 'returned'), [reservations]);
+  const returnedCount = useMemo(() => reservations.filter(r => r.status === 'returned').length, [reservations]);
   const rentAgain = useMemo(() => rentAgainProducts(reservations, products), [reservations, products]);
 
   const rail = (items: Product[]) => (
@@ -281,9 +303,16 @@ export default function HomeScreen() {
             style={{ marginTop: 16 }}
           />
 
-          {pickup && (
+          {isAdmin && (
+            <View style={[UI.card, styles.previewCard]}>
+              <ToggleRow title={HOME_COPY.adminPreviewToggle} sub={HOME_COPY.adminPreviewSub} value={previewAll} onValueChange={togglePreview} />
+            </View>
+          )}
+
+          {(pickup || preview) && (
             <View style={{ marginTop: 14 }}>
               <NextPickupCard rental={pickup} />
+              {preview && !pickup && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPickupExample}</Text>}
             </View>
           )}
 
@@ -312,7 +341,17 @@ export default function HomeScreen() {
           ) : null}
 
           {/* Got plans? — admin-managed occasion collections */}
-          {!loading && <CollectionCards collections={visibleCollections} />}
+          {preview ? (
+            <>
+              <CollectionCards collections={allCollections} />
+              {allCollections.length > 0 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminDraftsIncluded}</Text>}
+              {allCollections.length === 0 && <AdminHint />}
+            </>
+          ) : !loading && visibleCollections.length > 0 ? (
+            <CollectionCards collections={visibleCollections} />
+          ) : !loading && isAdmin ? (
+            <AdminHint />
+          ) : null}
 
           {/* New arrivals */}
           {!loading && newArrivals.length > 0 && (
@@ -322,15 +361,17 @@ export default function HomeScreen() {
             </>
           )}
 
-          {/* First-time renters: how it works. Returning renters: their past products. */}
-          {!hasRented ? (
-            <RentReturnRepeat />
-          ) : !loading && rentAgain.length > 0 ? (
+          {/* Returning renters: their past products ("Rent again"). Otherwise — never
+              rented, or none of those products is still in the catalogue — how it works.
+              Admin preview: both, plus the counts behind the choice. */}
+          {(preview || rentAgain.length === 0) && <RentReturnRepeat />}
+          {!loading && (preview || rentAgain.length > 0) && (
             <>
               <RailHeader title={HOME_COPY.rentAgainTitle} />
+              {preview && <Text style={[UI.small, styles.adminNote, { marginTop: -6, marginBottom: 10 }]}>{HOME_COPY.adminRentAgainStats(returnedCount, rentAgain.length)}</Text>}
               {rail(rentAgain)}
             </>
-          ) : null}
+          )}
 
           {/* Most rented this month */}
           {!loading && mostRented.length > 0 && (
@@ -347,6 +388,18 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** Admin-only placeholder where "Got plans?" will appear. Renters never see it. */
+function AdminHint() {
+  const router = useRouter();
+  return (
+    <TouchableOpacity style={[UI.card, styles.adminHint]} onPress={() => router.push('/admin/collections' as never)} activeOpacity={0.8}>
+      <Feather name="layers" size={16} color={SHADES.carbonMuted} />
+      <Text style={[UI.small, { flex: 1 }]}>{HOME_COPY.adminNoCollections}</Text>
+      <Feather name="chevron-right" size={16} color={SHADES.carbonMuted} />
+    </TouchableOpacity>
   );
 }
 
@@ -478,5 +531,11 @@ const styles = StyleSheet.create({
   catItem: { width: 76, alignItems: 'center' },
   catLabel: { fontSize: 13, fontWeight: '600', color: SHADES.carbon, marginTop: 8 },
 
+  previewCard: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 4 },
+  adminNote: { marginTop: 6, fontStyle: 'italic' },
+  adminHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 24, padding: 12,
+    borderStyle: 'dashed', borderWidth: 1, borderColor: SHADES.carbonFaint, backgroundColor: 'transparent',
+  },
   loadError: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20 },
 });
