@@ -62,7 +62,12 @@ export type WhyBuy =
  * retail value, with what they paid in total (frozen `total`, LAK). Otherwise null.
  */
 export function whyBuyMine(reservations: RentalDoc[], products: Product[], rate: number | null): WhyBuy | null {
-  if (rate == null) return null;
+  return whyBuyMineRanked(reservations, products, rate)[0] ?? null;
+}
+
+/** Every eligible product of the renter, best first (for the no-repeat picker). */
+export function whyBuyMineRanked(reservations: RentalDoc[], products: Product[], rate: number | null): WhyBuy[] {
+  if (rate == null) return [];
   const byId = new Map(products.map(p => [p.id, p]));
   const agg = new Map<string, { times: number; paid: number; last: number }>();
   for (const r of reservations) {
@@ -75,24 +80,78 @@ export function whyBuyMine(reservations: RentalDoc[], products: Product[], rate:
     a.last = Math.max(a.last, returnedMs(r));
     agg.set(r.productId, a);
   }
-  const best = [...agg.entries()].sort((x, y) => y[1].times - x[1].times || y[1].last - x[1].last)[0];
-  if (!best) return null;
-  const product = byId.get(best[0])!;
-  return { kind: 'mine', product, retailLak: toLak(product.retailPrice!, rate), times: best[1].times, paidLak: best[1].paid };
+  return [...agg.entries()]
+    .sort((x, y) => y[1].times - x[1].times || y[1].last - x[1].last)
+    .map(([id, a]) => {
+      const product = byId.get(id)!;
+      return { kind: 'mine' as const, product, retailLak: toLak(product.retailPrice!, rate), times: a.times, paidLak: a.paid };
+    });
 }
 
 /** Catalogue example: the product with the highest retail value / daily price ratio. */
 export function whyBuyCatalogue(products: Product[], rate: number | null): WhyBuy | null {
-  if (rate == null) return null;
-  let best: { p: Product; perDay: number; ratio: number } | null = null;
-  for (const p of products) {
-    const perDay = getMinPrice(p);
-    if (!p.retailPrice || perDay == null || perDay <= 0) continue;
-    const ratio = p.retailPrice / perDay;
-    if (!best || ratio > best.ratio) best = { p, perDay, ratio };
+  return whyBuyCatalogueRanked(products, rate)[0] ?? null;
+}
+
+/** Catalogue examples, best retail value / daily price ratio first. */
+export function whyBuyCatalogueRanked(products: Product[], rate: number | null): WhyBuy[] {
+  if (rate == null) return [];
+  return products
+    .map(p => ({ p, perDay: getMinPrice(p) }))
+    .filter((x): x is { p: Product; perDay: number } => !!x.p.retailPrice && x.perDay != null && x.perDay > 0)
+    .sort((a, b) => b.p.retailPrice! / b.perDay - a.p.retailPrice! / a.perDay)
+    .map(({ p, perDay }) => ({ kind: 'catalogue' as const, product: p, retailLak: toLak(p.retailPrice!, rate), perDayLak: toLak(perDay, rate) }));
+}
+
+// ── No repeated products across nearby sections ──────────────────────────────
+
+export interface SectionSpec<T> {
+  key: string;
+  /** Candidates in the section's own order (best first). */
+  items: T[];
+  min: number;
+  max: number;
+  /** Shown as is (the renter's history, a true ranking) — still counted as shown. */
+  exempt?: boolean;
+}
+
+/**
+ * Builds the Home product sections in display order with a "shown" set: each section
+ * takes candidates not shown higher on the page first; it reuses an already-shown
+ * product only to reach its minimum, and never one from the product section shown
+ * directly above it. A section that can't reach its minimum is empty (hidden) and the
+ * "directly above" section stays the previous visible one. Pure.
+ */
+export function pickSections<T>(sections: SectionSpec<T>[], idOf: (item: T) => string): Record<string, T[]> {
+  const shown = new Set<string>();
+  let above = new Set<string>();
+  const out: Record<string, T[]> = {};
+  for (const sec of sections) {
+    let picked: T[];
+    if (sec.exempt) {
+      picked = sec.items.slice(0, sec.max);
+    } else {
+      picked = sec.items.filter(t => !shown.has(idOf(t))).slice(0, sec.max);
+      if (picked.length < sec.min) {
+        const taken = new Set(picked.map(idOf));
+        for (const t of sec.items) {
+          if (picked.length >= sec.min) break;
+          const id = idOf(t);
+          if (!taken.has(id) && !above.has(id)) { picked.push(t); taken.add(id); }
+        }
+        // Keep the section's own order after topping up.
+        const rank = new Map(sec.items.map((t, i) => [idOf(t), i]));
+        picked.sort((a, b) => rank.get(idOf(a))! - rank.get(idOf(b))!);
+      }
+      if (picked.length < sec.min) picked = [];
+    }
+    out[sec.key] = picked;
+    if (picked.length > 0) {
+      picked.forEach(t => shown.add(idOf(t)));
+      above = new Set(picked.map(idOf));
+    }
   }
-  if (!best) return null;
-  return { kind: 'catalogue', product: best.p, retailLak: toLak(best.p.retailPrice!, rate), perDayLak: toLak(best.perDay, rate) };
+  return out;
 }
 
 // ── Free this weekend ────────────────────────────────────────────────────────

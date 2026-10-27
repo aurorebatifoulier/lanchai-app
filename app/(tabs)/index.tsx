@@ -34,7 +34,10 @@ import WhyBuyCard from '@/components/home/WhyBuyCard';
 import ReferralPromoCard from '@/components/home/ReferralPromoCard';
 import { RailHeader } from '@/components/home/RailHeader';
 import { useReduceMotion } from '@/components/account/AccountHeader';
-import { rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue, weekendWindow, freeThisWeekend, budgetPicks, bookableByPopularity } from '@/lib/homeData';
+import {
+  rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue, whyBuyMineRanked, whyBuyCatalogueRanked,
+  weekendWindow, freeThisWeekend, budgetPicks, bookableByPopularity, pickSections, type WhyBuy,
+} from '@/lib/homeData';
 import FreeWeekend from '@/components/home/FreeWeekend';
 import BudgetPicks from '@/components/home/BudgetPicks';
 import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
@@ -247,7 +250,6 @@ export default function HomeScreen() {
   const returning = returnedCount > 0;
   const whyMine = useMemo(() => whyBuyMine(reservations, products, exchangeRate), [reservations, products, exchangeRate]);
   const whyCatalogue = useMemo(() => whyBuyCatalogue(products, exchangeRate), [products, exchangeRate]);
-  const whyBuy = returning ? (whyMine ?? whyCatalogue) : whyCatalogue;
   const referralPts = loyalty.config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
 
   const weekend = useMemo(
@@ -257,17 +259,42 @@ export default function HomeScreen() {
     [timeSlots, focusTick],
   );
   const weekendFree = useMemo(
-    () => (weekend && occupancy ? freeThisWeekend(products, occupancy, weekend, userTier ?? null) : []),
+    // max 12: every free candidate, so the no-repeat picker has room to choose.
+    () => (weekend && occupancy ? freeThisWeekend(products, occupancy, weekend, userTier ?? null, { max: 12 }) : []),
     [products, occupancy, weekend, userTier],
   );
   const budget = useMemo(
     () => budgetPicks(products, budgetLak, exchangeRate, userTier ?? null),
     [products, budgetLak, exchangeRate, userTier],
   );
+  const whyRanked = useMemo(
+    () => (returning ? [...whyBuyMineRanked(reservations, products, exchangeRate), ...whyBuyCatalogueRanked(products, exchangeRate)]
+      : whyBuyCatalogueRanked(products, exchangeRate)),
+    [returning, reservations, products, exchangeRate],
+  );
+
+  // No repeated products across nearby sections (display order; Rent again and the
+  // ranking — podium / most-rented rail — are shown as is but count as shown).
+  const picked = useMemo(() => {
+    type Item = { id: string; product?: Product; why?: WhyBuy };
+    const prod = (list: Product[]): Item[] => list.map(p => ({ id: p.id, product: p }));
+    const r = pickSections<Item>([
+      { key: 'newArrivals', items: prod(newArrivals), min: 1, max: newArrivals.length },
+      { key: 'weekend', items: prod(weekendFree), min: 3, max: 8 },
+      { key: 'rentAgain', items: rentAgain.map(x => ({ id: x.product.id, product: x.product })), min: 1, max: 3, exempt: true },
+      { key: 'ranking', items: prod(podium ? podium.top : mostRented), min: 1, max: 5, exempt: true },
+      { key: 'budget', items: prod(budget), min: 2, max: 4 },
+      { key: 'why', items: whyRanked.map(w => ({ id: w.product.id, why: w })), min: 1, max: 1 },
+    ], it => it.id);
+    const ps = (k: string) => r[k].map(it => it.product!);
+    return { newArrivals: ps('newArrivals'), weekend: ps('weekend'), budget: ps('budget'), why: r.why[0]?.why ?? null };
+  }, [newArrivals, weekendFree, rentAgain, podium, mostRented, budget, whyRanked]);
+  const whyBuy = picked.why;
+
   // Admin preview: example products when not enough match right now.
-  const weekendShown = weekendFree.length >= 3 ? weekendFree
+  const weekendShown = picked.weekend.length >= 3 ? picked.weekend
     : preview ? bookableByPopularity(products, userTier ?? null).slice(0, 8) : [];
-  const budgetShown = budget.length >= 2 ? budget
+  const budgetShown = picked.budget.length >= 2 ? picked.budget
     : preview ? [...bookableByPopularity(products, userTier ?? null)].sort((a, b) => a.pricePerDay - b.pricePerDay).slice(0, 4) : [];
 
   // Categories: all on one row (≤ 6) sized to the width; horizontal scroll from 7.
@@ -415,10 +442,10 @@ export default function HomeScreen() {
             ) : null}
 
             {/* New arrivals — the product-card rail (the showcase) */}
-            {!loading && newArrivals.length > 0 && (
+            {!loading && picked.newArrivals.length > 0 && (
               <>
                 <RailHeader title={HOME_COPY.newArrivalsTitle} onSeeAll={() => router.push('/explore')} />
-                {rail(newArrivals)}
+                {rail(picked.newArrivals)}
               </>
             )}
 
@@ -442,7 +469,7 @@ export default function HomeScreen() {
             {!loading && weekend && weekendShown.length >= 3 && (
               <>
                 <FreeWeekend products={weekendShown} win={weekend} exchangeRate={exchangeRate} />
-                {preview && weekendFree.length < 3 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
+                {preview && picked.weekend.length < 3 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
               </>
             )}
           </View>
@@ -482,7 +509,7 @@ export default function HomeScreen() {
             {!loading && budgetShown.length >= 2 && (
               <>
                 <BudgetPicks products={budgetShown} thresholdLak={budgetLak} exchangeRate={exchangeRate} />
-                {preview && budget.length < 2 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
+                {preview && picked.budget.length < 2 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminExampleData}</Text>}
               </>
             )}
 
