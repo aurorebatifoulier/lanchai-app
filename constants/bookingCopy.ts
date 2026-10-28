@@ -1,0 +1,95 @@
+// Every booking-flow string (Your booking, bag checkout, confirmation) — edit here only.
+export const BOOKING_COPY = {
+  title: 'Your booking',
+  checkoutTitle: 'Checkout',
+  fromPerDay: (x: string) => `From ${x} LAK / day`,
+
+  when: 'When?',
+  dates: 'Dates',
+  selectDates: 'Select dates',
+  selectReturn: 'Select return',
+  pickup: 'Pick-up',
+  return: 'Return',
+  select: 'Select',
+  tierHint: (days: number, pct: number) => `Keep it ${days} days and save ${pct}% per day.`,
+  returnAfterPickup: 'Return must be after pick-up.',
+  unpriced: "Pricing for this item hasn't been set yet. Booking unavailable.",
+
+  quantity: 'Quantity',
+  available: (n: number) => `${n} available`,
+  outOfStock: 'Not available on these dates.',
+
+  total: 'Your total',
+  dayLine: (days: number, rate: string, qty: number) =>
+    `${days} ${days === 1 ? 'day' : 'days'} × ${rate} LAK${qty > 1 ? ` × ${qty}` : ''}`,
+  rentalItems: (n: number) => `Rental · ${n} ${n === 1 ? 'item' : 'items'}`,
+  coupon: (tier: string, pct: number) => `${tier} coupon · ${pct}% off`,
+  apply: 'Apply',
+  remove: 'Remove',
+  couponApplied: (x: string) => `Coupon −${x} LAK`,
+  subtotalHt: 'Subtotal (excl. VAT)',
+  vat: (pct: number) => `VAT (${pct}%)`,
+  toPay: 'To pay at pick-up',
+  deposit: 'Refundable deposit',
+
+  depositLink: 'How does the deposit work?',
+  depositSteps: [
+    'You pay it at the shop when you pick up, separately from the rental.',
+    'We check the item with you at return (about 10 min).',
+    'All good? You get it back on the spot, in full.',
+  ],
+  // Aligned with Terms §7 / §9 and the settlement code (charges are suggestions staff can
+  // reduce or waive; lost / beyond repair = full replacement value; balance due).
+  depositNote:
+    "Late returns, damage or missing parts may be charged from the deposit — an item that's lost or beyond repair is charged at its full replacement value. If charges are more than the deposit, the difference is due. Our team can reduce or waive charges.",
+  residentLess: (pct: number) => `Residents pay ${pct}% less · `,
+  verifyStatus: 'Verify my status',
+
+  cancellation: 'Free cancellation any time before pick-up.',
+  policy: 'Policy',
+  addNote: '+ Add a note for the shop',
+  notePlaceholder: 'Anything we should know? (optional)',
+  terms: 'I agree to the ',
+  termsLink: 'rental terms',
+
+  barSub: (days: number) => `${days} ${days === 1 ? 'day' : 'days'} · pay at pick-up`,
+  barSubItems: (n: number) => `${n} ${n === 1 ? 'item' : 'items'} · pay at pick-up`,
+  cta: {
+    confirm: 'Confirm booking',
+    confirming: 'Confirming…',
+    selectDates: 'Select dates',
+    selectPickup: 'Select pick-up time',
+    selectReturn: 'Select return time',
+    acceptTerms: 'Accept the terms',
+  },
+
+  businessDoc: 'Please upload your business registration document before booking.',
+  businessDocLink: 'Go to settings',
+  signIn: 'Please sign in to confirm your booking.',
+  phoneRequired: 'A phone number is required to book. Go to Account → Personal info to add one.',
+  genericError: 'Could not confirm your booking. Please try again.',
+  notFound: "This item isn't available anymore.",
+  backToExplore: 'Back to Explore',
+
+  // Confirmation
+  booked: "It's booked!",
+  waiting: (what: string) => `${what} waiting patiently and pretending not to be excited.`,
+  yourItem: (name: string) => `Your ${name} is`,
+  yourItems: 'Your items are',
+  order: (id: string) => `Order ${id}`,
+  tapQr: 'Tap the QR to enlarge it at the shop',
+  returnOn: (label: string) => `Return ${label}`,
+  addToCalendar: 'Add to calendar',
+  directions: 'Directions',
+  whatToBring: 'What to bring',
+  yourId: 'Your ID',
+  idChecked: 'checked at first pick-up',
+  rental: 'Rental',
+  questions: 'Questions? ',
+  whatsapp: 'Message us on WhatsApp',
+  viewRentals: 'View my rentals',
+  backHome: 'Back to home',
+  loadError: 'Could not load booking details.',
+  notifTitle: 'Reservation request sent',
+  notifBody: (name: string) => `Your booking for ${name} is pending confirmation.`,
+} as const;

@@ -2,6 +2,7 @@ import { renderEmail, fmtLak, fmtCurrency, type Block, type Inner, type Button }
 import type { EmailShop, Rates, Recipient } from './context';
 import { appLink, reviewLink } from './config';
 import { googleCalendarUrl, icsAttachment, type CalendarEvent } from './calendar';
+import { bookingCalendarEvents } from '../shared/calendar';
 import {
   deriveReceiptData, deriveSettlementOutcome, splitHtVat,
   type ReceiptInput, type DepositCurrency,
@@ -177,21 +178,7 @@ const cancellationLine = (): Block => ({
 });
 
 function calendarEvents(items: ResData[], orderId: string): CalendarEvent[] {
-  const seen = new Set<string>();
-  const events: CalendarEvent[] = [];
-  for (const r of sortByPickup(items)) {
-    const key = `${r.pickupAtMs}|${r.returnAtMs}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const names = items.filter(i => i.pickupAtMs === r.pickupAtMs && i.returnAtMs === r.returnAtMs).map(i => i.productName).join(', ');
-    events.push(
-      { uid: `${orderId}-${r.pickupAtMs}-pickup`, title: 'LANCHAI pick-up', startMs: r.pickupAtMs, durationMin: 30,
-        description: `Pick up: ${names}. Order ${orderId}. Bring your ID and booking QR code.` },
-      { uid: `${orderId}-${r.returnAtMs}-return`, title: 'LANCHAI return', startMs: r.returnAtMs, durationMin: 30,
-        description: `Return: ${names}. Order ${orderId}.` },
-    );
-  }
-  return events;
+  return bookingCalendarEvents(items.map(r => ({ id: r.id, productName: r.productName, pickupAtMs: r.pickupAtMs, returnAtMs: r.returnAtMs })), orderId);
 }
 
 function build(subject: string, preheader: string, title: string, blocks: Block[], shop: EmailShop,
