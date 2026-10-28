@@ -1011,6 +1011,25 @@ a snapshot indefinitely).
   read once through `useMyLoyalty().profile` (type, tier, BtoB fields). Per-product
   `cardBg` is gone everywhere (optional legacy field only).
 
+- **Booking flow (validated mockups, 2026-10-28).** Copy in `constants/bookingCopy.ts`,
+  blocks in `components/booking/` (`BookingBlocks`: product card, When? card + "Keep it n
+  days and save x%" hint (next cheaper tier within 2 extra days), quantity row, Your total
+  card, deposit explainer, cancellation line, note, terms, business-document card, bottom
+  bar; `BookingSheets`: dates + slot sheets). "Your booking" (`app/booking/new.tsx`) is
+  ONE screen — `booking/summary.tsx` only redirects old links. The bag checkout uses the
+  same blocks and the same "Confirm booking". Confirm order (both): business document →
+  ID step → phone → `createBooking` (server checks unchanged). The deposit shown =
+  `Math.round(toLak(deposit) × depositPercentFor / 100)` per line, NOT × quantity — the
+  same formula as the server's `priceLine`. Deposit explainer wording is aligned with
+  Terms §7/§9 and the settlement code ("may be charged", lost / beyond repair = full
+  replacement value, difference due, team can reduce or waive) — keep it that way.
+  Confirmation (shared): rental = frozen `total` (AFTER coupon), order `displayOrderId`,
+  Add to calendar = `lib/bookingCalendar.ts` on `functions/src/shared/calendar.ts` (the
+  ONE source of the booking calendar events, also used by the email; .ics via the share
+  sheet, Google link fallback), What to bring (ID line only while `firstRentalIdCheck`).
+  "Free cancellation up to 48h" is gone; the 48h tier texts left in the cancel screens
+  only show when a reservation carries an advance (never today).
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the
