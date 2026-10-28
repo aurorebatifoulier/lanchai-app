@@ -1,410 +1,191 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
-import { getReservationsByOrderId, RentalDoc } from '@/lib/firestore';
-import { QRThumb } from '@/components/QRThumb';
-import { QRLightbox } from '@/components/QRLightbox';
-import { useVatPercent, DEFAULT_VAT_PERCENT } from '@/lib/exchangeRate';
-import { splitHtVat } from '@/utils/currency';
-import { PICKUP_DELAY_MS } from '@/utils/availability';
-import { BillingSummary } from '@/components/BillingSummary';
-import WhatsAppButton from '@/components/WhatsAppButton';
+import { BOOKING_COPY } from '@/constants/bookingCopy';
+import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import DrawnCheck from '@/components/DrawnCheck';
+import { QRThumb } from '@/components/QRThumb';
+import { QRLightbox } from '@/components/QRLightbox';
+import { getReservationsByOrderId, type RentalDoc } from '@/lib/firestore';
+import { useShopInfo, buildMapsUrl, buildWhatsappUrl } from '@/lib/shop';
+import { addBookingToCalendar } from '@/lib/bookingCalendar';
+import { displayOrderId } from '@/utils/rentalDocs';
 
-// ── QR code string formats (documented here for the admin scanner) ─────────────
-// Order-level QR (shown when there are 2+ items in an order):
-//   "LANCHAI-ORDER:{orderId}"
-// Per-item QR (one per reservation, always shown):
-//   "LANCHAI-RES:{reservationId}"
-// The scanner resolves orderId via `reservations` where `orderId == …`
-// and resolves reservationId via direct doc read `reservations/{reservationId}`.
+// Booking confirmation (validated mockup) — shared by the single booking and the bag
+// checkout. Check + "It's booked!" + order number; carbon card with the QR (order QR for
+// several items, then one compact card per item); Add to calendar (same events as the
+// email) + Directions; What to bring (ID only while the first ID check is pending,
+// rental AFTER coupon, deposit, payment methods from config/shop); WhatsApp line.
+//
+// QR formats (admin scanner): "LANCHAI-ORDER:{orderId}" (orders of 2+ items) and
+// "LANCHAI-RES:{reservationId}" (one per reservation).
 
-const QR_ORDER = 150; // hero order QR at top (grouped)
-const QR_ITEM  = 72;  // per-item QRs on item cards + single-item hero
-
-interface Lightbox { value: string; label: string }
+const n = (v: number) => Math.round(v).toLocaleString('en-US');
 
 export default function BookingConfirmationScreen() {
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
+  const shop = useShopInfo();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const vatPercent = useVatPercent();
-
   const [reservations, setReservations] = useState<RentalDoc[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(false);
-  const [lightbox,     setLightbox]     = useState<Lightbox | null>(null);
-
-  const closeLightbox = () => setLightbox(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [lightbox, setLightbox] = useState<{ value: string; label: string } | null>(null);
 
   useEffect(() => {
     if (!orderId) { setLoading(false); setError(true); return; }
     getReservationsByOrderId(orderId)
-      .then(res => {
-        if (res.length === 0) setError(true);
-        else setReservations(res);
-      })
+      .then(res => { if (res.length === 0) setError(true); else setReservations(res); })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [orderId]);
 
-  const totalRental  = reservations.reduce((s, r) => s + (r.subtotal ?? 0), 0);
-  const totalDeposit = reservations.reduce((s, r) => s + (r.deposit  ?? 0), 0);
-  const isSingle     = reservations.length === 1;
-  const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
-  const { ht: vatHt, vat: vatAmount } = splitHtVat(totalRental, vatPct);
-
+  const c = BOOKING_COPY;
   if (loading) {
-    return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
-        <StatusBar style="dark" />
-        <View style={s.centered}><ActivityIndicator color={COLORS.amber} /></View>
-      </View>
-    );
+    return <View style={[s.root, screen.root, s.center]}><StatusBar style="dark" /><ActivityIndicator color={SHADES.amber} /></View>;
   }
-
   if (error || !orderId) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, screen.root, s.center]}>
         <StatusBar style="dark" />
-        <View style={s.centered}>
-          <Text style={s.errorText}>Could not load booking details.</Text>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)/reservations')}>
-            <Text style={s.errorLink}>View my rentals</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={UI.body}>{c.loadError}</Text>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)/reservations')} style={{ marginTop: 12 }}>
+          <Text style={UI.link}>{c.viewRentals}</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
-  return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+  const single = reservations.length === 1;
+  const first = reservations[0];
+  // FIX: the amount AFTER coupon (frozen `total`), not the pre-coupon subtotal.
+  const rental = reservations.reduce((sum, r) => sum + (r.total ?? r.subtotal ?? 0), 0);
+  const deposit = reservations.reduce((sum, r) => sum + (r.deposit ?? 0), 0);
+  const idPending = reservations.some(r => r.firstRentalIdCheck === true);
+  const orderLabel = displayOrderId(first) ?? orderId;
+  const qrValue = single ? `LANCHAI-RES:${first.id}` : `LANCHAI-ORDER:${orderId}`;
+  const whatsapp = shop.whatsappNumber
+    ? buildWhatsappUrl(shop.whatsappNumber, `Hi LANCHAI, I have a question about my booking (order ${orderLabel}).`)
+    : null;
 
-      <ScrollView
-        style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
-      >
-        {/* ── Hero QR (replaces check icon at top) ── */}
-        {isSingle ? (
-          // Single: neutral QR + product info; no separate item row below
-          <View style={s.heroSection}>
-            <QRThumb
-              value={`LANCHAI-RES:${reservations[0].id}`}
-              onPress={() => setLightbox({
-                value: `LANCHAI-RES:${reservations[0].id}`,
-                label: reservations[0].productName,
-              })}
-            />
-            <Text style={s.heroProductName}>{reservations[0].productName}</Text>
-            <View style={s.heroPeriodRow}>
-              <Text style={s.heroPeriodLabel}>Pick-up</Text>
-              <Text style={s.heroPickupText}>{reservations[0].pickupLabel}</Text>
-            </View>
-            <Text style={s.pickupDelayNote}>
-              Ready within {PICKUP_DELAY_MS / 3_600_000}h of this confirmation
-            </Text>
-            <View style={s.heroPeriodRow}>
-              <Text style={s.heroPeriodLabel}>Return</Text>
-              <Text style={s.heroPickupText}>{reservations[0].returnLabel}</Text>
-            </View>
+  return (
+    <View style={[s.root, screen.root]}>
+      <StatusBar style="dark" />
+      <ScrollView contentContainerStyle={[UI.screenContent, { paddingTop: 24, paddingBottom: screen.contentBottom }]} showsVerticalScrollIndicator={false}>
+        {/* 1 · Check, headline, order number */}
+        <View style={s.hero}>
+          <DrawnCheck size={64} />
+          <Text style={s.title}>{c.booked}</Text>
+          <Text style={s.sub}>{c.waiting(single ? c.yourItem(first.productName) : c.yourItems)}</Text>
+          {!!orderLabel && <Text style={s.order}>{c.order(orderLabel)}</Text>}
+        </View>
+
+        {/* 2 · Carbon card: QR + pick-up / return */}
+        <View style={s.carbon}>
+          <QRThumb value={qrValue} size={82} onPress={() => setLightbox({ value: qrValue, label: single ? first.productName : c.order(orderLabel) })} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.pickLabel}>{c.pickup}</Text>
+            <Text style={s.pickWhen}>{first.pickupLabel}</Text>
+            <Text style={s.returnLine}>{c.returnOn(first.returnLabel)}</Text>
+            <Text style={s.tapHint}>{c.tapQr}</Text>
           </View>
-        ) : (
-          // Grouped: amber-framed order QR (black QR on white, amber outer frame)
-          <View style={s.heroSection}>
-            <QRThumb
-              value={`LANCHAI-ORDER:${orderId}`}
-              size={QR_ORDER}
-              variant="order"
-              onPress={() => setLightbox({ value: `LANCHAI-ORDER:${orderId}`, label: 'Order QR' })}
-            />
+        </View>
+        {!single && (
+          <View style={{ gap: 8, marginTop: 10 }}>
+            {reservations.map(r => (
+              <View key={r.id} style={[UI.card, s.item]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={UI.title} numberOfLines={1}>{r.productName}</Text>
+                  <Text style={UI.subtitle} numberOfLines={1}>{`${r.pickupLabel} → ${r.returnLabel}`}</Text>
+                </View>
+                <QRThumb value={`LANCHAI-RES:${r.id}`} size={44} onPress={() => setLightbox({ value: `LANCHAI-RES:${r.id}`, label: r.productName })} />
+              </View>
+            ))}
           </View>
         )}
 
-        {/* ── Headline (amber check drawing itself) ── */}
-        <View style={s.checkWrap}><DrawnCheck /></View>
-        <Text style={s.title}>Booking confirmation</Text>
-        <Text style={s.subtitle}>
-          All set! Your items are waiting patiently and pretending not to be excited to see you.
-        </Text>
-
-        {/* ── Status chip ── */}
-        <View style={s.statusChip}>
-          <View style={s.statusDot} />
-          <Text style={s.statusText}>Pending payment at pick-up</Text>
+        {/* 3 · Add to calendar + Directions */}
+        <View style={s.actions}>
+          <PressScale style={[UI.card, s.action]} onPress={() => addBookingToCalendar(orderLabel, reservations, shop)}>
+            <Feather name="calendar" size={16} color={SHADES.amberDeep} />
+            <Text style={s.actionText}>{c.addToCalendar}</Text>
+          </PressScale>
+          <PressScale style={[UI.card, s.action]} onPress={() => Linking.openURL(buildMapsUrl(shop))}>
+            <Feather name="map-pin" size={16} color={SHADES.amberDeep} />
+            <Text style={s.actionText}>{c.directions}</Text>
+          </PressScale>
         </View>
 
-        {/* ── Per-item rows (grouped only — horizontal: text left, QR right) ── */}
-        {!isSingle && reservations.map(res => (
-          <View key={res.id} style={s.itemCard}>
-            <View style={s.itemInfo}>
-              <Text style={s.itemName} numberOfLines={2}>{res.productName}</Text>
-              <View style={s.itemDateRow}>
-                <Text style={s.itemDateLabel}>Pick-up</Text>
-                <Text style={s.itemPickupText}>{res.pickupLabel}</Text>
-              </View>
-              <Text style={s.pickupDelayNote}>
-                Ready within {PICKUP_DELAY_MS / 3_600_000}h of this confirmation
-              </Text>
-              <View style={s.itemDateRow}>
-                <Text style={s.itemDateLabel}>Return</Text>
-                <Text style={s.itemPickupText}>{res.returnLabel}</Text>
-              </View>
+        {/* 4 · What to bring */}
+        <Text style={[UI.sectionTitle]}>{c.whatToBring}</Text>
+        <View style={[UI.card, { paddingHorizontal: 16 }]}>
+          {idPending && (
+            <View style={s.bring}>
+              <Text style={s.bringLabel}>{c.yourId}</Text>
+              <Text style={s.bringMuted}>{c.idChecked}</Text>
             </View>
-            <QRThumb
-              value={`LANCHAI-RES:${res.id}`}
-              onPress={() =>
-                setLightbox({ value: `LANCHAI-RES:${res.id}`, label: res.productName })
-              }
-            />
+          )}
+          <View style={[s.bring, idPending && s.sep]}>
+            <Text style={s.bringLabel}>{c.rental}</Text>
+            <Text style={s.bringValue}>{`${n(rental)} LAK`}</Text>
           </View>
-        ))}
-
-        {/* ── Totals reminder ── */}
-        <View style={s.totalsCard}>
-          <BillingSummary
-            subtotalHt={vatHt}
-            vatAmount={vatAmount}
-            vatPct={vatPercent}
-            total={totalRental}
-            totalLabel="Total to pay at pick-up"
-            deposit={totalDeposit}
-            depositLabel="Deposit (refundable)"
-          />
+          <View style={[s.bring, s.sep]}>
+            <Text style={s.bringLabel}>{c.deposit}</Text>
+            <Text style={s.bringValue}>{`${n(deposit)} LAK`}</Text>
+          </View>
         </View>
+        {!!shop.paymentMethods && <Text style={[UI.small, { marginTop: 8 }]}>{`${shop.paymentMethods}.`}</Text>}
 
-        {/* ── Actions ── */}
-        <WhatsAppButton
-          variant="row"
-          title="Questions about your booking?"
-          message={isSingle
-            ? `Hi LANCHAI, I have a question about my booking (reservation ID: ${reservations[0].id}).`
-            : `Hi LANCHAI, I have a question about my booking (order ID: ${orderId}; reservation IDs: ${reservations.map(r => r.id).join(', ')}).`}
-        />
+        {/* 5 · WhatsApp line */}
+        {whatsapp && (
+          <Text style={s.questions}>
+            {c.questions}
+            <Text style={s.waLink} onPress={() => Linking.openURL(whatsapp)}>{c.whatsapp}</Text>
+          </Text>
+        )}
 
-        <PressScale
-          style={s.primaryBtn}
-          onPress={() => router.replace('/(tabs)/reservations')}
-          activeOpacity={0.85}
-        >
-          <Text style={s.primaryBtnText}>View my rentals</Text>
+        {/* 7 · Actions */}
+        <PressScale style={[UI.btnPrimary, { marginTop: 20 }]} onPress={() => router.replace('/(tabs)/reservations')}>
+          <Text style={UI.btnPrimaryText}>{c.viewRentals}</Text>
         </PressScale>
-
-        <PressScale
-          style={s.secondaryBtn}
-          onPress={() => router.replace('/(tabs)')}
-          activeOpacity={0.75}
-        >
-          <Text style={s.secondaryBtnText}>Back to home</Text>
-        </PressScale>
+        <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={s.homeLink} hitSlop={8}>
+          <Text style={s.homeText}>{c.backHome}</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* ── Lightbox overlay (absolutely positioned — no Modal, avoids Android SDK 54 issues) ── */}
-      {lightbox && (
-        <QRLightbox
-          value={lightbox.value}
-          label={lightbox.label}
-          onClose={closeLightbox}
-        />
-      )}
+      {lightbox && <QRLightbox value={lightbox.value} label={lightbox.label} onClose={() => setLightbox(null)} />}
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 14,
-    color: SHADES.carbonMuted,
-    textAlign: 'center',
-  },
-  errorLink: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    textDecorationLine: 'underline',
-  },
-
-  // Scroll content
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 40,
-    alignItems: 'center',
-    gap: 16,
-  },
-
-  // ── Hero section (top, replaces check icon) ──────────────────────────────
-  heroSection: {
-    alignItems: 'center',
-    gap: 8,
-  },
-
-  // Single: neutral QR + product info
-  heroProductName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  heroPeriodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroPeriodLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: SHADES.carbonMuted,
-    width: 52,
-    flexShrink: 0,
-  },
-  heroPickupText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-  pickupDelayNote: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-
-  // ── Headline ─────────────────────────────────────────────────────────────
-  checkWrap: { alignItems: 'center', marginBottom: 12 },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: SHADES.carbonMuted,
-    lineHeight: 22,
-    textAlign: 'center',
-    maxWidth: 300,
-  },
-
-  // ── Status chip ───────────────────────────────────────────────────────────
-  statusChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: SHADES.amberLight,
-    borderRadius: 9,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: SHADES.amber },
-  statusText: { fontSize: 13, fontWeight: '700', color: SHADES.amberDeep },
-
-  // ── Per-item cards (grouped only, horizontal layout) ─────────────────────
-  itemCard: {
-    alignSelf: 'stretch',
-    backgroundColor: SHADES.white,
-    borderRadius: 18,
-    borderWidth: 0.5,
-    borderColor: SHADES.border,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 16,
-  },
-  itemInfo: {
-    flex: 1,
-    gap: 5,
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  itemDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  itemDateLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: SHADES.carbonMuted,
-    width: 52,
-    flexShrink: 0,
-  },
-  itemPickupText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-
-  // ── Totals reminder ───────────────────────────────────────────────────────
-  totalsCard: {
-    alignSelf: 'stretch',
-    backgroundColor: SHADES.white,
-    borderRadius: 18,
-    borderWidth: 0.5,
-    borderColor: SHADES.border,
-    padding: 16,
-  },
-  // ── Buttons ───────────────────────────────────────────────────────────────
-  primaryBtn: {
-    alignSelf: 'stretch',
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  secondaryBtn: {
-    alignSelf: 'stretch',
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: SHADES.carbon,
-    backgroundColor: SHADES.white,
-  },
-  secondaryBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: SHADES.carbonMuted,
-  },
-
+  root: { flex: 1, backgroundColor: COLORS.porcelain },
+  center: { alignItems: 'center', justifyContent: 'center', padding: 24 },
+  hero: { alignItems: 'center', gap: 8, marginBottom: 20 },
+  title: { fontSize: 26, fontWeight: '800', color: SHADES.carbon, marginTop: 8 },
+  sub: { fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 21, paddingHorizontal: 12 },
+  order: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbonMuted },
+  carbon: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: SHADES.carbon, borderRadius: 18, padding: 16 },
+  pickLabel: { fontSize: 13, fontWeight: '700', color: SHADES.amber },
+  pickWhen: { fontSize: 18, fontWeight: '800', color: SHADES.white, marginTop: 2 },
+  returnLine: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 3 },
+  tapHint: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 6 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  action: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50 },
+  actionText: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
+  bring: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15 },
+  sep: { borderTopWidth: 0.5, borderTopColor: SHADES.border },
+  bringLabel: { fontSize: 15, fontWeight: '500', color: SHADES.carbon },
+  bringValue: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  bringMuted: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted },
+  questions: { fontSize: 14.5, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', marginTop: 18 },
+  waLink: { color: SHADES.amberText, fontWeight: '700' },
+  homeLink: { alignSelf: 'center', marginTop: 14, paddingVertical: 6 },
+  homeText: { fontSize: 15, fontWeight: '600', color: SHADES.carbonMuted },
 });
