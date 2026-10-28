@@ -1,94 +1,102 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  ActivityIndicator,
-  Modal,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
+import { BOOKING_COPY } from '@/constants/bookingCopy';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
-import { useBookingHold } from '@/lib/bookingHold';
-import DateRangeCalendar from '@/components/DateRangeCalendar';
-import { getRenterProduct } from '@/lib/firestore';
-import { Product } from '@/lib/mockData';
-import { getAvailableStock, effectiveStock } from '@/utils/availability';
-import { getEffectiveRate } from '@/utils/pricing';
-import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
-import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
-import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
-import { toLak, formatLak } from '@/utils/currency';
-import { PriceLak } from '@/components/PriceLak';
-import { useAuth } from '@/contexts/AuthContext';
-import { getUserProfile, type UserProfile } from '@/lib/firestore';
-import { useLoyaltyConfig, depositPercentFor, useLoyaltyTier } from '@/lib/loyalty';
-import { getAvailableTimeSlots } from '@/utils/timeSlots';
-import { getProductAccessState } from '@/utils/productAccess';
 import PressScale from '@/components/PressScale';
+import { UI, useScreenInsets } from '@/components/account/ui';
+import { IdRequirementStep } from '@/components/IdRequirementStep';
+import {
+  BookingProductCard, WhenCard, QuantityRow, TotalCard, DepositExplainer, CancellationLine, NoteField,
+  TermsCheck, BusinessDocCard, BookingBottomBar, type CouponOption,
+} from '@/components/booking/BookingBlocks';
+import { DatesSheet, SlotSheet } from '@/components/booking/BookingSheets';
+import { useBookingHold } from '@/lib/bookingHold';
+import { useMyIdentity } from '@/lib/identity';
+import { auth } from '@/lib/auth';
+import { sendNotif } from '@/lib/notifications';
+import {
+  getRenterProduct, getUserProfile, createBooking, BookingError, type LoyaltyCoupon, type LoyaltyTier, type UserProfile,
+} from '@/lib/firestore';
+import type { Product } from '@/lib/mockData';
+import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
+import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
+import { useLoyaltyConfig, depositPercentFor, isLoyaltyExcluded, TIER_LABELS } from '@/lib/loyalty';
+import { useMyLoyalty } from '@/lib/loyaltyUi';
+import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
+import { getAvailableStock, effectiveStock } from '@/utils/availability';
+import { getEffectiveRate, getMinPrice } from '@/utils/pricing';
+import { getAvailableTimeSlots } from '@/utils/timeSlots';
+import { toLak, splitHtVat } from '@/utils/currency';
+import { getProductAccessState } from '@/utils/productAccess';
+import { needsBtobDocument } from '@/utils/btob';
+import { couponPercentFor, orderDiscount } from '@/functions/src/shared/pricing';
 
-const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
-];
-function fmtDate(d: Date) {
-  const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  return `${dow[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
-}
+// "Your booking" (validated mockup) — ONE screen: dates & times, quantity, total (coupon,
+// VAT only when on, to pay at pick-up, the renter's real deposit, points), deposit
+// explainer, cancellation, note, terms, Confirm. Confirm runs, in order: business document
+// → ID step → phone → createBooking (the server re-checks everything). booking/summary
+// now redirects here. Copy in constants/bookingCopy.ts.
 
-function buildDateTime(date: Date, timeStr: string): Date {
-  const dt = new Date(date);
-  const [h, m] = timeStr.split(':').map(Number);
-  dt.setHours(h, m, 0, 0);
-  return dt;
-}
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtDay = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
+const atTime = (date: Date, hhmm: string) => {
+  const d = new Date(date);
+  const [h, m] = hhmm.split(':').map(Number);
+  d.setHours(h, m, 0, 0);
+  return d;
+};
+const pad = (n: number) => String(n).padStart(2, '0');
+const hhmmOf = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-// ── Screen ────────────────────────────────────────────────────────────────────
 export default function BookingNewScreen() {
-  // pickupAt / returnAt (ms, optional): pre-filled dates, e.g. Home "Free this weekend".
+  // pickupAt / returnAt (ms, optional): pre-filled dates (Home "Free this weekend").
   const { productId, pickupAt: prefillPickup, returnAt: prefillReturn } =
     useLocalSearchParams<{ productId: string; pickupAt?: string; returnAt?: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-
+  const screen = useScreenInsets();
   const shop = useShopInfo();
-  const bookingHold = useBookingHold();
   const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
   const exchangeRate = useExchangeRate();
   const vatPercent = useVatPercent();
-  const { user } = useAuth();
-  const userTier = useLoyaltyTier();
   const loyaltyConfig = useLoyaltyConfig();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const bookingHold = useBookingHold();
+  const { identity } = useMyIdentity();
+  // The live users doc (useMyLoyalty) — customer type, tier, coupons, BtoB fields.
+  const loyalty = useMyLoyalty();
+  const profile = loyalty.profile as (Partial<UserProfile> & { loyaltyTier?: LoyaltyTier; coupons?: LoyaltyCoupon[] }) | null;
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const { pickupTime, returnTime, selectPickupTime, selectReturnTime, resetTimes } = useLinkedReturnTime();
+  const [quantity, setQuantity] = useState(1);
+  const [availableStock, setAvailableStock] = useState(1);
+  const [notes, setNotes] = useState('');
+  const [couponId, setCouponId] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [sheet, setSheet] = useState<'dates' | 'pickup' | 'return' | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [docRequired, setDocRequired] = useState(false);
+  const [idStepOpen, setIdStepOpen] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    getUserProfile(user.uid).then(setProfile).catch(() => {});
-  }, [user]);
+    if (!productId) { setLoading(false); return; }
+    getRenterProduct(productId)
+      .then(p => { setProduct(p); if (p) setAvailableStock(effectiveStock(p)); })
+      .catch(() => setProduct(null))
+      .finally(() => setLoading(false));
+  }, [productId]);
 
-  const [product, setProduct]               = useState<Product | null>(null);
-  const [loading, setLoading]               = useState(true);
-  const [startDate, setStartDate]           = useState<Date | null>(null);
-  const [endDate, setEndDate]               = useState<Date | null>(null);
-  const { pickupTime, returnTime, selectPickupTime, selectReturnTime, resetTimes } = useLinkedReturnTime();
-  const [quantity, setQuantity]             = useState(1);
-  const [notes, setNotes]                   = useState('');
-  const [availableStock, setAvailableStock] = useState(1);
-
-  const [showDateModal,        setShowDateModal]        = useState(false);
-  const [showPickupTimeModal,  setShowPickupTimeModal]  = useState(false);
-  const [showReturnTimeModal,  setShowReturnTimeModal]  = useState(false);
-
-  // Pre-fill once from the params when still valid (slot open, return after pick-up);
-  // otherwise ignored and the normal flow applies. The renter can change everything.
+  // Pre-fill once from the params when still valid; otherwise the normal flow applies.
   const prefilled = useRef(false);
   useEffect(() => {
     if (prefilled.current || !prefillPickup || !prefillReturn) return;
@@ -96,771 +104,240 @@ export default function BookingNewScreen() {
     const p = new Date(Number(prefillPickup));
     const r = new Date(Number(prefillReturn));
     if (!Number.isFinite(p.getTime()) || !Number.isFinite(r.getTime()) || r <= p) return;
-    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     const pDay = new Date(p.getFullYear(), p.getMonth(), p.getDate());
     const rDay = new Date(r.getFullYear(), r.getMonth(), r.getDate());
-    if (!getAvailableTimeSlots(pDay, timeSlots).includes(hhmm(p)) || !timeSlots.includes(hhmm(r))) return;
+    if (!getAvailableTimeSlots(pDay, timeSlots).includes(hhmmOf(p)) || !timeSlots.includes(hhmmOf(r))) return;
     setStartDate(pDay);
     setEndDate(rDay);
-    resetTimes(hhmm(p), hhmm(r));
+    resetTimes(hhmmOf(p), hhmmOf(r));
   }, [prefillPickup, prefillReturn, timeSlots, resetTimes]);
 
-  useEffect(() => {
-    if (!productId) return;
-    getRenterProduct(productId).then(p => {
-      setProduct(p);
-      if (p) setAvailableStock(effectiveStock(p));
-      setLoading(false);
-    });
-  }, [productId]);
-
+  // Units free on the chosen dates (same check as before; the server re-checks).
   useEffect(() => {
     if (!product || !startDate || !endDate) return;
-    getAvailableStock(product.id, startDate, endDate, effectiveStock(product)).then(s => {
-      setAvailableStock(s);
-      if (quantity > s) setQuantity(Math.max(1, s));
-    });
-  }, [startDate, endDate]);
+    getAvailableStock(product.id, startDate, endDate, effectiveStock(product)).then(n => {
+      setAvailableStock(n);
+      setQuantity(q => Math.max(1, Math.min(q, n)));
+    }).catch(() => {});
+  }, [product, startDate, endDate]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const pickupDateTime = startDate && pickupTime ? buildDateTime(startDate, pickupTime) : null;
-  const returnDateTime = endDate && returnTime ? buildDateTime(endDate, returnTime) : null;
+  const pickupAt = startDate && pickupTime ? atTime(startDate, pickupTime) : null;
+  const returnAt = endDate && returnTime ? atTime(endDate, returnTime) : null;
+  const returnValid = !!pickupAt && !!returnAt && returnAt > pickupAt;
+  const days = pickupAt && returnAt && returnValid ? Math.max(1, Math.ceil((returnAt.getTime() - pickupAt.getTime()) / 86_400_000)) : 0;
+  const rateUsd = product && days > 0 ? getEffectiveRate(product, days) : null;
+  const rateLak = rateUsd != null && exchangeRate != null ? toLak(rateUsd, exchangeRate) : null;
+  const subtotal = rateLak != null ? rateLak * days * quantity : 0;
 
-  const isReturnValid = !!(
-    pickupDateTime && returnDateTime &&
-    returnDateTime.getTime() > pickupDateTime.getTime()
-  );
+  // "Keep it {n} days and save {x}% per day." — next cheaper tier within 2 extra days.
+  const tierHint = useMemo(() => {
+    if (!product || days <= 0 || rateUsd == null) return null;
+    for (let extra = 1; extra <= 2; extra++) {
+      const next = getEffectiveRate(product, days + extra);
+      if (next != null && next < rateUsd) return BOOKING_COPY.tierHint(days + extra, Math.round((1 - next / rateUsd) * 100));
+    }
+    return null;
+  }, [product, days, rateUsd]);
 
-  // 24h-block billing: Fri 10:00 → Sat 10:00 = exactly 24h = 1 day
-  const billableDays =
-    pickupDateTime && returnDateTime && isReturnValid
-      ? Math.max(1, Math.ceil((returnDateTime.getTime() - pickupDateTime.getTime()) / (1000 * 60 * 60 * 24)))
-      : 0;
+  const excluded = isLoyaltyExcluded(profile ?? {});
+  const couponPct = (c: LoyaltyCoupon) => couponPercentFor(c.tier, loyaltyConfig);
+  const coupons = excluded ? [] : (profile?.coupons ?? []).filter(c => !c.used && couponPct(c) > 0);
+  const selected = coupons.find(c => c.id === couponId) ?? null;
+  const discount = selected ? orderDiscount([subtotal], couponPct(selected)).total : 0;
+  const toPay = subtotal - discount;
+  const vat = vatPercent != null ? (() => { const v = splitHtVat(toPay, vatPercent); return { ht: v.ht, amount: v.vat, pct: vatPercent }; })() : null;
+  const couponOptions: CouponOption[] = coupons.map(c => ({
+    id: c.id,
+    label: BOOKING_COPY.coupon(TIER_LABELS[c.tier], couponPct(c)),
+    savings: orderDiscount([subtotal], couponPct(c)).total,
+  }));
+  const depositPct = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
+  // Same formula as the server's priceLine (one deposit per line, not × quantity).
+  const depositLak = product && exchangeRate != null ? Math.round(toLak(product.deposit, exchangeRate) * depositPct / 100) : 0;
 
-  const dayRateUsd = product && billableDays > 0 ? getEffectiveRate(product, billableDays) : null;
-  const dayRateLak = dayRateUsd != null && exchangeRate != null ? toLak(dayRateUsd, exchangeRate) : null;
-  const subtotal   = dayRateLak != null && billableDays > 0 ? dayRateLak * billableDays * quantity : 0;
-  const discPct  =
-    dayRateUsd != null && product && product.pricePerDay > 0 && dayRateUsd < product.pricePerDay
-      ? Math.round((1 - dayRateUsd / product.pricePerDay) * 100)
-      : 0;
+  const c = BOOKING_COPY;
+  const ctaLabel = !startDate || !endDate ? c.cta.selectDates
+    : !pickupTime ? c.cta.selectPickup
+    : !returnTime ? c.cta.selectReturn
+    : !agreed ? c.cta.acceptTerms
+    : c.cta.confirm;
+  const ready = returnValid && rateLak != null && availableStock > 0 && quantity >= 1 && agreed && !bookingHold;
 
-  const ready =
-    !!startDate && !!endDate && !!pickupTime && !!returnTime &&
-    isReturnValid && quantity >= 1 && availableStock > 0 && dayRateLak !== null &&
-    !bookingHold;
-
-  // ── Handlers ─────────────────────────────────────────────────────────────
-  const openDateModal = () => setShowDateModal(true);
-
-  const handleChangeRange = (start: Date | null, end: Date | null) => {
-    setStartDate(start);
-    setEndDate(end);
-  };
-
-  // Selecting pick-up time defaults the return time to the same slot
-  const handlePickupTimeSelect = selectPickupTime;
-
-  const handleSubmit = () => {
-    if (!product || !ready || dayRateLak === null || exchangeRate == null || !startDate || !endDate || !pickupTime || !returnTime || !pickupDateTime || !returnDateTime) return;
-    const depositPercent = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
-    const depositLak = Math.round(toLak(product.deposit, exchangeRate) * depositPercent / 100);
-    router.push({
-      pathname: '/booking/summary',
-      params: {
-        productId: product.id,
-        productName: product.name,
-        productImage: product.images?.[0] ?? '',
-        pickupDateISO: pickupDateTime.toISOString(),
-        returnDateISO: returnDateTime.toISOString(),
-        pickupDateLabel: fmtDate(startDate),
-        pickupTimeLabel: pickupTime,
-        returnDateLabel: fmtDate(endDate),
-        returnTimeLabel: returnTime,
-        billableDays: String(billableDays),
-        quantity: String(quantity),
-        pricePerDay: String(dayRateLak),
-        subtotal: String(subtotal),
-        deposit: String(depositLak),
+  // ── Confirm: business document → ID step → phone → createBooking ─────────────
+  const confirm = async (opts: { idCheckAtCounter?: boolean; idJustAdded?: boolean } = {}) => {
+    if (!product || !pickupAt || !returnAt || !ready || confirming) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) { setError(c.signIn); return; }
+    if (needsBtobDocument(profile as UserProfile | null)) { setDocRequired(true); return; }
+    if (identity?.status !== 'on_file' && !opts.idJustAdded && !opts.idCheckAtCounter) { setIdStepOpen(true); return; }
+    setConfirming(true);
+    setError(null);
+    try {
+      const fresh = await getUserProfile(currentUser.uid);
+      if (!fresh?.phoneNumber && !fresh?.phone) { setError(c.phoneRequired); setConfirming(false); return; }
+      const { orderId, reservationIds } = await createBooking({
+        items: [{ productId: product.id, pickupAt, returnAt, quantity }],
+        couponId: selected?.id ?? null,
+        idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes,
-      },
-    });
+      });
+      sendNotif(currentUser.uid, {
+        type: 'rental', icon: 'clock', iconColor: '#F4B400',
+        title: c.notifTitle, body: c.notifBody(product.name), deepLink: `/rentals/${reservationIds[0]}`,
+      });
+      router.replace({ pathname: '/booking/confirmation', params: { orderId } });
+    } catch (err) {
+      setError(err instanceof BookingError ? err.message : c.genericError);
+      setConfirming(false);
+    }
   };
 
-  // ── Loading / not found ───────────────────────────────────────────────────
+  // ── States ──────────────────────────────────────────────────────────────────
+  const header = (
+    <View style={s.header}>
+      <BackButton onPress={() => router.back()} />
+      <Text style={s.headerTitle}>{c.title}</Text>
+    </View>
+  );
   if (loading) {
+    return <View style={[s.root, screen.root]}>{header}<ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} /></View>;
+  }
+  if (!product) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
-        <StatusBar style="dark" />
-        <ActivityIndicator color={COLORS.amber} style={{ flex: 1 }} />
+      <View style={[s.root, screen.root]}>
+        {header}
+        <View style={s.center}>
+          <Text style={UI.title}>{c.notFound}</Text>
+          <PressScale style={[UI.btnPrimary, { marginTop: 18, paddingHorizontal: 24 }]} onPress={() => router.replace('/(tabs)/explore')}>
+            <Text style={UI.btnPrimaryText}>{c.backToExplore}</Text>
+          </PressScale>
+        </View>
       </View>
     );
   }
-  if (!product) return null;
-
-  // Defense in depth — the product detail screen already disables the CTA for a
-  // tier-locked product, but this covers a direct/deep-linked entry to this screen.
-  const accessState = getProductAccessState(product, userTier ?? null);
-  if (accessState.locked) {
+  const access = getProductAccessState(product, profile?.loyaltyTier ?? null);
+  if (access.locked) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
-        <StatusBar style="dark" />
-        <View style={[s.header, { paddingTop: insets.top + 8 }]}>
-          <BackButton onPress={() => router.back()} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.headerTitle}>Your booking</Text>
-            <Text style={s.headerSub} numberOfLines={1}>{product.name}</Text>
-          </View>
-        </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 }}>
-          <Feather name="lock" size={32} color={SHADES.carbonMuted} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.carbon, textAlign: 'center' }}>
-            Booking restricted
-          </Text>
-          <Text style={{ fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center' }}>
-            {accessState.message}
-          </Text>
+      <View style={[s.root, screen.root]}>
+        {header}
+        <View style={s.center}>
+          <Feather name="lock" size={30} color={SHADES.carbonMuted} />
+          <Text style={[UI.title, { marginTop: 10 }]}>Booking restricted</Text>
+          <Text style={[UI.body, { textAlign: 'center', marginTop: 4 }]}>{access.message}</Text>
         </View>
       </View>
     );
   }
 
-  const ctaLabel = ready
-    ? 'Confirm booking'
-    : !startDate || !endDate
-    ? 'Select dates'
-    : !pickupTime
-    ? 'Select pick-up time'
-    : !returnTime
-    ? 'Select return time'
-    : 'Confirm booking';
+  const minUsd = getMinPrice(product);
+  const fromLabel = minUsd != null && exchangeRate != null ? c.fromPerDay(toLak(minUsd, exchangeRate).toLocaleString('en-US')) : undefined;
+  const datesLabel = startDate && endDate ? `${fmtDay(startDate)} → ${fmtDay(endDate)}` : startDate ? `${fmtDay(startDate)} → ${c.selectReturn}` : null;
+  const whenError = pickupAt && returnAt && !returnValid ? c.returnAfterPickup : returnValid && rateLak == null ? c.unpriced : null;
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={s.root}>
+    <KeyboardAvoidingView style={[s.root, { paddingTop: screen.top }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar style="dark" />
-
-      {/* ── Header ── */}
-      <View style={[s.header, { paddingTop: insets.top + 8 }]}>
-        <BackButton onPress={() => router.back()} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>Your booking</Text>
-          <Text style={s.headerSub} numberOfLines={1}>{product.name}</Text>
-        </View>
-      </View>
+      <IdRequirementStep
+        visible={idStepOpen}
+        rejected={identity?.status === 'rejected'}
+        onClose={() => setIdStepOpen(false)}
+        onUploaded={() => { setIdStepOpen(false); confirm({ idJustAdded: true }); }}
+        onAtCounter={() => { setIdStepOpen(false); confirm({ idCheckAtCounter: true }); }}
+      />
+      {header}
 
       <ScrollView
         style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.content}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: 110 + screen.bottom }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 16 }} />}
+        <BookingProductCard name={product.name} image={product.images?.[0]} sub={fromLabel} />
+        {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginTop: 16 }} />}
 
-        {/* ══ DATES & TIMES ═══════════════════════════════════════════════════ */}
-        <Text style={s.sectionLabel}>Dates & times</Text>
-
-        <View style={s.fieldGrid}>
-          {/* Single unified field — opens the range calendar for both pick-up & return */}
-          <TouchableOpacity
-            style={[s.fieldBtn, s.fieldBtnFull, (startDate || endDate) && s.fieldBtnFilled]}
-            onPress={openDateModal}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.fieldBtnEye, (startDate || endDate) && s.fieldBtnEyeFilled]}>Dates</Text>
-            <Text style={[s.fieldBtnVal, (startDate || endDate) && s.fieldBtnValFilled]}>
-              {startDate && endDate
-                ? `${fmtDate(startDate)} → ${fmtDate(endDate)}`
-                : startDate
-                ? `${fmtDate(startDate)} → Select return`
-                : 'Select dates'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.fieldBtn, pickupTime && s.fieldBtnFilled]}
-            onPress={() => setShowPickupTimeModal(true)}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.fieldBtnEye, pickupTime && s.fieldBtnEyeFilled]}>Pick-up time</Text>
-            <Text style={[s.fieldBtnVal, pickupTime && s.fieldBtnValFilled]}>
-              {pickupTime ?? 'Select'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[s.fieldBtn, returnTime && s.fieldBtnFilled]}
-            onPress={() => setShowReturnTimeModal(true)}
-            activeOpacity={0.75}
-          >
-            <Text style={[s.fieldBtnEye, returnTime && s.fieldBtnEyeFilled]}>Return time</Text>
-            <Text style={[s.fieldBtnVal, returnTime && s.fieldBtnValFilled]}>
-              {returnTime ?? 'Select'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Duration chip — live, shown when both datetimes are available */}
-        {pickupDateTime && returnDateTime && (
-          !isReturnValid ? (
-            <View style={s.returnError}>
-              <Feather name="alert-circle" size={13} color={COLORS.danger} />
-              <Text style={s.returnErrorText}>Return must be after pick-up</Text>
-            </View>
-          ) : dayRateLak === null ? (
-            <View style={s.returnError}>
-              <Feather name="alert-circle" size={13} color={COLORS.danger} />
-              <Text style={s.returnErrorText}>Pricing for this item hasn&apos;t been set yet. Booking unavailable.</Text>
-            </View>
-          ) : (
-            <View style={s.durationChip}>
-              <View style={s.durationChipRow}>
-                <Feather name="clock" size={13} color={SHADES.carbon} />
-                <Text style={s.durationChipMain}>
-                  {billableDays} day{billableDays !== 1 ? 's' : ''} · 24h
-                </Text>
-                {discPct > 0 && (
-                  <View style={s.discountPill}>
-                    <Text style={s.discountPillText}>−{discPct}%</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={s.durationChipSub}>Rate applied: {formatLak(dayRateUsd!, exchangeRate)} / day</Text>
-            </View>
-          )
-        )}
-
-        {/* ══ QUANTITY ═══════════════════════════════════════════════════════ */}
-        <Text style={[s.sectionLabel, { marginTop: 28 }]}>Quantity</Text>
-
-        <View style={s.stockBadge}>
-          <View style={[s.stockDot, { backgroundColor: availableStock > 0 ? COLORS.success : COLORS.danger }]} />
-          <Text style={[s.stockText, { color: availableStock > 0 ? COLORS.success : COLORS.danger }]}>
-            {availableStock === 0
-              ? 'Out of stock'
-              : effectiveStock(product) > 1
-              ? `${availableStock} of ${effectiveStock(product)} available`
-              : 'In stock'}
-          </Text>
-        </View>
-
-        <View style={s.qtyControl}>
-          <TouchableOpacity
-            style={[s.qtyBtn, quantity <= 1 && s.qtyBtnOff]}
-            onPress={() => quantity > 1 && setQuantity(q => q - 1)}
-          >
-            <Feather name="minus" size={20} color={quantity <= 1 ? COLORS.softGray : COLORS.carbon} />
-          </TouchableOpacity>
-          <View style={s.qtyDisplay}>
-            <Text style={s.qtyNum}>{quantity}</Text>
-            <Text style={s.qtyUnit}>unit{quantity !== 1 ? 's' : ''}</Text>
-          </View>
-          <TouchableOpacity
-            style={[s.qtyBtn, quantity >= availableStock && s.qtyBtnOff]}
-            onPress={() => quantity < availableStock && setQuantity(q => q + 1)}
-          >
-            <Feather name="plus" size={20} color={quantity >= availableStock ? COLORS.softGray : COLORS.carbon} />
-          </TouchableOpacity>
-        </View>
-
-        {/* ══ NOTES ══════════════════════════════════════════════════════════ */}
-        <Text style={[s.sectionLabel, { marginTop: 24 }]}>
-          Notes <Text style={s.sectionOptional}>(optional)</Text>
-        </Text>
-        <TextInput
-          style={s.notesInput}
-          placeholder="Special instructions or questions…"
-          placeholderTextColor={SHADES.carbonMuted}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          maxLength={500}
-          textAlignVertical="top"
+        <WhenCard
+          datesLabel={datesLabel}
+          pickup={pickupTime}
+          ret={returnTime}
+          onDates={() => setSheet('dates')}
+          onPickup={() => setSheet('pickup')}
+          onReturn={() => setSheet('return')}
+          hint={tierHint}
+          error={whenError}
         />
 
-        {/* Trust */}
-        <View style={s.trust}>
-          <Feather name="check-circle" size={13} color={SHADES.amber} />
-          <Text style={s.trustText}>Free cancellation up to 48h before pick-up.</Text>
-        </View>
+        <QuantityRow quantity={quantity} available={availableStock} onChange={q => setQuantity(Math.max(1, Math.min(q, availableStock)))} />
 
-        <View style={{ height: 100 + insets.bottom }} />
+        {days > 0 && rateLak != null && (
+          <TotalCard
+            lines={[{ label: c.dayLine(days, rateLak.toLocaleString('en-US'), quantity), value: subtotal }]}
+            coupons={couponOptions}
+            selectedCouponId={couponId}
+            onToggleCoupon={id => setCouponId(cur => (cur === id ? null : id))}
+            discount={discount}
+            vat={vat}
+            toPay={toPay}
+            deposit={depositLak}
+            pointsSubtotals={[subtotal]}
+          />
+        )}
+        <DepositExplainer />
+        <CancellationLine />
+        <NoteField value={notes} onChange={setNotes} />
+        {docRequired && <BusinessDocCard onGo={() => { setDocRequired(false); router.push('/profile/business-document'); }} />}
+        <TermsCheck agreed={agreed} onToggle={() => setAgreed(a => !a)} />
+        {!!error && <Text style={[UI.errorText, { marginTop: 12 }]}>{error}</Text>}
       </ScrollView>
 
-      {/* ── Dates modal (unified range calendar) ── */}
-      <Modal
-        visible={showDateModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDateModal(false)}
-        statusBarTranslucent
-      >
-        <TouchableOpacity
-          style={s.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowDateModal(false)}
-        >
-          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Select dates</Text>
-              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowDateModal(false)}>
-                <Text style={s.modalDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <DateRangeCalendar
-              productId={product.id}
-              totalStock={effectiveStock(product)}
-              startDate={startDate}
-              endDate={endDate}
-              onChangeRange={handleChangeRange}
-              timeSlots={timeSlots}
-            />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      <BookingBottomBar
+        total={days > 0 ? toPay : null}
+        sub={c.barSub(days)}
+        label={ctaLabel}
+        disabled={!ready}
+        busy={confirming}
+        onPress={() => confirm()}
+        bottom={Math.max(screen.bottom, 12)}
+      />
 
-      {/* ── Pick-up time modal ── */}
-      <Modal
-        visible={showPickupTimeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPickupTimeModal(false)}
-        statusBarTranslucent
-      >
-        <TouchableOpacity
-          style={s.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowPickupTimeModal(false)}
-        >
-          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Pick-up time</Text>
-              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowPickupTimeModal(false)}>
-                <Text style={s.modalDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={s.modalSubtitle}>{shop.name} · {shop.hours}</Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={s.timeModalScroll} contentContainerStyle={s.timeModalList}>
-              {getAvailableTimeSlots(startDate, timeSlots).map(slot => {
-                const active = pickupTime === slot;
-                return (
-                  <TouchableOpacity
-                    key={slot}
-                    style={[s.timeModalRow, active && s.timeModalRowActive]}
-                    onPress={() => { handlePickupTimeSelect(slot); setShowPickupTimeModal(false); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[s.timeModalRowText, active && s.timeModalRowTextActive]}>{slot}</Text>
-                    {active && <Feather name="check" size={16} color={COLORS.carbon} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ── Return time modal ── */}
-      <Modal
-        visible={showReturnTimeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowReturnTimeModal(false)}
-        statusBarTranslucent
-      >
-        <TouchableOpacity
-          style={s.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowReturnTimeModal(false)}
-        >
-          <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Return time</Text>
-              <TouchableOpacity style={s.modalDoneBtn} onPress={() => setShowReturnTimeModal(false)}>
-                <Text style={s.modalDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={s.modalSubtitle}>Same shop hours apply · {shop.hours}</Text>
-            <ScrollView showsVerticalScrollIndicator={false} style={s.timeModalScroll} contentContainerStyle={s.timeModalList}>
-              {getAvailableTimeSlots(endDate, timeSlots).map(slot => {
-                const active = returnTime === slot;
-                return (
-                  <TouchableOpacity
-                    key={slot}
-                    style={[s.timeModalRow, active && s.timeModalRowActive]}
-                    onPress={() => { selectReturnTime(slot); setShowReturnTimeModal(false); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[s.timeModalRowText, active && s.timeModalRowTextActive]}>{slot}</Text>
-                    {active && <Feather name="check" size={16} color={COLORS.carbon} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* ── Footer CTA ── */}
-      <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {subtotal > 0 && isReturnValid && (
-          <View style={s.footerLeft}>
-            <PriceLak lak={subtotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.footerPrice} />
-            <Text style={s.footerPriceSub}>
-              {billableDays} day{billableDays !== 1 ? 's' : ''} · {quantity} unit{quantity !== 1 ? 's' : ''}
-            </Text>
-          </View>
-        )}
-        <PressScale
-          style={[s.cta, !ready && s.ctaOff, subtotal === 0 && { flex: 1 }]}
-          onPress={handleSubmit}
-          disabled={!ready}
-          activeOpacity={0.85}
-        >
-          <Text style={[s.ctaText, !ready && s.ctaTextOff]}>{ctaLabel}</Text>
-        </PressScale>
-      </View>
-    </View>
+      <DatesSheet
+        visible={sheet === 'dates'}
+        onClose={() => setSheet(null)}
+        productId={product.id}
+        totalStock={effectiveStock(product)}
+        startDate={startDate}
+        endDate={endDate}
+        onChangeRange={(st, en) => { setStartDate(st); setEndDate(en); if (st && en) setSheet(null); }}
+        timeSlots={timeSlots}
+      />
+      <SlotSheet
+        visible={sheet === 'pickup'}
+        title={c.pickup}
+        sub={`${shop.name} · ${shop.hours}`}
+        slots={getAvailableTimeSlots(startDate, timeSlots)}
+        selected={pickupTime}
+        onSelect={selectPickupTime}
+        onClose={() => setSheet(null)}
+      />
+      <SlotSheet
+        visible={sheet === 'return'}
+        title={c.return}
+        sub={shop.hours}
+        slots={getAvailableTimeSlots(endDate, timeSlots)}
+        selected={returnTime}
+        onSelect={selectReturnTime}
+        onClose={() => setSheet(null)}
+      />
+    </KeyboardAvoidingView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-
-  // Header
+  root: { flex: 1, backgroundColor: COLORS.porcelain },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    gap: 14,
-    backgroundColor: COLORS.porcelain,
-    borderBottomWidth: 1,
-    borderBottomColor: SHADES.border,
+    flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
-  headerSub: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-    marginTop: 1,
-  },
-
-  // Scroll
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0,
-    color: SHADES.carbon,
-    marginBottom: 10,
-  },
-  sectionOptional: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: SHADES.carbonFaint,
-    textTransform: 'lowercase',
-    letterSpacing: 0,
-  },
-
-  // 2×2 field grid
-  fieldGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  fieldBtn: {
-    width: '48%',
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    padding: 14,
-    gap: 4,
-  },
-  fieldBtnFull: {
-    width: '100%',
-  },
-  fieldBtnFilled: {
-    backgroundColor: COLORS.amber,
-    borderColor: COLORS.amber,
-  },
-  fieldBtnEye: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: SHADES.carbonMuted,
-    letterSpacing: 0.2,
-  },
-  fieldBtnEyeFilled: {
-    color: 'rgba(30,30,30,0.55)',
-  },
-  fieldBtnVal: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: SHADES.carbonMuted,
-    letterSpacing: -0.1,
-  },
-  fieldBtnValFilled: {
-    color: COLORS.carbon,
-  },
-
-  // Modals (shared)
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(30,30,30,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
-  modalDoneBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    backgroundColor: COLORS.amber,
-    borderRadius: 10,
-  },
-  modalDoneText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-  modalSubtitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-    marginBottom: 14,
-    marginTop: -8,
-  },
-
-  // Time modal list
-  timeModalScroll: {
-    maxHeight: 320,
-  },
-  timeModalList: {
-    gap: 4,
-  },
-  timeModalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: COLORS.porcelain,
-  },
-  timeModalRowActive: {
-    backgroundColor: COLORS.amber,
-  },
-  timeModalRowText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: SHADES.carbonMuted,
-  },
-  timeModalRowTextActive: {
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
-
-  // Duration chip (green status)
-  durationChip: {
-    // Neutral info card (no green background).
-    backgroundColor: SHADES.white,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 0.5,
-    borderColor: SHADES.border,
-  },
-  durationChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  durationChipMain: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
-  durationChipSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 3 },
-  discountPill: {
-    backgroundColor: COLORS.amber,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  discountPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
-
-  // Return error
-  returnError: {
-    // One-line error (no red background).
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-  },
-  returnErrorText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.danger },
-
-  // Stock badge
-  stockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  stockDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  stockText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
-  // Quantity control
-  qtyControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    padding: 6,
-  },
-  qtyBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: SHADES.carbonLight,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyBtnOff: {
-    opacity: 0.35,
-  },
-  qtyDisplay: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 1,
-  },
-  qtyNum: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.5,
-  },
-  qtyUnit: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-
-  // Notes
-  notesInput: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    padding: 14,
-    fontSize: 14,
-    fontWeight: '400',
-    color: COLORS.carbon,
-    minHeight: 80,
-    lineHeight: 20,
-  },
-
-  // Trust
-  trust: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 16,
-  },
-  trustText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-
-  // Footer
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    backgroundColor: COLORS.porcelain,
-    borderTopWidth: 1,
-    borderTopColor: SHADES.border,
-  },
-  footerLeft: {
-    flexShrink: 0,
-  },
-  footerPrice: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
-  footerPriceSub: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-    marginTop: -2,
-  },
-  cta: {
-    flex: 1,
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaOff: {
-    backgroundColor: SHADES.carbonLight,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  ctaTextOff: {
-    color: SHADES.carbonMuted,
-  },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
 });
