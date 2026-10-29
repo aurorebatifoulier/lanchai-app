@@ -2,20 +2,27 @@
 // LANCHAI legal documents — rendered in-app by components/LegalScreen.tsx (Terms,
 // Privacy, Cancellation policy). Updated 23 Oct 2026 with the business decisions
 // validated by Aurore and her partner (no advance, free cancellation before pick-up,
-// no-show rule, progressive late fees, company not registered yet).
+// no-show rule, progressive late fees, company not registered yet), and 29 Oct 2026
+// (identity / residency documents + retention, loyalty & referrals, per-unit deposit,
+// charges on the units concerned, rental agreement signed at pick-up).
 //
 // ⚠️ NEEDS LAWYER REVIEW before public launch (see CLAUDE.md "Legal texts"): limitation
 // of liability, deposit retention on non-return, ID copy retention, data transfers
 // outside Laos (Singapore / Brevo in France), operating before registration, governing
-// law & competent court, damage charges, tax/VAT obligations once registered.
+// law & competent court, damage charges, tax/VAT obligations once registered, document
+// retention periods, loyalty programme & referrals (Terms §16), per-unit deposit,
+// Brevo link tracking, validity of an electronic signature in Lao PDR.
 //
 // Placeholders filled at render time from config/shop (LegalScreen.tsx), so they stay in
 // sync with Admin → Shop settings:
 //   {{SHOP_ADDRESS}}   → "<addressLine>, <city>, Lao PDR"
 //   {{WHATSAPP_LINE}}  → "**WhatsApp:** +856…" line, or removed when no number is set
+// and from config/legalPublic (mirror of the retention settings, code defaults):
+//   {{ID_RETENTION}}     → "6 months"
+//   {{PROOF_RETENTION}}  → "30 days"
 // The internal late-return grace period must NEVER appear here.
 
-export const LEGAL_EFFECTIVE_DATE = '23 October 2026';
+export const LEGAL_EFFECTIVE_DATE = '29 October 2026';
 
 const OPERATOR_BLOCK = [
   `**Effective date:** ${LEGAL_EFFECTIVE_DATE}`,
@@ -38,19 +45,19 @@ export const TERMS_MARKDOWN: string = [
   '',
   'These Terms of Service ("Terms") govern your use of the LANCHAI application and rental service ("LANCHAI", "we", "us"). By creating an account, reserving an item, or otherwise using the service, you agree to these Terms. If you do not agree, please do not use the service.',
   '',
-  'Renting from LANCHAI is also governed by the **rental agreement you sign in store at pick-up**, which sets out the specific item(s), deposit, and charges for each rental. If there is any conflict, the signed rental agreement prevails for that rental.',
+  'Renting from LANCHAI is also governed by the **rental agreement you sign at pick-up**, which sets out the specific item(s), deposit, and charges for each rental. If there is any conflict, the rental agreement you sign at pick-up prevails for that rental.',
   '',
   '## 2. Who can use LANCHAI',
   '',
   '- You must be at least **18 years old** to create an account and to rent.',
   '- You must provide accurate information and keep it up to date.',
-  '- You must present a **valid identity document** to rent. You agree that we may keep a copy of it for the duration of the rental, as part of the signed rental agreement.',
+  '- You must provide a **valid passport or ID card** to rent: add a photo in the app, or show it at the shop on your first pick-up, where our staff check it and take a photo. We keep it as described in the Privacy Policy (Section 6).',
   '',
   '## 3. Your account',
   '',
   '- You are responsible for keeping your login details confidential and for activity under your account.',
-  '- LANCHAI may assign your account a **customer type** (for example Tourist, Resident, or Business). This may affect the security deposit required. The customer type is set by LANCHAI and cannot be changed by the user.',
-  '- You can update your personal information in the app (Profile → Personal info) and delete your account at any time (Profile → Delete account), subject to Section 15.',
+  '- Your account has a **customer type** (Tourist, Resident, or Business), which may affect the security deposit required. It is set by LANCHAI. You can ask for resident status in the app (Account → ID & residency); it is granted after we check your documents and may have an end date.',
+  '- You can update your personal information in the app (Account → Personal info) and delete your account at any time (Account → Delete account), subject to Section 15.',
   '',
   '## 4. Reservations and payment',
   '',
@@ -61,7 +68,7 @@ export const TERMS_MARKDOWN: string = [
   '## 5. Rental duration',
   '',
   '- One rental day is **24 hours**, counted from your confirmed pick-up time to your return time — **not** by calendar dates. For example, picking up on Friday at 10:00 and returning on Saturday at 10:00 is one day (24h).',
-  '- The applicable rate and duration are shown before you confirm and are restated in the signed rental agreement.',
+  '- The applicable rate and duration are shown before you confirm and are restated in the rental agreement you sign at pick-up.',
   '',
   '## 6. Pick-up and return',
   '',
@@ -71,7 +78,7 @@ export const TERMS_MARKDOWN: string = [
   '## 7. Security deposit',
   '',
   '- A **refundable security deposit** is required for every rental.',
-  "- The deposit amount **depends on the item's value**, is shown before you confirm your booking, and is confirmed in the rental agreement at pick-up.",
+  "- The deposit **depends on the item's value and your customer type**, and applies **per unit**: renting 2 of the same item means 2 deposits. It is shown before you confirm your booking and confirmed in the rental agreement you sign at pick-up.",
   '- The deposit is **collected in store at pick-up**, separately from the rental fee.',
   '- When you return the item, it is inspected on the spot (about 10 minutes). Once inspection is complete, the deposit is **refunded immediately**, in the same visit. Where charges apply (see Section 9), they are deducted from the deposit before refund.',
   '',
@@ -85,8 +92,8 @@ export const TERMS_MARKDOWN: string = [
   '',
   '- The 24-hour rental period starts at your **confirmed pick-up time**. Returning late may add rental days: **up to 24 hours late adds 1 day, 24–48 hours adds 1.5 days, and 48–72 hours adds 2 days**. After **72 hours**, the rental is treated as a **non-return**: the security deposit may be kept and our contract procedure applies. New bookings are paused until any late return is settled.',
   '- You are responsible for the items while they are in your possession.',
-  "- If an item is returned **damaged**, a share of its replacement value is charged depending on the damage, explained to you at return. If an item is **lost, stolen, or damaged beyond repair**, you are responsible for its **full replacement value**.",
-  '- These amounts may be deducted from your security deposit; if they exceed the deposit, the difference remains payable. Our team can reduce or waive late fees and damage charges. The specific charges for each rental are set out in the signed rental agreement.',
+  "- If an item is returned **damaged**, a share of its replacement value is charged depending on the damage, explained to you at return. If an item is **lost, stolen, or damaged beyond repair**, you are responsible for its **full replacement value**. When you rent several units, these charges apply **only to the units concerned**.",
+  '- These amounts may be deducted from your security deposit (the whole deposit for that booking); if they exceed it, the difference remains payable. Our team can reduce or waive late fees and damage charges. The specific charges for each rental are set out in the rental agreement you sign at pick-up.',
   '',
   '## 10. Acceptable use',
   '',
@@ -115,17 +122,26 @@ export const TERMS_MARKDOWN: string = [
   '',
   '## 15. Account deletion and termination',
   '',
-  'You may delete your account at any time in the app. When you do, we delete your profile information and favorites; **rental records are kept as business records** (see the Privacy Policy). You cannot delete your account while you have an active or upcoming rental — you must first return the item(s) and settle any deposit, or contact us.',
+  'You may delete your account at any time in the app. When you do, we delete your profile information and favorites; **rental records are kept as business records** (see the Privacy Policy). You cannot delete your account while you have an active or upcoming rental — you must first return the item(s) and settle any deposit, or contact us. Loyalty points and coupons are lost when the account is deleted (see Section 16).',
   '',
-  '## 16. Changes to these terms',
+  '## 16. Loyalty programme and referrals',
+  '',
+  '- You earn points for completed rentals and for reviews, and may reach tiers that give coupons and other perks shown in the app. Business accounts are not part of the programme.',
+  '- **Invite a friend:** a new user who enters your invite code before their first booking is linked to you. When their first rental is returned, you both receive bonus points. A code can\'t be used on your own account, and each account can be invited only once.',
+  '- Points, tiers and coupons have **no cash value**, can\'t be exchanged for money, and are **not transferable** to another account.',
+  '- We may change, suspend or end the programme, including how points are earned or used. The current rules are shown in the app.',
+  '- Points or coupons obtained through abuse — for example fake accounts or fake referrals — may be cancelled.',
+  '- Points and coupons are **lost when your account is deleted**.',
+  '',
+  '## 17. Changes to these terms',
   '',
   'We may update these Terms from time to time. The current version is available in the app. Continued use after a change means you accept the updated Terms.',
   '',
-  '## 17. Governing law',
+  '## 18. Governing law',
   '',
   "These Terms are governed by the laws of the Lao People's Democratic Republic. We will first try to resolve any dispute amicably; if that fails, it will be handled by the competent courts of Vientiane.",
   '',
-  '## 18. Contact',
+  '## 19. Contact',
   '',
   'Questions about these Terms: **contact@lanchai.la**',
   '',
@@ -180,16 +196,26 @@ export const PRIVACY_MARKDOWN: string = [
   '- WhatsApp number (optional)',
   '- Address (optional)',
   '',
+  '**Identity document (required to rent)**',
+  '- A photo of your passport or ID card, either uploaded by you in the app or taken by our staff at the shop on your first pick-up, with the document type and the date it was checked.',
+  '',
+  '**Residency documents (optional)**',
+  '- If you ask for resident status: your residency details and the proof you send (for example a Lao national ID card, a visa, a work or residence permit, or a lease), and our decision.',
+  '',
   '**Customer profile**',
-  '- Customer type (for example Tourist, Resident, or Business), which is set by LANCHAI',
+  '- Customer type (Tourist, Resident or Business), set by LANCHAI',
   '- Profile photo (optional)',
   "- For business accounts: company details and the company's registration document",
   '',
+  '**Loyalty and referrals**',
+  '- Your points, tier, coupons and their history',
+  '- Your invite code and, if you use or share one, the link between your account and the account that invited you or that you invited',
+  '',
   '**Rental activity**',
-  '- Your reservations and rental history (items, dates, amounts, deposit, and any notes)',
+  '- Your reservations and rental history (items, dates, quantities, amounts, deposit, and any notes)',
   '- Condition reports recorded at pick-up and return, including photos of the items',
   '- Items you save as favorites, and reviews you write',
-  '- Messages, photos and videos you send us through the in-app chat, and claims you submit',
+  '- Messages, photos and videos you send us through the in-app chat, and claims you submit (including their photos)',
   '- "Request this item" submissions',
   '',
   '**What we do NOT collect**',
@@ -201,7 +227,9 @@ export const PRIVACY_MARKDOWN: string = [
   'We use your information to:',
   '- create and manage your account;',
   '- process reservations and deposits;',
-  '- prepare and manage the rental agreement, including identity verification;',
+  '- check your identity before your first rental, prepare the rental agreement, and protect LANCHAI and other renters in case of non-return, theft, loss or a dispute;',
+  '- decide whether you are eligible for resident status (which gives a lower deposit);',
+  '- run the loyalty programme and credit referral rewards;',
   '- communicate with you (confirmations, reminders, support via chat and email);',
   '- prevent fraud, abuse, and loss;',
   '- keep business and accounting records;',
@@ -209,29 +237,40 @@ export const PRIVACY_MARKDOWN: string = [
   '',
   '## 4. How your information is stored and processed',
   '',
-  "We use **Google Firebase** (Authentication, the Firestore database and Cloud Storage for photos and documents) and **Google Cloud** to run LANCHAI. Your data is stored on Google's servers in the **Asia–Southeast region (Singapore)**. This means your information is processed and stored **outside Laos**.",
+  "We use **Google Firebase** (Authentication, the Firestore database, Cloud Storage for photos and documents, and Cloud Functions) and **Google Cloud** to run LANCHAI. Your data, including identity and residency documents, is stored on Google's servers in the **Asia–Southeast region (Singapore)**. This means your information is processed and stored **outside Laos**.",
   '',
-  'Emails about your account and rentals (such as account verification, password reset, booking confirmations and receipts) are sent through **Brevo** (Sendinblue SAS, France), which processes your email address and the content of these emails on our behalf.',
+  "Emails about your account and rentals (such as account verification, password reset, booking confirmations, reminders and receipts) are sent through **Brevo** (Sendinblue SAS, France), which processes your email address and the content of these emails on our behalf. Links in these emails may go through Brevo's tracking service. Identity and residency documents are **never** sent by email.",
   '',
   'Google and Brevo act as our service providers (data processors) and process the data on our behalf.',
+  '',
+  'If you contact us on **WhatsApp**, that conversation is also handled by WhatsApp (Meta) under its own terms and privacy policy.',
   '',
   '## 5. Sharing and disclosure',
   '',
   '- We do **not sell** your personal data.',
-  '- We share it only with:',
+  '- Your identity and residency documents are seen only by LANCHAI staff, and are never shown to other users.',
+  '- We share your data only with:',
   '  - **service providers** that help us operate LANCHAI (currently Google / Firebase and Brevo); and',
-  '  - **authorities or third parties** where required by law, or to protect our rights, property, or safety.',
+  '  - **authorities or third parties** where required by law, or to protect our rights, property, or safety (for example after a non-return or theft).',
   '',
   '## 6. Data retention and account deletion',
   '',
   '- We keep your account information for as long as your account is active.',
-  '- You can **delete your account** at any time in the app (Profile → Delete account). When you do, we delete your **profile information and favorites**.',
+  '- **Identity document:** kept while you have a rental in progress or booked, then for **{{ID_RETENTION}}** after your last rental ends. If you never rent, it is deleted **{{PROOF_RETENTION}}** after you added it.',
+  '- **Proof of residence:** deleted **{{PROOF_RETENTION}}** after we approve or decline your request, or after your resident status expires.',
+  '- **Replaced or declined documents** (an ID you replaced or that we declined, an older proof of residence) are deleted **{{PROOF_RETENTION}}** later. A residency request you send again is reviewed again instead.',
+  "- **We never delete these documents while** a rental is in progress, a balance is unpaid, an item hasn't been returned, a missed pick-up hasn't been resolved with us, or a claim is open. They are deleted as soon as that is settled.",
+  '- You can ask for deletion in the app (Account → ID & residency):',
+  '  - **Proof of residence:** withdrawing your resident status deletes it right away, unless one of the situations above applies.',
+  '  - **Identity document:** it can be deleted once the rules above allow it, and the app tells you when that will be.',
+  '- You can **delete your account** at any time in the app (Account → Delete account). When you do, we delete your **profile information and favorites**, and your loyalty points and coupons are lost.',
   '- **Rental records (reservations) are kept** as business and accounting records even after your account is deleted, in line with our legitimate business needs and any legal obligations.',
   '',
   '## 7. Your rights and choices',
   '',
-  '- You can view and update most of your information in the app (Profile → Personal info).',
-  '- You can choose which non-essential emails you receive (Profile → Notifications).',
+  '- You can view and update most of your information in the app (Account → Personal info).',
+  '- You can view, replace or delete your identity and residency documents in the app (Account → ID & residency), within the rules of Section 6.',
+  '- You can choose which non-essential emails you receive (Account → Notifications).',
   '- You can delete your account at any time in the app.',
   '- For any other request regarding your personal data (access, correction, deletion, or questions), contact us at **contact@lanchai.la**. We will respond to these requests within a reasonable time, in line with applicable Lao law.',
   '',
@@ -257,14 +296,19 @@ export const PRIVACY_MARKDOWN: string = [
   '',
 ].join('\n');
 
-/** Fills the config/shop placeholders (see the header comment). */
+/** Fills the config/shop + config/legalPublic placeholders (see the header comment). */
 export function fillLegalPlaceholders(
   markdown: string,
   shop: { addressLine: string; city: string; whatsappNumber: string },
+  retention: { idRetentionMonths: number; proofRetentionDays: number },
 ): string {
   const address = [shop.addressLine, shop.city, 'Lao PDR'].map(s => s.trim()).filter(Boolean).join(', ');
   const whatsapp = shop.whatsappNumber ? `**WhatsApp:** +${shop.whatsappNumber}` : '';
+  const months = retention.idRetentionMonths;
+  const days = retention.proofRetentionDays;
   return markdown
+    .replace(/\{\{ID_RETENTION\}\}/g, `${months} ${months === 1 ? 'month' : 'months'}`)
+    .replace(/\{\{PROOF_RETENTION\}\}/g, `${days} ${days === 1 ? 'day' : 'days'}`)
     .replace(/\{\{SHOP_ADDRESS\}\}/g, address)
     // Markdown line breaks: keep the operator block lines separate.
     .replace(/\{\{WHATSAPP_LINE\}\}\n?/g, whatsapp ? `${whatsapp}\n` : '');

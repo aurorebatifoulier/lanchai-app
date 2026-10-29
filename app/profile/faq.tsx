@@ -28,7 +28,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'shield',
     q: 'How does the deposit work?',
-    a: "A refundable security deposit is required for every rental. The amount depends on the item's value and is shown at checkout. It's separate from your rental fee, collected in store when you pick up the item, and refunded on the spot when you return it, right after a quick inspection (about 10 minutes).",
+    a: "A refundable security deposit is required for every rental. The amount depends on the item's value and your account type, and applies per unit (2 chairs = 2 deposits). It's shown before you confirm. It's separate from your rental fee, collected in store when you pick up the item, and refunded on the spot when you return it, right after a quick inspection (about 10 minutes).",
   },
   {
     icon: 'credit-card',
@@ -43,7 +43,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'file-text',
     q: 'What do I need to rent?',
-    a: "A valid ID (passport, ID card, or driver's license), plus your name, phone, and email. You'll sign a short rental contract, and at pick-up we note the item's condition together with photos.",
+    a: "A valid passport or ID card, plus your name, phone and email. You can add a photo of your ID in the app (Account → ID & residency), or show it at the shop on your first pick-up — we check it there. You'll sign the rental agreement at pick-up, and we note the item's condition together with photos.",
   },
   {
     icon: 'map-pin',
@@ -68,12 +68,17 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'alert-triangle',
     q: 'What if the item is damaged or lost?',
-    a: "Minor reversible marks (light scratches, normal wear) are free. If an item is damaged, we charge a share of its replacement value depending on the damage, explained to you at return — the full replacement value if the item is unusable or lost. Charges are deducted from your deposit, and our team can reduce or waive them.",
+    a: "Minor reversible marks (light scratches, normal wear) are free. If an item is damaged, we charge a share of its replacement value depending on the damage, explained to you at return — the full replacement value if the item is unusable or lost. If you rented several units, only the units concerned are charged. Charges are deducted from your deposit, and our team can reduce or waive them.",
   },
   {
     icon: 'user',
     q: 'What do account types mean?',
-    a: "Your account type (Tourist, Resident, or Business) can affect your deposit. It's set by LANCHAI — contact us if you think yours should be updated.",
+    a: "Your account type (Tourist, Resident, or Business) can affect your deposit — residents pay a lower one. Live in Laos? Ask for resident status in Account → ID & residency; we check your documents and confirm it.",
+  },
+  {
+    icon: 'gift',
+    q: 'How does inviting a friend work?',
+    a: "Share your invite code (Account → Loyalty, or Invite a friend). Your friend enters it when signing up, or before their first booking. When their first rental is returned, you both get bonus points. Codes can't be used on your own account, and business accounts aren't part of the programme.",
   },
   {
     icon: 'cloud',

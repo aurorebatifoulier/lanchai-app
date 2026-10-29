@@ -402,8 +402,10 @@ service cloud.firestore {
 
     match /config/{docId} {
       // config/features (launch flags: businessAccounts, newsletter) is read before
-      // sign-in by the signup screen — non-sensitive booleans only.
-      allow read:  if docId == 'features'
+      // sign-in by the signup screen — non-sensitive booleans only. config/legalPublic
+      // (retention durations quoted by the Privacy policy, mirrored from the admin-only
+      // config/residency) is read by the legal screens, also before sign-in.
+      allow read:  if docId in ['features', 'legalPublic']
                     || (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth', 'residency']))
                     || isAdmin();
       allow write: if isAdmin();

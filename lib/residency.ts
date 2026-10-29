@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLoyaltyConfig } from './loyalty';
-import { doc, getDoc, onSnapshot, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, serverTimestamp, writeBatch, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { auth } from './auth';
@@ -95,8 +95,26 @@ export async function getRetentionConfig(): Promise<RetentionConfig> {
   }
 }
 
+// Saved together with its PUBLIC mirror config/legalPublic (readable by everyone, admin
+// write) — the Privacy policy quotes these durations (LegalScreen, before sign-in too).
 export async function saveRetentionConfig(cfg: RetentionConfig): Promise<void> {
-  await setDoc(doc(db, 'config', 'residency'), { ...cfg, updatedAt: serverTimestamp() }, { merge: true });
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'config', 'residency'), { ...cfg, updatedAt: serverTimestamp() }, { merge: true });
+  batch.set(doc(db, 'config', 'legalPublic'), {
+    idRetentionMonths: cfg.idRetentionMonths,
+    proofRetentionDays: cfg.proofRetentionDays,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
+}
+
+/** Retention durations for the legal texts (config/legalPublic); code defaults on any failure. */
+export async function getPublicRetention(): Promise<RetentionConfig> {
+  try {
+    return sanitizeRetention((await getDoc(doc(db, 'config', 'legalPublic'))).data());
+  } catch {
+    return sanitizeRetention(null);
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +9,7 @@ import { SHADES } from '@/constants/brandShades';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import { useShopInfo } from '@/lib/shop';
 import { fillLegalPlaceholders } from '@/lib/legalContent';
+import { getPublicRetention, RETENTION_DEFAULTS, type RetentionConfig } from '@/lib/residency';
 
 interface Props {
   title: string;
@@ -42,6 +43,9 @@ const MD_STYLES = {
 export default function LegalScreen({ title, content }: Props) {
   // Address + WhatsApp come from config/shop, so the legal texts follow Shop settings.
   const shop = useShopInfo();
+  // Retention durations quoted by the Privacy policy (config/legalPublic, code defaults).
+  const [retention, setRetention] = useState<RetentionConfig>(RETENTION_DEFAULTS);
+  useEffect(() => { getPublicRetention().then(setRetention); }, []);
   const screen = useScreenInsets();
   const router = useRouter();
 
@@ -60,7 +64,7 @@ export default function LegalScreen({ title, content }: Props) {
         contentContainerStyle={[s.content, { paddingBottom: screen.contentBottom }]}
       >
         <View style={[UI.card, s.card]}>
-          <Markdown style={MD_STYLES as never}>{fillLegalPlaceholders(content, shop)}</Markdown>
+          <Markdown style={MD_STYLES as never}>{fillLegalPlaceholders(content, shop, retention)}</Markdown>
         </View>
       </ScrollView>
     </View>

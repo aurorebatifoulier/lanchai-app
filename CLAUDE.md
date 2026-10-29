@@ -639,17 +639,27 @@ a snapshot indefinitely).
   convention used everywhere else pricing is shown (`app/bag.tsx`,
   `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
 
-- **Legal texts (`lib/legalContent.ts`) — updated 2026-10-23, still NEED LAWYER REVIEW
-  before public launch** (limitation of liability, deposit retention on non-return, ID
-  copy retention, data transfers outside Laos — Singapore / Brevo France, operating before
-  company registration, governing law & court, damage charges, tax/VAT once registered).
-  No "DRAFT" banner is shown to renters any more; the review note lives in the file header
-  and here. Address + WhatsApp come from `config/shop` via `{{SHOP_ADDRESS}}` /
-  `{{WHATSAPP_LINE}}` placeholders filled by `components/LegalScreen.tsx`
-  (`fillLegalPlaceholders`). Effective date: `LEGAL_EFFECTIVE_DATE`. Never mention the
-  grace period, an advance, vouchers or a handling fee. Damage wording = the code: a
-  share of the replacement value depending on the damage (`damagedChargePercent`), full
-  replacement value if unusable/lost, staff can reduce or waive.
+- **Legal texts (`lib/legalContent.ts`) — updated 2026-10-29, still NEED LAWYER REVIEW
+  before public launch.** Lawyer list: limitation of liability, deposit retention on
+  non-return, ID copy retention + the document retention periods (Privacy §6), data
+  transfers outside Laos — Singapore / Brevo France (incl. Brevo link tracking),
+  operating before company registration, governing law & court, damage charges (per unit
+  concerned) and the per-unit deposit, tax/VAT once registered, the loyalty programme &
+  referrals (Terms §16: no cash value, not transferable, may change/end, abuse →
+  cancelled, lost on account deletion), and the **validity of an electronic signature in
+  Lao PDR** (the rental agreement is signed at pick-up — texts say "the rental agreement
+  you sign at pick-up"). No "DRAFT" banner is shown to renters; the review note lives in
+  the file header and here. Placeholders filled by `components/LegalScreen.tsx`
+  (`fillLegalPlaceholders`): `{{SHOP_ADDRESS}}` / `{{WHATSAPP_LINE}}` from `config/shop`,
+  `{{ID_RETENTION}}` / `{{PROOF_RETENTION}}` from **`config/legalPublic`**
+  (`idRetentionMonths`, `proofRetentionDays` — readable by everyone, admin write, written
+  in the SAME batch as `config/residency` by `saveRetentionConfig()`; code defaults
+  `RETENTION_DEFAULTS` when missing — `config/residency` itself stays admin-only).
+  Effective date: `LEGAL_EFFECTIVE_DATE`. Never mention the grace period, an advance,
+  vouchers or a handling fee. Damage wording = the code: a share of the replacement value
+  depending on the damage (`damagedChargePercent`), full replacement value if
+  unusable/lost, only the units concerned, staff can reduce or waive. Accepted ID =
+  passport or ID card (never a driver's licence — `ID_DOC_TYPES`).
 - **Launch feature flags — `config/features`** (`lib/features.ts`, Admin → Shop settings
   → Features; readable before sign-in by `firestore.rules`): `businessAccounts` (OFF —
   hides the Individual/Business selector and the cross-path login block; all BtoB code
@@ -779,9 +789,8 @@ a snapshot indefinitely).
   `inviteCode`/`referredBy`/`referralCount` server-only. App: `<ReferralCard>`,
   `app/profile/invite-code.tsx`, optional signup field. Admin: referral settings in
   Loyalty, "Referred by · n referrals" in `<RenterNameBlock>`.
-  Lawyer list adds: a "Loyalty programme" Terms section (no cash value, not
-  transferable, may change/end, abuse → cancelled, lost on account deletion) and the
-  referral mention in the Privacy policy — proposals only, legal texts unchanged.
+  Legal: Terms §16 "Loyalty programme and referrals" and the referral / loyalty data in
+  the Privacy policy (§2, §3) are in the texts since 2026-10-29 (lawyer list above).
 
 - **My Account top (validated mockup, 2026-10-26) — brand shades only**
   (`constants/brandShades.ts`; no green/red here). Strings: `constants/accountCopy.ts`
