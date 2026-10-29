@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { SHADES } from '@/constants/brandShades';
 import { BOOKING_COPY } from '@/constants/bookingCopy';
+import { PROMO_COPY } from '@/constants/promoCopy';
 import { UI, SectionTitle, IconCircle } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { BookingPointsHint } from '@/components/BookingPointsHint';
@@ -132,14 +133,29 @@ export function QuantityRow({ quantity, available, onChange }: { quantity: numbe
 
 export interface CouponOption { id: string; label: string; savings: number }
 
+/** Promo code block of "Your total" (state from usePromoCode + the screen's choice). */
+export interface PromoUi {
+  applied: { code: string; discountTotal: number } | null;
+  /** The promo is the chosen discount (one discount per booking). */
+  selected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onApply: (code: string) => void;
+  checking: boolean;
+  error: string | null;
+}
+
 export function TotalCard({
-  lines, coupons, selectedCouponId, onToggleCoupon, discount, vat, toPay, deposit, depositDetail, pointsSubtotals,
+  lines, coupons, selectedCouponId, onToggleCoupon, discount, discountLabel, promo, vat, toPay, deposit, depositDetail, pointsSubtotals,
 }: {
   lines: { label: string; value: number }[];
   coupons: CouponOption[];
   selectedCouponId: string | null;
   onToggleCoupon: (id: string) => void;
   discount: number;
+  /** Discount line label ("Coupon −x LAK" / "Promo CODE · −x LAK"); default = coupon. */
+  discountLabel?: string;
+  promo?: PromoUi;
   /** null = VAT display off. */
   vat: { ht: number; amount: number; pct: number } | null;
   toPay: number;
@@ -159,19 +175,29 @@ export function TotalCard({
             <Text style={s.lineValue}>{`${n(l.value)} LAK`}</Text>
           </View>
         ))}
+        {/* Discounts — radio-like rows: loyalty coupons and the promo code, ONE at a time. */}
         {coupons.map(cp => {
           const on = cp.id === selectedCouponId;
           return (
             <TouchableOpacity key={cp.id} style={s.coupon} onPress={() => onToggleCoupon(cp.id)} activeOpacity={0.8}>
-              <Feather name="tag" size={15} color={SHADES.amberDeep} />
+              <Radio on={on} />
               <Text style={s.couponText}>{cp.label}</Text>
               <Text style={s.couponAction}>{on ? c.remove : c.apply}</Text>
             </TouchableOpacity>
           );
         })}
+        {promo?.applied && (
+          <TouchableOpacity style={s.coupon} onPress={promo.onSelect} activeOpacity={0.8}>
+            <Radio on={promo.selected} />
+            <Text style={s.couponText}>{PROMO_COPY.line(promo.applied.code, n(promo.applied.discountTotal))}</Text>
+            <Text style={s.couponAction} onPress={promo.onRemove} suppressHighlighting>{PROMO_COPY.remove}</Text>
+          </TouchableOpacity>
+        )}
+        {promo?.applied && coupons.length > 0 && <Text style={UI.small}>{PROMO_COPY.discount}</Text>}
+        {promo && !promo.applied && <PromoField promo={promo} />}
         {discount > 0 && (
           <View style={s.line}>
-            <Text style={s.lineLabel}>{c.couponApplied(n(discount))}</Text>
+            <Text style={s.lineLabel}>{discountLabel ?? c.couponApplied(n(discount))}</Text>
           </View>
         )}
         <View style={s.sep} />
@@ -192,6 +218,52 @@ export function TotalCard({
         {!!depositDetail && <Text style={s.depositDetail}>{depositDetail}</Text>}
         <BookingPointsHint subtotals={pointsSubtotals} compact />
       </View>
+    </View>
+  );
+}
+
+function Radio({ on }: { on: boolean }) {
+  return (
+    <View style={[s.radio, on && s.radioOn]}>
+      {on && <View style={s.radioDot} />}
+    </View>
+  );
+}
+
+/** "Have a promo code?" — discreet dark-amber link → field + Apply, one-line error. */
+function PromoField({ promo }: { promo: PromoUi }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  if (!open) {
+    return (
+      <View>
+        <TouchableOpacity onPress={() => setOpen(true)} hitSlop={8} style={{ alignSelf: 'flex-start' }}>
+          <Text style={s.promoLink}>{PROMO_COPY.have}</Text>
+        </TouchableOpacity>
+        {!!promo.error && <Text style={[UI.errorText, { marginTop: 4 }]}>{promo.error}</Text>}
+      </View>
+    );
+  }
+  const can = value.trim().length >= 4 && !promo.checking;
+  return (
+    <View>
+      <View style={s.promoRow}>
+        <TextInput
+          style={[UI.input, s.promoInput]}
+          value={value}
+          onChangeText={t => setValue(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20))}
+          placeholder={PROMO_COPY.placeholder}
+          placeholderTextColor={SHADES.carbonFaint}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          returnKeyType="done"
+          onSubmitEditing={() => can && promo.onApply(value)}
+        />
+        <PressScale style={[UI.btnSecondary, s.promoBtn, !can && UI.btnDisabled]} onPress={() => promo.onApply(value)} disabled={!can}>
+          {promo.checking ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnSecondaryText}>{PROMO_COPY.apply}</Text>}
+        </PressScale>
+      </View>
+      {!!promo.error && <Text style={[UI.errorText, { marginTop: 4 }]}>{promo.error}</Text>}
     </View>
   );
 }
@@ -373,6 +445,13 @@ const s = StyleSheet.create({
   coupon: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: SHADES.amberLight, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   couponText: { flex: 1, fontSize: 14, fontWeight: '600', color: SHADES.amberDeep },
   couponAction: { fontSize: 14, fontWeight: '700', color: SHADES.amberDeep },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: SHADES.amberDeep, alignItems: 'center', justifyContent: 'center' },
+  radioOn: { borderColor: SHADES.amberDeep },
+  radioDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: SHADES.amberDeep },
+  promoLink: { fontSize: 14, fontWeight: '700', color: SHADES.amberText },
+  promoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  promoInput: { flex: 1, letterSpacing: 1, fontWeight: '700' },
+  promoBtn: { paddingHorizontal: 16, minWidth: 84 },
   sep: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 2 },
   toPayLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: SHADES.carbon },
   toPayValue: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },

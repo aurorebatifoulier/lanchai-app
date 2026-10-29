@@ -260,6 +260,8 @@ export interface RentalDoc {
   handoverChecklist?: ChecklistData;
   returnChecklist?: ChecklistData;
   couponApplied?: { id: string; percent: number; discountAmount: number };
+  /** Promo code on this line (createReservations — server-computed share of the order discount). */
+  promoApplied?: { code: string; type: 'percent' | 'fixed'; value: number; discountAmount: number };
   // Set by the restoreCancelledCoupon Cloud Function once the coupon was given back.
   couponRestored?: boolean;
 
@@ -399,7 +401,7 @@ export type BookingErrorCode =
   | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
   | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
   | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal'
-  | 'id-required' | 'id-rejected';
+  | 'id-required' | 'id-rejected' | 'promo-invalid' | 'one-discount';
 
 const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
   'unauthenticated':        'Please sign in to book.',
@@ -419,6 +421,8 @@ const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
   'internal':               'Could not confirm your booking. Please try again.',
   'id-required':            'An ID document is required to book — add it now, or choose to show it at the shop.',
   'id-rejected':            'Your ID document was declined — please add a new one to book.',
+  'promo-invalid':          'This promo code can’t be used anymore. Remove it and try again.',
+  'one-discount':           'Only one discount can be used per booking.',
 };
 
 /** Thrown by createBooking — `message` is ready to show to the renter. */
@@ -433,6 +437,8 @@ export class BookingError extends Error {
 export async function createBooking(input: {
   items: BookingItemInput[];
   couponId?: string | null;
+  /** Promo code (never together with a coupon — one discount per booking). */
+  promoCode?: string | null;
   notes?: string;
   /** "I'll show my ID at the shop" (no ID document on file yet). */
   idCheckAtCounter?: boolean;
@@ -447,12 +453,15 @@ export async function createBooking(input: {
         quantity: i.quantity,
       })),
       couponId: input.couponId ?? null,
+      promoCode: input.promoCode ?? null,
       notes: input.notes ?? '',
       idCheckAtCounter: input.idCheckAtCounter === true,
     });
     return res.data;
   } catch (err: any) {
     const code = (err?.details?.code ?? 'internal') as BookingErrorCode;
+    // Promo: the server's own line ("This code has expired", "Minimum 300,000 LAK"…).
+    if (code === 'promo-invalid' && typeof err?.message === 'string' && err.message) throw new BookingError(code, err.message);
     throw new BookingError(code, BOOKING_ERROR_MESSAGES[code] ?? BOOKING_ERROR_MESSAGES.internal);
   }
 }

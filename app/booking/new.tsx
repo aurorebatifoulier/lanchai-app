@@ -36,6 +36,8 @@ import { toLak, splitHtVat } from '@/utils/currency';
 import { getProductAccessState } from '@/utils/productAccess';
 import { needsBtobDocument } from '@/utils/btob';
 import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
+import { usePromoCode } from '@/lib/promoCodes';
+import { PROMO_COPY } from '@/constants/promoCopy';
 
 // "Your booking" (validated mockup) — ONE screen: dates & times, quantity, total (coupon,
 // VAT only when on, to pay at pick-up, the renter's real deposit, points), deposit
@@ -145,8 +147,30 @@ export default function BookingNewScreen() {
   const couponPct = (c: LoyaltyCoupon) => couponPercentFor(c.tier, loyaltyConfig);
   const coupons = excluded ? [] : (profile?.coupons ?? []).filter(c => !c.used && couponPct(c) > 0);
   const selected = coupons.find(c => c.id === couponId) ?? null;
-  const discount = selected ? orderDiscount([subtotal], couponPct(selected)).total : 0;
+
+  // Promo code (usePromoCode re-checks it when dates / quantity change). ONE discount
+  // per booking: the loyalty coupon OR the promo — the better one is preselected.
+  const promoItems = useMemo(
+    () => (product && pickupAt && returnAt && returnValid ? [{ productId: product.id, pickupAt, returnAt, quantity }] : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [product?.id, pickupAt?.getTime(), returnAt?.getTime(), returnValid, quantity],
+  );
+  const promo = usePromoCode(promoItems);
+  const [promoChosen, setPromoChosen] = useState(false);
+  const promoActive = promoChosen && !!promo.applied;
+  const couponDiscount = selected && !promoActive ? orderDiscount([subtotal], couponPct(selected)).total : 0;
+  const discount = promoActive ? promo.applied!.discountTotal : couponDiscount;
+  const discountLabel = promoActive ? PROMO_COPY.line(promo.applied!.code, discount.toLocaleString('en-US')) : undefined;
   const toPay = subtotal - discount;
+  const applyPromo = async (code: string) => {
+    const r = await promo.apply(code);
+    if (!r) return;
+    const bestCoupon = coupons
+      .map(cp => ({ id: cp.id, savings: orderDiscount([subtotal], couponPct(cp)).total }))
+      .sort((a, b) => b.savings - a.savings)[0];
+    if (!bestCoupon || r.discountTotal >= bestCoupon.savings) { setPromoChosen(true); setCouponId(null); }
+    else { setPromoChosen(false); setCouponId(bestCoupon.id); }
+  };
   const vat = vatPercent != null ? (() => { const v = splitHtVat(toPay, vatPercent); return { ht: v.ht, amount: v.vat, pct: vatPercent }; })() : null;
   const couponOptions: CouponOption[] = coupons.map(c => ({
     id: c.id,
@@ -180,7 +204,8 @@ export default function BookingNewScreen() {
       if (!fresh?.phoneNumber && !fresh?.phone) { setError(c.phoneRequired); setConfirming(false); return; }
       const { orderId, reservationIds } = await createBooking({
         items: [{ productId: product.id, pickupAt, returnAt, quantity }],
-        couponId: selected?.id ?? null,
+        couponId: promoActive ? null : selected?.id ?? null,
+        promoCode: promoActive ? promo.applied!.code : null,
         idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes,
       });
@@ -276,8 +301,15 @@ export default function BookingNewScreen() {
             lines={[{ label: c.dayLine(days, rateLak.toLocaleString('en-US'), quantity), value: subtotal }]}
             coupons={couponOptions}
             selectedCouponId={couponId}
-            onToggleCoupon={id => setCouponId(cur => (cur === id ? null : id))}
+            onToggleCoupon={id => { setPromoChosen(false); setCouponId(cur => (cur === id ? null : id)); }}
             discount={discount}
+            discountLabel={discountLabel}
+            promo={{
+              applied: promo.applied, selected: promoActive, checking: promo.checking, error: promo.error,
+              onApply: applyPromo,
+              onSelect: () => { setPromoChosen(true); setCouponId(null); },
+              onRemove: () => { promo.remove(); setPromoChosen(false); },
+            }}
             vat={vat}
             toPay={toPay}
             deposit={depositLak}

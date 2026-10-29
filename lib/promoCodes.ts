@@ -1,10 +1,11 @@
 import {
   collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp, updateDoc,
 } from 'firebase/firestore';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import { auth } from './auth';
-import type { PromoCode, PromoError } from '@/functions/src/shared/promo';
+import { normalizePromoCode, type PromoCode, type PromoError } from '@/functions/src/shared/promo';
 import { PROMO_COPY } from '@/constants/promoCopy';
 
 // Promo codes — admin CRUD (promoCodes is admin-only in firestore.rules; counters are
@@ -67,4 +68,57 @@ export async function checkPromoCode(code: string, items: PromoItem[]): Promise<
     if (e.details?.code === 'promo-invalid' && e.message) return { ok: false, message: e.message, error: e.details.promoError ?? null };
     return { ok: false, message: PROMO_COPY.generic, error: null };
   }
+}
+
+/**
+ * Renter promo state for one booking (single booking screen / bag checkout): apply a
+ * code, re-check it automatically when the items / dates / quantities change (600 ms
+ * after the last change — failed re-checks drop it with the server's message).
+ */
+export function usePromoCode(items: PromoItem[] | null) {
+  const [applied, setApplied] = useState<{ code: string; discountTotal: number; perLine: number[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const itemsKey = items ? items.map(i => `${i.productId}:${i.pickupAt.getTime()}:${i.returnAt.getTime()}:${i.quantity}`).join('|') : '';
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const appliedCode = useRef<string | null>(null);
+
+  const apply = useCallback(async (raw: string): Promise<{ code: string; discountTotal: number } | null> => {
+    const code = normalizePromoCode(raw);
+    const current = itemsRef.current;
+    if (!code || !current || current.length === 0) return null;
+    setChecking(true);
+    setError(null);
+    const r = await checkPromoCode(code, current);
+    setChecking(false);
+    if (r.ok) {
+      appliedCode.current = r.code;
+      setApplied({ code: r.code, discountTotal: r.discountTotal, perLine: r.perLine });
+      return r;
+    }
+    appliedCode.current = null;
+    setApplied(null);
+    setError(r.message);
+    return null;
+  }, []);
+
+  const remove = useCallback(() => { appliedCode.current = null; setApplied(null); setError(null); }, []);
+
+  // Re-check the applied code whenever what's booked changes.
+  useEffect(() => {
+    const code = appliedCode.current;
+    if (!code || !itemsKey) return;
+    const t = setTimeout(async () => {
+      const current = itemsRef.current;
+      if (!current || appliedCode.current !== code) return;
+      const r = await checkPromoCode(code, current);
+      if (appliedCode.current !== code) return;
+      if (r.ok) setApplied({ code: r.code, discountTotal: r.discountTotal, perLine: r.perLine });
+      else { appliedCode.current = null; setApplied(null); setError(r.message); }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [itemsKey]);
+
+  return { applied, error, checking, apply, remove };
 }
