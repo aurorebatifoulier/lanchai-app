@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
@@ -75,8 +75,11 @@ export function useIdCheck(renterId: string | null | undefined): IdCheck {
     if (uri) setCounterPhotos(p => [...p, uri].slice(0, 6));
   }, []);
 
+  // Recorded once per screen: the rental agreement runs it BEFORE signing (so "checked
+  // on" is real), and the handover submit calls it again — that second call is a no-op.
+  const performed = useRef(false);
   const perform = useCallback(async () => {
-    if (!needed || !renterId) return;
+    if (!needed || !renterId || performed.current) return;
     let counterPhoto: { docType: IdDocType; files: string[] } | undefined;
     if (!onFile) {
       if (!counterDocType || counterPhotos.length === 0) throw new Error('Take a photo of the ID first.');
@@ -84,6 +87,7 @@ export function useIdCheck(renterId: string | null | undefined): IdCheck {
     }
     try {
       await httpsCallable(functions, 'recordIdCheck')({ renterId, matchesPerson, nameMatches, counterPhoto });
+      performed.current = true;
     } catch (err) {
       throw new Error((err as { message?: string })?.message || 'Could not record the ID check. Please try again.');
     }
