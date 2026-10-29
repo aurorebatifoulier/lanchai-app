@@ -266,17 +266,25 @@ async function finalize(agreementId: string, reservationIds: string[], method: A
 export const agreementIdFor = (reservations: RentalDoc[]) =>
   newAgreementId(reservations[0].orderId ?? reservations[0].id, Date.now());
 
+// A NEW id for every attempt: Storage allows one create per file, so a retry after a
+// failed finalize must never write to the same path again.
+const withFreshId = (data: AgreementData): AgreementData => {
+  const orderId = data.agreementId.slice(0, data.agreementId.lastIndexOf('-'));
+  return { ...data, agreementId: newAgreementId(orderId, Date.now()) };
+};
+
 /** Signature on the staff device → PDF → Storage → finalizeRentalAgreement. */
 export async function signAgreement(args: {
   data: AgreementData; termsMarkdown: string; signature: Signature; staffName: string; reservationIds: string[];
 }) {
-  const html = buildAgreementHtml(args.data, {
+  const data = withFreshId(args.data);
+  const html = buildAgreementHtml(data, {
     signatureSvg: toSignatureSvg(args.signature),
     signedAtLabel: vteReservationLabel(Date.now()),
     termsMarkdown: args.termsMarkdown,
   });
-  await uploadPdf(html, args.data.agreementId, 'signature');
-  return finalize(args.data.agreementId, args.reservationIds, 'signature', args.staffName);
+  await uploadPdf(html, data.agreementId, 'signature');
+  return finalize(data.agreementId, args.reservationIds, 'signature', args.staffName);
 }
 
 /** Paper fallback: the agreement text + the photographed signed pages, as one PDF. */
@@ -288,11 +296,12 @@ export async function savePaperAgreement(args: {
     const img = await manipulateAsync(uri, [{ resize: { width: 1400 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true });
     if (img.base64) photos.push(`data:image/jpeg;base64,${img.base64}`);
   }
-  const html = buildAgreementHtml(args.data, {
+  const data = withFreshId(args.data);
+  const html = buildAgreementHtml(data, {
     blank: true, paperPhotos: photos, signedAtLabel: vteReservationLabel(Date.now()), termsMarkdown: args.termsMarkdown,
   });
-  await uploadPdf(html, args.data.agreementId, 'paper');
-  return finalize(args.data.agreementId, args.reservationIds, 'paper', args.staffName);
+  await uploadPdf(html, data.agreementId, 'paper');
+  return finalize(data.agreementId, args.reservationIds, 'paper', args.staffName);
 }
 
 /** Printable blank version (system print dialog). */
