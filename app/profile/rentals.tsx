@@ -126,7 +126,7 @@ export default function AllRentalsScreen() {
             </View>
           )}
 
-          {visible.map(r => <RentalDocCard key={r.id} rental={r} icons={false} />)}
+          {visible.map(r => <RentalDocCard key={r.id} rental={r} />)}
 
           {visible.length < filtered.length && (
             <PressScale style={[UI.btnSecondary, { marginTop: 4 }]} onPress={() => setPages(p => p + 1)} activeOpacity={0.8}>

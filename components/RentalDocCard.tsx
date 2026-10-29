@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI, StatusChip } from '@/components/account/ui';
 import type { RentalDoc } from '@/lib/firestore';
@@ -14,8 +13,8 @@ import {
 
 // One rental with its documents (validated mockup): name (one line) + amount, a grey
 // "Returned … · LNC-…" line, and Receipt / Pick-up / Return / Agreement buttons — greyed when that
-// document doesn't exist yet. Used by app/profile/documents.tsx (Receipts & reports) and app/profile/rentals.tsx.
-export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; icons?: boolean }) {
+// document doesn't exist yet. Used by app/profile/documents.tsx (Receipts & reports) and app/profile/rentals.tsx (All rentals). Text-only buttons.
+export function RentalDocCard({ rental: r }: { rental: RentalDoc }) {
   const router = useRouter();
   const receipt = hasReceipt(r);
   const orderId = displayOrderId(r);
@@ -36,11 +35,11 @@ export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; 
     setOpening(false);
   };
 
-  const buttons: { label: string; icon: 'file-text' | 'clipboard' | 'file'; enabled: boolean; onPress: () => void }[] = [
-    { label: 'Receipt', icon: 'file-text', enabled: receipt, onPress: () => router.push(`/rentals/${r.id}/receipt` as never) },
-    { label: 'Pick-up', icon: 'clipboard', enabled: hasPickupReport(r), onPress: () => router.push(`/rentals/${r.id}/report?type=pickup` as never) },
-    { label: 'Return', icon: 'clipboard', enabled: hasReturnReport(r), onPress: () => router.push(`/rentals/${r.id}/report?type=return` as never) },
-    { label: AGREEMENT_UI.renterButton, icon: 'file', enabled: !!r.agreementId && !opening, onPress: openAgreement },
+  const buttons: { label: string; enabled: boolean; onPress: () => void }[] = [
+    { label: 'Receipt', enabled: receipt, onPress: () => router.push(`/rentals/${r.id}/receipt` as never) },
+    { label: 'Pick-up', enabled: hasPickupReport(r), onPress: () => router.push(`/rentals/${r.id}/report?type=pickup` as never) },
+    { label: 'Return', enabled: hasReturnReport(r), onPress: () => router.push(`/rentals/${r.id}/report?type=return` as never) },
+    { label: AGREEMENT_UI.renterButton, enabled: !!r.agreementId && !opening, onPress: openAgreement },
   ];
 
   return (
@@ -63,8 +62,7 @@ export function RentalDocCard({ rental: r, icons = true }: { rental: RentalDoc; 
             onPress={b.onPress}
             activeOpacity={0.75}
           >
-            {icons && <Feather name={b.icon} size={13} color={b.enabled ? SHADES.carbon : SHADES.carbonFaint} />}
-            <Text style={[s.btnText, !b.enabled && s.btnTextDisabled]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{b.label}</Text>
+            <Text style={[s.btnText, !b.enabled && s.btnTextDisabled]} numberOfLines={1}>{b.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -80,10 +78,11 @@ const s = StyleSheet.create({
   btnRow: { flexDirection: 'row', gap: 6, marginTop: 12 },
   // Compact secondary buttons (white, carbon outline); greyed when the document doesn't exist.
   btn: {
-    flex: 1, height: 38, borderRadius: 12, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 3,
+    // Text only, 4 equal buttons — always fits on one line (no icons).
+    flex: 1, minWidth: 0, height: 36, borderRadius: 12, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
   },
   btnDisabled: { borderColor: SHADES.border, borderWidth: 1 },
-  btnText: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
+  btnText: { fontSize: 12, fontWeight: '700', color: SHADES.carbon },
   btnTextDisabled: { color: SHADES.carbonFaint },
 });
