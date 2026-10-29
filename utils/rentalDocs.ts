@@ -19,7 +19,7 @@ export function displayOrderId(r: Pick<RentalDoc, 'id' | 'orderId'>): string | n
 /** Rentals with at least one document (receipt or condition report), newest first. */
 export function rentalsWithDocuments(rentals: RentalDoc[]): RentalDoc[] {
   return rentals
-    .filter(r => hasReceipt(r) || hasPickupReport(r) || hasReturnReport(r))
+    .filter(r => hasReceipt(r) || hasPickupReport(r) || hasReturnReport(r) || !!r.agreementId)
     .sort((a, b) => (b.pickupAt?.toMillis() ?? 0) - (a.pickupAt?.toMillis() ?? 0));
 }
 

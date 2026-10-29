@@ -49,6 +49,7 @@ import { RentalReceipt } from '@/components/RentalReceipt';
 import { SettlementActions } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import UnitsStepper from '@/components/UnitsStepper';
+import { AgreementAdminCard } from '@/components/admin/AgreementAdminCard';
 import {
   CANCEL_REASONS,
   CANCEL_REASON_KEYS,
@@ -870,6 +871,11 @@ export default function AdminReservationDetailScreen() {
           <Feather name="clock" size={12} color={COLORS.fg3} />
           <Text style={d.metaText}>Created: {fmtTimestamp(reservation.createdAt)}</Text>
         </View>
+
+        {/* ── RENTAL AGREEMENT ───────────────────────────────────────────── */}
+        {(reservation.agreementId || ['pending_payment', 'confirmed'].includes(reservation.status)) && (
+          <AgreementAdminCard reservation={reservation} />
+        )}
 
         {/* ── CHECKLISTS ────────────────────────────────────────────────── */}
         {(reservation.handoverChecklist?.confirmedAt || reservation.returnChecklist?.confirmedAt) && (
