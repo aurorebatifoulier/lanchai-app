@@ -225,6 +225,10 @@ export interface RentalDoc {
   deposit: number;   // line total = depositPerUnit × quantity (createReservations)
   /** Unit deposit (LAK), frozen by createReservations. Absent on older reservations. */
   depositPerUnit?: number;
+  /** Rental agreement signed at pick-up (finalizeRentalAgreement — server-written). */
+  agreementId?: string;
+  agreementSignedAt?: Timestamp;
+  agreementMethod?: 'signature' | 'paper';
   depositReturned?: boolean;
   returnedAt?: Timestamp;
   // Late-return escalation — all written by the lateReturnAlerts Cloud Function only.

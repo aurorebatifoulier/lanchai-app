@@ -44,6 +44,9 @@ export * from './retention';
 // Referral programme (invite codes) — see referral.ts; reward in creditReferralIfAny below.
 export * from './referral';
 
+// Rental agreement signed at pick-up (finalizeRentalAgreement).
+export * from './agreements';
+
 admin.initializeApp();
 const db = admin.firestore();
 

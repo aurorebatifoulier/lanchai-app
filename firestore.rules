@@ -400,6 +400,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── rentalAgreements/{agreementId} ─────────────────────────────────────
+    // Rental agreement signed at pick-up (functions/src/agreements.ts). Written ONLY by
+    // the finalizeRentalAgreement callable (Admin SDK). The renter reads their own; the
+    // staff name lives in internal/audit, admin-only. Business record — never deleted.
+    match /rentalAgreements/{agreementId} {
+      allow read:  if isAdmin() || (isAuthed() && resource.data.renterId == request.auth.uid);
+      allow write: if false;
+      match /internal/{docId} {
+        allow read:  if isAdmin();
+        allow write: if false;
+      }
+    }
+
     match /config/{docId} {
       // config/features (launch flags: businessAccounts, newsletter) is read before
       // sign-in by the signup screen — non-sensitive booleans only. config/legalPublic

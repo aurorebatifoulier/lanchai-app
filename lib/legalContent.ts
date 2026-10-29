@@ -23,7 +23,10 @@
 //   {{PROOF_RETENTION}}  → "30 days"
 // The internal late-return grace period must NEVER appear here.
 
-export const LEGAL_EFFECTIVE_DATE = '29 October 2026';
+import { LEGAL_EFFECTIVE_DATE } from '@/functions/src/shared/legal';
+
+// One source (also stamped on rental agreements).
+export { LEGAL_EFFECTIVE_DATE };
 
 const OPERATOR_BLOCK = [
   `**Effective date:** ${LEGAL_EFFECTIVE_DATE}`,

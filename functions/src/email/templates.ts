@@ -1193,3 +1193,53 @@ export function welcomeEmail(shop: EmailShop, ctx: { firstName: string; resident
     shop,
   );
 }
+
+// ── Rental agreement (signed at pick-up) — the PDF goes as an attachment ─────────
+// Sent by finalizeRentalAgreement right after signing (or the paper version). Never
+// the ID document, never a staff name.
+export function rentalAgreementEmail(shop: EmailShop, ctx: {
+  firstName: string;
+  orderLabel: string;
+  items: { name: string; quantity: number; pickupLabel: string; returnLabel: string }[];
+  signedLabel: string;
+  paper: boolean;
+  firstReservationId: string;
+  attachment: { name: string; content: string } | null;
+}): Rendered {
+  return build(
+    'Your LANCHAI rental agreement',
+    `A copy of the agreement signed at pick-up — order ${ctx.orderLabel}`,
+    'Your rental agreement',
+    [
+      {
+        type: 'hero',
+        pill: 'Rental agreement',
+        title: 'Here’s your rental agreement',
+        sub: `Hi ${ctx.firstName} — here’s a copy of the rental agreement ${ctx.paper ? 'you signed on paper' : 'you signed'} at pick-up (order ${ctx.orderLabel}). Keep it for your records.`,
+        primary: { label: 'View my rental', url: appLink(`rentals/${ctx.firstReservationId}`) },
+      },
+      {
+        type: 'card',
+        title: ctx.items.length === 1 ? 'Your item' : 'Your items',
+        items: ctx.items.map(i => ({
+          type: 'line' as const,
+          name: i.quantity > 1 ? `${i.name} × ${i.quantity}` : i.name,
+          detail: [`Pick-up ${i.pickupLabel}`, `Return ${i.returnLabel}`],
+        })),
+      },
+      {
+        type: 'card',
+        items: [
+          {
+            type: 'iconNote',
+            icon: { name: 'file', alt: 'Agreement' },
+            title: ctx.attachment ? 'The PDF is attached to this email' : 'Your agreement is in the app',
+            text: `Signed on ${ctx.signedLabel}. You can also find it in the app: Account › Receipts & reports › Agreement.`,
+          },
+        ],
+      },
+    ],
+    shop,
+    ctx.attachment ? [ctx.attachment] : undefined,
+  );
+}

@@ -11,6 +11,7 @@ rules_version = '2';
 //   claim-photos/{uid}/{fileName}                — renter-submitted claim evidence photos
 //   claim-videos/{uid}/{fileName}                — renter-submitted claim evidence videos
 //   homeSlides/{slideId}/{fileName}             — Home hero / banner slide photos
+//   rentalAgreements/{agreementId}/{fileName}   — signed rental agreements (PDF)
 //
 // Admin detection mirrors firestore.rules exactly:
 //   firestore.rules uses:  exists(/databases/$(database)/documents/admins/$(uid))
@@ -100,6 +101,24 @@ service firebase.storage {
                            && request.resource.size < 10 * 1024 * 1024
                            && request.resource.contentType.matches('image/.*');
       allow delete:         if false;  // condition evidence
+    }
+
+    // ── Rental agreements ─────────────────────────────────────────────────────
+    // Path: rentalAgreements/{agreementId}/{fileName} — the signed PDF (or the PDF of
+    // the paper form's photos). Business record: never deleted from the client, and NOT
+    // touched by the ID-document retention job.
+    // Read: admins, or the renter of that agreement (rentalAgreements/{id}.renterId —
+    //   written by finalizeRentalAgreement right after the upload).
+    // Write: admins only, create once (no overwrite).
+    match /rentalAgreements/{agreementId}/{fileName} {
+      allow read:   if isAdmin()
+                    || (request.auth != null
+                        && firestore.get(/databases/(default)/documents/rentalAgreements/$(agreementId)).data.renterId == request.auth.uid);
+      allow create: if isAdmin()
+                    && request.resource.size < 15 * 1024 * 1024
+                    && (request.resource.contentType == 'application/pdf'
+                        || request.resource.contentType.matches('image/.*'));
+      allow update, delete: if false;
     }
 
     // ── Claim photos ──────────────────────────────────────────────────────────

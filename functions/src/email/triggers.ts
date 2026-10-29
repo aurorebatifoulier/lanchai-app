@@ -18,7 +18,7 @@ import {
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
   idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
-  welcomeEmail,
+  welcomeEmail, rentalAgreementEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -380,7 +380,7 @@ export async function sendAccountEmail(
   }
 }
 
-export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail };
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail };
 
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
@@ -483,6 +483,12 @@ export const sendTestEmails = onCall(
       ['residency-rejected-A-fixable',     residencyRejectedEmail(shop, { firstName: name, reason: 'proof_missing', text: 'The lease contract isn\u2019t in your name.', fixable: true })],
       ['residency-rejected-B-final',       residencyRejectedEmail(shop, { firstName: name, reason: 'not_eligible', text: null, fixable: false })],
       ['residency-expired',                residencyExpiredEmail(shop, { firstName: name })],
+      ['rental-agreement',                 rentalAgreementEmail(shop, {
+        firstName: name, orderLabel: base.orderId ?? 'LNC-261020-TEST', paper: false, firstReservationId: base.id,
+        signedLabel: 'Sat, 24 Oct · 10:06',
+        items: [base, second].map(r => ({ name: r.productName, quantity: r.quantity, pickupLabel: r.pickupLabel, returnLabel: r.returnLabel })),
+        attachment: null, // the real email attaches the signed PDF
+      })],
       ['late-nonReturn',                   lateReturnEmail(name, 'nonReturn', [{ r: late(base, 300000, 2), stage: 'nonReturn' }], shop, lateCtx)],
     ];
     const results: Record<string, SendResult> = {};
