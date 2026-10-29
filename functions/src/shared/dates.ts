@@ -80,3 +80,9 @@ export function vteDateStamp(ms: number): string {
   const d = local(ms);
   return `${String(d.getUTCFullYear()).slice(-2)}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
 }
+
+/** Vientiane calendar day "2026-10-29" (promo code validity, whole local days). */
+export function vteIsoDay(ms: number): string {
+  const d = local(ms);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}

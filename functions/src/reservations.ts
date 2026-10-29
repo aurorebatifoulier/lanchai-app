@@ -11,6 +11,8 @@ import { isLoyaltyExcluded } from './shared/loyalty';
 import { buildTimeSlots, toHHMM } from './shared/timeSlots';
 import { vteReservationLabel, vteMinutesOfDay, vteDateStamp } from './shared/dates';
 import { identityBookingDecision, idCheckNeeded, type IdentityRecord } from './shared/identity';
+import { evaluatePromo, normalizePromoCode, promoErrorText, PROMO_CODE_RE } from './shared/promo';
+import { readPromo, promoLine } from './promo';
 
 // ── createReservations ─────────────────────────────────────────────────────────
 // The ONLY way a renter creates reservations (firestore.rules: reservations create is
@@ -38,7 +40,7 @@ export type BookingErrorCode =
   | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
   | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
   | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal'
-  | 'id-required' | 'id-rejected';
+  | 'id-required' | 'id-rejected' | 'promo-invalid' | 'one-discount';
 
 function fail(code: BookingErrorCode, message: string, extra: Record<string, unknown> = {}): never {
   const status = code === 'unauthenticated' ? 'unauthenticated'
@@ -50,7 +52,7 @@ function fail(code: BookingErrorCode, message: string, extra: Record<string, unk
 
 interface ItemInput { productId: string; pickupAtMs: number; returnAtMs: number; quantity: number }
 
-function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; notes: string; idCheckAtCounter: boolean } {
+function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; promoCode: string | null; notes: string; idCheckAtCounter: boolean } {
   const d = (data ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(d.items) ? d.items : [];
   if (raw.length === 0 || raw.length > MAX_ITEMS) fail('invalid-request', 'Choose between 1 and 10 items.');
@@ -68,7 +70,11 @@ function parseInput(data: unknown): { items: ItemInput[]; couponId: string | nul
   });
   const couponId = typeof d.couponId === 'string' && d.couponId ? d.couponId : null;
   const notes = typeof d.notes === 'string' ? d.notes.trim().slice(0, MAX_NOTES) : '';
-  return { items, couponId, notes, idCheckAtCounter: d.idCheckAtCounter === true };
+  const promoCode = normalizePromoCode(d.promoCode) || null;
+  if (promoCode && !PROMO_CODE_RE.test(promoCode)) fail('promo-invalid', promoErrorText('not-found'), { promoError: 'not-found' });
+  // ONE discount per booking: a loyalty coupon OR a promo code.
+  if (promoCode && couponId) fail('one-discount', 'Only one discount can be used per booking.');
+  return { items, couponId, promoCode, notes, idCheckAtCounter: d.idCheckAtCounter === true };
 }
 
 function randomOrderCode(length = 4): string {
@@ -80,7 +86,7 @@ function randomOrderCode(length = 4): string {
 export const createReservations = onCall({ region: REGION }, async request => {
   const uid = request.auth?.uid;
   if (!uid) fail('unauthenticated', 'Please sign in to book.');
-  const { items, couponId, notes, idCheckAtCounter } = parseInput(request.data);
+  const { items, couponId, promoCode, notes, idCheckAtCounter } = parseInput(request.data);
   const db = admin.firestore();
   const now = Date.now();
 
@@ -212,7 +218,23 @@ export const createReservations = onCall({ region: REGION }, async request => {
       couponPercent = coupon && !excluded && coupon.used !== true ? couponPercentFor(coupon.tier as string, loyaltyCfg) : 0;
       if (couponPercent <= 0) fail('coupon-invalid', 'This coupon can’t be used.');
     }
-    const discount = orderDiscount(lines.map(l => l.subtotal), couponPercent);
+    let discount = orderDiscount(lines.map(l => l.subtotal), couponPercent);
+
+    // Promo code: re-validated HERE with the same rule as validatePromoCode, discount
+    // computed from server prices only (shared/promo.ts evaluatePromo).
+    let promo: { code: string; type: string; value: number } | null = null;
+    if (promoCode) {
+      const ctx = await readPromo(r => tx.get(r), q => tx.get(q), promoCode, uid!);
+      if (!ctx) fail('promo-invalid', promoErrorText('not-found'), { promoError: 'not-found' });
+      const res = evaluatePromo(ctx!.promo, {
+        lines: lines.map(l => promoLine(l.it.productId, l.p, l.subtotal)),
+        nowMs: now, isBusiness: excluded,
+        hasPriorBooking: ctx!.hasPriorBooking, usesByRenter: ctx!.usesByRenter,
+      });
+      if (!res.ok) fail('promo-invalid', promoErrorText(res.error, res.minLak), { promoError: res.error, minLak: res.minLak });
+      discount = { total: (res as { total: number }).total, perLine: (res as { perLine: number[] }).perLine };
+      promo = { code: promoCode, type: ctx!.promo.type, value: ctx!.promo.value };
+    }
 
     // Writes.
     const reservationIds: string[] = [];
@@ -246,6 +268,7 @@ export const createReservations = onCall({ region: REGION }, async request => {
         idCheckAtCounter: !idOnFile,
         firstRentalIdCheck,
         ...(couponId ? { couponApplied: { id: couponId, percent: couponPercent, discountAmount: discount.perLine[i] } } : {}),
+        ...(promo && discount.perLine[i] > 0 ? { promoApplied: { ...promo, discountAmount: discount.perLine[i] } } : {}),
         createdAt:    FieldValue.serverTimestamp(),
       });
     });
@@ -257,12 +280,22 @@ export const createReservations = onCall({ region: REGION }, async request => {
         : c);
       tx.update(freshUser.ref, { coupons: next });
     }
+    if (promo) {
+      // Usage counters, atomic with the booking (total + per renter).
+      const promoRef = db.collection('promoCodes').doc(promo.code);
+      tx.update(promoRef, { usedCount: FieldValue.increment(1), discountGivenLak: FieldValue.increment(discount.total) });
+      tx.set(promoRef.collection('uses').doc(uid!), {
+        count: FieldValue.increment(1),
+        orderIds: FieldValue.arrayUnion(orderId),
+        lastUsedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
     lockRefs.forEach((r, i) => tx.set(r, {
       lastBookingAt: FieldValue.serverTimestamp(),
       version: ((lockSnaps[i].get('version') as number | undefined) ?? 0) + 1,
     }, { merge: true }));
 
-    logger.info('[createReservations] created', { uid, orderId, lines: lines.length, coupon: !!couponId });
+    logger.info('[createReservations] created', { uid, orderId, lines: lines.length, coupon: !!couponId, promo: promo?.code ?? null });
     return { orderId, reservationIds };
   });
 });

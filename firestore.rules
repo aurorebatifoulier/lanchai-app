@@ -400,6 +400,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── promoCodes/{code} ──────────────────────────────────────────────────
+    // Admin only — renters never read codes (validation through the validatePromoCode
+    // callable, rate-limited). Counters (usedCount, discountGivenLak) and uses/{uid}
+    // are written by createReservations / restoreCancelledPromo only. A code can be
+    // deleted only while unused; afterwards it is deactivated (active: false).
+    // promoAttempts/{uid} (rate limit) has no rule → denied by the catch-all.
+    match /promoCodes/{code} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin()
+                    && code.matches('^[A-Z0-9]{4,20}$')
+                    && request.resource.data.code == code
+                    && request.resource.data.usedCount == 0
+                    && request.resource.data.discountGivenLak == 0;
+      allow update: if isAdmin()
+                    && !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['code', 'usedCount', 'discountGivenLak']);
+      allow delete: if isAdmin() && resource.data.usedCount == 0;
+      match /uses/{uid} {
+        allow read:  if isAdmin();
+        allow write: if false;
+      }
+    }
+
     // ── rentalAgreements/{agreementId} ─────────────────────────────────────
     // Rental agreement signed at pick-up (functions/src/agreements.ts). Written ONLY by
     // the finalizeRentalAgreement callable (Admin SDK). The renter reads their own; the

@@ -47,6 +47,9 @@ export * from './referral';
 // Rental agreement signed at pick-up (finalizeRentalAgreement).
 export * from './agreements';
 
+// Promo codes (validatePromoCode, restoreCancelledPromo) — see shared/promo.ts.
+export * from './promo';
+
 admin.initializeApp();
 const db = admin.firestore();
 
