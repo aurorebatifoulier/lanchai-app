@@ -4,7 +4,8 @@
 // validated by Aurore and her partner (no advance, free cancellation before pick-up,
 // no-show rule, progressive late fees, company not registered yet), and 29 Oct 2026
 // (identity / residency documents + retention, loyalty & referrals, per-unit deposit,
-// charges on the units concerned, rental agreement signed at pick-up).
+// charges on the units concerned, rental agreement signed at pick-up, rental agreements
+// collected + kept as business records — Privacy §2 / §6).
 //
 // ⚠️ NEEDS LAWYER REVIEW before public launch (see CLAUDE.md "Legal texts"): limitation
 // of liability, deposit retention on non-return, ID copy retention, data transfers
@@ -218,6 +219,7 @@ export const PRIVACY_MARKDOWN: string = [
   '**Rental activity**',
   '- Your reservations and rental history (items, dates, quantities, amounts, deposit, and any notes)',
   '- Condition reports recorded at pick-up and return, including photos of the items',
+  '- The rental agreement you sign at pick-up (including your signature), or a photo of the paper version you signed',
   '- Items you save as favorites, and reviews you write',
   '- Messages, photos and videos you send us through the in-app chat, and claims you submit (including their photos)',
   '- "Request this item" submissions',
@@ -269,6 +271,7 @@ export const PRIVACY_MARKDOWN: string = [
   '  - **Identity document:** it can be deleted once the rules above allow it, and the app tells you when that will be.',
   '- You can **delete your account** at any time in the app (Account → Delete account). When you do, we delete your **profile information and favorites**, and your loyalty points and coupons are lost.',
   '- **Rental records (reservations) are kept** as business and accounting records even after your account is deleted, in line with our legitimate business needs and any legal obligations.',
+  '- **Rental agreements** are kept with your rental records, as business records — they are not deleted with your identity document, nor when you delete your account.',
   '',
   '## 7. Your rights and choices',
   '',

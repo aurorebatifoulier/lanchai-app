@@ -647,8 +647,10 @@ a snapshot indefinitely).
   concerned) and the per-unit deposit, tax/VAT once registered, the loyalty programme &
   referrals (Terms §16: no cash value, not transferable, may change/end, abuse →
   cancelled, lost on account deletion), and the **validity of an electronic signature in
-  Lao PDR** (the rental agreement is signed at pick-up — texts say "the rental agreement
-  you sign at pick-up"), and the wording "our contract procedure applies" on a non-return
+  Lao PDR** (the rental agreement is signed at pick-up on the staff device, with a finger
+  signature — texts say "the rental agreement you sign at pick-up"; also the paper
+  fallback, the Terms annexed to the PDF, and keeping agreements as business records,
+  Privacy §2 / §6), and the wording "our contract procedure applies" on a non-return
   (Terms §9, FAQ "What happens if I return late?" — kept as is on purpose; what that
   procedure is and whether it's enforceable). No "DRAFT" banner is shown to renters; the review note lives in
   the file header and here. Placeholders filled by `components/LegalScreen.tsx`
@@ -1080,6 +1082,31 @@ a snapshot indefinitely).
   re-derives on focus. `BookingBottomBar` is absolutely positioned: every screen using it
   (bag, booking, bag checkout) passes `onHeight` and pads its scroll content with
   `bookingBarSpace(height, bottom)` (bar height + 24) so nothing hides behind it.
+
+- **Rental agreement signed at pick-up (2026-10-29).** Model + document wording:
+  `functions/src/shared/rentalAgreement.ts` (`AGREEMENT_TEMPLATE_VERSION` — bump it when the
+  wording/layout changes, `AGREEMENT_COPY`, key rules = Terms §9 without the grace period,
+  `depositPerUnitOf`), effective date `functions/src/shared/legal.ts` (re-exported by
+  `lib/legalContent.ts`). App: `lib/rentalAgreement.ts` (data, HTML in the receipt PDF
+  style + the FULL current Terms annexed via `markdownToHtml(TERMS_MARKDOWN)`, PDF upload,
+  paper fallback, blank print, open), `components/SignaturePad.tsx` (react-native-svg +
+  PanResponder, no dependency; vector SVG in the PDF), `components/admin/AgreementSection.tsx`
+  (BLOCKING section + full-screen signing view), `AgreementAdminCard`, screen strings in
+  `constants/agreementCopy.ts`. ONE agreement per handover SESSION (single checklist = that
+  item; chain summary = every item), id `{orderId}-{base36 time}`; "Sign again" creates a
+  new one and the server marks the old one `supersededBy`. Order: ID check recorded
+  (`useIdCheck.perform`, now once per screen) → agreement → handover write. Server:
+  `finalizeRentalAgreement` (`functions/src/agreements.ts`) checks the PDF
+  (`rentalAgreements/{id}/agreement.pdf` or `paper-agreement.pdf`, application/pdf,
+  < 15 MB) and that every reservation is pre-pick-up / same renter / same order, stamps
+  `signedAt` (server) + `pdfSha256`, writes `rentalAgreements/{id}` (renter + admin read,
+  server write) + `internal/audit` (staff name, admin only), sets
+  `agreementId`/`agreementSignedAt`/`agreementMethod` on the reservations, emails the PDF
+  as an ATTACHMENT (`rentalAgreementEmail`, never a Storage link). Storage
+  `rentalAgreements/{id}/` = admin create once, renter/admin read, never deleted — business
+  record, outside the ID-document retention. Renter: "Agreement" button in Receipts &
+  reports (`RentalDocCard`); admin: detail card (status, recorded by, email, Open PDF,
+  Print agreement). The agreement never contains the ID photo or a staff name.
 
 ## Security follow-ups
 
