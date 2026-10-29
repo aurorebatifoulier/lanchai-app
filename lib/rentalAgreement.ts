@@ -6,6 +6,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, storage } from './firebase';
+import { auth } from './auth';
+import { AGREEMENT_UI } from '@/constants/agreementCopy';
 import { CHECKLIST_CATEGORIES, type ChecklistData, type ChecklistRating, type RentalDoc } from './firestore';
 import { TERMS_MARKDOWN, LEGAL_EFFECTIVE_DATE, fillLegalPlaceholders } from './legalContent';
 import { getPublicRetention } from './residency';
@@ -252,15 +254,43 @@ export async function termsForAnnex(shop: ShopInfo): Promise<string> {
 
 // ── Sign / paper / print / open ──────────────────────────────────────────────
 
+// Each step fails with its OWN message (AGREEMENT_UI.errors) + the Firebase code, so a
+// failure says which call broke: the PDF, the Storage upload or the server step.
+const codeOf = (err: unknown) => String((err as { code?: string })?.code ?? 'unknown').replace(/^(storage|functions)\//, '');
+
 async function uploadPdf(html: string, agreementId: string, method: AgreementMethod): Promise<void> {
-  const { uri } = await Print.printToFileAsync({ html, base64: false });
-  const blob: Blob = await (await fetch(uri)).blob();
-  await uploadBytes(storageRef(storage, agreementPdfPath(agreementId, method)), blob, { contentType: 'application/pdf' });
+  let blob: Blob;
+  try {
+    const { uri } = await Print.printToFileAsync({ html, base64: false });
+    blob = await (await fetch(uri)).blob();
+  } catch (err) {
+    throw new Error(AGREEMENT_UI.errors.pdf(codeOf(err)));
+  }
+  try {
+    await uploadBytes(storageRef(storage, agreementPdfPath(agreementId, method)), blob, { contentType: 'application/pdf' });
+  } catch (err) {
+    throw new Error(AGREEMENT_UI.errors.upload(codeOf(err)));
+  }
 }
 
 async function finalize(agreementId: string, reservationIds: string[], method: AgreementMethod, staffName: string) {
-  const r = await httpsCallable(functions, 'finalizeRentalAgreement')({ agreementId, reservationIds, method, staffName });
-  return r.data as { agreementId: string; signedAtMs: number; emailed: boolean };
+  try {
+    const r = await httpsCallable(functions, 'finalizeRentalAgreement')({ agreementId, reservationIds, method, staffName });
+    return r.data as { agreementId: string; signedAtMs: number; emailed: boolean };
+  } catch (err) {
+    // Our own HttpsErrors carry a readable message; a bare "unauthenticated" /
+    // "permission-denied" before the function runs = Cloud Run invoker permission.
+    const code = codeOf(err);
+    const msg = (err as { message?: string })?.message ?? '';
+    throw new Error(AGREEMENT_UI.errors.finalize(code, msg && msg.toLowerCase() !== code.replace(/-/g, ' ') && msg !== code ? msg : null));
+  }
+}
+
+/** The signed-in staff account, with a fresh ID token, before any write. */
+async function requireSession(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error(AGREEMENT_UI.errors.session);
+  await user.getIdToken(true).catch(() => { throw new Error(AGREEMENT_UI.errors.session); });
 }
 
 export const agreementIdFor = (reservations: RentalDoc[]) =>
@@ -277,6 +307,7 @@ const withFreshId = (data: AgreementData): AgreementData => {
 export async function signAgreement(args: {
   data: AgreementData; termsMarkdown: string; signature: Signature; staffName: string; reservationIds: string[];
 }) {
+  await requireSession();
   const data = withFreshId(args.data);
   const html = buildAgreementHtml(data, {
     signatureSvg: toSignatureSvg(args.signature),
@@ -296,6 +327,7 @@ export async function savePaperAgreement(args: {
     const img = await manipulateAsync(uri, [{ resize: { width: 1400 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true });
     if (img.base64) photos.push(`data:image/jpeg;base64,${img.base64}`);
   }
+  await requireSession();
   const data = withFreshId(args.data);
   const html = buildAgreementHtml(data, {
     blank: true, paperPhotos: photos, signedAtLabel: vteReservationLabel(Date.now()), termsMarkdown: args.termsMarkdown,

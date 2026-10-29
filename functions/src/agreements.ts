@@ -34,7 +34,9 @@ async function requireAdmin(uid: string | undefined): Promise<string> {
 
 // { agreementId, reservationIds, method, staffName? } → { agreementId, signedAtMs, emailed }
 export const finalizeRentalAgreement = onCall(
-  { region: REGION, secrets: [BREVO_API_KEY], memory: '512MiB' },
+  // invoker 'public': Cloud Run lets every request reach the function, which then checks
+  // Firebase Auth + admin itself (a missing invoker binding shows as a bare 401/403).
+  { region: REGION, secrets: [BREVO_API_KEY], memory: '512MiB', invoker: 'public' },
   async request => {
     const adminUid = await requireAdmin(request.auth?.uid);
     const d = (request.data ?? {}) as { agreementId?: unknown; reservationIds?: unknown; method?: unknown; staffName?: unknown };

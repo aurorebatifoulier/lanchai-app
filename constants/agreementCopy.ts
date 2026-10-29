@@ -42,6 +42,11 @@ export const AGREEMENT_UI = {
 
   errors: {
     generic: 'Couldn’t save the agreement. Please try again.',
+    session: 'You’re signed out — sign in again, then sign the agreement.',
+    pdf: (code: string) => `Couldn’t create the PDF on this device (${code}). Please try again.`,
+    upload: (code: string) => `Couldn’t upload the agreement PDF (Storage: ${code}). Please try again.`,
+    finalize: (code: string, msg: string | null) =>
+      msg ? `Agreement not recorded (server: ${code}) — ${msg}` : `Agreement not recorded (server: ${code}). Please try again.`,
     open: 'Couldn’t open the agreement. Please try again.',
     share: 'Sharing isn’t available on this device.',
   },
