@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,8 @@ import { useExchangeRate, useThbRate } from '@/lib/exchangeRate';
 import { lakToUsd, lakToThb } from '@/utils/currency';
 import { getChainItemDraft, clearChainDrafts } from '@/lib/checklistChainDraft';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
+import { AgreementSection, initialAgreementState, type AgreementState } from '@/components/admin/AgreementSection';
+import { conditionLines } from '@/lib/rentalAgreement';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -111,9 +113,27 @@ export default function ChecklistSummaryScreen() {
   // First-pick-up ID double check — once for the whole handover chain (same renter).
   const idCheck = useIdCheck(type === 'handover' ? reservations?.[0]?.renterId : null);
 
+  // Rental agreement signed at pick-up — ONE for this handover session (every item of
+  // the chain). BLOCKING like the ID check.
+  const needsAgreement = type === 'handover';
+  const [agreement, setAgreement] = useState<AgreementState>({ signed: false, label: null });
+  const agreementSeeded = useRef(false);
+  useEffect(() => {
+    if (!reservations || agreementSeeded.current) return;
+    agreementSeeded.current = true;
+    setAgreement(initialAgreementState(reservations));
+  }, [reservations]);
+  const agreementConditions = useMemo<Record<string, string[]>>(
+    () => Object.fromEntries(idList.map((id, i) => [id, conditionLines(draftList[i]?.categories)])),
+    [idList, draftList],
+  );
+  const agreementReady = needsAgreement && !!reservations && idCheck.ready && missingDraftIds.length === 0
+    && depositCurrency !== null && !currencyMismatch && calculatedTotalDepositAmount !== null;
+
   const canSubmit =
     !!reservations &&
     (type !== 'handover' || idCheck.ready) &&
+    (!needsAgreement || agreement.signed) &&
     missingDraftIds.length === 0 &&
     depositCurrency !== null &&
     !currencyMismatch &&
@@ -438,6 +458,18 @@ export default function ChecklistSummaryScreen() {
           </View>
           <Text style={styles.checkboxLabel}>Client confirms the item condition as recorded above</Text>
         </TouchableOpacity>
+
+        {needsAgreement && reservations && (
+          <AgreementSection
+            reservations={reservations}
+            conditions={agreementConditions}
+            ready={agreementReady}
+            beforeSign={idCheck.perform}
+            staffName={confirmedByName.trim()}
+            state={agreement}
+            onState={setAgreement}
+          />
+        )}
 
         {submitError && (
           <View style={styles.errorBanner}>

@@ -47,6 +47,8 @@ import { SettlementSummary } from '@/components/SettlementSummary';
 import { SettlementActions, type SettlementConfirmAction } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
+import { AgreementSection, initialAgreementState, type AgreementState } from '@/components/admin/AgreementSection';
+import { conditionLines } from '@/lib/rentalAgreement';
 import { auth } from '@/lib/auth';
 
 type ChecklistType = 'handover' | 'return';
@@ -300,6 +302,23 @@ export default function ChecklistScreen() {
   // consolidated summary screen). Blocking until both confirmations (+ counter photo).
   const idCheck = useIdCheck(type === 'handover' && !inChain ? reservation?.renterId : null);
 
+  // Rental agreement signed at pick-up — single handover only (a chain signs once, on the
+  // order summary). BLOCKING like the ID check.
+  const needsAgreement = type === 'handover' && !inChain;
+  const [agreement, setAgreement] = useState<AgreementState>({ signed: false, label: null });
+  const agreementSeeded = useRef(false);
+  useEffect(() => {
+    if (!reservation || agreementSeeded.current) return;
+    agreementSeeded.current = true;
+    setAgreement(initialAgreementState([reservation]));
+  }, [reservation]);
+  const agreementConditions = useMemo<Record<string, string[]>>(() => (
+    reservation && allRated
+      ? { [reservation.id]: conditionLines(categories as unknown as ChecklistData['categories']) }
+      : {}
+  ), [reservation, allRated, categories]);
+  const agreementReady = needsAgreement && allRated && depositCurrency !== null && calculatedDepositAmount !== null && idCheck.ready;
+
   // In a chain, this screen only collects condition ratings + photos — deposit and
   // confirmation are entered once, on the consolidated summary screen after the last item.
   const canSubmit = inChain
@@ -313,6 +332,7 @@ export default function ChecklistScreen() {
       !chargeUnresolved &&
       !lateChargeUnresolved &&
       (type !== 'handover' || idCheck.ready) &&
+      (!needsAgreement || agreement.signed) &&
       !submitting;
 
   const setRating = useCallback((catId: ChecklistCategoryId, rating: ChecklistRating) => {
@@ -1018,6 +1038,18 @@ export default function ChecklistScreen() {
               <Text style={styles.checkboxLabel}>Client confirms the item condition as recorded above</Text>
             </TouchableOpacity>
           </>
+        )}
+
+        {needsAgreement && (
+          <AgreementSection
+            reservations={[reservation]}
+            conditions={agreementConditions}
+            ready={agreementReady}
+            beforeSign={idCheck.perform}
+            staffName={confirmedByName.trim()}
+            state={agreement}
+            onState={setAgreement}
+          />
         )}
 
         {submitError && (
