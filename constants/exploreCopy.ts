@@ -9,7 +9,12 @@ export const EXPLORE_COPY = {
   searchPlaceholder: 'Tent, drill, party…',
   allCategory: 'All',
 
-  chips: { weekend: 'Free this weekend', under: (x: string) => `Under ${x}`, newItems: 'New', popular: 'Popular' },
+  chips: {
+    weekend: 'Free this weekend', under: (x: string) => `Under ${x}`, newItems: 'New', popular: 'Popular',
+    /** Bag "Add more items" period (removable). */
+    period: (dates: string) => `Free ${dates}`,
+    removePeriod: 'Remove the date filter',
+  },
   bestMatchSort: 'Best match',
 
   // Card signal line — real data only, first applicable.

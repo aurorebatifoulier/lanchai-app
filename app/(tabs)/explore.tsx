@@ -81,6 +81,10 @@ const EXPLORE_CATEGORIES = [
 
 type QuickKey = 'weekend' | 'under' | 'newItems' | 'popular';
 const NO_QUICK: Record<QuickKey, boolean> = { weekend: false, under: false, newItems: false, popular: false };
+const P_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const P_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtPeriodDay = (d: Date) => `${P_DOW[d.getDay()]} ${d.getDate()} ${P_MON[d.getMonth()]}`;
+const fmtPeriod = (a: Date, b: Date) => `${fmtPeriodDay(a)} – ${fmtPeriodDay(b)}`;
 // Sticky search + categories: overlay vertical padding (like the Home sticky search).
 const STICKY_PAD = 8;
 
@@ -100,7 +104,9 @@ export default function ExploreScreen() {
   const exchangeRate = useExchangeRate();
   const CURRENT_USER = user?.uid ?? '';
   // maxPrice (LAK / day, optional): starts with the price filter set — Home "Under X LAK a day".
-  const { q: initialQuery, maxPrice } = useLocalSearchParams<{ q?: string; maxPrice?: string }>();
+  // from / to (ms, optional): a period from the bag's "Add more items" — only products
+  // free for that whole window (removable "Free …" chip); "+" pre-fills it.
+  const { q: initialQuery, maxPrice, from, to } = useLocalSearchParams<{ q?: string; maxPrice?: string; from?: string; to?: string }>();
 
   // Data
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -130,6 +136,7 @@ export default function ExploreScreen() {
   const [occupancy,      setOccupancy]      = useState<Map<string, OccupancyRecord[]> | null>(null);
   // Quick filter chips (combinable with category, search and the filter sheet).
   const [quick, setQuick] = useState<Record<QuickKey, boolean>>(NO_QUICK);
+  const [period, setPeriod] = useState<{ pickupAt: Date; returnAt: Date } | null>(null);
   const [budgetLak, setBudgetLak] = useState(DEFAULT_BUDGET_THRESHOLD_LAK);
   const shop = useShopInfo();
   const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
@@ -168,6 +175,13 @@ export default function ExploreScreen() {
     if (!maxPrice || !Number.isFinite(max) || max <= 0) return;
     setFilters(f => ({ ...f, priceMax: Math.min(max, PRICE_CONFIG.max) }));
   }, [maxPrice]);
+
+  // Bag "Add more items": a valid future period (pick-up before return) → the filter.
+  useEffect(() => {
+    const a = Number(from), b = Number(to);
+    if (!from || !to || !Number.isFinite(a) || !Number.isFinite(b) || a >= b || a < Date.now()) return;
+    setPeriod({ pickupAt: new Date(a), returnAt: new Date(b) });
+  }, [from, to]);
 
   // ── Favorites ─────────────────────────────────────────────────────────────
 
@@ -232,6 +246,7 @@ export default function ExploreScreen() {
     setFilters(DEFAULT_FILTERS);
     setSearchQuery('');
     setQuick(NO_QUICK);
+    setPeriod(null);
   }, []);
 
   const hasActiveFilters = useMemo(() => (
@@ -306,6 +321,16 @@ export default function ExploreScreen() {
     }
     return m;
   }, [allProducts, occupancy, weekend]);
+  // Same rule for the bag period ("Free {dates}" chip).
+  const periodFreeIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!period || !occupancy) return ids;
+    for (const p of allProducts) {
+      if (p.available === false) continue;
+      if (computeAvailableUnits(occupancy.get(p.id) ?? [], period.pickupAt, period.returnAt, effectiveStock(p)) >= 1) ids.add(p.id);
+    }
+    return ids;
+  }, [allProducts, occupancy, period]);
   // "Popular" chip: ≥ 3 returns this month (rentalsByMonth) OR the admin "Popular" flag
   // (the flag alone while the month has no data yet).
   const isPopular = useCallback((p: Product) => {
@@ -325,13 +350,14 @@ export default function ExploreScreen() {
       (!quick.weekend || (weekendUnitsById.get(p.id) ?? 0) >= 1)
       && (!quick.under || (exchangeRate != null && p.pricePerDay > 0 && toLak(p.pricePerDay, exchangeRate) <= budgetLak))
       && (!quick.newItems || p.showInNew === true)
-      && (!quick.popular || isPopular(p));
+      && (!quick.popular || isPopular(p))
+      && (!period || periodFreeIds.has(p.id));
     const base = matched.filter(quickOk);
     if (!search.active) return sortProducts(base, filters.sort);
     const allowed = new Set(base.map(p => p.id));
     const ranked = search.results.filter(r => allowed.has(r.product.id)).map(r => r.product);
     return filters.sort === 'popular' ? ranked : sortProducts(ranked, filters.sort);
-  }, [allProducts, activeCategory, filters, exchangeRate, search, quick, weekendUnitsById, budgetLak, isPopular]);
+  }, [allProducts, activeCategory, filters, exchangeRate, search, quick, weekendUnitsById, budgetLak, isPopular, period, periodFreeIds]);
   const bestId = search.active && filters.sort === 'popular' ? bestMatchId(filteredProducts, search.scoreById) : null;
 
   const budgetLabel = budgetLak.toLocaleString('en-US');
@@ -404,11 +430,11 @@ export default function ExploreScreen() {
       bestMatch={item.id === bestId}
       matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
       weekendUnits={quick.weekend ? (weekendUnitsById.get(item.id) ?? null) : null}
-      quickAdd={locked ? null : availability ? 'later' : 'now'}
-      onQuickAdd={() => openQuickAdd(item, { availableToday: !availability })}
+      quickAdd={locked ? null : period || !availability ? 'now' : 'later'}
+      onQuickAdd={() => openQuickAdd(item, period ? { window: period } : { availableToday: !availability })}
     />
     );
-  }, [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById, openQuickAdd]);
+  }, [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById, openQuickAdd, period]);
 
   const renderRow = useCallback(({ item }: { item: Row }) => (
     item.kind === 'pair'
@@ -455,6 +481,17 @@ export default function ExploreScreen() {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+        {period && (
+          <PressScale
+            style={[styles.quickChip, styles.quickChipOn, !occupancy && UI.btnDisabled]}
+            onPress={() => setPeriod(null)}
+            accessibilityLabel={EXPLORE_COPY.chips.removePeriod}
+          >
+            <Feather name="calendar" size={13} color={SHADES.amber} />
+            <Text style={[styles.quickChipText, styles.quickChipTextOn]}>{EXPLORE_COPY.chips.period(fmtPeriod(period.pickupAt, period.returnAt))}</Text>
+            <Feather name="x" size={13} color={SHADES.cream} />
+          </PressScale>
+        )}
         {quickChips.map(c => (
           <PressScale
             key={c.key}

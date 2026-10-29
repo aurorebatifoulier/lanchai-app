@@ -30,8 +30,11 @@ import { toLak } from '@/utils/currency';
 // checks still run at checkout.
 
 type Choice = 'weekend' | 'tomorrow' | 'pick';
-/** range: dates already picked (product page calendar) → the sheet opens on them. */
-type QuickAddOpts = { availableToday?: boolean; range?: { start: Date; end: Date } };
+type QWindow = { pickupAt: Date; returnAt: Date };
+/** range: dates already picked (product page calendar) → the sheet opens on them.
+ *  window: exact pick-up / return times (Explore period from the bag) → same, with those
+ *  times instead of the day's first slot. */
+type QuickAddOpts = { availableToday?: boolean; range?: { start: Date; end: Date }; window?: QWindow };
 interface QuickAddApi { openQuickAdd: (product: Product, opts?: QuickAddOpts) => void }
 const Ctx = createContext<QuickAddApi>({ openQuickAdd: () => {} });
 export const useQuickAdd = () => useContext(Ctx);
@@ -41,6 +44,8 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const pad = (n: number) => String(n).padStart(2, '0');
 const fmtDayShort = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()}`;
 const fmtWhen = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const dayOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const atSlot = (day: Date, slot: string) => {
   const d = new Date(day.getFullYear(), day.getMonth(), day.getDate());
   const [h, m] = slot.split(':').map(Number);
@@ -53,12 +58,15 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const [product, setProduct] = useState<Product | null>(null);
   const [startOnPick, setStartOnPick] = useState(false);
   const [presetRange, setPresetRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [presetWindow, setPresetWindow] = useState<QWindow | null>(null);
   const [toast, setToast] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openQuickAdd = useCallback((p: Product, opts?: QuickAddOpts) => {
-    setStartOnPick(opts?.availableToday === false || !!opts?.range);
-    setPresetRange(opts?.range ?? null);
+    const w = opts?.window ?? null;
+    setStartOnPick(opts?.availableToday === false || !!opts?.range || !!w);
+    setPresetRange(w ? { start: dayOf(w.pickupAt), end: dayOf(w.returnAt) } : opts?.range ?? null);
+    setPresetWindow(w);
     setProduct(p);
   }, []);
 
@@ -74,7 +82,7 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={api}>
       {children}
-      {product && <QuickAddSheet product={product} startOnPick={startOnPick} presetRange={presetRange} onClose={() => setProduct(null)} onAdded={onAdded} />}
+      {product && <QuickAddSheet product={product} startOnPick={startOnPick} presetRange={presetRange} presetWindow={presetWindow} onClose={() => setProduct(null)} onAdded={onAdded} />}
       {toast && <Toast onView={() => { setToast(false); router.push('/bag'); }} />}
     </Ctx.Provider>
   );
@@ -98,8 +106,9 @@ function Toast({ onView }: { onView: () => void }) {
   );
 }
 
-function QuickAddSheet({ product, startOnPick, presetRange, onClose, onAdded }: {
-  product: Product; startOnPick: boolean; presetRange: { start: Date; end: Date } | null; onClose: () => void; onAdded: () => void;
+function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClose, onAdded }: {
+  product: Product; startOnPick: boolean; presetRange: { start: Date; end: Date } | null; presetWindow: QWindow | null;
+  onClose: () => void; onAdded: () => void;
 }) {
   const screen = useScreenInsets();
   const { user } = useAuth();
@@ -124,7 +133,10 @@ function QuickAddSheet({ product, startOnPick, presetRange, onClose, onAdded }: 
     const tSlot = available(t)[0];
     const tomorrow = tSlot ? { pickupAt: atSlot(t, tSlot), returnAt: atSlot(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1), tSlot) } : null;
     let pick: { pickupAt: Date; returnAt: Date } | null = null;
-    if (range.start && range.end) {
+    if (range.start && range.end && presetWindow
+      && sameDay(range.start, presetWindow.pickupAt) && sameDay(range.end, presetWindow.returnAt)) {
+      pick = presetWindow; // the bag's exact times, while the renter keeps those days
+    } else if (range.start && range.end) {
       const pSlot = available(range.start)[0];
       if (pSlot) {
         const pickupAt = atSlot(range.start, pSlot);
@@ -133,7 +145,7 @@ function QuickAddSheet({ product, startOnPick, presetRange, onClose, onAdded }: 
       }
     }
     return { weekend: wk ? { pickupAt: wk.pickupAt, returnAt: wk.returnAt } : null, tomorrow, pick };
-  }, [slots, range]);
+  }, [slots, range, presetWindow]);
 
   const free = useCallback((w: { pickupAt: Date; returnAt: Date } | null) =>
     !!w && occ != null && computeAvailableUnits(occ, w.pickupAt, w.returnAt, stock) >= 1, [occ, stock]);
