@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/search-vocabulary';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/search-vocabulary' | '/admin/promo-codes';
 }
 
 const CARDS: HubCard[] = [
@@ -53,6 +53,13 @@ const CARDS: HubCard[] = [
     title: 'Collections',
     sub: 'Home "Got plans?" occasion picks',
     route: '/admin/collections',
+  },
+  {
+    icon: 'tag',
+    iconBg: COLORS.warmBeige,
+    title: 'Promo codes',
+    sub: 'Discount codes for campaigns and partners',
+    route: '/admin/promo-codes',
   },
   {
     icon: 'radio',
