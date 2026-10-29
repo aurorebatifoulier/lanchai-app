@@ -648,7 +648,9 @@ a snapshot indefinitely).
   referrals (Terms §16: no cash value, not transferable, may change/end, abuse →
   cancelled, lost on account deletion), and the **validity of an electronic signature in
   Lao PDR** (the rental agreement is signed at pick-up — texts say "the rental agreement
-  you sign at pick-up"). No "DRAFT" banner is shown to renters; the review note lives in
+  you sign at pick-up"), and the wording "our contract procedure applies" on a non-return
+  (Terms §9, FAQ "What happens if I return late?" — kept as is on purpose; what that
+  procedure is and whether it's enforceable). No "DRAFT" banner is shown to renters; the review note lives in
   the file header and here. Placeholders filled by `components/LegalScreen.tsx`
   (`fillLegalPlaceholders`): `{{SHOP_ADDRESS}}` / `{{WHATSAPP_LINE}}` from `config/shop`,
   `{{ID_RETENTION}}` / `{{PROOF_RETENTION}}` from **`config/legalPublic`**

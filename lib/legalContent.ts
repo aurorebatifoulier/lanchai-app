@@ -11,7 +11,8 @@
 // outside Laos (Singapore / Brevo in France), operating before registration, governing
 // law & competent court, damage charges, tax/VAT obligations once registered, document
 // retention periods, loyalty programme & referrals (Terms §16), per-unit deposit,
-// Brevo link tracking, validity of an electronic signature in Lao PDR.
+// Brevo link tracking, validity of an electronic signature in Lao PDR, "our contract
+// procedure applies" on a non-return (Terms §9 + FAQ — kept as is on purpose).
 //
 // Placeholders filled at render time from config/shop (LegalScreen.tsx), so they stay in
 // sync with Admin → Shop settings:
