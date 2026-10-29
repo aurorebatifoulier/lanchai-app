@@ -305,7 +305,8 @@ export default function BagSummaryScreen() {
               name={item.productName}
               image={item.productImage}
               lines={[
-                `${item.pickupLabel} → ${item.returnLabel}`,
+                item.pickupLabel,
+                c.returnArrow(item.returnLabel),
                 `${c.dayLine(item.durationDays, item.pricePerDay.toLocaleString('en-US'), item.quantity)}`,
               ]}
               right={`${item.subtotal.toLocaleString('en-US')} LAK`}

@@ -63,6 +63,11 @@ export default function BookingConfirmationScreen() {
 
   const single = reservations.length === 1;
   const first = reservations[0];
+  // Different dates across items: the carbon card shows the EARLIEST pick-up + how many
+  // pick-ups (or returns) there are; each item card below keeps its own dates.
+  const earliest = reservations.reduce((a, r) => (r.pickupAt.toMillis() < a.pickupAt.toMillis() ? r : a), first);
+  const pickupCount = new Set(reservations.map(r => r.pickupAt.toMillis())).size;
+  const returnCount = new Set(reservations.map(r => r.returnAt.toMillis())).size;
   // FIX: the amount AFTER coupon (frozen `total`), not the pre-coupon subtotal.
   const rental = reservations.reduce((sum, r) => sum + (r.total ?? r.subtotal ?? 0), 0);
   const deposit = reservations.reduce((sum, r) => sum + (r.deposit ?? 0), 0);
@@ -89,9 +94,16 @@ export default function BookingConfirmationScreen() {
         <View style={s.carbon}>
           <QRThumb value={qrValue} size={82} onPress={() => setLightbox({ value: qrValue, label: single ? first.productName : c.order(orderLabel) })} />
           <View style={{ flex: 1 }}>
-            <Text style={s.pickLabel}>{c.pickup}</Text>
-            <Text style={s.pickWhen}>{first.pickupLabel}</Text>
-            <Text style={s.returnLine}>{c.returnOn(first.returnLabel)}</Text>
+            <View style={s.pickHead}>
+              <Text style={s.pickLabel}>{c.pickup}</Text>
+              {pickupCount > 1 && <Text style={s.countChip}>{c.pickupsCount(pickupCount)}</Text>}
+            </View>
+            <Text style={s.pickWhen}>{earliest.pickupLabel}</Text>
+            <Text style={s.returnLine}>
+              {pickupCount > 1 ? c.seeEachItem
+                : returnCount > 1 ? `${c.returnsCount(returnCount)} · ${c.seeEachItem}`
+                : c.returnOn(earliest.returnLabel)}
+            </Text>
             <Text style={s.tapHint}>{c.tapQr}</Text>
           </View>
         </View>
@@ -101,7 +113,8 @@ export default function BookingConfirmationScreen() {
               <View key={r.id} style={[UI.card, s.item]}>
                 <View style={{ flex: 1 }}>
                   <Text style={UI.title} numberOfLines={1}>{r.productName}</Text>
-                  <Text style={UI.subtitle} numberOfLines={1}>{`${r.pickupLabel} → ${r.returnLabel}`}</Text>
+                  <Text style={UI.subtitle} numberOfLines={1}>{r.pickupLabel}</Text>
+                  <Text style={UI.subtitle} numberOfLines={1}>{c.returnArrow(r.returnLabel)}</Text>
                 </View>
                 <QRThumb value={`LANCHAI-RES:${r.id}`} size={44} onPress={() => setLightbox({ value: `LANCHAI-RES:${r.id}`, label: r.productName })} />
               </View>
@@ -171,7 +184,12 @@ const s = StyleSheet.create({
   sub: { fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 21, paddingHorizontal: 12 },
   order: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbonMuted },
   carbon: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: SHADES.carbon, borderRadius: 18, padding: 16 },
+  pickHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   pickLabel: { fontSize: 13, fontWeight: '700', color: SHADES.amber },
+  countChip: {
+    fontSize: 11.5, fontWeight: '700', color: SHADES.carbon, backgroundColor: SHADES.amber,
+    borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden',
+  },
   pickWhen: { fontSize: 18, fontWeight: '800', color: SHADES.white, marginTop: 2 },
   returnLine: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 3 },
   tapHint: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 6 },

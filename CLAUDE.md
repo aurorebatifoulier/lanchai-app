@@ -1043,6 +1043,23 @@ a snapshot indefinitely).
   sheet, Google link fallback), What to bring (ID line only while `firstRentalIdCheck`).
   "Free cancellation up to 48h" is gone; the 48h tier texts left in the cancel screens
   only show when a reservation carries an advance (never today).
+  Confirmation with several items: the carbon card shows the EARLIEST pick-up + "{n}
+  pick-ups" (or "{n} returns") and "See each item below"; item cards keep their own
+  dates (two lines, also in the bag checkout product cards).
+- **Bag (validated mockup, 2026-10-29)** — `app/bag.tsx`, copy in `constants/bagCopy.ts`.
+  Header "Your bag" + items chip; "Same dates for everything" toggle (≥ 2 items; starts ON
+  when every item already shares the same dates; ON → copies the first dated item's
+  dates/times to all, and any Edit applies to all; OFF writes nothing — state is local,
+  no Firestore field). Item cards: thumbnail (category icon when no photo) → product,
+  two-line dates + Edit (`DateRangePicker` rules), inline `ConfirmBox` remove, round − / +
+  (max = units free on its dates), rental amount; ONE dark-amber signal line: tier lock →
+  date conflict ("change them" opens the picker) → no price → "Only 1 left on these
+  dates." (exactly 1 unit free). "+ Add more items" → `/explore?from=&to=` (ms) when every
+  item shares the same dates/times, else `/explore`. Explore: removable "Free {dates}"
+  chip, products free for the whole window (`computeAvailableUnits`, Free-this-weekend
+  rule); "+" → `openQuickAdd(product, { window })` = those exact times. Your total =
+  rental (to pay at pick-up) + refundable deposit on its own line — NEVER summed with the
+  rental. Bottom bar "Continue" → `/bag/checkout`.
 
 ## Security follow-ups
 
