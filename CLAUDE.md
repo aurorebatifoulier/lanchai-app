@@ -1120,6 +1120,30 @@ a snapshot indefinitely).
   via CSS `@page` margin boxes (Android WebView; iOS prints without it). Rental document
   buttons (`RentalDocCard`) are text only, 4 equal, 12px.
 
+- **Promo codes (2026-10-29)** — separate from loyalty coupons, ONE discount per booking
+  (coupon OR promo; `createReservations` refuses both: `one-discount`). Rule:
+  `functions/src/shared/promo.ts` (`promoStatus`, `evaluatePromo`: active, Vientiane days
+  `validFrom/To` "YYYY-MM-DD" via `vteIsoDay`, business accounts only if
+  `businessAllowed`, first rental only = no booking except cancelled ones
+  (`NOT_FIRST_RENTAL_STATUSES`), per-renter + total limits, scope categories/products,
+  minimum on the in-scope rental; percent or fixed LAK, spread on in-scope lines only,
+  never a free line). `promoCodes/{CODE}` (doc id = code) admin-only;
+  `usedCount`/`discountGivenLak` + `uses/{uid}` server-only (rules); delete only while
+  unused, else deactivate. Renters check a code through `validatePromoCode`
+  (`functions/src/promo.ts`, 10 FAILED tries / hour / account in `promoAttempts/{uid}` —
+  re-checks of a valid code don't count); `createReservations` re-validates it in its
+  transaction (`readPromo`), computes the discount itself and increments the counters
+  atomically; reservations carry `promoApplied {code, type, value, discountAmount}`.
+  `restoreCancelledPromo` gives the use back when every carrying line is cancelled by the
+  renter or an admin (not `admin_release`, never a no-show). App: `lib/promoCodes.ts`
+  (admin CRUD, `checkPromoCode`, `usePromoCode` — re-checks 600 ms after dates /
+  quantity / bag change), `TotalCard` promo field + radio-like discount rows (better one
+  preselected on apply), admin `app/admin/promo-codes.tsx` + `promo-code-form.tsx?code=`
+  (flat), copy `constants/promoCopy.ts`. Every display of a discount goes through the
+  shared `discountOf` / `orderDiscountOf` ("Loyalty coupon (10%)" / "Promo CODE"):
+  confirmation, rental + admin detail, receipt summary (screen/PDF/email), booking
+  email, agreement. Loyalty points stay on the pre-discount subtotal.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the
@@ -1155,6 +1179,14 @@ callable's `details.code` to friendly messages. Renter cancellation rule now pin
 - `requests`: field allow-list + size limits (text ≤ 1000, contact ≤ 200 or null).
 - Storage: chat, claim, profile and checklist files are SDK-readable only by their
   owner/admin (checklist: admin only). Stored download URLs keep working.
+
+**Closed (2026-10-29): client-side amounts.** Audit of `createReservations`: the
+client sends only product, dates, quantity, `couponId` OR `promoCode`, `notes` (≤ 500)
+and `idCheckAtCounter` (an intent — the server decides with `identityBookingDecision`).
+Every amount (tier price, exchange rate, per-unit deposit, coupon % from config, promo
+discount, stock, slots) is recomputed server-side in the transaction. Amounts still
+written from a client are STAFF entries only (checklist charges, deposit received,
+settlement), protected by the admin rules — by design.
 
 **Still open:** App Check (with the EAS build, before public launch).
 
