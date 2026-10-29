@@ -1,26 +1,22 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-} from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
+import { MOTION } from '@/constants/motion';
+import { BAG_COPY } from '@/constants/bagCopy';
+import { categoryStyle } from '@/constants/categoryStyle';
+import { UI, Chip, SectionTitle, ToggleRow, useScreenInsets } from '@/components/account/ui';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
+import { BookingBottomBar } from '@/components/booking/BookingBlocks';
+import { ConfirmBox } from '@/components/ConfirmBox';
+import DateRangePicker from '@/components/DateRangePicker';
+import PressScale from '@/components/PressScale';
 import { useBookingHold } from '@/lib/bookingHold';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -29,511 +25,299 @@ import {
   updateBagItemDates,
   updateAllBagItemDates,
   updateBagItemQuantity,
-  BagItem,
+  type BagItem,
 } from '@/lib/bag';
-import { getRenterProduct } from '@/lib/firestore';
-import { Product } from '@/lib/mockData';
+import { getRenterProduct, getUserProfile, type UserProfile } from '@/lib/firestore';
+import type { Product } from '@/lib/mockData';
 import { getAvailableStock, effectiveStock } from '@/utils/availability';
 import { getEffectiveRate, billableDaysFromDates, depositForLine } from '@/utils/pricing';
-import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
+import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
-import { getUserProfile, type UserProfile } from '@/lib/firestore';
 import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
-import DateRangePicker from '@/components/DateRangePicker';
-import { PriceLak } from '@/components/PriceLak';
-import PressScale from '@/components/PressScale';
 
-// ── Date format helper ────────────────────────────────────────────────────────
-const DOW_S  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const MON_S  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// Bag (validated mockup) — My Account / booking visual language. Header + "{n} items"
+// chip; "Same dates for everything" toggle; one white card per item (thumbnail → product,
+// name, dates on two lines + Edit, − / + quantity up to what's free on its dates, rental
+// amount) with ONE honest signal line when relevant (tier lock, date conflict, no price,
+// only 1 left); "+ Add more items" (→ Explore, filtered on the bag's period when every
+// item shares it); "Your total" (rental to pay at pick-up, refundable deposit on its own
+// line — never added together); bottom bar → bag checkout. Same price / deposit rules as
+// the checkout and the server (getEffectiveRate, depositForLine).
 
-function fmtDateTime(d: Date): string {
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
-  return `${DOW_S[d.getDay()]} ${d.getDate()} ${MON_S[d.getMonth()]} · ${h}:${m}`;
-}
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad = (v: number) => String(v).padStart(2, '0');
+const fmtWhen = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const n = (v: number) => Math.round(v).toLocaleString('en-US');
+const ms = (t: BagItem['pickupAt']) => (t ? t.toMillis() : null);
 
-// ── Screen ────────────────────────────────────────────────────────────────────
 export default function BagScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const { user } = useAuth();
   const exchangeRate = useExchangeRate();
-  const vatPercent = useVatPercent();
   const loyaltyConfig = useLoyaltyConfig();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const bookingHold = useBookingHold();
+  const b = BAG_COPY;
 
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   useEffect(() => {
     if (!user) return;
     getUserProfile(user.uid).then(setProfile).catch(() => {});
   }, [user]);
 
-  // Converts a product's USD deposit to LAK, applying the customer-type/loyalty-tier
-  // deposit percentage.
-  // Per unit × quantity — the server's formula (shared depositForLine).
-  const depositLakFor = useCallback((usdDeposit: number, quantity: number): number => {
-    if (exchangeRate == null) return 0;
-    const percent = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
-    return depositForLine(usdDeposit, exchangeRate, percent, quantity).deposit;
-  }, [exchangeRate, profile, loyaltyConfig]);
-
-  const [items,      setItems]      = useState<BagItem[]>([]);
+  const [rawItems,   setRawItems]   = useState<BagItem[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [productMap, setProductMap] = useState<Record<string, Product | null>>({});
   const [stockMap,   setStockMap]   = useState<Record<string, number>>({});
   const [datePickerItemId, setDatePickerItemId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  // null = follow the bag (on when every item already shares the same dates).
+  const [sameDatesPref, setSameDatesPref] = useState<boolean | null>(null);
 
-  // Track fetched products and checked availability combos to avoid redundant reads
+  // Avoid redundant reads: products fetched once, availability once per item + dates.
   const fetchedProductIds = useRef<Set<string>>(new Set());
   const checkedAvail      = useRef<Set<string>>(new Set());
 
-  // ── Bag listener ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    const unsub = listenBagItems(
+    return listenBagItems(
       user.uid,
-      received => { setItems(received); setLoading(false); },
-      ()       => { setLoading(false); },
+      received => { setRawItems(received); setLoading(false); },
+      () => setLoading(false),
     );
-    return unsub;
   }, [user]);
 
-  // ── Fetch products for new items ──────────────────────────────────────────
+  // listenBagItems has no orderBy — show items in the order they were added.
+  const items = useMemo(
+    () => [...rawItems].sort((a, c) => (a.addedAt?.toMillis?.() ?? 0) - (c.addedAt?.toMillis?.() ?? 0)),
+    [rawItems],
+  );
+
   useEffect(() => {
     items.forEach(item => {
       if (fetchedProductIds.current.has(item.productId)) return;
       fetchedProductIds.current.add(item.productId);
-      getRenterProduct(item.productId).then(p => {
-        setProductMap(prev => ({ ...prev, [item.productId]: p }));
-      });
+      getRenterProduct(item.productId).then(p => setProductMap(prev => ({ ...prev, [item.productId]: p })));
     });
   }, [items]);
 
-  // ── Availability check for items with dates set ───────────────────────────
+  // Units free on each item's dates (the booking rule).
   useEffect(() => {
     items.forEach(item => {
       if (!item.pickupAt || !item.returnAt) return;
       const product = productMap[item.productId];
       if (!product) return;
-
       const key = `${item.id}:${item.pickupAt.seconds}:${item.returnAt.seconds}`;
       if (checkedAvail.current.has(key)) return;
       checkedAvail.current.add(key);
-
-      const pickup = item.pickupAt.toDate();
-      const ret    = item.returnAt.toDate();
-      getAvailableStock(item.productId, pickup, ret, effectiveStock(product)).then(avail => {
-        setStockMap(prev => ({ ...prev, [item.id]: avail }));
-      });
+      getAvailableStock(item.productId, item.pickupAt.toDate(), item.returnAt.toDate(), effectiveStock(product))
+        .then(avail => setStockMap(prev => ({ ...prev, [item.id]: avail })))
+        .catch(() => {});
     });
   }, [items, productMap]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  // Per-item conflict: known stock < requested quantity
-  const conflictMap = useMemo(() => {
-    const map: Record<string, boolean> = {};
-    items.forEach(item => {
-      if (!item.pickupAt || !item.returnAt) return;
-      const avail = stockMap[item.id];
-      if (avail === undefined) return;
-      if (avail < item.quantity) map[item.id] = true;
-    });
-    return map;
-  }, [items, stockMap]);
+  const depositPct = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
 
-  // Items that are fully ready for checkout
-  const readyItems = useMemo(() =>
-    items.filter(item => {
-      if (!item.pickupAt || !item.returnAt) return false;
-      const avail = stockMap[item.id];
-      if (avail === undefined) return false;
-      if (avail < item.quantity) return false;
-      const product = productMap[item.productId];
-      if (!product) return false;
-      if (getProductAccessState(product, profile?.loyaltyTier ?? null).locked) return false;
-      const days = billableDaysFromDates(item.pickupAt.toDate(), item.returnAt.toDate());
-      return getEffectiveRate(product, days) !== null;
-    }),
-    [items, stockMap, productMap, profile],
-  );
+  /** Rental (LAK) of one item on its dates, or null (no dates / no rate / no price). */
+  const rentalOf = useCallback((item: BagItem): number | null => {
+    const product = productMap[item.productId];
+    if (!product || !item.pickupAt || !item.returnAt || exchangeRate == null) return null;
+    const days = billableDaysFromDates(item.pickupAt.toDate(), item.returnAt.toDate());
+    const rate = getEffectiveRate(product, days);
+    return rate == null ? null : toLak(rate, exchangeRate) * days * item.quantity;
+  }, [productMap, exchangeRate]);
 
-  const totalRental = useMemo(() =>
-    readyItems.reduce((sum, item) => {
-      const product = productMap[item.productId];
-      if (!product || !item.pickupAt || !item.returnAt || exchangeRate == null) return sum;
-      const days = billableDaysFromDates(item.pickupAt.toDate(), item.returnAt.toDate());
-      const rate = getEffectiveRate(product, days);
-      if (rate === null) return sum;
-      const rateLak = toLak(rate, exchangeRate);
-      return sum + rateLak * days * item.quantity;
-    }, 0),
-    [readyItems, productMap, exchangeRate],
-  );
+  const conflictOf = useCallback((item: BagItem) => {
+    if (!item.pickupAt || !item.returnAt) return false;
+    const avail = stockMap[item.id];
+    return avail !== undefined && avail < item.quantity;
+  }, [stockMap]);
 
-  const totalDeposit = useMemo(() =>
-    readyItems.reduce((sum, item) => {
-      const product = productMap[item.productId];
-      if (!product || exchangeRate == null) return sum;
-      return sum + depositLakFor(product.deposit, item.quantity);
-    }, 0),
-    [readyItems, productMap, exchangeRate, depositLakFor],
-  );
+  // Ready for checkout: dates, known availability, no conflict, not tier-locked, priced.
+  const readyItems = useMemo(() => items.filter(item => {
+    const product = productMap[item.productId];
+    if (!product || !item.pickupAt || !item.returnAt || stockMap[item.id] === undefined) return false;
+    if (conflictOf(item)) return false;
+    if (getProductAccessState(product, profile?.loyaltyTier ?? null).locked) return false;
+    return rentalOf(item) != null;
+  }), [items, productMap, stockMap, conflictOf, profile, rentalOf]);
 
+  const totalRental = readyItems.reduce((sum, item) => sum + (rentalOf(item) ?? 0), 0);
+  const totalDeposit = exchangeRate == null ? 0 : readyItems.reduce((sum, item) => {
+    const product = productMap[item.productId];
+    return product ? sum + depositForLine(product.deposit, exchangeRate, depositPct, item.quantity).deposit : sum;
+  }, 0);
   const itemsNeedingDates = items.filter(i => !i.pickupAt || !i.returnAt).length;
 
-  const activeBagItem = useMemo(
-    () => (datePickerItemId ? (items.find(i => i.id === datePickerItemId) ?? null) : null),
-    [datePickerItemId, items],
-  );
+  // The bag's period when EVERY item has the same pick-up and return (Explore filter).
+  const sharedWindow = useMemo(() => {
+    const first = items[0];
+    if (!first?.pickupAt || !first.returnAt) return null;
+    const p = first.pickupAt.toMillis(), r = first.returnAt.toMillis();
+    return items.every(i => ms(i.pickupAt) === p && ms(i.returnAt) === r) ? { pickupAt: p, returnAt: r } : null;
+  }, [items]);
+  const sameDates = items.length >= 2 && (sameDatesPref ?? sharedWindow != null);
 
-  // Source item for "use same dates for all" — the first item that actually HAS
-  // dates set, not strictly items[0]: listenBagItems has no orderBy, so array order
-  // isn't guaranteed to reflect "first added."
-  const dateSourceItem = useMemo(
-    () => items.find(i => i.pickupAt && i.returnAt) ?? null,
-    [items],
-  );
+  const activeBagItem = datePickerItemId ? (items.find(i => i.id === datePickerItemId) ?? null) : null;
+  const activeProduct = activeBagItem ? productMap[activeBagItem.productId] : undefined;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleRemove = useCallback((itemId: string) => {
-    if (!user) return;
-    removeFromBag(user.uid, itemId).catch(() => {});
+    setRemovingId(null);
+    if (user) removeFromBag(user.uid, itemId).catch(() => {});
   }, [user]);
 
-  const handleQuantityChange = useCallback(async (item: BagItem, delta: number) => {
+  const handleQuantity = useCallback((item: BagItem, delta: number) => {
     if (!user) return;
-    const product  = productMap[item.productId];
-    const avail    = stockMap[item.id];
-    const maxQty   = avail !== undefined ? avail : (product ? effectiveStock(product) : 99);
-    const next     = Math.max(1, Math.min(maxQty, item.quantity + delta));
-    if (next === item.quantity) return;
-    try { await updateBagItemQuantity(user.uid, item.id, next); } catch {}
+    const product = productMap[item.productId];
+    const avail = stockMap[item.id];
+    const max = avail !== undefined ? avail : (product ? effectiveStock(product) : 1);
+    const next = Math.max(1, Math.min(max, item.quantity + delta));
+    if (next !== item.quantity) updateBagItemQuantity(user.uid, item.id, next).catch(() => {});
   }, [user, productMap, stockMap]);
 
-  const handleDateConfirm = useCallback(async (pickup: Date, ret: Date) => {
+  // "Same dates for everything" on: one item's new dates go to every item (conflicts
+  // then show on the items that aren't free — the usual availability check).
+  const handleDateConfirm = useCallback((pickup: Date, ret: Date) => {
     if (!user || !datePickerItemId) return;
     const itemId = datePickerItemId;
     setDatePickerItemId(null);
-    try { await updateBagItemDates(user.uid, itemId, pickup, ret); } catch {}
-  }, [user, datePickerItemId]);
+    const write = sameDates
+      ? updateAllBagItemDates(user.uid, items.map(i => i.id), pickup, ret)
+      : updateBagItemDates(user.uid, itemId, pickup, ret);
+    write.catch(() => {});
+  }, [user, datePickerItemId, sameDates, items]);
 
-  const bookingHold = useBookingHold();
+  // Turning it on copies the first dated item's dates / times to every other item.
+  const toggleSameDates = useCallback((on: boolean) => {
+    setSameDatesPref(on);
+    if (!on || !user) return;
+    const src = items.find(i => i.pickupAt && i.returnAt);
+    if (!src?.pickupAt || !src.returnAt) return;
+    const p = src.pickupAt.toMillis(), r = src.returnAt.toMillis();
+    const ids = items.filter(i => ms(i.pickupAt) !== p || ms(i.returnAt) !== r).map(i => i.id);
+    updateAllBagItemDates(user.uid, ids, src.pickupAt.toDate(), src.returnAt.toDate()).catch(() => {});
+  }, [user, items]);
 
-  const handleCheckout = useCallback(() => {
-    router.push('/bag/checkout');
-  }, [router]);
+  const addMore = () => {
+    if (sharedWindow) router.push(`/explore?from=${sharedWindow.pickupAt}&to=${sharedWindow.returnAt}`);
+    else router.push('/explore');
+  };
 
-  // No pre-flight availability check needed — writing the copied dates triggers
-  // listenBagItems' live onSnapshot, which cache-misses the existing stockMap/
-  // conflictMap effect and re-fetches per item automatically, surfacing the
-  // existing per-item conflictBanner wherever the copied dates don't work.
-  const handleUseSameDates = useCallback(() => {
-    if (!user || !dateSourceItem?.pickupAt || !dateSourceItem?.returnAt) return;
-    const otherIds = items.filter(i => i.id !== dateSourceItem.id).map(i => i.id);
-    updateAllBagItemDates(
-      user.uid,
-      otherIds,
-      dateSourceItem.pickupAt.toDate(),
-      dateSourceItem.returnAt.toDate(),
-    ).catch(() => {});
-  }, [user, items, dateSourceItem]);
-
-  // ── Item card ─────────────────────────────────────────────────────────────
-  const renderItem = useCallback(({ item }: { item: BagItem }) => {
-    const product     = productMap[item.productId];
-    const avail       = stockMap[item.id];
-    const maxQty      = avail !== undefined ? avail : (product ? effectiveStock(product) : 99);
-    const hasConflict = conflictMap[item.id] ?? false;
-    const hasDates    = !!(item.pickupAt && item.returnAt);
-    const accessState = product ? getProductAccessState(product, profile?.loyaltyTier ?? null) : null;
-
-    let days = 0, effectiveRate: number | null = null, subtotal = 0;
-    if (hasDates && product && item.pickupAt && item.returnAt && exchangeRate != null) {
-      days = billableDaysFromDates(item.pickupAt.toDate(), item.returnAt.toDate());
-      const rateUsd = getEffectiveRate(product, days);
-      effectiveRate = rateUsd != null ? toLak(rateUsd, exchangeRate) : null;
-      subtotal      = effectiveRate != null ? effectiveRate * days * item.quantity : 0;
-    }
-
-    return (
-      <View style={s.card}>
-        {/* Top row: thumbnail + name + delete */}
-        <View style={s.cardTop}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push(`/product/${item.productId}`)}
-          >
-            {item.productImage ? (
-              <Image source={{ uri: item.productImage }} style={s.thumb} contentFit="cover" />
-            ) : (
-              <View style={[s.thumb, s.thumbPlaceholder]}>
-                <Feather name="image" size={18} color={COLORS.softGray} />
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <Text style={s.cardName} numberOfLines={2}>{item.productName}</Text>
-
-          <TouchableOpacity
-            style={s.deleteBtn}
-            onPress={() => handleRemove(item.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Feather name="trash-2" size={15} color={SHADES.carbonMuted} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={s.divider} />
-
-        {/* Dates section */}
-        {!hasDates ? (
-          <TouchableOpacity
-            style={s.setDatesBtn}
-            onPress={() => setDatePickerItemId(item.id)}
-            activeOpacity={0.75}
-          >
-            <Feather name="calendar" size={14} color={SHADES.carbonMuted} />
-            <Text style={s.setDatesBtnText}>Set rental dates</Text>
-            <Feather name="chevron-right" size={14} color={SHADES.carbonMuted} />
-          </TouchableOpacity>
-        ) : (
-          <View style={s.datesRow}>
-            <View style={s.datesInfo}>
-              <View style={s.dateLine}>
-                <Text style={s.dateLabel}>Pick-up</Text>
-                <Text style={s.dateValue}>{fmtDateTime(item.pickupAt!.toDate())}</Text>
-              </View>
-              <View style={s.dateLine}>
-                <Text style={s.dateLabel}>Return </Text>
-                <Text style={s.dateValue}>{fmtDateTime(item.returnAt!.toDate())}</Text>
-              </View>
-              {days > 0 && (
-                <Text style={s.durationText}>{days} day{days !== 1 ? 's' : ''}</Text>
-              )}
-            </View>
-            <TouchableOpacity
-              style={s.editDatesBtn}
-              onPress={() => setDatePickerItemId(item.id)}
-            >
-              <Text style={s.editDatesBtnText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Conflict warning */}
-        {hasConflict && (
-          <View style={s.conflictBanner}>
-            <Feather name="alert-circle" size={13} color={COLORS.danger} />
-            <Text style={s.conflictText}>
-              These dates are not available. Try different dates.
-            </Text>
-          </View>
-        )}
-
-        {/* Access-restricted warning — won't be included at checkout */}
-        {accessState?.locked && (
-          <View style={s.conflictBanner}>
-            <Feather name="lock" size={13} color={COLORS.danger} />
-            <Text style={s.conflictText}>{accessState.message}</Text>
-          </View>
-        )}
-
-        <View style={s.divider} />
-
-        {/* Quantity */}
-        <View style={s.qtyRow}>
-          <Text style={s.qtyLabel}>Quantity</Text>
-          <View style={s.qtyControl}>
-            <TouchableOpacity
-              style={[s.qtyBtn, item.quantity <= 1 && s.qtyBtnOff]}
-              onPress={() => handleQuantityChange(item, -1)}
-              activeOpacity={0.75}
-            >
-              <Feather name="minus" size={14} color={item.quantity <= 1 ? COLORS.softGray : COLORS.carbon} />
-            </TouchableOpacity>
-            <Text style={s.qtyNum}>{item.quantity}</Text>
-            <TouchableOpacity
-              style={[s.qtyBtn, item.quantity >= maxQty && s.qtyBtnOff]}
-              onPress={() => handleQuantityChange(item, 1)}
-              activeOpacity={0.75}
-            >
-              <Feather name="plus" size={14} color={item.quantity >= maxQty ? COLORS.softGray : COLORS.carbon} />
-            </TouchableOpacity>
-          </View>
-          {avail !== undefined && (
-            <Text style={[s.stockText, avail === 0 && s.stockTextOut]}>
-              {avail === 0
-                ? 'Out of stock'
-                : product && effectiveStock(product) > 1
-                ? `${avail} of ${effectiveStock(product)} available`
-                : 'In stock'}
-            </Text>
-          )}
-        </View>
-
-        {/* Pricing — only when dates set and product loaded and no conflict */}
-        {hasDates && product && !hasConflict && (
-          effectiveRate !== null ? (
-            <>
-              <View style={s.divider} />
-              <View style={s.pricingRows}>
-                <View style={s.pricingRow}>
-                  <Text style={s.pricingLabel}>Rental</Text>
-                  <PriceLak lak={subtotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.pricingValue} />
-                </View>
-                <View style={s.pricingRow}>
-                  <Text style={s.pricingLabel}>Deposit</Text>
-                  {exchangeRate != null ? (
-                    <PriceLak
-                      lak={depositLakFor(product.deposit, item.quantity)}
-                      customerType={profile?.customerType}
-                      vatPercent={vatPercent}
-                      textStyle={s.pricingValue}
-                    />
-                  ) : (
-                    <Text style={s.pricingValue}>— LAK</Text>
-                  )}
-                </View>
-              </View>
-            </>
-          ) : (
-            <>
-              <View style={s.divider} />
-              <View style={s.unpricedNotice}>
-                <Feather name="alert-circle" size={13} color={SHADES.carbonMuted} />
-                <Text style={s.unpricedNoticeText}>Pricing not set — this item can&apos;t be checked out.</Text>
-              </View>
-            </>
-          )
-        )}
-      </View>
-    );
-  }, [productMap, stockMap, conflictMap, handleRemove, handleQuantityChange, router, exchangeRate, depositLakFor, profile]);
-
-  // ── Empty state ───────────────────────────────────────────────────────────
-  const renderEmptyState = () => (
-    <View style={s.centered}>
-      <View style={s.emptyIconWrap}>
-        <Feather name="shopping-bag" size={36} color={SHADES.carbonMuted} />
-      </View>
-      <Text style={s.emptyTitle}>Your bag is empty</Text>
-      <Text style={s.emptySub}>Add items from the catalogue to build your rental order.</Text>
-      <TouchableOpacity
-        style={s.exploreBtn}
-        onPress={() => router.push('/explore')}
-        activeOpacity={0.85}
-      >
-        <Text style={s.exploreBtnText}>Explore items</Text>
-      </TouchableOpacity>
+  // ── Header ────────────────────────────────────────────────────────────────
+  const header = (
+    <View style={s.header}>
+      <BackButton onPress={() => router.back()} />
+      <Text style={s.headerTitle}>{b.title}</Text>
+      {items.length > 0 && <View style={s.headerChip}><Chip label={b.itemsChip(items.length)} small /></View>}
     </View>
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const grandTotal = totalRental + totalDeposit;
-  const hasBagItems = items.length > 0;
-
-  return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={s.header}>
-        <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>
-          Bag{items.length > 0 ? ` (${items.length})` : ''}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Body */}
-      {loading ? (
-        <View style={s.centered}>
-          <ActivityIndicator color={COLORS.amber} />
-        </View>
-      ) : !hasBagItems ? (
-        renderEmptyState()
-      ) : (
-        <>
-          <FlatList
-            data={items}
-            keyExtractor={item => item.id}
-            renderItem={renderItem}
-            contentContainerStyle={s.listContent}
-            showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-            ListHeaderComponent={
-              items.length > 1 && dateSourceItem ? (
-                <TouchableOpacity
-                  style={s.sameDatesBtn}
-                  onPress={handleUseSameDates}
-                  activeOpacity={0.75}
-                >
-                  <Feather name="copy" size={12} color={COLORS.carbon} />
-                  <Text style={s.sameDatesBtnText}>Use same dates for all items</Text>
-                </TouchableOpacity>
-              ) : null
-            }
-          />
-
-          {/* Sticky summary + CTA */}
-          <View style={[s.summary, { paddingBottom: insets.bottom + 12 }]}>
-            {itemsNeedingDates > 0 && (
-              <View style={s.needsDatesRow}>
-                <Feather name="info" size={13} color={SHADES.carbonMuted} />
-                <Text style={s.needsDatesText}>
-                  {itemsNeedingDates} item{itemsNeedingDates !== 1 ? 's' : ''} need{itemsNeedingDates === 1 ? 's' : ''} dates before checkout
-                </Text>
-              </View>
-            )}
-
-            {readyItems.length > 0 && (
-              <>
-                <View style={s.summaryRows}>
-                  <View style={s.summaryRow}>
-                    <Text style={s.summaryLabel}>
-                      {readyItems.length} item{readyItems.length !== 1 ? 's' : ''} ready
-                    </Text>
-                    <PriceLak lak={totalRental} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.summaryValue} />
-                  </View>
-                  <View style={s.summaryRow}>
-                    <Text style={s.summaryLabel}>
-                      Deposits{' '}
-                      <Text style={s.summaryLabelNote}>(refundable on return)</Text>
-                    </Text>
-                    <PriceLak lak={totalDeposit} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.summaryValue} />
-                  </View>
-                  <View style={[s.summaryRow, s.summaryRowTotal]}>
-                    <Text style={s.summaryLabelTotal}>Total</Text>
-                    <PriceLak lak={grandTotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={s.summaryValueTotal} />
-                  </View>
-                </View>
-              </>
-            )}
-
-            {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 12 }} />}
-            <PressScale
-              style={[s.cta, (readyItems.length === 0 || !!bookingHold) && s.ctaOff]}
-              onPress={handleCheckout}
-              disabled={readyItems.length === 0 || !!bookingHold}
-              activeOpacity={0.85}
-            >
-              <Text style={[s.ctaText, (readyItems.length === 0 || !!bookingHold) && s.ctaTextOff]}>
-                {readyItems.length > 0
-                  ? `Reserve ${readyItems.length} item${readyItems.length !== 1 ? 's' : ''}`
-                  : 'Set dates to continue'}
-              </Text>
+  if (loading || items.length === 0) {
+    return (
+      <View style={[s.root, screen.root]}>
+        <StatusBar style="dark" />
+        <View style={{ flexShrink: 0 }}>{header}</View>
+        {loading ? (
+          <View style={s.center}><ActivityIndicator color={SHADES.amber} /></View>
+        ) : (
+          <View style={s.center}>
+            <View style={s.emptyIcon}><Feather name="shopping-bag" size={30} color={SHADES.carbonMuted} /></View>
+            <Text style={s.emptyTitle}>{b.empty.title}</Text>
+            <Text style={s.emptySub}>{b.empty.sub}</Text>
+            <PressScale style={[UI.btnPrimary, s.emptyBtn]} onPress={() => router.push('/explore')}>
+              <Text style={UI.btnPrimaryText}>{b.empty.cta}</Text>
             </PressScale>
           </View>
-        </>
-      )}
+        )}
+      </View>
+    );
+  }
 
-      {/* Date picker — rendered at root level to float above everything */}
+  return (
+    <View style={[s.root, { paddingTop: screen.top }]}>
+      <StatusBar style="dark" />
+      <View style={{ flexShrink: 0 }}>{header}</View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+        {items.length >= 2 && (
+          <View style={[UI.card, s.toggleCard]}>
+            <ToggleRow title={b.sameDates} value={sameDates} onValueChange={toggleSameDates} />
+          </View>
+        )}
+
+        {items.map(item => (
+          <Animated.View
+            key={item.id}
+            exiting={FadeOut.duration(MOTION.duration.fast).reduceMotion(ReduceMotion.System)}
+            layout={LinearTransition.duration(MOTION.duration.base).reduceMotion(ReduceMotion.System)}
+          >
+            <ItemCard
+              item={item}
+              product={productMap[item.productId]}
+              avail={stockMap[item.id]}
+              conflict={conflictOf(item)}
+              rental={rentalOf(item)}
+              userTier={profile?.loyaltyTier ?? null}
+              removing={removingId === item.id}
+              onOpen={() => router.push(`/product/${item.productId}`)}
+              onEditDates={() => setDatePickerItemId(item.id)}
+              onAskRemove={() => setRemovingId(item.id)}
+              onCancelRemove={() => setRemovingId(null)}
+              onRemove={() => handleRemove(item.id)}
+              onQuantity={d => handleQuantity(item, d)}
+            />
+          </Animated.View>
+        ))}
+
+        <TouchableOpacity style={s.addMore} onPress={addMore} hitSlop={8} activeOpacity={0.7}>
+          <Feather name="plus" size={16} color={SHADES.amberText} />
+          <Text style={UI.link}>{b.addMore}</Text>
+        </TouchableOpacity>
+
+        {readyItems.length > 0 && (
+          <>
+            <SectionTitle>{b.total}</SectionTitle>
+            <View style={[UI.card, s.total]}>
+              <View style={s.line}>
+                <Text style={s.lineLabel}>{b.rental(readyItems.length)}</Text>
+                <Text style={s.lineValue}>{`${n(totalRental)} LAK`}</Text>
+              </View>
+              <View style={s.sep} />
+              <View style={s.line}>
+                <Text style={s.toPayLabel}>{b.toPay}</Text>
+                <Text style={s.toPayValue}>{`${n(totalRental)} LAK`}</Text>
+              </View>
+              <View style={s.line}>
+                <Text style={s.lineLabel}>{b.deposit}</Text>
+                <Text style={s.depositValue}>{exchangeRate != null ? `${n(totalDeposit)} LAK` : '—'}</Text>
+              </View>
+              <Text style={s.note}>{b.note}</Text>
+            </View>
+          </>
+        )}
+        {itemsNeedingDates > 0 && <Text style={[UI.small, s.needDates]}>{b.needDates(itemsNeedingDates)}</Text>}
+        {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginTop: 16 }} />}
+      </ScrollView>
+
+      <BookingBottomBar
+        total={readyItems.length > 0 ? totalRental : null}
+        sub={b.barSub(readyItems.length)}
+        label={readyItems.length > 0 ? b.continue : b.setDatesToContinue}
+        disabled={readyItems.length === 0 || !!bookingHold}
+        busy={false}
+        onPress={() => router.push('/bag/checkout')}
+        bottom={Math.max(screen.bottom, 12)}
+      />
+
+      {/* Date picker — existing rules (availability, shop slots, lead time). */}
       <DateRangePicker
         visible={datePickerItemId !== null}
         productId={activeBagItem?.productId ?? ''}
-        totalStock={(() => {
-          const p = activeBagItem ? productMap[activeBagItem.productId] : undefined;
-          return p ? effectiveStock(p) : 1;
-        })()}
+        totalStock={activeProduct ? effectiveStock(activeProduct) : 1}
         initialPickupAt={activeBagItem?.pickupAt?.toDate() ?? null}
         initialReturnAt={activeBagItem?.returnAt?.toDate() ?? null}
         onClose={() => setDatePickerItemId(null)}
@@ -543,387 +327,149 @@ export default function BagScreen() {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── Item card ─────────────────────────────────────────────────────────────────
+
+function ItemCard({
+  item, product, avail, conflict, rental, userTier, removing,
+  onOpen, onEditDates, onAskRemove, onCancelRemove, onRemove, onQuantity,
+}: {
+  item: BagItem;
+  product: Product | null | undefined;
+  avail: number | undefined;
+  conflict: boolean;
+  rental: number | null;
+  userTier: UserProfile['loyaltyTier'] | null;
+  removing: boolean;
+  onOpen: () => void;
+  onEditDates: () => void;
+  onAskRemove: () => void;
+  onCancelRemove: () => void;
+  onRemove: () => void;
+  onQuantity: (delta: number) => void;
+}) {
+  const b = BAG_COPY;
+  const hasDates = !!(item.pickupAt && item.returnAt);
+  const max = avail !== undefined ? avail : (product ? effectiveStock(product) : 1);
+  const canDec = item.quantity > 1;
+  const canInc = item.quantity < max;
+  const access = product ? getProductAccessState(product, userTier ?? null) : null;
+  const cat = product ? categoryStyle(product.category) : null;
+
+  // ONE honest line, most important first.
+  let signal: React.ReactNode = null;
+  if (access?.locked) signal = access.message;
+  else if (conflict) signal = <>{b.signal.conflict}<Text style={s.signalLink} onPress={onEditDates}>{b.signal.conflictLink}</Text></>;
+  else if (hasDates && product && rental == null) signal = b.signal.unpriced;
+  else if (hasDates && avail === 1) signal = b.signal.lastOne;
+
+  return (
+    <View style={[UI.card, s.card]}>
+      <View style={s.top}>
+        <PressScale onPress={onOpen} style={s.thumb} accessibilityLabel={item.productName}>
+          {item.productImage
+            ? <Image source={{ uri: item.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+            : <MaterialCommunityIcons name={cat?.icon ?? 'package-variant-closed'} size={26} color={SHADES.carbonMuted} />}
+        </PressScale>
+        <View style={{ flex: 1 }}>
+          <Text style={UI.title} numberOfLines={1}>{item.productName}</Text>
+          {hasDates ? (
+            <>
+              <Text style={s.date}>{fmtWhen(item.pickupAt!.toDate())}</Text>
+              <Text style={s.date}>
+                {`${b.returnPrefix}${fmtWhen(item.returnAt!.toDate())}  `}
+                <Text style={s.edit} onPress={onEditDates}>{b.edit}</Text>
+              </Text>
+            </>
+          ) : (
+            <Text style={[s.edit, { marginTop: 4 }]} onPress={onEditDates}>{b.setDates}</Text>
+          )}
+        </View>
+        <TouchableOpacity onPress={onAskRemove} hitSlop={10} accessibilityLabel={b.remove.confirm} style={s.remove}>
+          <Feather name="x" size={18} color={SHADES.carbonMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {removing && (
+        <View style={{ marginTop: 12 }}>
+          <ConfirmBox
+            text={b.remove.ask(item.productName)}
+            confirmLabel={b.remove.confirm}
+            cancelLabel={b.remove.keep}
+            onCancel={onCancelRemove}
+            onConfirm={onRemove}
+            destructive
+          />
+        </View>
+      )}
+
+      <View style={s.divider} />
+      <View style={s.qtyRow}>
+        <PressScale style={[s.qtyBtn, !canDec && s.qtyBtnOff]} onPress={() => onQuantity(-1)} disabled={!canDec} accessibilityLabel="Fewer" hitSlop={6}>
+          <Feather name="minus" size={14} color={canDec ? SHADES.carbon : SHADES.carbonFaint} />
+        </PressScale>
+        <Text style={s.qtyNum}>{item.quantity}</Text>
+        <PressScale style={[s.qtyBtn, !canInc && s.qtyBtnOff]} onPress={() => onQuantity(1)} disabled={!canInc} accessibilityLabel="More" hitSlop={6}>
+          <Feather name="plus" size={14} color={canInc ? SHADES.carbon : SHADES.carbonFaint} />
+        </PressScale>
+        {rental != null && !conflict && <Text style={s.amount}>{`${n(rental)} LAK`}</Text>}
+      </View>
+      {signal != null && <Text style={s.signal}>{signal}</Text>}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-
-  // Header
+  root: { flex: 1, backgroundColor: COLORS.porcelain },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: SHADES.border,
+    flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
-  headerTitle: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  headerChip: { marginLeft: 'auto' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  content: { padding: 16, paddingBottom: 24, gap: 12 },
 
-  // Centered (loading / empty)
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
+  toggleCard: { overflow: 'hidden' },
 
-  // Empty state
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: SHADES.carbonLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    marginBottom: 8,
-    letterSpacing: -0.2,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: SHADES.carbonMuted,
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 24,
-  },
-  exploreBtn: {
-    height: 44,
-    paddingHorizontal: 24,
-    backgroundColor: COLORS.amber,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exploreBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
-
-  // List
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  sameDatesBtn: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    backgroundColor: SHADES.carbonLight,
-    marginBottom: 12,
-  },
-  sameDatesBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-
-  // Item card
-  card: {
-    backgroundColor: SHADES.white,
-    borderRadius: 18,
-    borderWidth: 0.5,
-    borderColor: SHADES.border,
-    overflow: 'hidden',
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-  },
+  card: { padding: 14 },
+  top: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   thumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    flexShrink: 0,
+    width: 56, height: 56, borderRadius: 14, overflow: 'hidden',
+    backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center',
   },
-  thumbPlaceholder: {
-    backgroundColor: SHADES.carbonLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.carbon,
-    lineHeight: 19,
-  },
-  deleteBtn: {
-    padding: 4,
-    flexShrink: 0,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: SHADES.border,
-    marginHorizontal: 14,
-  },
-
-  // Set dates CTA
-  setDatesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  setDatesBtnText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: SHADES.carbonMuted,
-  },
-
-  // Dates display
-  datesRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  datesInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  dateLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dateLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: SHADES.carbonMuted,
-    width: 42,
-    letterSpacing: 0.1,
-  },
-  dateValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  durationText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: SHADES.carbonMuted,
-    marginTop: 4,
-  },
-  editDatesBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    backgroundColor: SHADES.carbonLight,
-  },
-  editDatesBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
-
-  // Conflict
-  conflictBanner: {
-    // One-line warning (no red background).
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginHorizontal: 14,
-    marginTop: 8,
-  },
-  conflictText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.danger, lineHeight: 18 },
-  unpricedNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  unpricedNoticeText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-    lineHeight: 17,
-  },
-
-  // Quantity
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  qtyLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: SHADES.carbonMuted,
-    flex: 1,
-  },
-  qtyControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.porcelain,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    padding: 4,
-  },
+  date: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
+  edit: { fontSize: 13, fontWeight: '600', color: SHADES.amberText },
+  remove: { paddingLeft: 4 },
+  divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 12 },
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   qtyBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: SHADES.carbon,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: SHADES.white,
   },
-  qtyBtnOff: { opacity: 0.35 },
-  qtyNum: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  stockText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: COLORS.success,
-  },
-  stockTextOut: { color: COLORS.danger },
+  qtyBtnOff: { borderColor: SHADES.border },
+  qtyNum: { fontSize: 15, fontWeight: '600', color: SHADES.carbon, minWidth: 30, textAlign: 'center' },
+  amount: { marginLeft: 'auto', fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  signal: { fontSize: 13.5, fontWeight: '500', color: SHADES.amberDeep, marginTop: 10 },
+  signalLink: { fontWeight: '700', textDecorationLine: 'underline' },
 
-  // Pricing rows
-  pricingRows: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 4,
-  },
-  pricingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pricingLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-  pricingValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.carbon,
-  },
+  addMore: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6 },
 
-  // Summary footer
-  summary: {
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: SHADES.border,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    gap: 10,
-  },
-  needsDatesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  needsDatesText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-  summaryRows: {
-    gap: 5,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  summaryRowTotal: {
-    marginTop: 4,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: SHADES.border,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: SHADES.carbonMuted,
-  },
-  summaryLabelNote: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: SHADES.carbonMuted,
-  },
-  summaryValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  summaryLabelTotal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  summaryValueTotal: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
+  total: { padding: 16, gap: 10 },
+  line: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  lineLabel: { fontSize: 14.5, fontWeight: '500', color: SHADES.carbonMuted },
+  lineValue: { fontSize: 14.5, fontWeight: '600', color: SHADES.carbon },
+  sep: { height: 0.5, backgroundColor: SHADES.border },
+  toPayLabel: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
+  toPayValue: { fontSize: 19, fontWeight: '800', color: SHADES.carbon },
+  depositValue: { fontSize: 14.5, fontWeight: '500', color: SHADES.carbonMuted },
+  note: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted },
+  needDates: { textAlign: 'center' },
 
-  // CTA
-  cta: {
-    height: 52,
-    backgroundColor: COLORS.amber,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyIcon: {
+    width: 72, height: 72, borderRadius: 36, backgroundColor: SHADES.carbonLight,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  ctaOff: {
-    backgroundColor: SHADES.carbonLight,
-    borderWidth: 1,
-    borderColor: SHADES.border,
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.2,
-  },
-  ctaTextOff: { color: SHADES.carbonMuted },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon },
+  emptySub: { fontSize: 14.5, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 4, marginBottom: 22 },
+  emptyBtn: { paddingHorizontal: 32 },
 });
