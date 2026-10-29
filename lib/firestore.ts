@@ -24,6 +24,7 @@ import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
 import { isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
+import { returnStockMoves, type ReturnStockInput } from '@/functions/src/shared/returnStock';
 
 // Throws on Firestore error — callers must handle.
 // Drafts and archived products are never shown or bookable for renters (the
@@ -129,6 +130,27 @@ export function addStockAdjustmentToBatch(
   });
 }
 
+/**
+ * Stock moves of a return (shared rule, functions/src/shared/returnStock.ts): unusable
+ * units → lostUnits, every other unit → pendingSettlementUnits until releaseSettledStock.
+ * Used by the single and chained return checklists and the "Mark as returned" fallback.
+ */
+export function addReturnStockToBatch(
+  batch: WriteBatch,
+  productId: string,
+  r: ReturnStockInput,
+  adminName: string,
+  reservationId: string,
+): void {
+  const { lostUnits, pendingUnits } = returnStockMoves(r);
+  if (lostUnits > 0) {
+    addStockAdjustmentToBatch(batch, productId, 'lostUnits', lostUnits, 'Return checklist rated item unusable', adminName, reservationId);
+  }
+  if (pendingUnits > 0) {
+    addStockAdjustmentToBatch(batch, productId, 'pendingSettlementUnits', pendingUnits, 'Returned — pending deposit settlement', adminName, reservationId);
+  }
+}
+
 // Standalone adjustment with no linked reservation — e.g. the product-form manual
 // stepper, or a warehouse audit finding a broken unit with no associated booking.
 // Throws on Firestore error — caller must handle.
@@ -200,7 +222,9 @@ export interface RentalDoc {
   pricePerDay: number;
   subtotal: number;
   total: number;    // rental fee only — does NOT include deposit (deposit is tracked separately)
-  deposit: number;
+  deposit: number;   // line total = depositPerUnit × quantity (createReservations)
+  /** Unit deposit (LAK), frozen by createReservations. Absent on older reservations. */
+  depositPerUnit?: number;
   depositReturned?: boolean;
   returnedAt?: Timestamp;
   // Late-return escalation — all written by the lateReturnAlerts Cloud Function only.
@@ -261,6 +285,9 @@ export interface RentalDoc {
   chargeReason?: string;              // e.g. "Main item condition — Damaged", "Reported lost/stolen"
   chargeSeverity?: 'damaged' | 'unusable' | 'lostStolen';
   chargePercent?: number;             // % actually applied, post staff-override — audit trail
+  /** Units the damage / unusable / lost charge is about (staff choice, 1..quantity).
+   *  Absent on older reservations = the whole quantity (shared/returnStock.ts). */
+  chargeUnits?: number;
   // Late-return penalty — fully independent of the damage/condition charge above (two
   // separate causes, two separate fields, never merged). Shares chargeCurrency. Frozen
   // from the indicative, Cloud-Function-owned latePenaltyAmount (always LAK) once staff
@@ -567,6 +594,7 @@ export interface ChecklistBatchChargeFields {
   chargeReason?: string;
   chargeSeverity?: 'damaged' | 'unusable';
   chargePercent?: number;
+  chargeUnits?: number;
   // Late-return penalty — present only when the reservation had a late penalty. Fully
   // independent of the damage fields above; either, neither, or both may be set.
   lateChargeAmount?: number;
@@ -634,11 +662,7 @@ export async function submitChecklistBatch(
     // buffer has elapsed. A checklist-rated 'unusable' item is a true write-off, so it
     // goes straight to lostUnits instead, mirroring "Report lost/stolen".
     if (!isHandover) {
-      const field: StockConditionField = charge?.chargeSeverity === 'unusable' ? 'lostUnits' : 'pendingSettlementUnits';
-      const reason = charge?.chargeSeverity === 'unusable'
-        ? 'Return checklist rated item unusable'
-        : 'Returned — pending deposit settlement';
-      addStockAdjustmentToBatch(batch, productId, field, quantity, reason, adminName, id);
+      addReturnStockToBatch(batch, productId, { quantity, chargeSeverity: charge?.chargeSeverity, chargeUnits: charge?.chargeUnits }, adminName, id);
     }
   });
   await batch.commit();

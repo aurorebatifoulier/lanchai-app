@@ -172,6 +172,7 @@ export default function ChecklistSummaryScreen() {
                 chargeReason: draft.chargeReason,
                 chargeSeverity: draft.chargeSeverity,
                 chargePercent: draft.chargePercent,
+                ...(draft.chargeUnits != null ? { chargeUnits: draft.chargeUnits } : {}),
               } : {}),
               ...(hasLate ? {
                 lateChargeAmount: draft.lateChargeAmount,
@@ -191,6 +192,7 @@ export default function ChecklistSummaryScreen() {
                 damageChargeWaivedPercent: draft.damageChargeWaivedPercent,
                 damageChargeWaivedBy: draft.damageChargeWaivedBy,
                 ...(draft.chargeSeverity ? { chargeSeverity: draft.chargeSeverity } : {}),
+                ...(draft.chargeUnits != null ? { chargeUnits: draft.chargeUnits } : {}),
               } : {}),
               chargeCurrency: draft.chargeCurrency,
               depositAppliedToCharge: draft.depositAppliedToCharge,

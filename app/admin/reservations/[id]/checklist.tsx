@@ -25,15 +25,15 @@ import {
   getReservationById,
   getUserProfile,
   getProduct,
-  addStockAdjustmentToBatch,
+  addReturnStockToBatch,
   earlyHandoverFields,
   CHECKLIST_CATEGORIES,
   type RentalDoc,
   type ChecklistCategoryId,
   type ChecklistRating,
   type ChecklistData,
-  type StockConditionField,
 } from '@/lib/firestore';
+import UnitsStepper from '@/components/UnitsStepper';
 import type { Product } from '@/lib/mockData';
 import { sendNotif } from '@/lib/notifications';
 import { ChecklistSummary, RATING_STYLE, RATING_LABELS } from '@/components/ChecklistSummary';
@@ -103,6 +103,9 @@ export default function ChecklistScreen() {
   const [clientConfirmed,       setClientConfirmed]       = useState(false);
   const [chargeAmountInput,   setChargeAmountInput]   = useState('');
   const [chargeAmountTouched, setChargeAmountTouched]  = useState(false);
+  // Damage: how many of the reservation's units are damaged / unusable (staff choice,
+  // default 1) — the suggested charge covers those units only (chargeUnits).
+  const [damagedUnits,        setDamagedUnits]         = useState(1);
   const [lateChargeAmountInput,   setLateChargeAmountInput]   = useState('');
   const [lateChargeAmountTouched, setLateChargeAmountTouched]  = useState(false);
   // Explicit waivers ("Waive" + inline confirmation). Undo here until submit; after
@@ -168,9 +171,11 @@ export default function ChecklistScreen() {
   const worstCategoryLabel = worst
     ? CHECKLIST_CATEGORIES.find(c => categories[c.id].rating === worst)?.label ?? 'Item condition'
     : null;
+  const reservationQty = Math.max(1, reservation?.quantity ?? 1);
+  const chargeUnits = Math.min(Math.max(1, damagedUnits), reservationQty);
   const defaultChargeAmount: number | null =
     chargePercent != null && product?.retailPrice != null && depositCurrency != null
-      ? convertUsdTo(product.retailPrice * chargePercent / 100, depositCurrency, exchangeRate, thbRate)
+      ? convertUsdTo(product.retailPrice * chargePercent / 100 * chargeUnits, depositCurrency, exchangeRate, thbRate)
       : null;
 
   // Pre-fills the editable amount with the computed default; stops overwriting once
@@ -186,12 +191,14 @@ export default function ChecklistScreen() {
   // silently survive a later flip to "Unusable" and keep showing the stale amount,
   // since the prefill effect above never overwrites a touched field.
   const prevWorstRef = useRef(worst);
+  const prevUnitsRef = useRef(chargeUnits);
   useEffect(() => {
-    if (prevWorstRef.current !== worst) {
+    if (prevWorstRef.current !== worst || prevUnitsRef.current !== chargeUnits) {
       prevWorstRef.current = worst;
+      prevUnitsRef.current = chargeUnits;
       setChargeAmountTouched(false);
     }
-  }, [worst]);
+  }, [worst, chargeUnits]);
 
   // Whole units only, rounded up — matches the app's currency convention everywhere else
   // (no decimals for LAK/USD/THB). Math.ceil defensively covers pasted/decimal input even
@@ -275,12 +282,14 @@ export default function ChecklistScreen() {
       damageChargeWaivedReason: `${worstCategoryLabel} — ${RATING_LABELS[worst]}`,
       damageChargeWaivedPercent: chargePercent,
       damageChargeWaivedBy: staffWaiverName,
-      // Still recorded: drives the release/repair choice at settlement.
+      // Still recorded: drives the release/repair choice at settlement and the stock
+      // moves (unusable units → lostUnits).
       chargeSeverity: worst as 'damaged' | 'unusable',
+      chargeUnits,
     } : {}),
   }), [
     lateWaived, hasLatePenalty, defaultLateChargeAmount, lateWaivedReason, staffWaiverName,
-    damageWaived, chargePercent, worst, defaultChargeAmount, worstCategoryLabel,
+    damageWaived, chargePercent, worst, defaultChargeAmount, worstCategoryLabel, chargeUnits,
   ]);
   const hasWaiver = Object.keys(waiverFields).length > 0;
   const totalCharge = (chargeAmount ?? 0) + (lateChargeAmount ?? 0);
@@ -386,6 +395,7 @@ export default function ChecklistScreen() {
               chargeReason: chargeReason!,
               chargeSeverity: worst as 'damaged' | 'unusable',
               chargePercent: chargePercent!,
+              chargeUnits,
             } : {}),
             ...(lateChargeAmount != null ? {
               lateChargeAmount,
@@ -441,11 +451,12 @@ export default function ChecklistScreen() {
           ...(chargeFields ?? {}),
           updatedAt: serverTimestamp(),
         });
-        const field: StockConditionField = chargeFields?.chargeSeverity === 'unusable' ? 'lostUnits' : 'pendingSettlementUnits';
-        const reason = chargeFields?.chargeSeverity === 'unusable'
-          ? 'Return checklist rated item unusable'
-          : 'Returned — pending deposit settlement';
-        addStockAdjustmentToBatch(batch, reservation.productId, field, reservation.quantity, reason, confirmedByName.trim(), id);
+        // Shared rule (shared/returnStock.ts): only the unusable units are written off.
+        addReturnStockToBatch(batch, reservation.productId, {
+          quantity: reservation.quantity,
+          chargeSeverity: chargeFields?.chargeSeverity,
+          chargeUnits: chargeFields?.chargeUnits,
+        }, confirmedByName.trim(), id);
         await batch.commit();
         // Mirrors the runAction pattern used everywhere else in this app — without this,
         // local `reservation` state stays stale (still 'active', no charge fields) right
@@ -501,7 +512,7 @@ export default function ChecklistScreen() {
   }, [
     reservation, id, type, canSubmit, inChain, categories, photos,
     depositCurrency, calculatedDepositAmount,
-    chargeAmount, worst, chargePercent, chargeReason,
+    chargeAmount, worst, chargePercent, chargeReason, chargeUnits,
     lateChargeAmount, lateChargeReason, waiverFields, hasWaiver,
     totalCharge, depositAppliedToCharge, outstandingBalanceCalc,
     confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified, idCheck,
@@ -827,8 +838,16 @@ export default function ChecklistScreen() {
               ) : (
                 <>
                   <Text style={styles.chargeHintText}>
-                    Damage/condition charge — {worstCategoryLabel} — {RATING_LABELS[worst!]} · {chargePercent}% of replacement value
+                    Damage/condition charge — {worstCategoryLabel} — {RATING_LABELS[worst!]} · {chargePercent}% of replacement value{chargeUnits > 1 ? ` × ${chargeUnits} units` : ''}
                   </Text>
+                  {reservationQty > 1 && !damageWaived && (
+                    <UnitsStepper
+                      label={worst === 'unusable' ? 'Units unusable' : 'Units damaged'}
+                      value={chargeUnits}
+                      max={reservationQty}
+                      onChange={setDamagedUnits}
+                    />
+                  )}
                   {damageWaived ? (
                     <WaivedRow
                       text={`Waived — suggested ${defaultChargeAmount.toLocaleString('en-US')} ${depositCurrency}. The renter sees "waived by our team".`}
@@ -926,6 +945,11 @@ export default function ChecklistScreen() {
               exchangeRate={exchangeRate}
               thbRate={thbRate}
             />
+            {reservation.quantity > 1 && !!reservation.depositPerUnit && (
+              <Text style={styles.chargeHintText}>
+                {`${reservation.quantity} units × ${reservation.depositPerUnit.toLocaleString('en-US')} LAK`}
+              </Text>
+            )}
             {type === 'handover' ? (
               <View style={styles.optionRow}>
                 {(['LAK', 'USD', 'THB'] as DepositCurrency[]).map(cur => {

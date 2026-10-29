@@ -66,6 +66,7 @@ export interface ResData extends ReceiptInput {
   latePenaltyAmount?: number;
   latePenaltyDays?: number;
   chargePercent?: number;
+  chargeUnits?: number;
   /** Explicit staff waivers — shown as "… · waived by our team" (buildReceiptSummary). */
   lateChargeWaived?: boolean;
   damageChargeWaived?: boolean;

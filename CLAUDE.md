@@ -527,6 +527,16 @@ a snapshot indefinitely).
     only shown when `chargeSeverity === 'damaged'`) tells the cron to transfer into
     `inRepairUnits` instead of releasing. `stockReleasedAt` is the cron's own
     idempotency marker (`null` until processed) — never set client-side.
+  - **Multi-unit charges — `chargeUnits`.** On the return checklist (single + chain)
+    staff choose how many units are damaged / unusable (default 1), and on "Report
+    lost/stolen" how many are lost (default all); the suggestion = replacement value ×
+    % × those units. `functions/src/shared/returnStock.ts` is the ONE stock rule
+    (`returnStockMoves` at return: unusable units → `lostUnits`, the rest →
+    `pendingSettlementUnits`; `releaseStockMoves` in `releaseSettledStock`: "repair" sends
+    only the damaged units to `inRepairUnits`), used via `addReturnStockToBatch`
+    (`lib/firestore.ts`). Absent `chargeUnits` (older docs) = the whole quantity. Lost
+    with fewer units than booked: only those go to `lostUnits`, the others are simply
+    back in stock (status `lost` releases the occupancy). Receipt detail adds "× n units".
   - This is backend timing logic only — no renter/admin-facing color or escalation.
     Do NOT reintroduce time-based urgency UI here; the admin inventory dashboard's
     "Needs attention" section surfaces stuck items (`pendingSettlementUnits > 0`) in
@@ -1018,9 +1028,13 @@ a snapshot indefinitely).
   bar; `BookingSheets`: dates + slot sheets). "Your booking" (`app/booking/new.tsx`) is
   ONE screen — `booking/summary.tsx` only redirects old links. The bag checkout uses the
   same blocks and the same "Confirm booking". Confirm order (both): business document →
-  ID step → phone → `createBooking` (server checks unchanged). The deposit shown =
-  `Math.round(toLak(deposit) × depositPercentFor / 100)` per line, NOT × quantity — the
-  same formula as the server's `priceLine`. Deposit explainer wording is aligned with
+  ID step → phone → `createBooking` (server checks unchanged). **Deposit = PER UNIT:**
+  `depositForLine()` (`shared/pricing.ts`, used by `priceLine`, the booking screen, the
+  bag and the bag checkout) = `Math.round(toLak(deposit) × depositPercentFor / 100)` per
+  unit, then × quantity. `createReservations` freezes `deposit` (the LINE total — what
+  handover, settlement, receipts and emails all read) + `depositPerUnit` (display:
+  "2 × 500,000 LAK" on the booking total, admin detail and handover checklist). Older
+  reservations keep their frozen values (no backfill). Deposit explainer wording is aligned with
   Terms §7/§9 and the settlement code ("may be charged", lost / beyond repair = full
   replacement value, difference due, team can reduce or waive) — keep it that way.
   Confirmation (shared): rental = frozen `total` (AFTER coupon), order `displayOrderId`,

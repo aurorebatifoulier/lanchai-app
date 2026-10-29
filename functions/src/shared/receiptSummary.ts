@@ -15,6 +15,8 @@ export interface ReceiptSummaryInput extends ReceiptInput {
   chargeAmount?: number;
   chargeReason?: string;
   chargePercent?: number;
+  /** Units the charge is about (shared/returnStock.ts) — shown when > 1. */
+  chargeUnits?: number;
   lateChargeAmount?: number;
   lateChargeReason?: string;
   latePenaltyAmount?: number;
@@ -73,7 +75,8 @@ export function buildReceiptSummary(
     lines.push({ kind: 'detail', text: 'Damage charge · waived by our team' });
   } else if (r.chargeAmount != null && r.chargeAmount > 0) {
     lines.push({ kind: 'row', label: 'Damage charge', value: `− ${fmt(r.chargeAmount)}`, danger: true });
-    const detail = [r.chargeReason, r.chargePercent != null ? `${r.chargePercent}% of replacement value` : null]
+    const units = r.chargeUnits != null && r.chargeUnits > 1 ? ` × ${r.chargeUnits} units` : '';
+    const detail = [r.chargeReason, r.chargePercent != null ? `${r.chargePercent}% of replacement value${units}` : null]
       .filter(Boolean).join(' · ');
     if (detail) lines.push({ kind: 'detail', text: detail });
   }

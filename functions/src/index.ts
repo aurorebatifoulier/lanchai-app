@@ -16,6 +16,7 @@ import {
 } from './shared/loyalty';
 import { isPickupMissed, vteDateStamp, vteMinutesOfDay, vteTime, vteMonthKey } from './shared/dates';
 import { HANDOFF_BUFFER_MS } from './shared/availability';
+import { releaseStockMoves } from './shared/returnStock';
 import { sendLateReturnEmail } from './email/triggers';
 import { dueLateAlerts, planLateEmails, type LateAlertKey, type LateRow } from './lateAlerts';
 
@@ -301,32 +302,41 @@ export const releaseSettledStock = onSchedule(
       const quantity: number = data.quantity ?? 0;
       if (!productId || quantity <= 0) continue;
 
-      const toRepair = data.stockReleaseHandling === 'repair';
+      // Shared rule (shared/returnStock.ts): only the units that went to
+      // pendingSettlementUnits at return come out of it — unusable units went to
+      // lostUnits instead — and on "repair" only the damaged units go to inRepairUnits.
+      const moves = releaseStockMoves({
+        quantity,
+        chargeSeverity: data.chargeSeverity ?? null,
+        chargeUnits: data.chargeUnits ?? null,
+        stockReleaseHandling: data.stockReleaseHandling ?? null,
+      });
       const batch = db.batch();
       const productRef = db.collection('products').doc(productId);
 
       batch.update(reservationDoc.ref, { stockReleasedAt: FieldValue.serverTimestamp() });
-      batch.update(productRef, toRepair
-        ? { pendingSettlementUnits: FieldValue.increment(-quantity), inRepairUnits: FieldValue.increment(quantity) }
-        : { pendingSettlementUnits: FieldValue.increment(-quantity) },
-      );
-
-      const releaseAdjustmentRef = productRef.collection('stockAdjustments').doc();
-      batch.set(releaseAdjustmentRef, {
-        field: 'pendingSettlementUnits',
-        delta: -quantity,
-        reason: toRepair
-          ? 'Released from pending settlement — sent to repair'
-          : 'Released from pending settlement — back in stock',
-        reservationId: reservationDoc.id,
-        adminName: 'system (releaseSettledStock)',
-        createdAt: FieldValue.serverTimestamp(),
-      });
-      if (toRepair) {
-        const repairAdjustmentRef = productRef.collection('stockAdjustments').doc();
-        batch.set(repairAdjustmentRef, {
+      if (moves.pendingUnits > 0) {
+        batch.update(productRef, moves.repairUnits > 0
+          ? { pendingSettlementUnits: FieldValue.increment(-moves.pendingUnits), inRepairUnits: FieldValue.increment(moves.repairUnits) }
+          : { pendingSettlementUnits: FieldValue.increment(-moves.pendingUnits) },
+        );
+        batch.set(productRef.collection('stockAdjustments').doc(), {
+          field: 'pendingSettlementUnits',
+          delta: -moves.pendingUnits,
+          reason: moves.repairUnits === 0
+            ? 'Released from pending settlement — back in stock'
+            : moves.releasedUnits > 0
+              ? `Released from pending settlement — ${moves.repairUnits} sent to repair, ${moves.releasedUnits} back in stock`
+              : 'Released from pending settlement — sent to repair',
+          reservationId: reservationDoc.id,
+          adminName: 'system (releaseSettledStock)',
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+      if (moves.repairUnits > 0) {
+        batch.set(productRef.collection('stockAdjustments').doc(), {
           field: 'inRepairUnits',
-          delta: quantity,
+          delta: moves.repairUnits,
           reason: 'Released from pending settlement — sent to repair',
           reservationId: reservationDoc.id,
           adminName: 'system (releaseSettledStock)',

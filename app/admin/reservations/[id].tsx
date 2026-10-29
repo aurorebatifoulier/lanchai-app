@@ -23,6 +23,7 @@ import {
   getUserProfile,
   getProduct,
   addStockAdjustmentToBatch,
+  addReturnStockToBatch,
   adminCancelReservations,
   adminMarkNoShow,
   adminLiftNoShowHold,
@@ -47,6 +48,7 @@ import { SettlementSummary } from '@/components/SettlementSummary';
 import { RentalReceipt } from '@/components/RentalReceipt';
 import { SettlementActions } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import UnitsStepper from '@/components/UnitsStepper';
 import {
   CANCEL_REASONS,
   CANCEL_REASON_KEYS,
@@ -138,6 +140,9 @@ export default function AdminReservationDetailScreen() {
   const [lostNotes,              setLostNotes]              = useState('');
   const [lostChargeAmountInput,  setLostChargeAmountInput]  = useState('');
   const [lostChargeTouched,      setLostChargeTouched]      = useState(false);
+  // How many of the reservation's units are lost (staff choice, default all) — the
+  // charge and lostUnits cover those units only (chargeUnits).
+  const [lostUnitsCount,         setLostUnitsCount]         = useState<number | null>(null);
 
   // ── Phone edit state ──────────────────────────────────────────────────────
   const [editingPhone,   setEditingPhone]   = useState(false);
@@ -207,14 +212,18 @@ export default function AdminReservationDetailScreen() {
   // the "Derived" section below, which sits after early-return guards) since it drives a
   // hook and hooks can't be called conditionally. ─────────────────────────────────
   const lostChargeCurrency: 'LAK' | 'USD' | 'THB' = reservation?.handoverChecklist?.depositCurrency ?? 'LAK';
+  const lostQty = Math.max(1, reservation?.quantity ?? 1);
+  const lostUnits = Math.min(Math.max(1, lostUnitsCount ?? lostQty), lostQty);
   const lostDefaultChargeAmount: number | null = product?.retailPrice != null
-    ? convertUsdTo(product.retailPrice, lostChargeCurrency, exchangeRate, thbRate)
+    ? convertUsdTo(product.retailPrice * lostUnits, lostChargeCurrency, exchangeRate, thbRate)
     : null;
   useEffect(() => {
     if (!lostChargeTouched && lostDefaultChargeAmount != null) {
       setLostChargeAmountInput(String(lostDefaultChargeAmount));
     }
   }, [lostDefaultChargeAmount, lostChargeTouched]);
+  // A new unit count re-suggests the amount (an override was for the old count).
+  useEffect(() => { setLostChargeTouched(false); }, [lostUnits]);
   // Whole units only, rounded up — matches the app's currency convention everywhere else.
   const parsedLostCharge = parseFloat(lostChargeAmountInput);
   const lostChargeAmount = !isNaN(parsedLostCharge) && parsedLostCharge > 0 ? Math.ceil(parsedLostCharge) : null;
@@ -446,7 +455,9 @@ export default function AdminReservationDetailScreen() {
   const handoverDeposit = reservation.handoverChecklist;
   const depositDisplay = (handoverDeposit?.depositCurrency && handoverDeposit?.depositAmount != null)
     ? `${handoverDeposit.depositAmount.toLocaleString('en-US')} ${handoverDeposit.depositCurrency}`
-    : fmtLak(reservation.deposit);
+    : fmtLak(reservation.deposit)
+      // Per-unit deposit (frozen by createReservations): show how the total is made up.
+      + (reservation.quantity > 1 && reservation.depositPerUnit ? ` (${reservation.quantity} × ${fmtLak(reservation.depositPerUnit)})` : '');
 
   // ── Damage/late charges — set by the return checklist or "Report lost/stolen".
   // Damage charge and late-return penalty stay separate fields throughout; only the
@@ -995,14 +1006,14 @@ export default function AdminReservationDetailScreen() {
                 // Defensive fallback path — a checklist wasn't the trigger here, so decide
                 // the stock bucket from whatever chargeSeverity already sits on the doc (if
                 // any), exactly like the checklist submit paths.
-                batch => addStockAdjustmentToBatch(
+                batch => addReturnStockToBatch(
                   batch,
                   reservation.productId,
-                  reservation.chargeSeverity === 'unusable' ? 'lostUnits' : 'pendingSettlementUnits',
-                  reservation.quantity,
-                  reservation.chargeSeverity === 'unusable'
-                    ? 'Return checklist rated item unusable'
-                    : 'Returned — pending deposit settlement',
+                  {
+                    quantity: reservation.quantity,
+                    chargeSeverity: reservation.chargeSeverity,
+                    chargeUnits: reservation.chargeUnits,
+                  },
                   'Admin (fallback return action)',
                   id,
                 ),
@@ -1024,7 +1035,7 @@ export default function AdminReservationDetailScreen() {
             <ConfirmBox
               text={
                 lostChargeAmount != null
-                  ? `Report this item lost/stolen? A charge of ${lostChargeAmount.toLocaleString('en-US')} ${lostChargeCurrency} (100% of replacement value)${lostLateChargeAmount != null ? `, plus a ${lostLateChargeAmount.toLocaleString('en-US')} ${lostChargeCurrency} late-return penalty already on this reservation,` : ''} will be recorded, and the reservation will be closed as lost.`
+                  ? `Report ${lostQty > 1 ? `${lostUnits} of ${lostQty} units` : 'this item'} lost/stolen? A charge of ${lostChargeAmount.toLocaleString('en-US')} ${lostChargeCurrency} (100% of replacement value${lostUnits > 1 ? ` × ${lostUnits} units` : ''})${lostLateChargeAmount != null ? `, plus a ${lostLateChargeAmount.toLocaleString('en-US')} ${lostChargeCurrency} late-return penalty already on this reservation,` : ''} will be recorded, and the reservation will be closed as lost.${lostQty > lostUnits ? ` The other ${lostQty - lostUnits} ${lostQty - lostUnits === 1 ? 'unit is' : 'units are'} back in stock.` : ''}`
                   : product?.retailPrice == null
                   ? "Replacement value not set for this product — charge can't be calculated. Set it on the product's admin page first."
                   : 'Enter a valid charge amount to continue.'
@@ -1049,6 +1060,7 @@ export default function AdminReservationDetailScreen() {
                     chargeReason: lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
                     chargeSeverity: 'lostStolen',
                     chargePercent: 100,
+                    chargeUnits: lostUnits,
                     ...lateFields,
                     depositAppliedToCharge: depositApplied,
                     outstandingBalance: outstanding,
@@ -1060,6 +1072,7 @@ export default function AdminReservationDetailScreen() {
                     chargeReason: lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
                     chargeSeverity: 'lostStolen',
                     chargePercent: 100,
+                    chargeUnits: lostUnits,
                     ...lateFields,
                     depositAppliedToCharge: depositApplied,
                     outstandingBalance: outstanding,
@@ -1080,7 +1093,7 @@ export default function AdminReservationDetailScreen() {
                     batch,
                     reservation.productId,
                     'lostUnits',
-                    reservation.quantity,
+                    lostUnits,
                     lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
                     lostStaffName.trim(),
                     id,
@@ -1089,6 +1102,9 @@ export default function AdminReservationDetailScreen() {
               }}
               destructive
             >
+              {lostQty > 1 && (
+                <UnitsStepper label="Units lost" value={lostUnits} max={lostQty} onChange={setLostUnitsCount} />
+              )}
               {product?.retailPrice != null && (
                 <View style={d.numRow}>
                   <TextInput

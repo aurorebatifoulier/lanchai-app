@@ -16,6 +16,8 @@ export interface ChainItemDraft {
   chargeReason?: string;
   chargeSeverity?: 'damaged' | 'unusable';
   chargePercent?: number;
+  /** Units the damage charge is about (1..quantity) — see shared/returnStock.ts. */
+  chargeUnits?: number;
   // Late-return penalty — independent of the damage fields above; either, neither, or
   // both may be set. Shares chargeCurrency.
   lateChargeAmount?: number;
