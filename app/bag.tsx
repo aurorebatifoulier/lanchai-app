@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, Switch } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
@@ -10,10 +10,10 @@ import { SHADES } from '@/constants/brandShades';
 import { MOTION } from '@/constants/motion';
 import { BAG_COPY } from '@/constants/bagCopy';
 import { categoryStyle } from '@/constants/categoryStyle';
-import { UI, Chip, SectionTitle, ToggleRow, useScreenInsets } from '@/components/account/ui';
+import { UI, Chip, SectionTitle, useScreenInsets } from '@/components/account/ui';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
-import { BookingBottomBar } from '@/components/booking/BookingBlocks';
+import { BookingBottomBar, bookingBarSpace } from '@/components/booking/BookingBlocks';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import DateRangePicker from '@/components/DateRangePicker';
 import PressScale from '@/components/PressScale';
@@ -50,7 +50,9 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const pad = (v: number) => String(v).padStart(2, '0');
 const fmtWhen = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
-const ms = (t: BagItem['pickupAt']) => (t ? t.toMillis() : null);
+// Compared to the minute: two items booked for the same slot always match, even when
+// one write carried seconds / milliseconds.
+const minuteOf = (t: BagItem['pickupAt']) => (t ? Math.floor(t.toMillis() / 60000) : null);
 
 export default function BagScreen() {
   const router = useRouter();
@@ -75,6 +77,9 @@ export default function BagScreen() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   // null = follow the bag (on when every item already shares the same dates).
   const [sameDatesPref, setSameDatesPref] = useState<boolean | null>(null);
+  const [barH, setBarH] = useState(0); // fixed bottom bar height → scroll padding
+  // Back on the bag (e.g. from Explore): the toggle follows the bag again.
+  useFocusEffect(useCallback(() => { setSameDatesPref(null); }, []));
 
   // Avoid redundant reads: products fetched once, availability once per item + dates.
   const fetchedProductIds = useRef<Set<string>>(new Set());
@@ -156,8 +161,10 @@ export default function BagScreen() {
   const sharedWindow = useMemo(() => {
     const first = items[0];
     if (!first?.pickupAt || !first.returnAt) return null;
-    const p = first.pickupAt.toMillis(), r = first.returnAt.toMillis();
-    return items.every(i => ms(i.pickupAt) === p && ms(i.returnAt) === r) ? { pickupAt: p, returnAt: r } : null;
+    const p = minuteOf(first.pickupAt), r = minuteOf(first.returnAt);
+    return items.every(i => minuteOf(i.pickupAt) === p && minuteOf(i.returnAt) === r)
+      ? { pickupAt: first.pickupAt.toMillis(), returnAt: first.returnAt.toMillis() }
+      : null;
   }, [items]);
   const sameDates = items.length >= 2 && (sameDatesPref ?? sharedWindow != null);
 
@@ -197,8 +204,8 @@ export default function BagScreen() {
     if (!on || !user) return;
     const src = items.find(i => i.pickupAt && i.returnAt);
     if (!src?.pickupAt || !src.returnAt) return;
-    const p = src.pickupAt.toMillis(), r = src.returnAt.toMillis();
-    const ids = items.filter(i => ms(i.pickupAt) !== p || ms(i.returnAt) !== r).map(i => i.id);
+    const p = minuteOf(src.pickupAt), r = minuteOf(src.returnAt);
+    const ids = items.filter(i => minuteOf(i.pickupAt) !== p || minuteOf(i.returnAt) !== r).map(i => i.id);
     updateAllBagItemDates(user.uid, ids, src.pickupAt.toDate(), src.returnAt.toDate()).catch(() => {});
   }, [user, items]);
 
@@ -240,14 +247,30 @@ export default function BagScreen() {
   return (
     <View style={[s.root, { paddingTop: screen.top }]}>
       <StatusBar style="dark" />
-      <View style={{ flexShrink: 0 }}>{header}</View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
+      <View style={{ flexShrink: 0 }}>
+        {header}
+        {/* Discreet: one small line under the header, 2+ items only. */}
         {items.length >= 2 && (
-          <View style={[UI.card, s.toggleCard]}>
-            <ToggleRow title={b.sameDates} value={sameDates} onValueChange={toggleSameDates} />
+          <View style={s.sameRow}>
+            <Text style={s.sameText}>{b.sameDates}</Text>
+            <Switch
+              value={sameDates}
+              onValueChange={toggleSameDates}
+              trackColor={{ false: SHADES.carbonLight, true: SHADES.amber }}
+              thumbColor={SHADES.white}
+              ios_backgroundColor={SHADES.carbonLight}
+              style={s.sameSwitch}
+              accessibilityLabel={b.sameDates}
+            />
           </View>
         )}
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[s.content, { paddingBottom: bookingBarSpace(barH, Math.max(screen.bottom, 12)) }]}
+        showsVerticalScrollIndicator={false}
+      >
 
         {items.map(item => (
           <Animated.View
@@ -311,6 +334,7 @@ export default function BagScreen() {
         busy={false}
         onPress={() => router.push('/bag/checkout')}
         bottom={Math.max(screen.bottom, 12)}
+        onHeight={setBarH}
       />
 
       {/* Date picker — existing rules (availability, shop slots, lead time). */}
@@ -427,9 +451,15 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
   headerChip: { marginLeft: 'auto' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  content: { padding: 16, paddingBottom: 24, gap: 12 },
+  content: { padding: 16, gap: 12 },
 
-  toggleCard: { overflow: 'hidden' },
+  sameRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingLeft: 16, paddingRight: 10, paddingVertical: 2,
+    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
+  },
+  sameText: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
+  sameSwitch: { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] },
 
   card: { padding: 14 },
   top: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },

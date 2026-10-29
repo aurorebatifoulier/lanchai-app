@@ -30,11 +30,13 @@ function bagCol(uid: string) {
 
 // Throws on Firestore error — caller must handle.
 // `dates` (optional): quick add from a product card — same item shape, dates filled in
+// (and `quantity`, default 1)
 // one write; availability / ID / holds are still checked at checkout as usual.
 export async function addToBag(
   uid: string,
   product: { id: string; name: string; images?: string[] },
   dates?: { pickupAt: Date; returnAt: Date },
+  quantity = 1,
 ): Promise<string> {
   const ref = await addDoc(bagCol(uid), {
     productId:    product.id,
@@ -42,7 +44,7 @@ export async function addToBag(
     productImage: product.images?.[0] ?? null,
     pickupAt:     dates ? Timestamp.fromDate(dates.pickupAt) : null,
     returnAt:     dates ? Timestamp.fromDate(dates.returnAt) : null,
-    quantity:     1,
+    quantity:     Math.max(1, Math.floor(quantity)),
     addedAt:      serverTimestamp(),
   });
   return ref.id;

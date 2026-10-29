@@ -1,14 +1,20 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOutDown, ReduceMotion } from 'react-native-reanimated';
 import { SHADES } from '@/constants/brandShades';
 import { MOTION } from '@/constants/motion';
 import { EXPLORE_COPY } from '@/constants/exploreCopy';
+import { BOOKING_COPY } from '@/constants/bookingCopy';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
+import { TimesRow, QuantityRow } from '@/components/booking/BookingBlocks';
+import { SlotSheet } from '@/components/booking/BookingSheets';
+import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
+import { useMyLoyalty } from '@/lib/loyaltyUi';
+import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
 import { ProductThumb } from '@/components/home/ProductThumb';
 import { useAuth } from '@/contexts/AuthContext';
 import { addToBag } from '@/lib/bag';
@@ -18,16 +24,18 @@ import { weekendWindow } from '@/lib/homeData';
 import type { Product } from '@/lib/mockData';
 import { fetchOccupancy, computeAvailableUnits, effectiveStock, nextAvailableDay, type OccupancyRecord } from '@/utils/availability';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
-import { getEffectiveRate, billableDaysFromDates } from '@/utils/pricing';
+import { getEffectiveRate, billableDaysFromDates, depositForLine } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
 
 // Quick add (validated mockup): one provider (root layout) owns the bottom sheet and the
 // "Added to your bag" toast for every product card ("+" on Explore, category pages,
 // Liked and the Home rails). Dates: this weekend (weekendWindow) / tomorrow (first slot,
-// 1 day) / pick dates (DateRangeCalendar; first slot, return at the same time). Price =
-// the booking rule (24h blocks × getEffectiveRate). Availability = the booking rule on
-// this product's occupancy. Adds a dated bag item (quantity 1); holds, ID and all server
-// checks still run at checkout.
+// 1 day) / pick dates (DateRangeCalendar; first slot, return at the same time), then
+// Pick-up | Return time cells (booking slot rules, linked return time) and a quantity
+// row (max = units free on those exact dates/times). Price = the booking rule (24h blocks
+// × getEffectiveRate × quantity), deposit = depositForLine (per unit). Availability = the
+// booking rule on this product's occupancy. Adds a dated bag item with that quantity;
+// holds, ID and all server checks still run at checkout.
 
 type Choice = 'weekend' | 'tomorrow' | 'pick';
 type QWindow = { pickupAt: Date; returnAt: Date };
@@ -44,6 +52,7 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const pad = (n: number) => String(n).padStart(2, '0');
 const fmtDayShort = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()}`;
 const fmtWhen = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const dayOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const atSlot = (day: Date, slot: string) => {
@@ -115,24 +124,34 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
   const shop = useShopInfo();
   const slots = useMemo(() => getShopTimeSlots(shop), [shop]);
   const rate = useExchangeRate();
+  const loyaltyConfig = useLoyaltyConfig();
+  const loyalty = useMyLoyalty();
+  const profile = loyalty.profile as { customerType?: string; loyaltyTier?: string } | null;
   const stock = effectiveStock(product);
   const [occ, setOcc] = useState<OccupancyRecord[] | null>(null);
   const [choice, setChoice] = useState<Choice>(startOnPick ? 'pick' : 'weekend');
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>(presetRange ?? { start: null, end: null });
+  const [slotSheet, setSlotSheet] = useState<'pickup' | 'return' | null>(null);
+  const [qty, setQty] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Pick-up / return times — same linked rule as the booking screens (return follows
+  // pick-up until the renter picks it by hand).
+  const { pickupTime, returnTime, selectPickupTime, selectReturnTime, resetTimes } = useLinkedReturnTime();
 
   useEffect(() => {
     fetchOccupancy(product.id).then(setOcc).catch(() => setOcc([]));
   }, [product.id]);
 
+  // Each shortcut's DAYS and default times (weekend / tomorrow: first open slot; pick
+  // dates: first open slot of the pick-up day, or the bag's exact times).
   const windows = useMemo(() => {
     const available = (d: Date) => getAvailableTimeSlots(d, slots);
     const wk = weekendWindow(new Date(), available);
     const t = new Date(); t.setDate(t.getDate() + 1);
     const tSlot = available(t)[0];
     const tomorrow = tSlot ? { pickupAt: atSlot(t, tSlot), returnAt: atSlot(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1), tSlot) } : null;
-    let pick: { pickupAt: Date; returnAt: Date } | null = null;
+    let pick: QWindow | null = null;
     if (range.start && range.end && presetWindow
       && sameDay(range.start, presetWindow.pickupAt) && sameDay(range.end, presetWindow.returnAt)) {
       pick = presetWindow; // the bag's exact times, while the renter keeps those days
@@ -147,7 +166,7 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
     return { weekend: wk ? { pickupAt: wk.pickupAt, returnAt: wk.returnAt } : null, tomorrow, pick };
   }, [slots, range, presetWindow]);
 
-  const free = useCallback((w: { pickupAt: Date; returnAt: Date } | null) =>
+  const free = useCallback((w: QWindow | null) =>
     !!w && occ != null && computeAvailableUnits(occ, w.pickupAt, w.returnAt, stock) >= 1, [occ, stock]);
 
   // Default once availability is known: the first free shortcut; not free today ("+"
@@ -156,7 +175,7 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
   useEffect(() => {
     if (occ == null || defaulted.current) return;
     defaulted.current = true;
-    if (presetRange) return; // dates already chosen on the product page calendar
+    if (presetRange) return; // dates already chosen (product page calendar / bag period)
     if (startOnPick) {
       const next = nextAvailableDay(occ, stock);
       if (next instanceof Date) setRange({ start: next, end: new Date(next.getFullYear(), next.getMonth(), next.getDate() + 1) });
@@ -165,19 +184,40 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
     if (!free(windows.weekend)) setChoice(free(windows.tomorrow) ? 'tomorrow' : 'pick');
   }, [occ, free, windows, startOnPick, stock, presetRange]);
 
-  const sel = windows[choice];
-  const selFree = free(sel);
+  // New days (shortcut or calendar) → their default times; the renter can then change them.
+  const base = windows[choice];
+  useEffect(() => {
+    if (base) resetTimes(hhmm(base.pickupAt), hhmm(base.returnAt));
+    else resetTimes(null, null);
+  }, [base, resetTimes]);
+
+  const sel = useMemo<QWindow | null>(() => {
+    if (!base || !pickupTime || !returnTime) return null;
+    const pickupAt = atSlot(base.pickupAt, pickupTime);
+    const returnAt = atSlot(base.returnAt, returnTime);
+    return returnAt > pickupAt ? { pickupAt, returnAt } : null;
+  }, [base, pickupTime, returnTime]);
+  const badOrder = !!base && !!pickupTime && !!returnTime && sel == null;
+
+  // Units free on the exact dates / times → quantity max; everything follows.
+  const units = sel && occ != null ? computeAvailableUnits(occ, sel.pickupAt, sel.returnAt, stock) : 0;
+  useEffect(() => { if (units > 0) setQty(q => Math.min(q, units)); }, [units]);
+  const quantity = units > 0 ? Math.min(qty, units) : qty;
+  const selFree = units >= 1;
   const days = sel ? billableDaysFromDates(sel.pickupAt, sel.returnAt) : 0;
   const perDayUsd = sel ? getEffectiveRate(product, days) : null;
-  const total = perDayUsd != null && rate != null ? toLak(perDayUsd, rate) * days : null;
+  const total = perDayUsd != null && rate != null ? toLak(perDayUsd, rate) * days * quantity : null;
   const priceDay = rate != null && product.pricePerDay > 0 ? toLak(product.pricePerDay, rate) : null;
+  const deposit = rate != null
+    ? depositForLine(product.deposit, rate, depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig), quantity)
+    : null;
 
   const add = async () => {
     if (!user || !sel || !selFree || saving) return;
     setSaving(true);
     setError(null);
     try {
-      await addToBag(user.uid, product, { pickupAt: sel.pickupAt, returnAt: sel.returnAt });
+      await addToBag(user.uid, product, { pickupAt: sel.pickupAt, returnAt: sel.returnAt }, quantity);
       onAdded();
     } catch {
       setError(EXPLORE_COPY.quickAdd.error);
@@ -185,8 +225,16 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
     }
   };
 
+  // Drag the handle down to close.
+  const drag = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_e, g) => g.dy > 4,
+    onPanResponderRelease: (_e, g) => { if (g.dy > 60 || (Math.abs(g.dy) < 4 && Math.abs(g.dx) < 4)) onClose(); },
+  }), [onClose]);
+
   const q = EXPLORE_COPY.quickAdd;
-  const shortcut = (key: Choice, label: string, w: { pickupAt: Date; returnAt: Date } | null, busyLabel: string, icon?: 'calendar') => {
+  const c = BOOKING_COPY;
+  const shortcut = (key: Choice, label: string, w: QWindow | null, busyLabel: string, icon?: 'calendar') => {
     const unavailable = key !== 'pick' && occ != null && !free(w);
     const on = choice === key;
     return (
@@ -204,10 +252,21 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={s.overlay} onPress={onClose}>
-        <Pressable style={[s.sheet, { paddingBottom: screen.bottom + 16 }]} onPress={() => {}}>
-          <View style={s.handle} />
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* The backdrop is a SIBLING of the sheet (not its parent), so touches inside the
+          sheet go to its ScrollView — the whole content scrolls from anywhere. */}
+      <View style={s.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={q.close} />
+        <View style={s.sheet}>
+          <View style={s.handleArea} {...drag.panHandlers} accessibilityLabel={q.close}>
+            <View style={s.handle} />
+          </View>
+          <ScrollView
+            style={s.scroll}
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
             <View style={s.head}>
               <ProductThumb product={product} size={64} radius={16} />
               <View style={{ flex: 1 }}>
@@ -237,22 +296,50 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
               </View>
             )}
 
+            {base && (
+              <View style={[UI.card, { marginTop: 14 }]}>
+                <TimesRow
+                  top={false}
+                  pickup={pickupTime}
+                  ret={returnTime}
+                  onPickup={() => setSlotSheet('pickup')}
+                  onReturn={() => setSlotSheet('return')}
+                />
+              </View>
+            )}
+            {badOrder && <Text style={[UI.errorText, { marginTop: 8 }]}>{q.returnBeforePickup}</Text>}
+
             {occ == null ? (
               <ActivityIndicator color={SHADES.amber} style={{ marginVertical: 18 }} />
             ) : sel && (
-              <View style={s.summary}>
-                <View style={s.line}><Text style={s.lineLabel}>{q.pickup}</Text><Text style={s.lineValue}>{fmtWhen(sel.pickupAt)}</Text></View>
-                <View style={s.line}><Text style={s.lineLabel}>{q.return}</Text><Text style={s.lineValue}>{fmtWhen(sel.returnAt)}</Text></View>
-                <View style={[s.line, s.totalLine]}>
-                  <Text style={s.totalLabel}>{q.days(days)}</Text>
-                  <Text style={s.totalValue}>{total != null ? `${total.toLocaleString('en-US')} LAK` : '—'}</Text>
+              <>
+                {selFree && <QuantityRow quantity={quantity} available={units} onChange={v => setQty(Math.max(1, Math.min(v, units)))} />}
+                <View style={s.summary}>
+                  <View style={s.line}><Text style={s.lineLabel}>{q.pickup}</Text><Text style={s.lineValue}>{fmtWhen(sel.pickupAt)}</Text></View>
+                  <View style={s.line}><Text style={s.lineLabel}>{q.return}</Text><Text style={s.lineValue}>{fmtWhen(sel.returnAt)}</Text></View>
+                  <View style={[s.line, s.totalLine]}>
+                    <Text style={s.totalLabel}>{q.days(days)}</Text>
+                    <Text style={s.totalValue}>{total != null ? `${total.toLocaleString('en-US')} LAK` : '—'}</Text>
+                  </View>
+                  {deposit != null && (
+                    <View style={s.line}>
+                      <Text style={s.lineLabel}>{q.deposit}</Text>
+                      <Text style={s.lineLabel}>{`${deposit.deposit.toLocaleString('en-US')} LAK`}</Text>
+                    </View>
+                  )}
+                  {deposit != null && quantity > 1 && (
+                    <Text style={s.depositDetail}>{q.depositPerUnit(quantity, deposit.depositPerUnit.toLocaleString('en-US'))}</Text>
+                  )}
+                  {!selFree && <Text style={[UI.errorText, { marginTop: 8 }]}>{q.notFreeDates}</Text>}
                 </View>
-                {!selFree && <Text style={[UI.errorText, { marginTop: 8 }]}>{q.notFreeDates}</Text>}
-              </View>
+              </>
             )}
-
             {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
-            <PressScale style={[UI.btnPrimary, s.addBtn, (!sel || !selFree || saving) && UI.btnDisabled]} onPress={add} disabled={!sel || !selFree || saving}>
+          </ScrollView>
+
+          {/* Fixed footer above the system bar — "Add to bag" is never hidden. */}
+          <View style={[s.footer, { paddingBottom: screen.bottom + 12 }]}>
+            <PressScale style={[UI.btnPrimary, (!sel || !selFree || saving) && UI.btnDisabled]} onPress={add} disabled={!sel || !selFree || saving}>
               {saving ? <ActivityIndicator size="small" color={SHADES.carbon} /> : (
                 <>
                   <Feather name="shopping-bag" size={18} color={SHADES.carbon} />
@@ -261,17 +348,39 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
               )}
             </PressScale>
             <Text style={s.payLater}>{q.payLater}</Text>
-          </ScrollView>
-        </Pressable>
-      </Pressable>
+          </View>
+        </View>
+      </View>
+
+      <SlotSheet
+        visible={slotSheet === 'pickup'}
+        title={c.pickup}
+        sub={`${shop.name} · ${shop.hours}`}
+        slots={base ? getAvailableTimeSlots(base.pickupAt, slots) : []}
+        selected={pickupTime}
+        onSelect={selectPickupTime}
+        onClose={() => setSlotSheet(null)}
+      />
+      <SlotSheet
+        visible={slotSheet === 'return'}
+        title={c.return}
+        sub={shop.hours}
+        slots={base ? getAvailableTimeSlots(base.returnAt, slots) : []}
+        selected={returnTime}
+        onSelect={selectReturnTime}
+        onClose={() => setSlotSheet(null)}
+      />
     </Modal>
   );
 }
 
 const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%' },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 16 },
+  sheet: { backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' },
+  handleArea: { alignItems: 'center', paddingTop: 10, paddingBottom: 12 },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border },
+  scroll: { flexGrow: 0, flexShrink: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 16 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   name: { fontSize: 19, fontWeight: '800', color: SHADES.carbon },
   when: { fontSize: 16, fontWeight: '800', color: SHADES.carbon, marginTop: 20, marginBottom: 10 },
@@ -291,7 +400,8 @@ const s = StyleSheet.create({
   totalLine: { borderTopWidth: 0.5, borderTopColor: SHADES.border, paddingTop: 10, marginTop: 2 },
   totalLabel: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
   totalValue: { fontSize: 15, fontWeight: '800', color: SHADES.carbon },
-  addBtn: { marginTop: 18 },
+  depositDetail: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'right', marginTop: -4 },
+  footer: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: SHADES.border, backgroundColor: SHADES.white },
   payLater: { fontSize: 13, color: SHADES.carbonMuted, textAlign: 'center', marginTop: 10 },
   toast: {
     position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center', gap: 10,

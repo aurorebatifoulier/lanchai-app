@@ -999,10 +999,15 @@ a snapshot indefinitely).
     sheet + toast. "+" (`QuickAddButton`: amber = free today, outline = not → Pick dates
     pre-filled with the next free day; none when tier-locked) on Explore, Liked, category
     pages and the Home rail cards. Shortcuts: this weekend / tomorrow (first slot, 1 day) /
-    pick dates (DateRangeCalendar, first slot, return at the same time). Availability =
-    `computeAvailableUnits` on the product's occupancy; total = 24h blocks ×
-    `getEffectiveRate`. `addToBag(uid, product, { pickupAt, returnAt })` (dates optional),
-    quantity 1. Checkout still runs every check (holds, ID, server).
+    pick dates (DateRangeCalendar, first slot, return at the same time), then Pick-up |
+    Return time cells (`<TimesRow>` from `BookingBlocks`, `SlotSheet`, booking slot rules,
+    `useLinkedReturnTime`) and `<QuantityRow>` (max = units free on those exact times).
+    Availability = `computeAvailableUnits` on the product's occupancy; total = 24h blocks
+    × `getEffectiveRate` × quantity; deposit = `depositForLine`. The backdrop is a SIBLING
+    of the sheet (never its parent Pressable — that swallowed scrolling): the content
+    scrolls from anywhere, the handle closes on tap / drag down, "Add to bag" sits in a
+    fixed footer above the system bar. `addToBag(uid, product, { pickupAt, returnAt },
+    quantity)` (dates optional, quantity default 1). Checkout still runs every check.
 
 - **Product detail (validated mockup, 2026-10-27).** `app/product/[id].tsx` assembles
   `components/product/*` — copy in `constants/productCopy.ts`. Gallery on carbonLight
@@ -1059,7 +1064,11 @@ a snapshot indefinitely).
   chip, products free for the whole window (`computeAvailableUnits`, Free-this-weekend
   rule); "+" → `openQuickAdd(product, { window })` = those exact times. Your total =
   rental (to pay at pick-up) + refundable deposit on its own line — NEVER summed with the
-  rental. Bottom bar "Continue" → `/bag/checkout`.
+  rental. Bottom bar "Continue" → `/bag/checkout`. The toggle is a discreet 12px line
+  under the header (compact switch); dates compare to the MINUTE and the toggle
+  re-derives on focus. `BookingBottomBar` is absolutely positioned: every screen using it
+  (bag, booking, bag checkout) passes `onHeight` and pads its scroll content with
+  `bookingBarSpace(height, bottom)` (bar height + 24) so nothing hides behind it.
 
 ## Security follow-ups
 

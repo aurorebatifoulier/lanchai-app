@@ -66,17 +66,7 @@ export function WhenCard({ datesLabel, pickup, ret, onDates, onPickup, onReturn,
           </View>
           <Feather name="chevron-right" size={18} color={SHADES.carbonMuted} />
         </TouchableOpacity>
-        <View style={s.timesRow}>
-          <TouchableOpacity style={s.timeCell} onPress={onPickup} activeOpacity={0.7}>
-            <Text style={s.fieldLabel}>{c.pickup}</Text>
-            <Text style={[s.fieldValue, !pickup && s.fieldEmpty]}>{pickup ?? c.select}</Text>
-          </TouchableOpacity>
-          <View style={s.vSep} />
-          <TouchableOpacity style={s.timeCell} onPress={onReturn} activeOpacity={0.7}>
-            <Text style={s.fieldLabel}>{c.return}</Text>
-            <Text style={[s.fieldValue, !ret && s.fieldEmpty]}>{ret ?? c.select}</Text>
-          </TouchableOpacity>
-        </View>
+        <TimesRow pickup={pickup} ret={ret} onPickup={onPickup} onReturn={onReturn} />
       </View>
       {!!error && <Text style={[UI.errorText, { marginTop: 8 }]}>{error}</Text>}
       {!error && !!hint && (
@@ -85,6 +75,31 @@ export function WhenCard({ datesLabel, pickup, ret, onDates, onPickup, onReturn,
           <Text style={s.hintText}>{hint}</Text>
         </View>
       )}
+    </View>
+  );
+}
+
+/** Pick-up time | Return time cells (the "When?" card row; also the quick-add sheet). */
+export function TimesRow({ pickup, ret, onPickup, onReturn, top = true }: {
+  pickup: string | null;
+  ret: string | null;
+  onPickup: () => void;
+  onReturn: () => void;
+  /** Top separator (inside the When? card under the dates row). */
+  top?: boolean;
+}) {
+  const c = BOOKING_COPY;
+  return (
+    <View style={[s.timesRow, !top && { borderTopWidth: 0 }]}>
+      <TouchableOpacity style={s.timeCell} onPress={onPickup} activeOpacity={0.7}>
+        <Text style={s.fieldLabel}>{c.pickup}</Text>
+        <Text style={[s.fieldValue, !pickup && s.fieldEmpty]}>{pickup ?? c.select}</Text>
+      </TouchableOpacity>
+      <View style={s.vSep} />
+      <TouchableOpacity style={s.timeCell} onPress={onReturn} activeOpacity={0.7}>
+        <Text style={s.fieldLabel}>{c.return}</Text>
+        <Text style={[s.fieldValue, !ret && s.fieldEmpty]}>{ret ?? c.select}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -293,7 +308,13 @@ export function BusinessDocCard({ onGo }: { onGo: () => void }) {
 
 // ── Bottom bar ───────────────────────────────────────────────────────────────
 
-export function BookingBottomBar({ total, sub, label, disabled, busy, onPress, bottom }: {
+/** Space the scroll content must keep under it so nothing hides behind the fixed bar:
+ *  the bar's measured height (onHeight) — or an estimate before the first layout — + 24. */
+export function bookingBarSpace(measured: number, bottom: number): number {
+  return (measured > 0 ? measured : 66 + bottom) + 24;
+}
+
+export function BookingBottomBar({ total, sub, label, disabled, busy, onPress, bottom, onHeight }: {
   total: number | null;
   sub: string;
   label: string;
@@ -301,9 +322,11 @@ export function BookingBottomBar({ total, sub, label, disabled, busy, onPress, b
   busy: boolean;
   onPress: () => void;
   bottom: number;
+  /** Measured bar height (insets included) → bookingBarSpace for the scroll padding. */
+  onHeight?: (h: number) => void;
 }) {
   return (
-    <View style={[s.bar, { paddingBottom: bottom }]}>
+    <View style={[s.bar, { paddingBottom: bottom }]} onLayout={e => onHeight?.(e.nativeEvent.layout.height)}>
       <View style={{ flex: 1 }}>
         {total != null && total > 0 && (
           <>

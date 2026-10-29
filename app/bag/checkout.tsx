@@ -11,7 +11,7 @@ import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import {
   BookingProductCard, TotalCard, DepositExplainer, CancellationLine, NoteField, TermsCheck, BusinessDocCard,
-  BookingBottomBar, type CouponOption,
+  BookingBottomBar, bookingBarSpace, type CouponOption,
 } from '@/components/booking/BookingBlocks';
 import { useBookingHold } from '@/lib/bookingHold';
 import { useAuth } from '@/contexts/AuthContext';
@@ -74,6 +74,7 @@ export default function BagSummaryScreen() {
   const bookingHold = useBookingHold();
   const [error,       setError]       = useState<string | null>(null);
   const [docRequired, setDocRequired] = useState(false);
+  const [barH, setBarH] = useState(0); // fixed bottom bar height → scroll padding
 
   // ── Loyalty ──────────────────────────────────────────────────────────────────
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -292,7 +293,7 @@ export default function BagSummaryScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: 110 + insets.bottom }]}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: bookingBarSpace(barH, Math.max(insets.bottom, 12)) }]}
         keyboardShouldPersistTaps="handled"
       >
         {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginBottom: 16 }} />}
@@ -341,6 +342,7 @@ export default function BagSummaryScreen() {
         busy={submitting}
         onPress={() => handleConfirm()}
         bottom={Math.max(insets.bottom, 12)}
+        onHeight={setBarH}
       />
     </KeyboardAvoidingView>
   );

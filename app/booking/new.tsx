@@ -13,7 +13,7 @@ import { UI, useScreenInsets } from '@/components/account/ui';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import {
   BookingProductCard, WhenCard, QuantityRow, TotalCard, DepositExplainer, CancellationLine, NoteField,
-  TermsCheck, BusinessDocCard, BookingBottomBar, type CouponOption,
+  TermsCheck, BusinessDocCard, BookingBottomBar, bookingBarSpace, type CouponOption,
 } from '@/components/booking/BookingBlocks';
 import { DatesSheet, SlotSheet } from '@/components/booking/BookingSheets';
 import { useBookingHold } from '@/lib/bookingHold';
@@ -78,6 +78,7 @@ export default function BookingNewScreen() {
   const [endDate, setEndDate] = useState<Date | null>(null);
   const { pickupTime, returnTime, selectPickupTime, selectReturnTime, resetTimes } = useLinkedReturnTime();
   const [quantity, setQuantity] = useState(1);
+  const [barH, setBarH] = useState(0); // fixed bottom bar height → scroll padding
   const [availableStock, setAvailableStock] = useState(1);
   const [notes, setNotes] = useState('');
   const [couponId, setCouponId] = useState<string | null>(null);
@@ -250,7 +251,7 @@ export default function BookingNewScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: 110 + screen.bottom }]}
+        contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: bookingBarSpace(barH, Math.max(screen.bottom, 12)) }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -300,6 +301,7 @@ export default function BookingNewScreen() {
         busy={confirming}
         onPress={() => confirm()}
         bottom={Math.max(screen.bottom, 12)}
+        onHeight={setBarH}
       />
 
       <DatesSheet

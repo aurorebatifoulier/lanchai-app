@@ -46,6 +46,10 @@ export const EXPLORE_COPY = {
     viewBag: 'View bag',
     error: "Couldn't add it to your bag. Please try again.",
     chooseDates: 'Choose your dates in the calendar.',
+    deposit: 'Refundable deposit',
+    depositPerUnit: (qty: number, unit: string) => `${qty} × ${unit} LAK`,
+    returnBeforePickup: 'Pick a return time after the pick-up.',
+    close: 'Close',
   },
 
   surprise: {
