@@ -24,7 +24,7 @@ import {
   type UserProfile,
   type LoyaltyCoupon,
 } from '@/lib/firestore';
-import { couponPercentFor, orderDiscount } from '@/functions/src/shared/pricing';
+import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
 import { clearBag, listenBagItems, BagItem } from '@/lib/bag';
 import { sendNotif } from '@/lib/notifications';
 import { Product } from '@/lib/mockData';
@@ -134,7 +134,8 @@ export default function BagSummaryScreen() {
       if (rateUsd === null) return []; // unpriced — never create a reservation for this item
       const rateLak = toLak(rateUsd, exchangeRate);
       const depositPercent = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
-      const depositLak = Math.round(toLak(product.deposit, exchangeRate) * depositPercent / 100);
+      // Per unit × quantity — the server's formula (shared depositForLine).
+      const depositLak = depositForLine(product.deposit, exchangeRate, depositPercent, raw.quantity).deposit;
       return [{
         bagItemId:    raw.id,
         productId:    raw.productId,

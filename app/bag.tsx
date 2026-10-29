@@ -34,7 +34,7 @@ import {
 import { getRenterProduct } from '@/lib/firestore';
 import { Product } from '@/lib/mockData';
 import { getAvailableStock, effectiveStock } from '@/utils/availability';
-import { getEffectiveRate, billableDaysFromDates } from '@/utils/pricing';
+import { getEffectiveRate, billableDaysFromDates, depositForLine } from '@/utils/pricing';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
 import { getUserProfile, type UserProfile } from '@/lib/firestore';
@@ -71,10 +71,11 @@ export default function BagScreen() {
 
   // Converts a product's USD deposit to LAK, applying the customer-type/loyalty-tier
   // deposit percentage.
-  const depositLakFor = useCallback((usdDeposit: number): number => {
+  // Per unit × quantity — the server's formula (shared depositForLine).
+  const depositLakFor = useCallback((usdDeposit: number, quantity: number): number => {
     if (exchangeRate == null) return 0;
     const percent = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
-    return Math.round(toLak(usdDeposit, exchangeRate) * percent / 100);
+    return depositForLine(usdDeposit, exchangeRate, percent, quantity).deposit;
   }, [exchangeRate, profile, loyaltyConfig]);
 
   const [items,      setItems]      = useState<BagItem[]>([]);
@@ -174,7 +175,7 @@ export default function BagScreen() {
     readyItems.reduce((sum, item) => {
       const product = productMap[item.productId];
       if (!product || exchangeRate == null) return sum;
-      return sum + depositLakFor(product.deposit) * item.quantity;
+      return sum + depositLakFor(product.deposit, item.quantity);
     }, 0),
     [readyItems, productMap, exchangeRate, depositLakFor],
   );
@@ -385,7 +386,7 @@ export default function BagScreen() {
                   <Text style={s.pricingLabel}>Deposit</Text>
                   {exchangeRate != null ? (
                     <PriceLak
-                      lak={depositLakFor(product.deposit) * item.quantity}
+                      lak={depositLakFor(product.deposit, item.quantity)}
                       customerType={profile?.customerType}
                       vatPercent={vatPercent}
                       textStyle={s.pricingValue}

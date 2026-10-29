@@ -118,7 +118,7 @@ export function QuantityRow({ quantity, available, onChange }: { quantity: numbe
 export interface CouponOption { id: string; label: string; savings: number }
 
 export function TotalCard({
-  lines, coupons, selectedCouponId, onToggleCoupon, discount, vat, toPay, deposit, pointsSubtotals,
+  lines, coupons, selectedCouponId, onToggleCoupon, discount, vat, toPay, deposit, depositDetail, pointsSubtotals,
 }: {
   lines: { label: string; value: number }[];
   coupons: CouponOption[];
@@ -129,6 +129,8 @@ export function TotalCard({
   vat: { ht: number; amount: number; pct: number } | null;
   toPay: number;
   deposit: number;
+  /** Small grey line under the deposit, e.g. "2 × 500,000 LAK" (per-unit deposit). */
+  depositDetail?: string;
   pointsSubtotals: number[];
 }) {
   const c = BOOKING_COPY;
@@ -172,6 +174,7 @@ export function TotalCard({
           <Text style={s.lineLabel}>{c.deposit}</Text>
           <Text style={s.depositValue}>{`${n(deposit)} LAK`}</Text>
         </View>
+        {!!depositDetail && <Text style={s.depositDetail}>{depositDetail}</Text>}
         <BookingPointsHint subtotals={pointsSubtotals} compact />
       </View>
     </View>
@@ -351,6 +354,7 @@ const s = StyleSheet.create({
   toPayLabel: { flex: 1, fontSize: 16, fontWeight: '700', color: SHADES.carbon },
   toPayValue: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
   depositValue: { fontSize: 14.5, fontWeight: '500', color: SHADES.carbonMuted },
+  depositDetail: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'right', marginTop: -6, marginBottom: 6 },
   linkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   explain: { padding: 16, marginTop: 10, gap: 6 },
   step: { fontSize: 14.5, fontWeight: '500', color: SHADES.carbon, lineHeight: 21 },

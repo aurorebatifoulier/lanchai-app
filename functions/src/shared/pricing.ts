@@ -83,6 +83,22 @@ export function depositPercentFor(
   return config.depositPercentByType.tourist; // tourist, or unset/unknown — same fallback
 }
 
+/**
+ * Deposit of one reservation line (LAK) — PER UNIT: the unit deposit (product deposit
+ * USD → LAK × the customer-type %) is rounded first, then × quantity, so "n × unit"
+ * always matches the line total. The ONE formula for the booking screens, the bag, the
+ * bag checkout and createReservations.
+ */
+export function depositForLine(
+  productDepositUsd: number,
+  exchangeRate: number,
+  depositPercent: number,
+  quantity: number,
+): { depositPerUnit: number; deposit: number } {
+  const depositPerUnit = Math.round(toLak(productDepositUsd || 0, exchangeRate) * depositPercent / 100);
+  return { depositPerUnit, deposit: depositPerUnit * Math.max(1, quantity) };
+}
+
 /** One reservation line's frozen figures (all LAK). null = unpriced product. */
 export function priceLine(input: {
   product: PricedProduct;
@@ -91,7 +107,7 @@ export function priceLine(input: {
   quantity: number;
   exchangeRate: number;
   depositPercent: number;
-}): { durationDays: number; pricePerDay: number; subtotal: number; deposit: number } | null {
+}): { durationDays: number; pricePerDay: number; subtotal: number; deposit: number; depositPerUnit: number } | null {
   const durationDays = billableDaysFromMs(input.pickupAtMs, input.returnAtMs);
   const rateUsd = getEffectiveRate(input.product, durationDays);
   if (rateUsd === null) return null;
@@ -100,7 +116,7 @@ export function priceLine(input: {
     durationDays,
     pricePerDay,
     subtotal: pricePerDay * durationDays * input.quantity,
-    deposit: Math.round(toLak(input.product.deposit, input.exchangeRate) * input.depositPercent / 100),
+    ...depositForLine(input.product.deposit, input.exchangeRate, input.depositPercent, input.quantity),
   };
 }
 

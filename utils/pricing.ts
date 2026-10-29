@@ -18,7 +18,7 @@ export function calculateDays(startDate: Date, endDate: Date): number {
 // Single source in functions/src/shared/pricing.ts — shared with the
 // createReservations callable, which recomputes every reservation figure server-side,
 // so the previews shown here always match what gets written. Product fields are USD.
-export { getRateForDays, getEffectiveRate, getMinPrice } from '@/functions/src/shared/pricing';
+export { getRateForDays, getEffectiveRate, getMinPrice, depositForLine } from '@/functions/src/shared/pricing';
 
 // 24h-block billing (shared rule).
 export function billableDaysFromDates(pickupAt: Date, returnAt: Date): number {

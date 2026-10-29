@@ -35,7 +35,7 @@ import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { toLak, splitHtVat } from '@/utils/currency';
 import { getProductAccessState } from '@/utils/productAccess';
 import { needsBtobDocument } from '@/utils/btob';
-import { couponPercentFor, orderDiscount } from '@/functions/src/shared/pricing';
+import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
 
 // "Your booking" (validated mockup) — ONE screen: dates & times, quantity, total (coupon,
 // VAT only when on, to pay at pick-up, the renter's real deposit, points), deposit
@@ -153,8 +153,9 @@ export default function BookingNewScreen() {
     savings: orderDiscount([subtotal], couponPct(c)).total,
   }));
   const depositPct = depositPercentFor(profile?.customerType, profile?.loyaltyTier, loyaltyConfig);
-  // Same formula as the server's priceLine (one deposit per line, not × quantity).
-  const depositLak = product && exchangeRate != null ? Math.round(toLak(product.deposit, exchangeRate) * depositPct / 100) : 0;
+  // Per unit × quantity — the server's formula (shared depositForLine).
+  const depositLine = product && exchangeRate != null ? depositForLine(product.deposit, exchangeRate, depositPct, quantity) : null;
+  const depositLak = depositLine?.deposit ?? 0;
 
   const c = BOOKING_COPY;
   const ctaLabel = !startDate || !endDate ? c.cta.selectDates
@@ -279,6 +280,7 @@ export default function BookingNewScreen() {
             vat={vat}
             toPay={toPay}
             deposit={depositLak}
+            depositDetail={depositLine && quantity > 1 ? c.depositPerUnit(quantity, depositLine.depositPerUnit.toLocaleString('en-US')) : undefined}
             pointsSubtotals={[subtotal]}
           />
         )}

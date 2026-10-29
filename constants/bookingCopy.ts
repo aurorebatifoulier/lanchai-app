@@ -31,6 +31,7 @@ export const BOOKING_COPY = {
   vat: (pct: number) => `VAT (${pct}%)`,
   toPay: 'To pay at pick-up',
   deposit: 'Refundable deposit',
+  depositPerUnit: (qty: number, unit: string) => `${qty} × ${unit} LAK`,
 
   depositLink: 'How does the deposit work?',
   depositSteps: [

@@ -236,7 +236,8 @@ export const createReservations = onCall({ region: REGION }, async request => {
         pricePerDay:  l.pricePerDay,
         subtotal:     l.subtotal,
         total,
-        deposit:      l.deposit,
+        deposit:      l.deposit,        // per unit × quantity (depositForLine)
+        depositPerUnit: l.depositPerUnit,
         currency:     'LAK',
         notes,
         status:       'pending_payment',
