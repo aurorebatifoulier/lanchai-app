@@ -12,7 +12,8 @@ import { useShopInfo } from '@/lib/shop';
 import { pickIdPhoto } from '@/lib/identity';
 import type { RentalDoc } from '@/lib/firestore';
 import {
-  agreementIdFor, buildAgreementData, loadRenterBlock, signAgreement, savePaperAgreement, termsForAnnex,
+  agreementIdFor, buildAgreementData, fmtDepositReceived, loadRenterBlock, signAgreement, savePaperAgreement, termsForAnnex,
+  type HandoverInfo,
 } from '@/lib/rentalAgreement';
 import { vteReservationLabel } from '@/functions/src/shared/dates';
 import { AGREEMENT_COPY as A, type AgreementData } from '@/functions/src/shared/rentalAgreement';
@@ -32,11 +33,11 @@ export function initialAgreementState(reservations: RentalDoc[] | null | undefin
   return { signed: true, label: first.agreementMethod === 'paper' ? c.signedPaper(when) : c.signed(when) };
 }
 
-export function AgreementSection({ reservations, conditions, ready, beforeSign, staffName, state, onState }: {
+export function AgreementSection({ reservations, handover, ready, beforeSign, staffName, state, onState }: {
   reservations: RentalDoc[];
-  /** Condition lines per reservation id (conditionLines of the checklist ratings). */
-  conditions: Record<string, string[]>;
-  /** ID check ready, everything rated, deposit currency chosen. */
+  /** Condition (conditionLines + photo count), deposit received and payment method. */
+  handover: HandoverInfo;
+  /** ID check ready, everything rated, deposit currency + payment method chosen. */
   ready: boolean;
   /** Runs before the agreement is built — records the ID check (so "checked on" is real). */
   beforeSign: () => Promise<void>;
@@ -57,9 +58,9 @@ export function AgreementSection({ reservations, conditions, ready, beforeSign, 
     await beforeSign();
     const first = reservations[0];
     const [renter, terms] = await Promise.all([loadRenterBlock(first.renterId, first.renterName ?? null), termsForAnnex(shop)]);
-    const data = buildAgreementData({ agreementId: agreementIdFor(reservations), reservations, shop, renter, conditions });
+    const data = buildAgreementData({ agreementId: agreementIdFor(reservations), reservations, shop, renter, handover });
     return { data, terms };
-  }, [beforeSign, reservations, shop, conditions]);
+  }, [beforeSign, reservations, shop, handover]);
 
   const startSigning = async () => {
     setError(null);
@@ -212,14 +213,20 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
             {d.lines.map(l => (
               <Block key={l.reservationId} title={`${l.productName} ${A.qty(l.quantity)}`} lines={[
                 `${A.from}: ${l.pickupLabel}`, `${A.to}: ${l.returnLabel}`,
-                `${A.rental}: ${l.total.toLocaleString('en-US')} LAK`,
+                `${A.rental}: ${A.rentalDays(l.durationDays, l.pricePerDay.toLocaleString('en-US'))} = ${l.subtotal.toLocaleString('en-US')} LAK`,
+                l.couponDiscount > 0 ? `${A.coupon}: −${l.couponDiscount.toLocaleString('en-US')} LAK` : null,
+                l.couponDiscount > 0 ? `${A.rentalTotal}: ${l.total.toLocaleString('en-US')} LAK` : null,
                 `${A.deposit}: ${l.deposit.toLocaleString('en-US')} LAK (${A.depositDetail(l.quantity, l.depositPerUnit.toLocaleString('en-US'))})`,
+                l.depositReceived ? `${A.depositReceived}: ${fmtDepositReceived(l.depositReceived, l.deposit)}` : null,
+                `${A.condition}:`,
+                l.photoCount != null ? A.photos(l.photoCount) : null,
                 ...l.condition,
               ]} />
             ))}
             <Block title={A.totals} lines={[
-              `${A.totalRental}: ${d.rentalTotal.toLocaleString('en-US')} LAK`,
+              d.paymentMethod ? A.paidAtPickup(d.rentalTotal.toLocaleString('en-US'), d.paymentMethod) : A.toPayAtPickup(d.rentalTotal.toLocaleString('en-US')),
               `${A.totalDeposit}: ${d.depositTotal.toLocaleString('en-US')} LAK`,
+              d.depositReceivedTotal ? `${A.depositReceived}: ${fmtDepositReceived(d.depositReceivedTotal, d.depositTotal)}` : null,
             ]} />
             <Block title={A.rules} lines={[...A.keyRules]} bullets />
             <Text style={[UI.small, { marginTop: 10 }]}>{A.terms(d.termsEffectiveDate)}</Text>

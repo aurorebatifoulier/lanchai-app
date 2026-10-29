@@ -5,7 +5,7 @@
 // several visits. Never mentions the internal late-return grace period.
 
 /** Bumped whenever the agreement's wording or layout changes (stamped on each agreement). */
-export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.1';
+export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.2';
 
 export type AgreementMethod = 'signature' | 'paper';
 
@@ -22,19 +22,43 @@ export function isAgreementIdFor(agreementId: string, orderId: string): boolean 
 export const agreementPdfPath = (agreementId: string, method: AgreementMethod) =>
   `rentalAgreements/${agreementId}/${method === 'paper' ? 'paper-agreement' : 'agreement'}.pdf`;
 
+/** How the rental was paid at pick-up — recorded by staff on the handover checklist
+ *  (handoverChecklist.rentalPaymentMethod), required before signing. */
+export const RENTAL_PAYMENT_METHODS = [
+  { key: 'cash_lak', label: 'Cash LAK' },
+  { key: 'cash_usd', label: 'Cash USD' },
+  { key: 'cash_thb', label: 'Cash THB' },
+  { key: 'bank_transfer', label: 'Bank transfer' },
+  { key: 'qr', label: 'QR' },
+] as const;
+export type RentalPaymentMethod = typeof RENTAL_PAYMENT_METHODS[number]['key'];
+export const paymentMethodLabel = (k: string | null | undefined) =>
+  RENTAL_PAYMENT_METHODS.find(m => m.key === k)?.label ?? null;
+
 export interface AgreementLine {
   reservationId: string;
   productName: string;
   quantity: number;
   pickupLabel: string;
   returnLabel: string;
+  durationDays: number;
+  /** Booked tier rate per day (LAK). */
+  pricePerDay: number;
+  /** Before coupon (LAK). */
+  subtotal: number;
+  /** Coupon / promo on this line (LAK), 0 when none. */
+  couponDiscount: number;
   /** Rental amount AFTER coupon (frozen `total`, LAK). */
   total: number;
   depositPerUnit: number;
   /** depositPerUnit × quantity (LAK). */
   deposit: number;
-  /** One line per checked category, e.g. "Main item condition: Good". Empty = blank form. */
+  /** What staff actually collected (handover currency), null on the blank form. */
+  depositReceived: { amount: number; currency: string } | null;
+  /** Elements not rated good ("Accessories · Fair · strap missing"), or "All checked…". Empty = blank form. */
   condition: string[];
+  /** Condition photos taken at pick-up; null on the blank form. */
+  photoCount: number | null;
 }
 
 export interface AgreementData {
@@ -45,6 +69,10 @@ export interface AgreementData {
   lines: AgreementLine[];
   rentalTotal: number;
   depositTotal: number;
+  /** Payment method of the rental at pick-up (label), null on the blank form. */
+  paymentMethod: string | null;
+  /** Deposit actually collected, all items (same handover currency), null on the blank form. */
+  depositReceivedTotal: { amount: number; currency: string } | null;
   termsEffectiveDate: string;
   templateVersion: string;
 }
@@ -61,7 +89,7 @@ export function depositPerUnitOf(r: { deposit: number; depositPerUnit?: number |
 export const AGREEMENT_COPY = {
   title: 'Rental agreement',
   intro: 'This agreement is made between LANCHAI and the renter below for the items listed, under the LANCHAI Terms of service attached at the end of this document.',
-  lanchai: 'LANCHAI',
+  lanchai: 'LANCHAI',  // block title; the block then shows the address lines only
   renter: 'Renter',
   idChecked: (type: string, date: string) => `${type} · checked on ${date}`,
   idNotChecked: 'ID checked at pick-up',
@@ -69,13 +97,22 @@ export const AGREEMENT_COPY = {
   qty: (n: number) => `× ${n}`,
   from: 'Pick-up',
   to: 'Return',
-  rental: 'Rental (after any coupon)',
+  rentalDays: (days: number, rate: string) => `${days} ${days === 1 ? 'day' : 'days'} × ${rate} LAK`,
+  coupon: 'Coupon',
+  rental: 'Rental',
+  rentalTotal: 'Rental after coupon',
   deposit: 'Refundable deposit',
   depositDetail: (qty: number, unit: string) => `${qty} × ${unit} LAK`,
+  depositReceived: 'Deposit received',
+  /** "140 USD (≈ 3,010,000 LAK)", or "3,010,000 LAK". */
+  depositAmount: (amount: string, currency: string, lak: string) => (currency === 'LAK' ? `${lak} LAK` : `${amount} ${currency} (≈ ${lak} LAK)`),
   totals: 'Totals',
-  totalRental: 'Rental to pay at pick-up',
+  paidAtPickup: (amount: string, method: string) => `Rental paid at pick-up: ${amount} LAK · ${method}`,
+  toPayAtPickup: (amount: string) => `Rental to pay at pick-up: ${amount} LAK`,
   totalDeposit: 'Refundable deposit',
   condition: 'Condition at pick-up',
+  photos: (n: number) => `${n} ${n === 1 ? 'photo' : 'photos'} on file`,
+  allGood: 'All checked: good condition',
   conditionBlank: 'Condition noted with you at pick-up:',
   rules: 'Key rules',
   keyRules: [
@@ -94,4 +131,5 @@ export const AGREEMENT_COPY = {
   paperNote: (label: string) => `Photo of the paper agreement signed at pick-up, recorded on ${label}.`,
   annex: (date: string) => `Annex — Terms of service (effective ${date})`,
   version: (v: string, id: string) => `Agreement ${id} · template ${v}`,
+  pageFooter: (order: string) => `Order ${order} · Page`,
 } as const;

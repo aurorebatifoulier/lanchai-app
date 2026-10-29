@@ -29,7 +29,9 @@ import { lakToUsd, lakToThb } from '@/utils/currency';
 import { getChainItemDraft, clearChainDrafts } from '@/lib/checklistChainDraft';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 import { AgreementSection, initialAgreementState, type AgreementState } from '@/components/admin/AgreementSection';
-import { conditionLines } from '@/lib/rentalAgreement';
+import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
+import { PaymentMethodChips } from '@/components/admin/PaymentMethodChips';
+import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -123,17 +125,33 @@ export default function ChecklistSummaryScreen() {
     agreementSeeded.current = true;
     setAgreement(initialAgreementState(reservations));
   }, [reservations]);
-  const agreementConditions = useMemo<Record<string, string[]>>(
-    () => Object.fromEntries(idList.map((id, i) => [id, conditionLines(draftList[i]?.categories)])),
-    [idList, draftList],
-  );
+  // Handover: how the rental was paid (required) — on the agreement + every handoverChecklist.
+  const [rentalPaymentMethod, setRentalPaymentMethod] = useState<RentalPaymentMethod | null>(null);
+  // Deposit actually collected per item = the same proration as the submit below.
+  const agreementHandover = useMemo<HandoverInfo>(() => {
+    const shares = reservations && depositCurrency && calculatedTotalDepositAmount != null
+      ? prorateDeposit(reservations, calculatedTotalDepositAmount, depositCurrency === 'LAK' ? 0 : 2)
+      : null;
+    return {
+      items: Object.fromEntries((reservations ?? []).map((r, i) => {
+        const draft = draftList[idList.indexOf(r.id)];
+        return [r.id, {
+          condition: conditionLines(draft?.categories),
+          photoCount: draft?.photos.length ?? 0,
+          depositReceived: shares && depositCurrency ? { amount: shares[i], currency: depositCurrency } : null,
+        }];
+      })),
+      paymentMethod: rentalPaymentMethod,
+    };
+  }, [reservations, depositCurrency, calculatedTotalDepositAmount, draftList, idList, rentalPaymentMethod]);
   const agreementReady = needsAgreement && !!reservations && idCheck.ready && missingDraftIds.length === 0
-    && depositCurrency !== null && !currencyMismatch && calculatedTotalDepositAmount !== null;
+    && depositCurrency !== null && !currencyMismatch && calculatedTotalDepositAmount !== null
+    && rentalPaymentMethod !== null;
 
   const canSubmit =
     !!reservations &&
     (type !== 'handover' || idCheck.ready) &&
-    (!needsAgreement || agreement.signed) &&
+    (!needsAgreement || (agreement.signed && rentalPaymentMethod !== null)) &&
     missingDraftIds.length === 0 &&
     depositCurrency !== null &&
     !currencyMismatch &&
@@ -176,6 +194,7 @@ export default function ChecklistSummaryScreen() {
           confirmedAt,
           clientConfirmedByName: clientConfirmedByName.trim(),
           clientConfirmed,
+          ...(isHandover && rentalPaymentMethod ? { rentalPaymentMethod } : {}),
         } as ChecklistData;
         // Damage charge and late-return penalty (if either) were already decided and
         // shown on this item's own condition screen, before this consolidated screen
@@ -280,7 +299,7 @@ export default function ChecklistSummaryScreen() {
     }
   }, [
     reservations, canSubmit, depositCurrency, calculatedTotalDepositAmount, type, idCheck,
-    confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerifiedList, idList,
+    confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerifiedList, idList, rentalPaymentMethod,
   ]);
 
   // ── Loading / error states ────────────────────────────────────────────────────
@@ -429,6 +448,10 @@ export default function ChecklistSummaryScreen() {
           )
         )}
 
+        {type === 'handover' && (
+          <PaymentMethodChips value={rentalPaymentMethod} onChange={setRentalPaymentMethod} />
+        )}
+
         {/* Confirmation name */}
         <Text style={styles.fieldLabel}>Confirmed by</Text>
         <TextInput
@@ -462,7 +485,7 @@ export default function ChecklistSummaryScreen() {
         {needsAgreement && reservations && (
           <AgreementSection
             reservations={reservations}
-            conditions={agreementConditions}
+            handover={agreementHandover}
             ready={agreementReady}
             beforeSign={idCheck.perform}
             staffName={confirmedByName.trim()}

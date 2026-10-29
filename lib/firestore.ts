@@ -25,6 +25,7 @@ import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
 import { isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
 import { returnStockMoves, type ReturnStockInput } from '@/functions/src/shared/returnStock';
+import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 
 // Throws on Firestore error — callers must handle.
 // Drafts and archived products are never shown or bookable for renters (the
@@ -203,6 +204,8 @@ export interface ChecklistData {
   clientConfirmed: boolean;
   depositCurrency: 'LAK' | 'USD' | 'THB';
   depositAmount: number; // frozen at submit time — never recalculated later
+  /** Handover only: how the rental was paid at pick-up (required since the rental agreement). */
+  rentalPaymentMethod?: RentalPaymentMethod;
 }
 
 // ── RentalDoc — shape of a document in the `reservations` collection ─────────

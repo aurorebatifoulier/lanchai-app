@@ -1107,6 +1107,18 @@ a snapshot indefinitely).
   record, outside the ID-document retention. Renter: "Agreement" button in Receipts &
   reports (`RentalDocCard`); admin: detail card (status, recorded by, email, Open PDF,
   Print agreement). The agreement never contains the ID photo or a staff name.
+  Content (template .2): per item "Rental · {days} days × {rate} LAK" + subtotal, a separate
+  "Coupon −x" line and "Rental after coupon" when one applies, deposit "n × unit" + the
+  deposit RECEIVED in the handover currency ("140 USD (≈ … LAK)", chain = the same
+  proration as the submit), condition = "{n} photos on file" + only the elements not rated
+  good (element · rating · note) or "All checked: good condition"; totals "Rental paid at
+  pick-up: {amount} LAK · {method}". The payment method is a REQUIRED staff choice on the
+  handover (single checklist + order summary, `<PaymentMethodChips>`,
+  `RENTAL_PAYMENT_METHODS` Cash LAK / Cash USD / Cash THB / Bank transfer / QR), stored as
+  `handoverChecklist.rentalPaymentMethod`. LANCHAI block = address lines only; the accept
+  sentence + signature + date never split across pages; footer "Order LNC-… · Page x / y"
+  via CSS `@page` margin boxes (Android WebView; iOS prints without it). Rental document
+  buttons (`RentalDocCard`) are text only, 4 equal, 12px.
 
 ## Security follow-ups
 

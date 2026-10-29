@@ -51,7 +51,7 @@ export function AgreementAdminCard({ reservation }: { reservation: RentalDoc }) 
       const pending = all.filter(r => PRE_PICKUP.includes(r.status));
       const items = pending.length > 0 ? pending : [reservation];
       const [renter, terms] = await Promise.all([loadRenterBlock(reservation.renterId, reservation.renterName ?? null), termsForAnnex(shop)]);
-      const data = buildAgreementData({ agreementId: agreementIdFor(items), reservations: items, shop, renter, conditions: {} });
+      const data = buildAgreementData({ agreementId: agreementIdFor(items), reservations: items, shop, renter, handover: null });
       await printBlankAgreement(data, terms);
     } catch {
       setError(c.errors.generic);

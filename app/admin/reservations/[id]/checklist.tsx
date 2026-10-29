@@ -48,7 +48,9 @@ import { SettlementActions, type SettlementConfirmAction } from '@/components/Se
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 import { AgreementSection, initialAgreementState, type AgreementState } from '@/components/admin/AgreementSection';
-import { conditionLines } from '@/lib/rentalAgreement';
+import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
+import { PaymentMethodChips } from '@/components/admin/PaymentMethodChips';
+import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 import { auth } from '@/lib/auth';
 
 type ChecklistType = 'handover' | 'return';
@@ -312,12 +314,20 @@ export default function ChecklistScreen() {
     agreementSeeded.current = true;
     setAgreement(initialAgreementState([reservation]));
   }, [reservation]);
-  const agreementConditions = useMemo<Record<string, string[]>>(() => (
-    reservation && allRated
-      ? { [reservation.id]: conditionLines(categories as unknown as ChecklistData['categories']) }
-      : {}
-  ), [reservation, allRated, categories]);
-  const agreementReady = needsAgreement && allRated && depositCurrency !== null && calculatedDepositAmount !== null && idCheck.ready;
+  // Handover: how the rental was paid (required) — on the agreement + handoverChecklist.
+  const [rentalPaymentMethod, setRentalPaymentMethod] = useState<RentalPaymentMethod | null>(null);
+  const agreementHandover = useMemo<HandoverInfo>(() => ({
+    items: reservation && allRated ? {
+      [reservation.id]: {
+        condition: conditionLines(categories as unknown as ChecklistData['categories']),
+        photoCount: photos.length,
+        depositReceived: depositCurrency && calculatedDepositAmount != null ? { amount: calculatedDepositAmount, currency: depositCurrency } : null,
+      },
+    } : {},
+    paymentMethod: rentalPaymentMethod,
+  }), [reservation, allRated, categories, photos.length, depositCurrency, calculatedDepositAmount, rentalPaymentMethod]);
+  const agreementReady = needsAgreement && allRated && depositCurrency !== null && calculatedDepositAmount !== null
+    && rentalPaymentMethod !== null && idCheck.ready;
 
   // In a chain, this screen only collects condition ratings + photos — deposit and
   // confirmation are entered once, on the consolidated summary screen after the last item.
@@ -332,7 +342,7 @@ export default function ChecklistScreen() {
       !chargeUnresolved &&
       !lateChargeUnresolved &&
       (type !== 'handover' || idCheck.ready) &&
-      (!needsAgreement || agreement.signed) &&
+      (!needsAgreement || (agreement.signed && rentalPaymentMethod !== null)) &&
       !submitting;
 
   const setRating = useCallback((catId: ChecklistCategoryId, rating: ChecklistRating) => {
@@ -445,6 +455,7 @@ export default function ChecklistScreen() {
         confirmedAt: serverTimestamp(),
         clientConfirmedByName: clientConfirmedByName.trim(),
         clientConfirmed,
+        ...(type === 'handover' && rentalPaymentMethod ? { rentalPaymentMethod } : {}),
       };
 
       const isHandover = type === 'handover';
@@ -535,7 +546,7 @@ export default function ChecklistScreen() {
     chargeAmount, worst, chargePercent, chargeReason, chargeUnits,
     lateChargeAmount, lateChargeReason, waiverFields, hasWaiver,
     totalCharge, depositAppliedToCharge, outstandingBalanceCalc,
-    confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified, idCheck,
+    confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified, idCheck, rentalPaymentMethod,
   ]);
 
   // ── Loading / error states ────────────────────────────────────────────────────
@@ -1008,6 +1019,10 @@ export default function ChecklistScreen() {
               )
             )}
 
+            {type === 'handover' && (
+              <PaymentMethodChips value={rentalPaymentMethod} onChange={setRentalPaymentMethod} />
+            )}
+
             {/* Confirmation name */}
             <Text style={styles.fieldLabel}>Confirmed by</Text>
             <TextInput
@@ -1043,7 +1058,7 @@ export default function ChecklistScreen() {
         {needsAgreement && (
           <AgreementSection
             reservations={[reservation]}
-            conditions={agreementConditions}
+            handover={agreementHandover}
             ready={agreementReady}
             beforeSign={idCheck.perform}
             staffName={confirmedByName.trim()}

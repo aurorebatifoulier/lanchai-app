@@ -17,7 +17,7 @@ import { vteReservationLabel, vteDay } from '@/functions/src/shared/dates';
 import { CONTACT_EMAIL } from '@/functions/src/shared/shop';
 import { ID_DOC_TYPES } from '@/functions/src/shared/identity';
 import {
-  AGREEMENT_COPY as A, AGREEMENT_TEMPLATE_VERSION, agreementPdfPath, depositPerUnitOf, newAgreementId,
+  AGREEMENT_COPY as A, AGREEMENT_TEMPLATE_VERSION, agreementPdfPath, depositPerUnitOf, newAgreementId, paymentMethodLabel,
   type AgreementData, type AgreementMethod,
 } from '@/functions/src/shared/rentalAgreement';
 import { toSignatureSvg, type Signature } from '@/components/SignaturePad';
@@ -31,19 +31,20 @@ import { toSignatureSvg, type Signature } from '@/components/SignaturePad';
 
 const RATING_TEXT: Record<ChecklistRating, string> = { good: 'Good', fair: 'Fair', damaged: 'Damaged', unusable: 'Unusable' };
 
-/** Condition summary of one item from the pick-up checklist ratings. */
+/** Condition at pick-up: every element NOT rated good ("Accessories · Fair · strap
+ *  missing"), or "All checked: good condition" only when everything is good. */
 export function conditionLines(categories: ChecklistData['categories'] | null | undefined): string[] {
   if (!categories) return [];
   const notGood = CHECKLIST_CATEGORIES.filter(c => categories[c.id]?.rating && categories[c.id].rating !== 'good');
-  const notes = CHECKLIST_CATEGORIES.filter(c => categories[c.id]?.rating === 'good' && categories[c.id]?.note);
-  if (notGood.length === 0) {
-    return ['All checked: good condition', ...notes.map(c => `${c.label}: ${categories[c.id].note}`)];
-  }
-  return [
-    ...notGood.map(c => `${c.label}: ${RATING_TEXT[categories[c.id].rating]}${categories[c.id].note ? ` — ${categories[c.id].note}` : ''}`),
-    ...notes.map(c => `${c.label}: ${categories[c.id].note}`),
-    'Everything else: good',
-  ];
+  if (notGood.length === 0) return [A.allGood];
+  return notGood.map(c => [c.label, RATING_TEXT[categories[c.id].rating], categories[c.id].note?.trim()].filter(Boolean).join(' · '));
+}
+
+/** What staff recorded at the handover (null = blank printable form). */
+export interface HandoverInfo {
+  items: Record<string, { condition: string[]; photoCount: number; depositReceived: { amount: number; currency: string } | null }>;
+  /** handoverChecklist.rentalPaymentMethod key. */
+  paymentMethod: string | null;
 }
 
 interface RenterBlock { name: string; phone: string | null; email: string | null; idType: string | null; idCheckedAtLabel: string | null }
@@ -74,23 +75,37 @@ export function buildAgreementData(args: {
   reservations: RentalDoc[];
   shop: ShopInfo;
   renter: RenterBlock;
-  conditions: Record<string, string[]>;
+  handover: HandoverInfo | null;
 }): AgreementData {
-  const { reservations: rs, shop } = args;
+  const { reservations: rs, shop, handover } = args;
   const lines = rs.map(r => {
     const unit = depositPerUnitOf(r);
+    const total = r.total ?? r.subtotal ?? 0;
+    const subtotal = r.subtotal ?? total;
+    const h = handover?.items[r.id];
     return {
       reservationId: r.id,
       productName: r.productName,
       quantity: r.quantity,
       pickupLabel: r.pickupLabel,
       returnLabel: r.returnLabel,
-      total: r.total ?? r.subtotal ?? 0,
+      durationDays: r.durationDays,
+      pricePerDay: r.pricePerDay,
+      subtotal,
+      couponDiscount: Math.max(0, r.couponApplied?.discountAmount ?? subtotal - total),
+      total,
       depositPerUnit: unit,
       deposit: unit * Math.max(1, r.quantity),
-      condition: args.conditions[r.id] ?? [],
+      depositReceived: h?.depositReceived ?? null,
+      condition: h?.condition ?? [],
+      photoCount: h ? h.photoCount : null,
     };
   });
+  // Deposit received in total — only when every item was collected in one currency.
+  const received = lines.map(l => l.depositReceived);
+  const depositReceivedTotal = received.length > 0 && received.every(x => x && x.currency === received[0]!.currency)
+    ? { currency: received[0]!.currency, amount: Math.round(received.reduce((s, x) => s + x!.amount, 0) * 100) / 100 }
+    : null;
   return {
     agreementId: args.agreementId,
     orderLabel: displayOrderId(rs[0]) ?? rs[0].orderId ?? rs[0].id,
@@ -104,6 +119,8 @@ export function buildAgreementData(args: {
     lines,
     rentalTotal: lines.reduce((s, l) => s + l.total, 0),
     depositTotal: lines.reduce((s, l) => s + l.deposit, 0),
+    paymentMethod: paymentMethodLabel(handover?.paymentMethod),
+    depositReceivedTotal,
     termsEffectiveDate: LEGAL_EFFECTIVE_DATE,
     templateVersion: AGREEMENT_TEMPLATE_VERSION,
   };
@@ -113,6 +130,13 @@ export function buildAgreementData(args: {
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const lak = (n: number) => `${Math.round(n).toLocaleString('en-US')} LAK`;
+const num = (n: number) => Math.round(n).toLocaleString('en-US');
+/** "140 USD (≈ 3,010,000 LAK)" — the amount actually collected, with the LAK figure. */
+export const fmtDepositReceived = (x: { amount: number; currency: string }, lakAmount: number) =>
+  A.depositAmount(x.amount.toLocaleString('en-US', { maximumFractionDigits: 2 }), x.currency, num(lakAmount));
+
+/** Safe inside a CSS string (page footer). */
+const cssText = (t: string) => t.replace(/[\\"\n]/g, ' ');
 
 /** Minimal Markdown → HTML for the Terms annex (headings, bullets, bold, italic, rules). */
 export function markdownToHtml(md: string): string {
@@ -154,14 +178,17 @@ export function buildAgreementHtml(data: AgreementData, opts: {
       <div class="row"><span class="name">${esc(l.productName)} <span class="qty">${esc(A.qty(l.quantity))}</span></span></div>
       <div class="muted">${esc(A.from)}: ${esc(l.pickupLabel)} &middot; ${esc(A.to)}: ${esc(l.returnLabel)}</div>
       <table>
-        <tr><td>${esc(A.rental)}</td><td class="v">${lak(l.total)}</td></tr>
-        <tr><td>${esc(A.deposit)}<div class="muted small">${esc(A.depositDetail(l.quantity, l.depositPerUnit.toLocaleString('en-US')))}</div></td><td class="v">${lak(l.deposit)}</td></tr>
+        <tr><td>${esc(A.rental)}<div class="muted small">${esc(A.rentalDays(l.durationDays, num(l.pricePerDay)))}</div></td><td class="v">${lak(l.subtotal)}</td></tr>
+        ${l.couponDiscount > 0 ? `<tr><td>${esc(A.coupon)}</td><td class="v">&minus;${lak(l.couponDiscount)}</td></tr>
+        <tr><td class="label">${esc(A.rentalTotal)}</td><td class="v">${lak(l.total)}</td></tr>` : ''}
+        <tr><td>${esc(A.deposit)}<div class="muted small">${esc(A.depositDetail(l.quantity, num(l.depositPerUnit)))}</div></td><td class="v">${lak(l.deposit)}</td></tr>
+        ${l.depositReceived ? `<tr><td>${esc(A.depositReceived)}</td><td class="v">${esc(fmtDepositReceived(l.depositReceived, l.deposit))}</td></tr>` : ''}
       </table>
       <div class="cond">
         <div class="label">${esc(opts.blank ? A.conditionBlank : A.condition)}</div>
         ${opts.blank
           ? '<div class="blankline"></div><div class="blankline"></div>'
-          : l.condition.map(c => `<div>${esc(c)}</div>`).join('')}
+          : `${l.photoCount != null ? `<div class="muted">${esc(A.photos(l.photoCount))}</div>` : ''}${l.condition.map(c => `<div>${esc(c)}</div>`).join('')}`}
       </div>
     </div>`).join('');
 
@@ -176,7 +203,10 @@ export function buildAgreementHtml(data: AgreementData, opts: {
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <style>
-  @page { size: A4; margin: 16mm 15mm; }
+  @page {
+    size: A4; margin: 16mm 15mm 18mm;
+    @bottom-center { content: "${cssText(A.pageFooter(data.orderLabel))} " counter(page) " / " counter(pages); font-size: 9px; color: #8A8A8A; }
+  }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1E1E1E; margin: 0; font-size: 12px; line-height: 1.5; }
   .header { border-bottom: 3px solid #F4B400; padding-bottom: 12px; margin-bottom: 16px; }
@@ -197,6 +227,7 @@ export function buildAgreementHtml(data: AgreementData, opts: {
   .label { font-weight: 700; }
   .totals td { font-size: 13px; } .totals td.v { font-size: 14px; }
   ul { margin: 4px 0; padding-left: 18px; } li { margin: 2px 0; } li.sub { margin-left: 16px; list-style: circle; }
+  .signblock { page-break-inside: avoid; break-inside: avoid; }
   .accept { font-weight: 800; font-size: 13px; margin: 16px 0 6px; }
   .sigbox { height: 110px; border: 1px solid #DCDAD3; border-radius: 10px; padding: 6px; margin-bottom: 4px; }
   .blankline { border-bottom: 1px solid #DCDAD3; height: 22px; }
@@ -215,7 +246,7 @@ export function buildAgreementHtml(data: AgreementData, opts: {
 
   <div class="grid">
     <div class="box"><div class="t">${esc(A.lanchai)}</div>
-      ${esc(data.shop.name)}<br/>${esc(data.shop.address)}<br/>${esc(data.shop.email)}${data.shop.whatsapp ? `<br/>WhatsApp ${esc(data.shop.whatsapp)}` : ''}</div>
+      ${esc(data.shop.address)}<br/>${esc(data.shop.email)}${data.shop.whatsapp ? `<br/>WhatsApp ${esc(data.shop.whatsapp)}` : ''}</div>
     <div class="box"><div class="t">${esc(A.renter)}</div>
       ${esc(r.name)}${r.phone ? `<br/>${esc(r.phone)}` : ''}${r.email ? `<br/>${esc(r.email)}` : ''}<br/>
       ${esc(r.idType && r.idCheckedAtLabel ? A.idChecked(r.idType, r.idCheckedAtLabel) : A.idNotChecked)}</div>
@@ -225,17 +256,22 @@ export function buildAgreementHtml(data: AgreementData, opts: {
   ${items}
 
   <table class="totals">
-    <tr><td>${esc(A.totalRental)}</td><td class="v">${lak(data.rentalTotal)}</td></tr>
+    <tr><td colspan="2" class="label">${esc(data.paymentMethod && !opts.blank
+      ? A.paidAtPickup(num(data.rentalTotal), data.paymentMethod)
+      : A.toPayAtPickup(num(data.rentalTotal)))}</td></tr>
     <tr><td>${esc(A.totalDeposit)}</td><td class="v">${lak(data.depositTotal)}</td></tr>
+    ${data.depositReceivedTotal && !opts.blank ? `<tr><td>${esc(A.depositReceived)}</td><td class="v">${esc(fmtDepositReceived(data.depositReceivedTotal, data.depositTotal))}</td></tr>` : ''}
   </table>
 
   <h2>${esc(A.rules)}</h2>
   <ul>${A.keyRules.map(k => `<li>${esc(k)}</li>`).join('')}</ul>
   <p class="muted">${esc(A.terms(data.termsEffectiveDate))}</p>
 
-  <div class="accept">${esc(A.accept)}</div>
-  <div class="label">${esc(A.signature)}</div>
-  ${signature}
+  <div class="signblock">
+    <div class="accept">${esc(A.accept)}</div>
+    <div class="label">${esc(A.signature)}</div>
+    ${signature}
+  </div>
 
   <div class="footer">${esc(A.version(data.templateVersion, data.agreementId))}</div>
 
