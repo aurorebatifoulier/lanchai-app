@@ -50,6 +50,7 @@ import { SettlementActions } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import UnitsStepper from '@/components/UnitsStepper';
 import { AgreementAdminCard } from '@/components/admin/AgreementAdminCard';
+import { discountOf } from '@/functions/src/shared/promo';
 import {
   CANCEL_REASONS,
   CANCEL_REASON_KEYS,
@@ -744,10 +745,10 @@ export default function AdminReservationDetailScreen() {
           <Text style={d.cardLabel}>Price breakdown</Text>
           <InfoRow label="Rate"     value={`${fmtLak(reservation.pricePerDay)} / day`} />
           <InfoRow label="Subtotal" value={fmtLak(reservation.subtotal)} />
-          {reservation.couponApplied && (
+          {discountOf(reservation) && (
             <InfoRow
-              label="Coupon applied"
-              value={`−${fmtLak(reservation.couponApplied.discountAmount)} (${reservation.couponApplied.percent}% off)`}
+              label={discountOf(reservation)!.label}
+              value={`−${fmtLak(discountOf(reservation)!.amount)}`}
               muted
             />
           )}

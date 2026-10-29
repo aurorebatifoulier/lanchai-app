@@ -1,4 +1,5 @@
 import { deriveReceiptData, deriveSettlementOutcome, type ReceiptInput } from './receiptData';
+import { discountOf, type DiscountInput } from './promo';
 
 // The "Your rental summary" lines, in order — the ONE source for the on-screen receipt
 // (components/RentalReceipt.tsx), the PDF (lib/receiptPdf.ts) and the receipt email
@@ -11,7 +12,7 @@ import { deriveReceiptData, deriveSettlementOutcome, type ReceiptInput } from '.
 // for renters (staffView = admin reservation detail only).
 
 /** The frozen reservation fields the summary reads — structurally satisfied by RentalDoc. */
-export interface ReceiptSummaryInput extends ReceiptInput {
+export interface ReceiptSummaryInput extends ReceiptInput, DiscountInput {
   chargeAmount?: number;
   chargeReason?: string;
   chargePercent?: number;
@@ -55,6 +56,9 @@ export function buildReceiptSummary(
   const lines: SummaryLine[] = [];
 
   lines.push({ kind: 'row', label: 'Rental fee', value: formatLakAmount(r.total) });
+  // Loyalty coupon or promo code already taken off the rental fee above.
+  const disc = discountOf(r);
+  if (disc) lines.push({ kind: 'detail', text: `${disc.label} · −${formatLakAmount(disc.amount)}` });
   // vatPercent === null → VAT display is off (vatDisplayPercent) → no VAT line at all.
   if (vatPercent != null) lines.push({ kind: 'detail', text: `incl. VAT ${data.vatPct}%: ${formatLakAmount(data.vatAmount)}` });
   lines.push({ kind: 'row', label: 'Deposit paid', value: fmt(data.depositHeldAmount) });

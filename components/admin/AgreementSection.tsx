@@ -214,7 +214,7 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
               <Block key={l.reservationId} title={`${l.productName} ${A.qty(l.quantity)}`} lines={[
                 `${A.from}: ${l.pickupLabel}`, `${A.to}: ${l.returnLabel}`,
                 `${A.rental}: ${A.rentalDays(l.durationDays, l.pricePerDay.toLocaleString('en-US'))} = ${l.subtotal.toLocaleString('en-US')} LAK`,
-                l.couponDiscount > 0 ? `${A.coupon}: −${l.couponDiscount.toLocaleString('en-US')} LAK` : null,
+                l.couponDiscount > 0 ? `${l.discountLabel ?? A.coupon}: −${l.couponDiscount.toLocaleString('en-US')} LAK` : null,
                 l.couponDiscount > 0 ? `${A.rentalTotal}: ${l.total.toLocaleString('en-US')} LAK` : null,
                 `${A.deposit}: ${l.deposit.toLocaleString('en-US')} LAK (${A.depositDetail(l.quantity, l.depositPerUnit.toLocaleString('en-US'))})`,
                 l.depositReceived ? `${A.depositReceived}: ${fmtDepositReceived(l.depositReceived, l.deposit)}` : null,

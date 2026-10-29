@@ -5,7 +5,7 @@
 // several visits. Never mentions the internal late-return grace period.
 
 /** Bumped whenever the agreement's wording or layout changes (stamped on each agreement). */
-export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.2';
+export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.3';
 
 export type AgreementMethod = 'signature' | 'paper';
 
@@ -48,6 +48,8 @@ export interface AgreementLine {
   subtotal: number;
   /** Coupon / promo on this line (LAK), 0 when none. */
   couponDiscount: number;
+  /** "Loyalty coupon (10%)" / "Promo SUMMER10" (shared discountOf), null when none. */
+  discountLabel?: string | null;
   /** Rental amount AFTER coupon (frozen `total`, LAK). */
   total: number;
   depositPerUnit: number;

@@ -15,6 +15,7 @@ import { BTOB_REJECTION_REASONS, BTOB_REVIEW_TIME_NOTE, btobNeedLine, type BtobR
 import { loyaltyPointsFor, TIER_LABELS, type LoyaltyTierKey } from '../shared/loyalty';
 import { buildReceiptSummary } from '../shared/receiptSummary';
 import { RESIDENCY_REJECTION_REASONS, type ResidencyRejectionKey } from '../shared/residency';
+import { orderDiscountOf } from '../shared/promo';
 import {
   cancellationOutcome, CANCEL_REASONS, type CancelReason, type CancellationOutcome,
 } from '../shared/cancellation';
@@ -46,6 +47,7 @@ export interface ResData extends ReceiptInput {
   durationDays: number;
   subtotal: number;
   couponApplied?: { percent: number; discountAmount: number } | null;
+  promoApplied?: { code: string; discountAmount: number } | null;
   chargeAmount?: number;
   chargeReason?: string;
   lateChargeAmount?: number;
@@ -123,12 +125,12 @@ function itemsCard(items: ResData[], opts: { prices?: boolean; vatPercent?: numb
   if (opts.prices) {
     const total    = items.reduce((s, r) => s + (r.total ?? 0), 0);
     const deposit  = items.reduce((s, r) => s + (r.deposit ?? 0), 0);
-    const discount = items.reduce((s, r) => s + (r.couponApplied?.discountAmount ?? 0), 0);
+    const discount = orderDiscountOf(items);
     // Same build-up as the app's confirmation screen (CLAUDE.md): VAT split of the
     // post-coupon total, for every customer type; the deposit never goes through VAT.
     // vatPercent null = VAT display off (vatDisplayPercent) → plain total only.
     inner.push({ type: 'divider' });
-    if (discount > 0) inner.push({ type: 'row', label: 'Coupon', value: `− ${fmtLak(discount)}`, tone: 'muted' });
+    if (discount) inner.push({ type: 'row', label: discount.label, value: `− ${fmtLak(discount.amount)}`, tone: 'muted' });
     if (opts.vatPercent != null) {
       const { ht, vat } = splitHtVat(total, opts.vatPercent);
       inner.push({ type: 'row', label: 'Subtotal (excl. VAT)', value: fmtLak(ht), tone: 'muted' });

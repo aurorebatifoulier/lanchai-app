@@ -134,3 +134,20 @@ export const promoErrorText = (e: PromoError, minLak?: number) =>
 
 /** "Promo SUMMER10" — receipts, emails, rental detail, agreement. */
 export const promoLabel = (code: string) => `Promo ${code}`;
+
+/** The ONE description of a booking line's discount — loyalty coupon or promo code —
+ *  for receipts (screen / PDF / email), emails, rental + admin detail, agreement. */
+export interface DiscountInput {
+  couponApplied?: { percent: number; discountAmount: number } | null;
+  promoApplied?: { code: string; discountAmount: number } | null;
+}
+export function discountOf(r: DiscountInput): { label: string; amount: number } | null {
+  if (r.promoApplied && r.promoApplied.discountAmount > 0) return { label: promoLabel(r.promoApplied.code), amount: r.promoApplied.discountAmount };
+  if (r.couponApplied && r.couponApplied.discountAmount > 0) return { label: `Loyalty coupon (${r.couponApplied.percent}%)`, amount: r.couponApplied.discountAmount };
+  return null;
+}
+/** Several lines of one order: summed, labelled from the first discounted line. */
+export function orderDiscountOf(lines: DiscountInput[]): { label: string; amount: number } | null {
+  const parts = lines.map(discountOf).filter((d): d is { label: string; amount: number } => !!d);
+  return parts.length ? { label: parts[0].label, amount: parts.reduce((s, d) => s + d.amount, 0) } : null;
+}

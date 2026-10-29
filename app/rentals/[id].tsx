@@ -8,6 +8,7 @@ import {
   Linking,
   ActivityIndicator,
 } from 'react-native';
+import { discountOf } from '@/functions/src/shared/promo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -297,10 +298,10 @@ export default function RentalDetailScreen() {
             <Text style={dr.label}>Subtotal</Text>
             <PriceLak lak={rental.subtotal} customerType={profile?.customerType} vatPercent={vatPercent} textStyle={dr.value} style={{ alignItems: 'flex-end' }} />
           </View>
-          {rental.couponApplied && (
+          {discountOf(rental) && (
             <DetailRow
-              label="Coupon applied"
-              value={`−${rental.couponApplied.discountAmount.toLocaleString('en-US')} LAK (${rental.couponApplied.percent}% off)`}
+              label={discountOf(rental)!.label}
+              value={`−${discountOf(rental)!.amount.toLocaleString('en-US')} LAK`}
               muted
             />
           )}

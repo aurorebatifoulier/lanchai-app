@@ -80,6 +80,7 @@ export const BOOKING_COPY = {
   order: (id: string) => `Order ${id}`,
   tapQr: 'Tap the QR to enlarge it at the shop',
   returnOn: (label: string) => `Return ${label}`,
+  discountIncluded: (label: string, amount: string) => `${label} · −${amount} LAK included`,
   // Several items with different dates: the earliest pick-up, then each item below.
   pickupsCount: (n: number) => `${n} pick-ups`,
   returnsCount: (n: number) => `${n} returns`,

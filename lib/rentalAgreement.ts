@@ -21,6 +21,7 @@ import {
   type AgreementData, type AgreementMethod,
 } from '@/functions/src/shared/rentalAgreement';
 import { toSignatureSvg, type Signature } from '@/components/SignaturePad';
+import { discountOf } from '@/functions/src/shared/promo';
 
 // Rental agreement signed at pick-up — app side: gathers the data, renders the HTML
 // (receipt PDF style), prints it to PDF (expo-print), uploads it to
@@ -92,7 +93,8 @@ export function buildAgreementData(args: {
       durationDays: r.durationDays,
       pricePerDay: r.pricePerDay,
       subtotal,
-      couponDiscount: Math.max(0, r.couponApplied?.discountAmount ?? subtotal - total),
+      couponDiscount: discountOf(r)?.amount ?? Math.max(0, subtotal - total),
+      discountLabel: discountOf(r)?.label ?? null,
       total,
       depositPerUnit: unit,
       deposit: unit * Math.max(1, r.quantity),
@@ -179,7 +181,7 @@ export function buildAgreementHtml(data: AgreementData, opts: {
       <div class="muted">${esc(A.from)}: ${esc(l.pickupLabel)} &middot; ${esc(A.to)}: ${esc(l.returnLabel)}</div>
       <table>
         <tr><td>${esc(A.rental)}<div class="muted small">${esc(A.rentalDays(l.durationDays, num(l.pricePerDay)))}</div></td><td class="v">${lak(l.subtotal)}</td></tr>
-        ${l.couponDiscount > 0 ? `<tr><td>${esc(A.coupon)}</td><td class="v">&minus;${lak(l.couponDiscount)}</td></tr>
+        ${l.couponDiscount > 0 ? `<tr><td>${esc(l.discountLabel ?? A.coupon)}</td><td class="v">&minus;${lak(l.couponDiscount)}</td></tr>
         <tr><td class="label">${esc(A.rentalTotal)}</td><td class="v">${lak(l.total)}</td></tr>` : ''}
         <tr><td>${esc(A.deposit)}<div class="muted small">${esc(A.depositDetail(l.quantity, num(l.depositPerUnit)))}</div></td><td class="v">${lak(l.deposit)}</td></tr>
         ${l.depositReceived ? `<tr><td>${esc(A.depositReceived)}</td><td class="v">${esc(fmtDepositReceived(l.depositReceived, l.deposit))}</td></tr>` : ''}

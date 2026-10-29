@@ -15,6 +15,7 @@ import { getReservationsByOrderId, type RentalDoc } from '@/lib/firestore';
 import { useShopInfo, buildMapsUrl, buildWhatsappUrl } from '@/lib/shop';
 import { addBookingToCalendar } from '@/lib/bookingCalendar';
 import { displayOrderId } from '@/utils/rentalDocs';
+import { orderDiscountOf } from '@/functions/src/shared/promo';
 
 // Booking confirmation (validated mockup) — shared by the single booking and the bag
 // checkout. Check + "It's booked!" + order number; carbon card with the QR (order QR for
@@ -71,6 +72,8 @@ export default function BookingConfirmationScreen() {
   // FIX: the amount AFTER coupon (frozen `total`), not the pre-coupon subtotal.
   const rental = reservations.reduce((sum, r) => sum + (r.total ?? r.subtotal ?? 0), 0);
   const deposit = reservations.reduce((sum, r) => sum + (r.deposit ?? 0), 0);
+  // Loyalty coupon or promo code — the rental above is already after it.
+  const disc = orderDiscountOf(reservations);
   const idPending = reservations.some(r => r.firstRentalIdCheck === true);
   const orderLabel = displayOrderId(first) ?? orderId;
   const qrValue = single ? `LANCHAI-RES:${first.id}` : `LANCHAI-ORDER:${orderId}`;
@@ -144,7 +147,10 @@ export default function BookingConfirmationScreen() {
             </View>
           )}
           <View style={[s.bring, idPending && s.sep]}>
-            <Text style={s.bringLabel}>{c.rental}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.bringLabel}>{c.rental}</Text>
+              {disc && <Text style={s.bringMuted}>{c.discountIncluded(disc.label, n(disc.amount))}</Text>}
+            </View>
             <Text style={s.bringValue}>{`${n(rental)} LAK`}</Text>
           </View>
           <View style={[s.bring, s.sep]}>
