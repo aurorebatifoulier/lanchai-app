@@ -7,7 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/components/account/ui';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -38,7 +38,8 @@ interface OverdueRow {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AdminInventoryScreen() {
-  const insets = useSafeAreaInsets();
+  // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -162,7 +163,7 @@ export default function AdminInventoryScreen() {
   const loading = loadingProducts;
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* Fixed top: header + summary + attention — grouped in one flexShrink:0
@@ -240,7 +241,7 @@ export default function AdminInventoryScreen() {
       {/* Scrolling product list — the only other flex sibling. */}
       <ScrollView
         style={s.list}
-        contentContainerStyle={[s.listContent, (loading || nonArchived.length === 0) && s.listContentCenter]}
+        contentContainerStyle={[s.listContent, (loading || nonArchived.length === 0) && s.listContentCenter, { paddingBottom: screen.contentBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (

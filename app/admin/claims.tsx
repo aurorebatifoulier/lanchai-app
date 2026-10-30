@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/components/account/ui';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -40,7 +40,8 @@ const FILTER_OPTIONS: Array<{ key: 'all' | ClaimStatus; label: string }> = [
 ];
 
 export default function AdminClaimsScreen() {
-  const insets = useSafeAreaInsets();
+  // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [claims,  setClaims]  = useState<ClaimDoc[]>([]);
@@ -63,7 +64,7 @@ export default function AdminClaimsScreen() {
   const isEmpty = !loading && filtered.length === 0;
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* ── Fixed top bar (header + filter chips grouped as one flex sibling) — required
@@ -98,7 +99,7 @@ export default function AdminClaimsScreen() {
 
       <ScrollView
         style={s.list}
-        contentContainerStyle={[s.listContent, (loading || isEmpty) && s.listContentCenter]}
+        contentContainerStyle={[s.listContent, (loading || isEmpty) && s.listContentCenter, { paddingBottom: screen.contentBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (

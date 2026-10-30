@@ -8,7 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/components/account/ui';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -66,7 +66,8 @@ function getStatusStyle(status: string, available: boolean) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AdminProductsScreen() {
-  const insets = useSafeAreaInsets();
+  // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
+  const screen = useScreenInsets();
   const router  = useRouter();
   const exchangeRate = useExchangeRate();
 
@@ -113,7 +114,7 @@ export default function AdminProductsScreen() {
   }, [rows, search, filterMode, categoryFilter]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* ── Fixed top bar (header + search + chips grouped as one flex sibling) */}
@@ -184,6 +185,7 @@ export default function AdminProductsScreen() {
       <ScrollView
         style={s.list}
         contentContainerStyle={[
+          { paddingBottom: screen.contentBottom },
           s.listContent,
           (loading || filtered.length === 0) && s.listContentCenter,
         ]}

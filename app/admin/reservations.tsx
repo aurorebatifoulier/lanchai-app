@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useScreenInsets } from '@/components/account/ui';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -105,7 +105,8 @@ type AdminRenderEntry =
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function AdminReservationsScreen() {
-  const insets = useSafeAreaInsets();
+  // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
+  const screen = useScreenInsets();
   const router = useRouter();
 
   const [rows,           setRows]           = useState<ReservationRow[]>([]);
@@ -256,7 +257,7 @@ export default function AdminReservationsScreen() {
   const isEmpty = !loading && renderEntries.length === 0;
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
 
       {/* ── Fixed top bar (header + search + chips grouped as one flex sibling) */}
@@ -322,6 +323,7 @@ export default function AdminReservationsScreen() {
       <ScrollView
         style={s.list}
         contentContainerStyle={[
+          { paddingBottom: screen.contentBottom },
           s.listContent,
           (loading || isEmpty) && s.listContentCenter,
         ]}
