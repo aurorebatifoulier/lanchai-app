@@ -13,13 +13,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
-import { cancelTier as getCancelTier, cancellationOutcome } from '@/functions/src/shared/cancellation';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
 import { UI, RowGroup, Row, IconCircle, useScreenInsets } from '@/components/account/ui';
-import { getReservationById, getProduct, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
+import { getReservationById, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
-import { Product } from '@/lib/mockData';
 import { sendNotif } from '@/lib/notifications';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
 import WhatsAppButton from '@/components/WhatsAppButton';
@@ -86,6 +84,8 @@ function getBadge(r: RentalDoc, cat: TabId): Badge {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+const CANCEL_CONFIRM_TEXT = 'Free cancellation — nothing is charged before pick-up. You can book again anytime.';
+
 export default function RentalDetailScreen() {
   const screen = useScreenInsets();
   const router = useRouter();
@@ -96,13 +96,11 @@ export default function RentalDetailScreen() {
   const vatPercent = useVatPercent();
 
   const [rental,  setRental]  = useState<RentalDoc | null>(null);
-  const [product, setProduct] = useState<Product | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(false);
 
-  const [cancelPhase,  setCancelPhase]  = useState<'idle' | 'confirm' | 'terms'>('idle');
-  const [cancelAgreed, setCancelAgreed] = useState(false);
+  const [cancelPhase,  setCancelPhase]  = useState<'idle' | 'confirm'>('idle');
   const [cancelling,   setCancelling]   = useState(false);
   const [cancelError,  setCancelError]  = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ value: string; label: string } | null>(null);
@@ -114,7 +112,6 @@ export default function RentalDetailScreen() {
       .then(async r => {
         setRental(r);
         if (!r) { setError(true); return; }
-        try { setProduct(await getProduct(r.productId)); } catch {}
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
@@ -162,13 +159,9 @@ export default function RentalDetailScreen() {
   const hoursUntilPickup = (rental.pickupAt.toDate().getTime() - now) / (1000 * 60 * 60);
   const isCancellable = (rental.status === 'pending_payment' || rental.status === 'confirmed') &&
     hoursUntilPickup > 0;
-  const cancelTier = getCancelTier(hoursUntilPickup, product?.isPremium);
-  // Nothing is charged before pick-up today → no warning about losing money. The tier
-  // flow below only applies if an advance was ever paid (advancePaidLak > 0).
-  const cancelOutcome = cancellationOutcome({
-    advancePaidLak: rental.advancePaidLak, hoursUntilPickup, isPremium: product?.isPremium,
-  });
-  const nothingToPay = cancelOutcome.kind === 'nothing_to_pay';
+  // The renter always sees the CURRENT policy: free cancellation any time before
+  // pick-up, nothing charged (Terms §8). The advance tiers stay in
+  // shared/cancellation.ts only, for the day an advance exists.
 
   // Once a handover checklist has been submitted, the deposit was actually received in
   // whatever currency the admin chose there — show that instead of the original LAK
@@ -194,7 +187,6 @@ export default function RentalDetailScreen() {
 
   const handleCancel = async () => {
     if (cancelling || !rental) return;
-    if (cancelPhase === 'terms' && !cancelAgreed) return;
     setCancelling(true);
     setCancelError(null);
     try {
@@ -209,7 +201,6 @@ export default function RentalDetailScreen() {
       });
       setRental(prev => prev ? { ...prev, status: 'cancelled' as const } : prev);
       setCancelPhase('idle');
-      setCancelAgreed(false);
     } catch {
       setCancelError('Could not cancel. Please try again.');
     } finally {
@@ -401,7 +392,7 @@ export default function RentalDetailScreen() {
               <>
                 <TouchableOpacity
                   style={s.cancelLink}
-                  onPress={() => setCancelPhase(nothingToPay || cancelTier === 'free' ? 'confirm' : 'terms')}
+                  onPress={() => setCancelPhase('confirm')}
                   activeOpacity={0.7}
                 >
                   <Feather name="x-circle" size={14} color={COLORS.danger} />
@@ -422,9 +413,7 @@ export default function RentalDetailScreen() {
               <View style={s.cancelCard}>
                 <Text style={s.cancelCardTitle}>Cancel this rental?</Text>
                 <Text style={s.cancelCardBody}>
-                  {nothingToPay
-                    ? 'Nothing to pay — nothing is charged before pick-up. You can book again anytime.'
-                    : 'Free cancellation — your pickup is more than 48 hours away. No charges apply.'}
+                  {CANCEL_CONFIRM_TEXT}
                 </Text>
                 <View style={s.cancelBtnRow}>
                   <TouchableOpacity style={s.cancelKeepBtn} onPress={() => setCancelPhase('idle')} activeOpacity={0.8}>
@@ -445,86 +434,6 @@ export default function RentalDetailScreen() {
               </View>
             )}
 
-            {cancelPhase === 'terms' && (
-              <View style={s.cancelCard}>
-                <View style={s.cancelWarningRow}>
-                  <Feather
-                    name={cancelTier === 'premium' ? 'info' : 'alert-triangle'}
-                    size={14}
-                    color={
-                      cancelTier === 'no_refund' ? COLORS.danger
-                      : cancelTier === 'premium'  ? COLORS.fg2
-                      : SHADES.amberDeep
-                    }
-                  />
-                  <Text style={[
-                    s.cancelWarningTitle,
-                    cancelTier === 'no_refund' && { color: COLORS.danger },
-                  ]}>
-                    {cancelTier === 'voucher'  ? 'No cash refund — store credit applies'
-                    : cancelTier === 'premium' ? 'Non-refundable — premium equipment'
-                    : 'No refund or voucher'}
-                  </Text>
-                </View>
-                {cancelTier === 'premium' ? (
-                  <Text style={s.cancelCardBody}>
-                    This is a premium item. Per cancellation policy, the advance payment is
-                    non-refundable regardless of cancellation date. No refund or store credit applies.
-                  </Text>
-                ) : cancelTier === 'voucher' ? (
-                  <Text style={s.cancelCardBody}>
-                    Your pickup is 24–48 hours away. Per cancellation policy, no cash refund applies.
-                    You will receive a store credit voucher equal to your advance payment, valid 6 months
-                    from the date of cancellation. The voucher is nominative and non-transferable.
-                  </Text>
-                ) : (
-                  <Text style={s.cancelCardBody}>
-                    Your pickup is less than 24 hours away. Per cancellation policy, no refund or store
-                    credit applies. The advance payment is retained by LANCHAI.
-                  </Text>
-                )}
-                <TouchableOpacity
-                  style={s.cancelPolicyLink}
-                  onPress={() => router.push('/legal/cancellation')}
-                  activeOpacity={0.7}
-                >
-                  <Feather name="file-text" size={13} color={COLORS.fg3} />
-                  <Text style={s.cancelPolicyLinkText}>Read full cancellation policy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={s.cancelAgreeRow}
-                  onPress={() => setCancelAgreed(v => !v)}
-                  activeOpacity={0.75}
-                >
-                  <View style={[s.cancelCheckbox, cancelAgreed && s.cancelCheckboxChecked]}>
-                    {cancelAgreed && <Feather name="check" size={12} color={SHADES.cream} />}
-                  </View>
-                  <Text style={s.cancelAgreeText}>
-                    I have read and accept the cancellation terms
-                  </Text>
-                </TouchableOpacity>
-                <View style={s.cancelBtnRow}>
-                  <TouchableOpacity
-                    style={s.cancelKeepBtn}
-                    onPress={() => { setCancelPhase('idle'); setCancelAgreed(false); }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={UI.btnSecondaryText}>Keep it</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.cancelConfirmBtn, (!cancelAgreed || cancelling) && s.cancelBtnOff]}
-                    onPress={handleCancel}
-                    disabled={!cancelAgreed || cancelling}
-                    activeOpacity={0.8}
-                  >
-                    {cancelling
-                      ? <ActivityIndicator size="small" color={COLORS.danger} />
-                      : <Text style={UI.dangerText}>Cancel rental</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
           </View>
         )}
 

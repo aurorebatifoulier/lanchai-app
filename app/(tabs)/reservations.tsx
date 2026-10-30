@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
-import { cancelTier as getCancelTier, cancellationOutcome, type CancelTier } from '@/functions/src/shared/cancellation';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMyReservations, cancelReservations, RentalDoc } from '@/lib/firestore';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
@@ -85,6 +84,8 @@ function getBadge(r: RentalDoc, cat: TabId): Badge {
 }
 
 // ── Screen ───────────────────────────────────────────────────────────────────
+
+const CANCEL_CONFIRM_TEXT = 'Free cancellation — nothing is charged before pick-up. You can book again anytime.';
 
 export default function ReservationsScreen() {
   const insets = useSafeAreaInsets();
@@ -367,8 +368,7 @@ function OrderGroupCard({
   onCancelOrder: (orderId: string, cancellableItems: RentalDoc[]) => Promise<void>;
   onOpenQR:      (value: string, label: string) => void;
 }) {
-  const [cancelPhase,  setCancelPhase]  = useState<'idle' | 'confirm' | 'terms'>('idle');
-  const [cancelAgreed, setCancelAgreed] = useState(false);
+  const [cancelPhase,  setCancelPhase]  = useState<'idle' | 'confirm'>('idle');
   const [cancelling,   setCancelling]   = useState(false);
   const [cancelError,  setCancelError]  = useState<string | null>(null);
 
@@ -390,30 +390,17 @@ function OrderGroupCard({
     r => r.status === 'pending_payment' || r.status === 'confirmed' || r.status === 'active',
   );
 
-  const itemTiers = cancellableItems.map(r =>
-    getCancelTier((r.pickupAt.toDate().getTime() - now) / (1000 * 60 * 60)),
-  );
-  const groupTier: CancelTier = itemTiers.includes('no_refund') ? 'no_refund'
-    : itemTiers.includes('voucher') ? 'voucher'
-    : itemTiers.includes('premium') ? 'premium'
-    : 'free';
-  const tiersAreMixed = new Set(itemTiers).size > 1;
-  // Nothing is charged before pick-up today → no money warnings. The tier flow below
-  // only applies if an item ever carries an advance (advancePaidLak > 0).
-  const nothingToPay = cancellableItems.every(r => cancellationOutcome({
-    advancePaidLak: r.advancePaidLak,
-    hoursUntilPickup: (r.pickupAt.toDate().getTime() - now) / (1000 * 60 * 60),
-  }).kind === 'nothing_to_pay');
+  // The renter always sees the CURRENT policy: free cancellation any time before
+  // pick-up, nothing charged (Terms §8). The advance tiers stay in
+  // shared/cancellation.ts only, for the day an advance exists.
 
   const handleDoCancel = async () => {
     if (cancelling || !isCancellable) return;
-    if (cancelPhase === 'terms' && !cancelAgreed) return;
     setCancelling(true);
     setCancelError(null);
     try {
       await onCancelOrder(orderId, cancellableItems);
       setCancelPhase('idle');
-      setCancelAgreed(false);
     } catch {
       setCancelError('Could not cancel. Please try again.');
       setCancelling(false);
@@ -514,7 +501,7 @@ function OrderGroupCard({
               {cancelPhase === 'idle' && (
                 <TouchableOpacity
                   style={s.cancelLink}
-                  onPress={() => setCancelPhase(nothingToPay || groupTier === 'free' ? 'confirm' : 'terms')}
+                  onPress={() => setCancelPhase('confirm')}
                   activeOpacity={0.7}
                 >
                   <Feather name="x-circle" size={13} color={COLORS.danger} />
@@ -528,9 +515,7 @@ function OrderGroupCard({
                 <View style={s.cancelCard}>
                   <Text style={s.cancelCardTitle}>Cancel this order?</Text>
                   <Text style={s.cancelCardBody}>
-                    {nothingToPay
-                      ? 'Nothing to pay — nothing is charged before pick-up. You can book again anytime.'
-                      : 'Free cancellation — all items are more than 48 hours before pickup. No charges apply.'}
+                    {CANCEL_CONFIRM_TEXT}
                   </Text>
                   <View style={s.cancelBtnRow}>
                     <TouchableOpacity style={s.cancelKeepBtn} onPress={() => setCancelPhase('idle')} activeOpacity={0.8}>
@@ -551,100 +536,6 @@ function OrderGroupCard({
                 </View>
               )}
 
-              {cancelPhase === 'terms' && (
-                <View style={s.cancelCard}>
-                  <View style={s.cancelWarningRow}>
-                    <Feather
-                      name={groupTier === 'premium' ? 'info' : 'alert-triangle'}
-                      size={13}
-                      color={
-                        groupTier === 'no_refund' ? COLORS.danger
-                        : groupTier === 'premium'  ? COLORS.fg2
-                        : '#854F0B'
-                      }
-                    />
-                    <Text style={[
-                      s.cancelWarningTitle,
-                      groupTier === 'no_refund' && { color: COLORS.danger },
-                    ]}>
-                      {groupTier === 'voucher'  ? 'No cash refund — store credit applies'
-                      : groupTier === 'premium' ? 'Non-refundable — premium equipment'
-                      : 'No refund or voucher'}
-                    </Text>
-                  </View>
-                  {/* Per-tier breakdown when items have different pickup windows */}
-                  {tiersAreMixed ? (
-                    <>
-                      <Text style={s.cancelCardBody}>
-                        Items in this order have different pickup times and are subject to different conditions:
-                      </Text>
-                      {(['no_refund', 'voucher', 'free'] as CancelTier[])
-                        .filter(t => itemTiers.includes(t))
-                        .map(t => {
-                          const count = itemTiers.filter(x => x === t).length;
-                          const label = t === 'no_refund'
-                            ? `${count} item${count !== 1 ? 's' : ''} <24h before pickup — advance retained, no refund or voucher.`
-                            : t === 'voucher'
-                            ? `${count} item${count !== 1 ? 's' : ''} 24–48h before pickup — store credit voucher (valid 6 months).`
-                            : `${count} item${count !== 1 ? 's' : ''} >48h before pickup — full refund.`;
-                          return (
-                            <View key={t} style={s.cancelBulletRow}>
-                              <Text style={s.cancelBullet}>·</Text>
-                              <Text style={s.cancelBulletText}>{label}</Text>
-                            </View>
-                          );
-                        })}
-                    </>
-                  ) : groupTier === 'premium' ? (
-                    <Text style={s.cancelCardBody}>
-                      This order contains premium items. Per cancellation policy, the advance payment
-                      is non-refundable regardless of cancellation date. No refund or store credit applies.
-                    </Text>
-                  ) : groupTier === 'voucher' ? (
-                    <Text style={s.cancelCardBody}>
-                      All items are 24–48 hours before pickup. No cash refund applies — a store
-                      credit voucher (valid 6 months, non-transferable) will be issued for each item.
-                    </Text>
-                  ) : (
-                    <Text style={s.cancelCardBody}>
-                      All items are less than 24 hours before pickup. No refund or store credit
-                      applies — the advance payment is retained by LANCHAI.
-                    </Text>
-                  )}
-                  <TouchableOpacity
-                    style={s.cancelAgreeRow}
-                    onPress={() => setCancelAgreed(v => !v)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={[s.cancelCheckbox, cancelAgreed && s.cancelCheckboxChecked]}>
-                      {cancelAgreed && <Feather name="check" size={11} color={COLORS.carbon} />}
-                    </View>
-                    <Text style={s.cancelAgreeText}>
-                      I have read and accept the cancellation terms
-                    </Text>
-                  </TouchableOpacity>
-                  <View style={s.cancelBtnRow}>
-                    <TouchableOpacity
-                      style={s.cancelKeepBtn}
-                      onPress={() => { setCancelPhase('idle'); setCancelAgreed(false); }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={s.cancelKeepText}>Keep it</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[s.cancelConfirmBtn, (!cancelAgreed || cancelling) && s.cancelBtnOff]}
-                      onPress={handleDoCancel}
-                      disabled={!cancelAgreed || cancelling}
-                      activeOpacity={0.8}
-                    >
-                      {cancelling
-                        ? <ActivityIndicator size="small" color="#fff" />
-                        : <Text style={s.cancelConfirmText}>Cancel order</Text>
-                      }
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
             </View>
           )}
         </>
