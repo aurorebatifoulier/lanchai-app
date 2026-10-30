@@ -1176,6 +1176,39 @@ a snapshot indefinitely).
     rental, you get N points" (`LOYALTY_COPY.referralSub`, Home card, share message,
     invite-code screen, FAQ — built from config).
 
+- **Chat, Notifications, Liked (validated mockups, 2026-10-30).** Copy:
+  `constants/chatCopy.ts`, `constants/notificationsCopy.ts`, `constants/likedCopy.ts`.
+  - **Chat media:** videos get a poster frame at send time (`expo-video-thumbnails` →
+    `videoThumbUrl`), photos are uploaded as 1600px JPEG with their content type; the
+    bubble (`MediaTile`) never shows an empty dark block — older videos = light "Video ·
+    Tap to play" card, a failed photo = "Photo can't load · Tap to retry".
+  - **Renter chat:** `ChatMark` header + "Usually replies within a few hours · Open until
+    … / Closed now" (shared `shopOpenState`), pinned `ContextCard` when opened with
+    `?productId=` (product page) or `?rentalId=` (rental detail "Message us about this
+    rental"); the first message carries `about {kind,id,name}` (staff see "About: …").
+    Quick question chips until the renter writes; "Read" under the last renter message.
+  - **Server (`functions/src/chat.ts`, `onChatMessage`):** a renter message while closed
+    → ONE auto-reply per closed period per conversation (`conversation.autoReplyKey` =
+    next opening, shared `closedPeriod()`; text `config/shop.autoReplyText`, Shop
+    settings, `{open time}`); a staff reply → in-app notification type `message` →
+    `/chat`. Welcome + auto-replies (`senderId 'lanchai-business'`) notify nobody.
+  - **Admin:** saved replies (`savedReplies/{id}`, admin-only; Admin → Saved replies;
+    chips above the admin chat input insert the text).
+  - **Notifications inbox:** chips All / Rentals / Codes / News; kind from stored
+    type + icon (`code` → ticket, `clock` → booking, alert icons → alert, box / check →
+    package, `message` → chat); swipe left deletes (broadcasts hidden on the device,
+    AsyncStorage `notifications.hiddenBroadcasts`). Code notifications are type `code` →
+    `/profile/loyalty?section=codes` (scrolls to Your codes). Broadcast deep links must
+    match an app route (`APP_LINK_RE`, `app/admin/broadcast.tsx`).
+  - **Liked:** "Notify me" on unavailable cards (`ProductGridCard` `footer` /
+    `reserveFooter`) → `availabilityWatches/{uid}_{productId}` (renter-written);
+    `availabilityWatchJob` (hourly, `functions/src/watches.ts`) notifies when the first
+    FULL free day (opening time → same time next day, booking rule, ≥ 2h away) exists in
+    the next 30 days — in-app + email (respects `emailRemindersOptOut`) — then deletes the
+    watch. "Recently viewed" rail = `recentViews/{uid}` (≤ 10, written by
+    `recordProductView` on the product page). Cards say "Unavailable"; the product page
+    keeps "Not available right now".
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

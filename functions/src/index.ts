@@ -53,6 +53,9 @@ export * from './promo';
 // Chat: auto-reply outside opening hours + notification when LANCHAI replies.
 export * from './chat';
 
+// "Notify me" (Liked): hourly availability watch job.
+export * from './watches';
+
 admin.initializeApp();
 const db = admin.firestore();
 

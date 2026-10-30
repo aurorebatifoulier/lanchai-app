@@ -21,7 +21,7 @@ export const EXPLORE_COPY = {
   signal: {
     backOn: (d: string) => `Back on ${d}`,
     fullyBooked: 'Fully booked',
-    unavailable: 'Not available right now',
+    unavailable: 'Unavailable', // cards (narrow); the product page keeps its full sentence
     lastOneWeekend: 'Only 1 left this weekend',
     rentedThisMonth: (n: number) => `Rented ${n}× this month`,
     rentalsWord: (n: number) => (n === 1 ? ' rental' : ' rentals'),

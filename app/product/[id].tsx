@@ -28,6 +28,8 @@ import {
   getRenterProduct, getFavorites, addFavorite, removeFavorite, getProducts, getProductReviewsPage,
   type ReviewDoc, type LoyaltyTier, type UserProfile,
 } from '@/lib/firestore';
+import { recordProductView } from '@/lib/recentViews';
+import { auth } from '@/lib/auth';
 import { CATEGORIES, type Product } from '@/lib/mockData';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
@@ -116,7 +118,12 @@ export default function ProductDetailScreen() {
   useEffect(() => {
     if (!id) return;
     getRenterProduct(id)
-      .then(p => { setProduct(p); setLoading(false); })
+      .then(p => {
+        setProduct(p);
+        setLoading(false);
+        // "Recently viewed" (Liked) — renter-visible products only.
+        if (p && auth.currentUser) recordProductView(p.id).catch(() => {});
+      })
       .catch(() => { setLoadError(true); setLoading(false); });
     // Secondary data — on failure the block simply has less (rating without a quote,
     // no "Pairs well with"); never an error screen for these.

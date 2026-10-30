@@ -1308,3 +1308,25 @@ export function promoExpiringEmail(shop: EmailShop, ctx: {
     shop,
   );
 }
+
+// ── "Notify me" (Liked): a watched item has a free full day in the next 30 days ─
+export function availabilityEmail(shop: EmailShop, ctx: {
+  firstName: string; productName: string; productId: string; fromLabel: string; image: string | null;
+}): Rendered {
+  return build(
+    `${ctx.productName} is free again`,
+    `Free from ${ctx.fromLabel} — book it before someone else does`,
+    `${ctx.productName} is free again`,
+    [
+      {
+        type: 'hero',
+        pill: 'Good news',
+        ...(ctx.image ? { image: { url: ctx.image, alt: ctx.productName, size: 120 } } : {}),
+        title: `${ctx.productName} is free again`,
+        sub: `Hi ${ctx.firstName} — you asked us to tell you. It’s free from ${ctx.fromLabel}. Book it before someone else does.`,
+        primary: { label: 'See the item', url: appLink(`product/${ctx.productId}`) },
+      },
+    ],
+    shop,
+  );
+}

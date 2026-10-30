@@ -18,7 +18,7 @@ import {
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
   idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
-  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail,
+  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -382,7 +382,7 @@ export async function sendAccountEmail(
   }
 }
 
-export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail };
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail };
 
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
@@ -487,6 +487,7 @@ export const sendTestEmails = onCall(
       ['residency-expired',                residencyExpiredEmail(shop, { firstName: name })],
       ['promo-granted-admin',              promoGrantedEmail(shop, { firstName: name, code: 'THANKYOU15', valueText: '15% off', conditions: 'Any rental', expiresLabel: 'Sat 28 Nov', source: 'admin' })],
       ['promo-granted-referral',           promoGrantedEmail(shop, { firstName: name, code: 'REFERRALWELCOME', valueText: '10% off', conditions: 'First rental', expiresLabel: 'Sun 29 Nov', source: 'referral' })],
+      ['availability-notify',              availabilityEmail(shop, { firstName: name, productName: 'Bosch tool set', productId: 'sample', fromLabel: 'Sun 1 Nov', image: null })],
       ['promo-expiring',                   promoExpiringEmail(shop, { firstName: name, code: 'THANKYOU15', valueText: '15% off', conditions: 'Any rental', expiresLabel: 'Sat 28 Nov' })],
       ['rental-agreement',                 rentalAgreementEmail(shop, {
         firstName: name, orderLabel: base.orderId ?? 'LNC-261020-TEST', paper: false, firstReservationId: base.id,

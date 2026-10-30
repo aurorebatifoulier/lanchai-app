@@ -35,6 +35,9 @@ const CARD_PRICE_LH    = 18;
 const CARD_PRICE_GAP   = 4;
 const CARD_BADGE_H     = 18; // signal line slot — always reserved
 
+/** Height of the optional footer row (Liked "Notify me"). */
+const FOOTER_H = 46;
+
 export function productCardLayout(fontScale: number) {
   const scale  = Math.max(1, fontScale);
   const name   = Math.ceil(CARD_NAME_LH * CARD_NAME_LINES * scale);
@@ -66,6 +69,8 @@ function ProductGridCard({
   matchPercent = null,
   quickAdd = null,
   onQuickAdd,
+  footer,
+  reserveFooter = false,
 }: {
   product: Product;
   width: number;
@@ -85,6 +90,11 @@ function ProductGridCard({
   /** Quick-add "+" state (bottom-right); null = no button (e.g. tier-locked). */
   quickAdd?: QuickAddState | null;
   onQuickAdd?: () => void;
+  /** Extra row under the signal (Liked: "Notify me"); `reserveFooter` keeps the same
+   *  card height for cards without one, so a row of cards stays aligned. */
+  footer?: React.ReactNode;
+  footerKey?: string;
+  reserveFooter?: boolean;
 }) {
   const layout = useProductCardLayout();
   const imageUri = product.images?.[0] ?? null;
@@ -103,7 +113,7 @@ function ProductGridCard({
   const signal = productSignal(product, { availability, weekendUnits });
 
   return (
-    <PressScale style={[UI.card, s.card, { width, height: layout.card }]} onPress={onPress}>
+    <PressScale style={[UI.card, s.card, { width, height: layout.card + (footer || reserveFooter ? FOOTER_H : 0) }]} onPress={onPress}>
       <View style={s.cardImageWrap}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={s.cardImage} contentFit="cover" transition={300} />
@@ -139,6 +149,7 @@ function ProductGridCard({
           <SignalLine signal={signal} />
         </View>
         {quickAdd && onQuickAdd && <View style={s.quickAdd}><QuickAddButton state={quickAdd} onPress={onQuickAdd} /></View>}
+        {!!footer && <View style={s.footer}>{footer}</View>}
       </View>
     </PressScale>
   );
@@ -178,12 +189,13 @@ const s = StyleSheet.create({
   },
   signalSlot: { justifyContent: 'center', flexShrink: 0 },
   quickAdd: { position: 'absolute', right: 10, bottom: CARD_PAD_BOTTOM },
+  footer: { marginTop: 8, height: FOOTER_H - 8 },
 });
 
 // Memoised for long lists: re-render only when what the card shows changes. Handlers are
 // per-render closures bound to this product's id, so ignoring their identity is safe;
 // availability is compared by value (a fresh object each parent render).
-const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'weekendUnits', 'bestMatch', 'matchPercent', 'quickAdd'] as const;
+const SHOWN_PROPS = ['product', 'width', 'isFavorite', 'exchangeRate', 'userTier', 'weekendUnits', 'bestMatch', 'matchPercent', 'quickAdd', 'footerKey', 'reserveFooter'] as const;
 const availKey = (a: GridAvailability | undefined) =>
   !a ? '' : a.kind === 'backOn' ? `b${a.date.getTime()}` : a.kind;
 type Props = React.ComponentProps<typeof ProductGridCard>;

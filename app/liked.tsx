@@ -16,7 +16,11 @@ import { COLORS } from '@/constants/Colors';
 import ProductGridCard from '@/components/ProductGridCard';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
-import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
+import { UI, IconCircle, Chip, SectionTitle, useScreenInsets } from '@/components/account/ui';
+import ProductRailCard from '@/components/ProductRailCard';
+import { LIKED_COPY } from '@/constants/likedCopy';
+import { useMyWatches, watchProduct, unwatchProduct } from '@/lib/availabilityWatch';
+import { useRecentViews } from '@/lib/recentViews';
 import SearchBar from '@/components/SearchBar';
 import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
 import { useAuth } from '@/contexts/AuthContext';
@@ -242,6 +246,22 @@ export default function LikedScreen() {
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const { openQuickAdd } = useQuickAdd();
+  // "Notify me" — availabilityWatches (hourly server job notifies, then clears it).
+  const watches = useMyWatches();
+  const [watchError, setWatchError] = useState<string | null>(null);
+  const toggleWatch = useCallback((productId: string) => {
+    setWatchError(null);
+    (watches.has(productId) ? unwatchProduct(productId) : watchProduct(productId))
+      .catch(() => setWatchError(LIKED_COPY.notifyError));
+  }, [watches]);
+  // "Recently viewed" — last 10 opened products that are still renter-visible.
+  const recentIds = useRecentViews();
+  const [catalogue, setCatalogue] = useState<Product[]>([]);
+  useEffect(() => { cached('products', HOME_TTL.products, getProducts).then(setCatalogue).catch(() => setCatalogue([])); }, []);
+  const recent = useMemo(() => {
+    const byId = new Map(catalogue.map(p => [p.id, p]));
+    return recentIds.map(id => byId.get(id)).filter((p): p is Product => !!p);
+  }, [recentIds, catalogue]);
   const renderItem = useCallback(({ item }: { item: Product }) => {
     const availability = gridAvailability(item, occupancy ? (occupancy.get(item.id) ?? []) : undefined);
     const locked = getProductAccessState(item, userTier ?? null).locked;
@@ -257,28 +277,30 @@ export default function LikedScreen() {
       availability={availability}
       bestMatch={item.id === bestId}
       matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
-      quickAdd={locked ? null : availability ? 'later' : 'now'}
-      onQuickAdd={() => openQuickAdd(item, { availableToday: !availability })}
+      // Free items keep the small "+"; unavailable ones get "Notify me" instead.
+      quickAdd={locked || availability ? null : 'now'}
+      onQuickAdd={() => openQuickAdd(item, { availableToday: true })}
+      reserveFooter
+      footerKey={availability ? (watches.has(item.id) ? 'on' : 'off') : ''}
+      footer={availability ? (
+        <NotifyButton on={watches.has(item.id)} onPress={() => toggleWatch(item.id)} />
+      ) : null}
     />
     );
-  }, [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, openQuickAdd]);
+  }, [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, openQuickAdd, watches, toggleWatch]);
 
   const keyExtractor = useCallback((item: Product) => item.id, []);
 
   const ListHeader = useMemo(() => {
-    if (likedProducts.length === 0) return null;
+    // The item count is the header chip — this row only shows active filters.
+    if (likedProducts.length === 0 || activeChips.length === 0) return null;
     return (
       <View>
         <View style={s.resultsBar}>
-          <Text style={s.resultsCount}>
-            <Text style={s.resultsNum}>{filteredLiked.length}</Text>
-            {filteredLiked.length === 1 ? ' item' : ' items'}
-          </Text>
-          {activeChips.length > 0 && (
-            <TouchableOpacity onPress={clearAllFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={s.clearAllText}>Clear all</Text>
-            </TouchableOpacity>
-          )}
+          <View />
+          <TouchableOpacity onPress={clearAllFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={s.clearAllText}>Clear all</Text>
+          </TouchableOpacity>
         </View>
         {activeChips.length > 0 && (
           <ScrollView
@@ -294,7 +316,7 @@ export default function LikedScreen() {
         )}
       </View>
     );
-  }, [likedProducts.length, filteredLiked.length, activeChips, clearAllFilters]);
+  }, [likedProducts.length, activeChips, clearAllFilters]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -303,16 +325,19 @@ export default function LikedScreen() {
       <StatusBar style="dark" />
 
       {/* Header */}
+      <View style={{ flexShrink: 0 }}>
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>Liked</Text>
-        <View style={{ width: 40 }} />
+        <Text style={s.headerTitle}>{LIKED_COPY.title}</Text>
+        {likedProducts.length > 0 && <View style={{ marginLeft: 'auto' }}><Chip label={LIKED_COPY.items(likedProducts.length)} small /></View>}
       </View>
 
       {/* Search bar — only when there are liked items to filter */}
       {!loading && !loadError && likedProducts.length > 0 && (
         <View style={s.searchRow}>
           <SearchBar
+            variant="account"
+            placeholder={LIKED_COPY.search}
             value={searchQuery}
             onChangeText={setSearchQuery}
             showFilter
@@ -331,6 +356,9 @@ export default function LikedScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {!!watchError && <Text style={[UI.errorText, { marginHorizontal: H_PAD, marginTop: 6 }]}>{watchError}</Text>}
+      </View>
 
       {/* Body */}
       {loading ? (
@@ -357,6 +385,35 @@ export default function LikedScreen() {
           showsVerticalScrollIndicator={false}
           extraData={filteredLiked.length}
           ListHeaderComponent={ListHeader}
+          ListFooterComponent={recent.length > 0 ? (
+            <View style={{ marginTop: 8 }}>
+              <SectionTitle>{LIKED_COPY.recent}</SectionTitle>
+              <FlatList
+                horizontal
+                data={recent}
+                keyExtractor={p => p.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 12, paddingRight: H_PAD }}
+                renderItem={({ item: p }) => {
+                  const av = gridAvailability(p, occupancy ? (occupancy.get(p.id) ?? []) : undefined);
+                  const locked = getProductAccessState(p, userTier ?? null).locked;
+                  return (
+                    <ProductRailCard
+                      product={p}
+                      onPress={() => router.push(`/product/${p.id}`)}
+                      exchangeRate={exchangeRate}
+                      userTier={userTier ?? null}
+                      isFavorite={likedProducts.some(l => l.id === p.id)}
+                      onToggleFavorite={() => {}}
+                      availability={av}
+                      quickAdd={locked ? null : av ? 'later' : 'now'}
+                      onQuickAdd={() => openQuickAdd(p, { availableToday: !av })}
+                    />
+                  );
+                }}
+              />
+            </View>
+          ) : null}
           ListEmptyComponent={
             <LikedEmptyState
               noLikedItems={likedProducts.length === 0}
@@ -390,24 +447,10 @@ const s = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.softGray200,
+    flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
-  headerTitle: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.carbon,
-    letterSpacing: -0.3,
-  },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
 
   // Search bar
   searchRow: {
@@ -473,4 +516,23 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
   emptySub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   exploreBtn: { paddingHorizontal: 24 },
+});
+
+/** "Notify me" (outline) → "We'll notify you" (light amber) — tap again to cancel. */
+function NotifyButton({ on, onPress }: { on: boolean; onPress: () => void }) {
+  return (
+    <PressScale style={[nb.btn, on && nb.on]} onPress={onPress}>
+      <Feather name="bell" size={14} color={on ? SHADES.amberDeep : SHADES.carbon} />
+      <Text style={[nb.text, on && nb.textOn]} numberOfLines={1}>{on ? LIKED_COPY.notifying : LIKED_COPY.notify}</Text>
+    </PressScale>
+  );
+}
+const nb = StyleSheet.create({
+  btn: {
+    height: 36, borderRadius: 12, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  on: { backgroundColor: SHADES.amberLight, borderColor: SHADES.amberLight },
+  text: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
+  textOn: { color: SHADES.amberDeep },
 });

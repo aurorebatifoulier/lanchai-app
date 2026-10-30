@@ -423,6 +423,31 @@ service cloud.firestore {
       }
     }
 
+    // ── availabilityWatches/{uid}_{productId} — "Notify me" (Liked) ─────────
+    // The renter creates / deletes their own; availabilityWatchJob (server) deletes it
+    // once notified. No update.
+    match /availabilityWatches/{watchId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && watchId == request.auth.uid + '_' + request.resource.data.productId
+                    && request.resource.data.keys().hasOnly(['uid', 'productId', 'createdAt']);
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    // ── recentViews/{uid} — "Recently viewed" (max 10 entries) ──────────────
+    match /recentViews/{uid} {
+      allow read:  if isOwner(uid);
+      allow write: if isOwner(uid)
+                   && request.resource.data.keys().hasOnly(['items', 'updatedAt'])
+                   && request.resource.data.items.size() <= 10;
+    }
+
+    // ── savedReplies/{id} — admin chat quick replies ─────────────────────────
+    match /savedReplies/{replyId} {
+      allow read, write: if isAdmin();
+    }
+
     // ── promoGrants/{CODE}_{uid} ──────────────────────────────────────────
     // Personal promo wallet: written ONLY by Cloud Functions (adminGrantPromo,
     // savePromoCode, applyInviteCode, createReservations, restoreCancelledPromo,
