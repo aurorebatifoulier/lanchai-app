@@ -3,6 +3,9 @@ import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
 import { isLoyaltyExcluded } from './shared/loyalty';
+import { BREVO_API_KEY } from './email/config';
+import { ensureReferralWelcomeCode, grantPromo } from './promo';
+import { DEFAULT_REFERRAL_WELCOME_DAYS, DEFAULT_REFERRAL_WELCOME_PERCENT } from './shared/promo';
 
 // Referral programme — invite codes (inviteCodes/{code} → uid, users.inviteCode) and
 // links (users.referredBy + referrals/{referredUid}), all server-written (rules deny
@@ -56,7 +59,7 @@ export const getMyInviteCode = onCall({ region: REGION }, async request => {
 // ── applyInviteCode({ code }) — a new renter, before their first booking ─────────
 // Checks: code exists; not their own (uid, phone or email); no booking ever created
 // (even cancelled); no referrer yet; neither side excluded (business / BtoB).
-export const applyInviteCode = onCall({ region: REGION }, async request => {
+export const applyInviteCode = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
   const uid = request.auth?.uid;
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const code = normalizeCode((request.data as { code?: unknown } | undefined)?.code);
@@ -94,9 +97,26 @@ export const applyInviteCode = onCall({ region: REGION }, async request => {
     if (fresh.get('referredBy')) fail('already-referred', 'You’ve already used an invite code.');
     tx.set(userSnap.ref, { referredBy: { uid: referrerUid, code, at: FieldValue.serverTimestamp() } }, { merge: true });
     tx.set(db().collection('referrals').doc(uid!), {
-      referrerUid, code, status: 'pending', createdAt: FieldValue.serverTimestamp(),
+      referrerUid, code, status: 'pending', createdAt: FieldValue.serverTimestamp(), welcomeGrant: true,
     });
   });
   logger.info('[referral] code applied', { uid, referrerUid });
+
+  // "Give X%": the invited friend's welcome code in their wallet — % and validity from
+  // config/loyalty, the % FROZEN on the grant (a later config change never alters it).
+  try {
+    const cfg = (await db().collection('config').doc('loyalty').get()).data() ?? {};
+    const pct = typeof cfg.referralWelcomePercent === 'number' && cfg.referralWelcomePercent > 0 && cfg.referralWelcomePercent <= 100
+      ? Math.round(cfg.referralWelcomePercent) : DEFAULT_REFERRAL_WELCOME_PERCENT;
+    const days = typeof cfg.referralWelcomeValidityDays === 'number' && cfg.referralWelcomeValidityDays >= 1
+      ? Math.floor(cfg.referralWelcomeValidityDays) : DEFAULT_REFERRAL_WELCOME_DAYS;
+    const promo = await ensureReferralWelcomeCode();
+    await grantPromo(uid!, promo, {
+      source: 'referral', personalExpiryMs: Date.now() + days * 24 * 60 * 60 * 1000,
+      override: { type: 'percent', value: pct }, notifyRenter: true,
+    });
+  } catch (err) {
+    logger.error('[referral] welcome code not granted', { uid, err: String(err) });
+  }
   return { ok: true, referrerFirstName: String(referrer.firstName ?? '') || null };
 });

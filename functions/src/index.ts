@@ -610,11 +610,13 @@ export const applyLoyaltyPoints = onDocumentUpdated(
 );
 
 /**
- * Referral reward — both sides get config/loyalty.referralRewardPoints (default 50)
- * through creditLoyaltyPoints (tier + coupons), history source 'referral', ONCE per
- * referred renter (referrals/{uid}.status pending → credited, in a transaction).
- * Excluded accounts earn nothing; optional monthly cap per referrer
- * (referralMonthlyCap > 0): beyond it only the referred renter is credited.
+ * Referral reward — "Give X%, get N points": the REFERRER gets
+ * config/loyalty.referralRewardPoints (default 50) through creditLoyaltyPoints (tier +
+ * coupons), history source 'referral', ONCE per referred renter (referrals/{uid}.status
+ * pending → credited, in a transaction). The invited friend got the welcome promo code
+ * at applyInviteCode (referrals.welcomeGrant) — points only for older referrals made
+ * before that (no welcomeGrant). Excluded accounts earn nothing; optional monthly cap
+ * per referrer (referralMonthlyCap > 0).
  */
 async function creditReferralIfAny(referredUid: string, reservationId: string): Promise<void> {
   const refDoc = db.collection('referrals').doc(referredUid);
@@ -642,7 +644,7 @@ async function creditReferralIfAny(referredUid: string, reservationId: string): 
       tx.get(db.collection('users').doc(referrerUid)),
     ]);
     if (ref.get('status') !== 'pending') return null;
-    const referredOk = referred.exists && !isLoyaltyExcluded(referred.data() ?? {});
+    const referredOk = referred.exists && !isLoyaltyExcluded(referred.data() ?? {}) && ref.get('welcomeGrant') !== true;
     const referrerOk = referrer.exists && !isLoyaltyExcluded(referrer.data() ?? {}) && !referrerCapped;
     if (referredOk) {
       creditLoyaltyPoints(tx, referred, amount, cfg, { source: 'referral', reservationId, productName: '' });

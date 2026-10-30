@@ -30,10 +30,13 @@ export const LOYALTY_COPY = {
 
   // ── Referral ──
   referralTitle: 'Friends don’t let friends buy a drill they’ll use once.',
-  referralSub: (n: number) => `Invite a friend. You both get ${n} points after their first rental.`,
+  referralSub: (pct: number, n: number) => `Invite a friend: they get ${pct}% off their first rental, you get ${n} points.`,
   referralShare: 'Share my invite link',
   referralYourCode: (code: string) => `Your code: ${code}`,
-  referralShareMessage: (code: string, n: number) =>
-    `Rent instead of buying in Vientiane with LANCHAI. Sign up with my invite code ${code} and we both get ${n} points after your first rental.`,
+  referralShareMessage: (code: string, pct: number) =>
+    `Rent instead of buying in Vientiane with LANCHAI. Sign up with my invite code ${code} and get ${pct}% off your first rental.`,
+  referralPathSub: (pct: number) => `Your friend gets ${pct}% off their first rental.`,
+  inviteApplied: (pct: number, days: number) => `Done — ${pct}% off your first rental is in Loyalty › Your codes (valid ${days} days).`,
+  inviteAsk: (pct: number) => `Got a code from a friend? Enter it before your first booking and get ${pct}% off your first rental.`,
   referralCredited: (n: number) => `Your friend's first rental is done: +${n} points`,
 };

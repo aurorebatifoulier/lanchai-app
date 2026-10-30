@@ -16,7 +16,7 @@ import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firest
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import { DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_TYPICAL_RENTAL_POINTS, DEFAULT_REFERRAL_REWARD_POINTS, defaultTierPerks, type LoyaltyConfig } from '@/lib/loyalty';
+import { DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_TYPICAL_RENTAL_POINTS, DEFAULT_REFERRAL_REWARD_POINTS, DEFAULT_REFERRAL_WELCOME_PERCENT, DEFAULT_REFERRAL_WELCOME_DAYS, defaultTierPerks, type LoyaltyConfig } from '@/lib/loyalty';
 
 function fmtDate(ts: Timestamp | undefined): string {
   if (!ts) return '—';
@@ -47,6 +47,8 @@ export default function AdminLoyaltyScreen() {
   const [typicalRentalPoints,      setTypicalRentalPoints]      = useState(String(DEFAULT_TYPICAL_RENTAL_POINTS));
   const [referralRewardPoints,     setReferralRewardPoints]     = useState(String(DEFAULT_REFERRAL_REWARD_POINTS));
   const [referralMonthlyCap,       setReferralMonthlyCap]       = useState('0');
+  const [welcomePercent,           setWelcomePercent]           = useState(String(DEFAULT_REFERRAL_WELCOME_PERCENT));
+  const [welcomeDays,              setWelcomeDays]              = useState(String(DEFAULT_REFERRAL_WELCOME_DAYS));
   // Optional custom "Unlocks …" line per tier (empty = default built from the config).
   const [perkSilver,   setPerkSilver]   = useState('');
   const [perkGold,     setPerkGold]     = useState('');
@@ -77,6 +79,8 @@ export default function AdminLoyaltyScreen() {
           setTypicalRentalPoints(String(data.typicalRentalPoints ?? DEFAULT_TYPICAL_RENTAL_POINTS));
           setReferralRewardPoints(String(data.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS));
           setReferralMonthlyCap(String(data.referralMonthlyCap ?? 0));
+          setWelcomePercent(String(data.referralWelcomePercent ?? DEFAULT_REFERRAL_WELCOME_PERCENT));
+          setWelcomeDays(String(data.referralWelcomeValidityDays ?? DEFAULT_REFERRAL_WELCOME_DAYS));
           setPerkSilver(data.perksTextByTier?.silver ?? '');
           setPerkGold(data.perksTextByTier?.gold ?? '');
           setPerkPlatinum(data.perksTextByTier?.platinum ?? '');
@@ -91,8 +95,10 @@ export default function AdminLoyaltyScreen() {
     silverPercent, goldPercent, platinumPercent,
     businessDeposit, residentDeposit, residentPlatinumDeposit, touristDeposit,
     damagedChargePercent, reviewRewardPoints, typicalRentalPoints, referralRewardPoints, referralMonthlyCap,
+    welcomePercent, welcomeDays,
   ].map(v => parseFloat(v));
-  const allValid = nums.every(n => !isNaN(n) && n >= 0);
+  const welcomeOk = parseFloat(welcomePercent) >= 1 && parseFloat(welcomePercent) <= 100 && parseFloat(welcomeDays) >= 1;
+  const allValid = nums.every(n => !isNaN(n) && n >= 0) && welcomeOk;
   const thresholdsOrdered =
     !isNaN(nums[0]) && !isNaN(nums[1]) && !isNaN(nums[2]) && nums[0] < nums[1] && nums[1] < nums[2];
 
@@ -130,6 +136,8 @@ export default function AdminLoyaltyScreen() {
         typicalRentalPoints: Math.max(1, Math.floor(parseFloat(typicalRentalPoints))),
         referralRewardPoints: Math.floor(parseFloat(referralRewardPoints)),
         referralMonthlyCap: Math.floor(parseFloat(referralMonthlyCap)),
+        referralWelcomePercent: Math.round(parseFloat(welcomePercent)),
+        referralWelcomeValidityDays: Math.floor(parseFloat(welcomeDays)),
         perksTextByTier: { silver: perkSilver.trim(), gold: perkGold.trim(), platinum: perkPlatinum.trim() },
       };
       await setDoc(doc(db, 'config', 'loyalty'), { ...newConfig, updatedAt: serverTimestamp() }, { merge: true });
@@ -148,7 +156,7 @@ export default function AdminLoyaltyScreen() {
     silverPercent, goldPercent, platinumPercent,
     businessDeposit, residentDeposit, residentPlatinumDeposit, touristDeposit,
     damagedChargePercent, reviewRewardPoints, typicalRentalPoints, perkSilver, perkGold, perkPlatinum,
-    referralRewardPoints, referralMonthlyCap,
+    referralRewardPoints, referralMonthlyCap, welcomePercent, welcomeDays,
   ]);
 
   return (
@@ -253,7 +261,7 @@ export default function AdminLoyaltyScreen() {
             />
 
             <Text style={s.sectionLabel}>Referrals</Text>
-            <Text style={s.fieldLabel}>Points for both sides after the friend&apos;s first returned rental</Text>
+            <Text style={s.fieldLabel}>Points for the referrer after the friend&apos;s first returned rental</Text>
             <TextInput
               style={s.input} value={referralRewardPoints} onChangeText={t => { setReferralRewardPoints(t); setSaveError(null); }}
               placeholder={`e.g. ${DEFAULT_REFERRAL_REWARD_POINTS}`} placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
@@ -263,6 +271,17 @@ export default function AdminLoyaltyScreen() {
               style={s.input} value={referralMonthlyCap} onChangeText={t => { setReferralMonthlyCap(t); setSaveError(null); }}
               placeholder="0" placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
             />
+            <Text style={s.fieldLabel}>Welcome discount for invited friends (% off their first rental)</Text>
+            <TextInput
+              style={s.input} value={welcomePercent} onChangeText={t => { setWelcomePercent(t); setSaveError(null); }}
+              placeholder={`e.g. ${DEFAULT_REFERRAL_WELCOME_PERCENT}`} placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
+            />
+            <Text style={s.fieldLabel}>Welcome code valid for (days)</Text>
+            <TextInput
+              style={s.input} value={welcomeDays} onChangeText={t => { setWelcomeDays(t); setSaveError(null); }}
+              placeholder={`e.g. ${DEFAULT_REFERRAL_WELCOME_DAYS}`} placeholderTextColor={COLORS.fg3} keyboardType="number-pad"
+            />
+            <Text style={s.updatedNote}>The friend gets the code (REFERRALWELCOME) in Loyalty › Your codes when they enter an invite code. The % is frozen for each friend when given.</Text>
 
             <Text style={s.sectionLabel}>Loyalty card</Text>
             <Text style={s.fieldLabel}>Typical points per rental (new renters)</Text>

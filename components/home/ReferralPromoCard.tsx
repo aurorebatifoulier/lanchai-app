@@ -8,7 +8,7 @@ import { HOME_COPY } from '@/constants/homeCopy';
 import PressScale from '@/components/PressScale';
 
 // Home bottom card for returning renters (validated mockup) → Loyalty, referral section.
-export default function ReferralPromoCard({ points }: { points: number }) {
+export default function ReferralPromoCard({ points, percent }: { points: number; percent: number }) {
   const router = useRouter();
   return (
     <PressScale
@@ -19,7 +19,7 @@ export default function ReferralPromoCard({ points }: { points: number }) {
       <IconCircle icon={{ name: 'users' }} tone="amber" size={52} />
       <View style={{ flex: 1 }}>
         <Text style={s.title}>{HOME_COPY.referralTitle}</Text>
-        <Text style={UI.subtitle}>{HOME_COPY.referralSub(points)}</Text>
+        <Text style={UI.subtitle}>{HOME_COPY.referralSub(percent, points)}</Text>
       </View>
       <Feather name="chevron-right" size={20} color={SHADES.amberText} />
     </PressScale>

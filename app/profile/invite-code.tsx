@@ -7,7 +7,8 @@ import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
 import { UI, StatusBlock, StatusChip, useScreenInsets } from '@/components/account/ui';
 import { applyInviteCode } from '@/lib/referral';
-import { useLoyaltyConfig, DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
+import { useLoyaltyConfig, referralWelcomePercent, DEFAULT_REFERRAL_WELCOME_DAYS } from '@/lib/loyalty';
+import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import PressScale from '@/components/PressScale';
 
 // "Have an invite code?" — new renters, before their first booking (any booking, even
@@ -16,7 +17,9 @@ export default function InviteCodeScreen() {
   const screen = useScreenInsets();
   const router = useRouter();
   const config = useLoyaltyConfig();
-  const pts = config?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
+  // "Give X%": the welcome code an invited friend gets (Loyalty › Your codes).
+  const welcomePct = referralWelcomePercent(config);
+  const welcomeDays = config?.referralWelcomeValidityDays ?? DEFAULT_REFERRAL_WELCOME_DAYS;
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,14 +49,14 @@ export default function InviteCodeScreen() {
         {done ? (
           <View style={[UI.card, UI.cardPadded]}>
             <StatusBlock icon={{ name: 'gift' }} title="Code applied" chip={<StatusChip label="Applied" tone="success" />}>
-              <Text style={UI.body}>You and your friend both get {pts} points after your first rental is returned.</Text>
+              <Text style={UI.body}>{LOYALTY_COPY.inviteApplied(welcomePct, welcomeDays)}</Text>
             </StatusBlock>
           </View>
         ) : (
           <View style={[UI.card, UI.cardPadded]}>
             {/* Amber = an action from you (a code to enter). */}
             <StatusBlock icon={{ name: 'gift' }} tone="amber" title="Have an invite code?">
-              <Text style={UI.body}>Got a code from a friend? Enter it before your first booking — you both get {pts} points after your first rental.</Text>
+              <Text style={UI.body}>{LOYALTY_COPY.inviteAsk(welcomePct)}</Text>
             </StatusBlock>
             <TextInput
               style={[UI.input, s.input]}

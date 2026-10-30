@@ -7,10 +7,10 @@ import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import { getMyInviteCode, shareInvite } from '@/lib/referral';
 import PressScale from '@/components/PressScale';
 
-// Referral card (validated mockup): users icon, headline, "You both get N points…",
+// Referral card (validated mockup): users icon, headline, "They get X% off…, you get N points",
 // amber "Share my invite link" (native share sheet with the code), "Your code: …".
 // The code is created server-side on first view (getMyInviteCode).
-export function ReferralCard({ points }: { points: number }) {
+export function ReferralCard({ points, percent }: { points: number; percent: number }) {
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,11 +22,11 @@ export function ReferralCard({ points }: { points: number }) {
     <View style={[UI.card, UI.cardPadded, s.card]}>
       <IconCircle icon={{ name: 'users' }} tone="amber" size={48} />
       <Text style={s.title}>{LOYALTY_COPY.referralTitle}</Text>
-      <Text style={[UI.body, s.sub]}>{LOYALTY_COPY.referralSub(points)}</Text>
+      <Text style={[UI.body, s.sub]}>{LOYALTY_COPY.referralSub(percent, points)}</Text>
       <PressScale
         style={[UI.btnPrimary, s.btn, !code && { opacity: 0.6 }]}
         disabled={!code}
-        onPress={() => code && shareInvite(code, points).catch(() => {})}
+        onPress={() => code && shareInvite(code, percent).catch(() => {})}
         activeOpacity={0.85}
       >
         {code ? (

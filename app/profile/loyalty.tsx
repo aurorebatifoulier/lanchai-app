@@ -13,7 +13,9 @@ import { ReferralCard } from '@/components/ReferralCard';
 import {
   TIER_ORDER, TIER_LABELS, tierPerksText, DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_REFERRAL_REWARD_POINTS,
   type PaidTier,
+  referralWelcomePercent,
 } from '@/lib/loyalty';
+import { LOYALTY_COPY } from '@/constants/loyaltyCopy';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { SHADES } from '@/constants/brandShades';
 import { UI, SectionTitle, RowGroup, Row, Chip, useScreenInsets } from '@/components/account/ui';
@@ -124,7 +126,7 @@ export default function LoyaltyScreen() {
             {[
               { icon: 'shopping-bag' as const, title: 'Rent', sub: '1 point per 10,000 LAK of rental fees, once the rental is returned.' },
               { icon: 'star' as const, title: `Review · +${reviewPts}`, sub: 'For each review of a returned rental — whatever your rating.' },
-              { icon: 'users' as const, title: `Invite a friend · +${referralPts}`, sub: 'For you and your friend, after their first rental.' },
+              { icon: 'users' as const, title: `Invite a friend · +${referralPts}`, sub: LOYALTY_COPY.referralPathSub(referralWelcomePercent(config)) },
             ].map(e => <Row key={e.title} icon={{ name: e.icon }} title={e.title} sub={e.sub} />)}
           </RowGroup>
 
@@ -137,7 +139,7 @@ export default function LoyaltyScreen() {
               setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }), 250);
             }}
           >
-            <ReferralCard points={referralPts} />
+            <ReferralCard points={referralPts} percent={referralWelcomePercent(config)} />
           </View>
 
           {/* ── Recent points ── */}

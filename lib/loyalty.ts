@@ -3,6 +3,7 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { getUserProfile, type LoyaltyTier } from './firestore';
 import { useAuth } from '@/contexts/AuthContext';
+import { DEFAULT_REFERRAL_WELCOME_PERCENT } from '@/functions/src/shared/promo';
 
 // Tier names and next-tier math live in functions/src/shared/loyalty.ts (shared with
 // the receipt email) — re-exported here so app imports stay unchanged.
@@ -25,7 +26,11 @@ export interface LoyaltyConfig {
   reviewRewardPoints?: number;   // points per review (any rating), credited server-side by applyReviewReward — default DEFAULT_REVIEW_REWARD_POINTS
   typicalRentalPoints?: number;  // fallback points of one rental for new renters (loyalty card copy) — default 20
   perksTextByTier?: { silver?: string; gold?: string; platinum?: string }; // optional custom "Unlocks …" line per tier
-  referralRewardPoints?: number; // points for both sides after the referred renter's first returned rental — default 50
+  referralRewardPoints?: number; // points for the REFERRER after the referred renter's first returned rental — default 50
+  /** "Give X%": welcome promo code for invited friends (% off their first rental, frozen per grant) — default 10. */
+  referralWelcomePercent?: number;
+  /** Validity of that welcome code, in days — default 30. */
+  referralWelcomeValidityDays?: number;
   referralMonthlyCap?: number;   // max credited referrals per referrer per month (0 / unset = no cap)
   updatedAt?: Timestamp;
 }
@@ -68,3 +73,10 @@ export function useLoyaltyTier(): LoyaltyTier | null | undefined {
 // Deposit % by customer type (and platinum tier for residents) — defined in
 // functions/src/shared/pricing.ts, shared with the createReservations callable.
 export { depositPercentFor } from '@/functions/src/shared/pricing';
+
+/** "Give X%, get N points" — the invited friend's welcome % (config, default 10). */
+export function referralWelcomePercent(cfg: { referralWelcomePercent?: number } | null | undefined): number {
+  const p = cfg?.referralWelcomePercent;
+  return typeof p === 'number' && p > 0 && p <= 100 ? Math.round(p) : DEFAULT_REFERRAL_WELCOME_PERCENT;
+}
+export { DEFAULT_REFERRAL_WELCOME_PERCENT, DEFAULT_REFERRAL_WELCOME_DAYS } from '@/functions/src/shared/promo';

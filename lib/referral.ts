@@ -28,6 +28,6 @@ export async function applyInviteCode(code: string): Promise<void> {
 }
 
 /** Native share sheet with a short message + the code (deep link later, installable build). */
-export async function shareInvite(code: string, points: number): Promise<void> {
-  await Share.share({ message: LOYALTY_COPY.referralShareMessage(code, points) });
+export async function shareInvite(code: string, welcomePercent: number): Promise<void> {
+  await Share.share({ message: LOYALTY_COPY.referralShareMessage(code, welcomePercent) });
 }

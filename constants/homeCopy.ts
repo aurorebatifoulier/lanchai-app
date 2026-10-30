@@ -48,7 +48,7 @@ export const HOME_COPY = {
   whyBuyCatalogueKicker: 'Use it, return it, keep the space.',
 
   referralTitle: "Friends don't let friends buy a drill they'll use once.",
-  referralSub: (points: number) => `Invite one. You both get ${points} points.`,
+  referralSub: (pct: number, points: number) => `Invite one: they get ${pct}% off, you get ${points} points.`,
   seeAll: 'See all',
   loadError: "Couldn't load products. Check your connection and try again.",
 

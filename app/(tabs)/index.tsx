@@ -60,7 +60,7 @@ import {
 import { CATEGORIES, type Product } from '@/lib/mockData';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { cached, clearHomeCache, HOME_TTL } from '@/lib/homeCache';
-import { DEFAULT_REFERRAL_REWARD_POINTS } from '@/lib/loyalty';
+import { DEFAULT_REFERRAL_REWARD_POINTS, referralWelcomePercent } from '@/lib/loyalty';
 import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
@@ -537,7 +537,7 @@ export default function HomeScreen() {
             {/* Bottom: returning renters → referral card */}
             <HomeSection loading={!ready.mine} skeleton={null}>
               {(preview || (returning && !loyalty.excluded)) && (
-                <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} /></View>
+                <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} percent={referralWelcomePercent(loyalty.config)} /></View>
               )}
             </HomeSection>
           </View>
