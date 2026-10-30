@@ -90,8 +90,8 @@ function ProductGridCard({
   /** Quick-add "+" state (bottom-right); null = no button (e.g. tier-locked). */
   quickAdd?: QuickAddState | null;
   onQuickAdd?: () => void;
-  /** Extra row under the signal (Liked: "Notify me"); `reserveFooter` keeps the same
-   *  card height for cards without one, so a row of cards stays aligned. */
+  /** Extra row under the signal (Liked: "Notify me") — the card grows by FOOTER_H.
+   *  `reserveFooter` (unused today) would give a card without one the same height. */
   footer?: React.ReactNode;
   footerKey?: string;
   reserveFooter?: boolean;

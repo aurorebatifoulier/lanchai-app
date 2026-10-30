@@ -1186,7 +1186,15 @@ a snapshot indefinitely).
     … / Closed now" (shared `shopOpenState`), pinned `ContextCard` when opened with
     `?productId=` (product page) or `?rentalId=` (rental detail "Message us about this
     rental"); the first message carries `about {kind,id,name}` (staff see "About: …").
-    Quick question chips until the renter writes; "Read" under the last renter message.
+    Quick questions (`CHAT_COPY.quick` / `quickProduct` / `quickRental`) on an empty
+    conversation or whenever a context card is shown, hidden once the renter sends a
+    message in this session; "Read" under the last renter message. The context card is
+    PINNED under the header (params re-read on every focus).
+  - **Both chats use `components/chat/ChatThread.tsx`** — an INVERTED FlatList (newest
+    message first = at the bottom; the day-separated list reversed), so a thread always
+    opens on the latest message without scroll-to-end timing. All messages are loaded
+    (no pagination in `lib/chat.ts` yet). Admin: "About: … ›" opens the product / admin
+    reservation; the renter name opens a sheet with `<RenterNameBlock>`.
   - **Server (`functions/src/chat.ts`, `onChatMessage`):** a renter message while closed
     → ONE auto-reply per closed period per conversation (`conversation.autoReplyKey` =
     next opening, shared `closedPeriod()`; text `config/shop.autoReplyText`, Shop
@@ -1206,7 +1214,8 @@ a snapshot indefinitely).
     FULL free day (opening time → same time next day, booking rule, ≥ 2h away) exists in
     the next 30 days — in-app + email (respects `emailRemindersOptOut`) — then deletes the
     watch. "Recently viewed" rail = `recentViews/{uid}` (≤ 10, written by
-    `recordProductView` on the product page). Cards say "Unavailable"; the product page
+    `recordProductView` on the product page). Liked cards keep their own height (rows
+    top-aligned, a "Notify me" card is simply taller). Cards say "Unavailable"; the product page
     keeps "Not available right now".
 
 ## Security follow-ups

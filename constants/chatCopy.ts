@@ -8,6 +8,8 @@ export const CHAT_COPY = {
   placeholder: 'Message LANCHAI…',
   read: 'Read',
   quick: ['Where’s the shop?', 'Extend my rental', 'How does the deposit work?'],
+  quickProduct: ['Is it free this weekend?', 'Can I see more photos?', 'How does it work?'],
+  quickRental: ['Can I extend it?', 'I’m running late', 'Something’s wrong with the item'],
   photoFailed: 'Photo can’t load · Tap to retry',
   videoTap: 'Video · Tap to play',
   aboutLine: (name: string) => `About: ${name}`,

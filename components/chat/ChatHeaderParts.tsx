@@ -41,10 +41,10 @@ export function ContextCard({ name, image, category, onView }: {
 }
 
 /** Quick question chips — tap sends the question. */
-export function QuickQuestions({ onAsk }: { onAsk: (q: string) => void }) {
+export function QuickQuestions({ questions, onAsk }: { questions: readonly string[]; onAsk: (q: string) => void }) {
   return (
     <View style={s.chips}>
-      {CHAT_COPY.quick.map(q => (
+      {questions.map(q => (
         <PressScale key={q} style={s.chip} onPress={() => onAsk(q)}>
           <Text style={s.chipText}>{q}</Text>
         </PressScale>

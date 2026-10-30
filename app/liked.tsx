@@ -280,7 +280,6 @@ export default function LikedScreen() {
       // Free items keep the small "+"; unavailable ones get "Notify me" instead.
       quickAdd={locked || availability ? null : 'now'}
       onQuickAdd={() => openQuickAdd(item, { availableToday: true })}
-      reserveFooter
       footerKey={availability ? (watches.has(item.id) ? 'on' : 'off') : ''}
       footer={availability ? (
         <NotifyButton on={watches.has(item.id)} onPress={() => toggleWatch(item.id)} />
@@ -503,8 +502,11 @@ const s = StyleSheet.create({
     paddingTop: 16,
     gap: COL_GAP,
   },
+  // Each card keeps its OWN height (a "Notify me" card is taller); top-aligned so the
+  // name / price / signal lines line up across a row — never a stretched empty card.
   row: {
     gap: COL_GAP,
+    alignItems: 'flex-start',
   },
 
   // Empty states (My Account design)

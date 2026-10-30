@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -14,13 +13,12 @@ import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
-import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ChatThread } from '@/components/chat/ChatThread';
 import { ChatMark, ContextCard, QuickQuestions, ReplyLine, ReadMark } from '@/components/chat/ChatHeaderParts';
 import { CHAT_COPY } from '@/constants/chatCopy';
 import { getProduct, getReservationById } from '@/lib/firestore';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
-import { DateSeparator, buildDaySeparatedList } from '@/components/chat/DateSeparator';
 import { MediaViewer } from '@/components/MediaViewer';
 import {
   ChatMessage,
@@ -42,7 +40,7 @@ export default function ChatScreen() {
   const { user } = useAuth();
   const RENTER_ID   = user!.uid;
   const RENTER_NAME = user!.displayName || user!.email || 'Renter';
-  const { scrollRef, keyboardShown, handleContentSizeChange } = useChatKeyboard();
+  const { keyboardShown } = useChatKeyboard();
 
   const [messages,  setMessages]  = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -115,6 +113,7 @@ export default function ChatScreen() {
     if (!text || sending || uploading) return;
     setSending(true);
     if (fromInput) setInputText('');
+    setSentThisSession(true);
     const about = context && !aboutSent.current
       ? { kind: context.kind, id: context.id, name: context.name }
       : null;
@@ -212,8 +211,14 @@ export default function ChatScreen() {
 
   // ── Day-separated render list ──────────────────────────────────────────────
 
-  const listEntries = useMemo(() => buildDaySeparatedList(messages), [messages]);
   const hasRenterMessage = messages.some(m => m.senderType === 'renter');
+  // Quick questions: an empty conversation, or any chat opened with a context card —
+  // contextual ones for a product / rental. Hidden once the renter sends a message here.
+  const [sentThisSession, setSentThisSession] = useState(false);
+  const showQuick = !sentThisSession && (!hasRenterMessage || !!context);
+  const quickQuestions = context?.kind === 'product' ? CHAT_COPY.quickProduct
+    : context?.kind === 'rental' ? CHAT_COPY.quickRental
+    : CHAT_COPY.quick;
   // "Read" under the LAST renter message, once LANCHAI has read it.
   const lastReadRenterId = useMemo(() => {
     const mine = messages.filter(m => m.senderType === 'renter');
@@ -279,27 +284,15 @@ export default function ChatScreen() {
         behavior="padding"
         keyboardVerticalOffset={insets.top}
       >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.messageList}
-          contentContainerStyle={styles.messageListContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={handleContentSizeChange}
-        >
-          {listEntries.map(entry =>
-            entry.kind === 'separator' ? (
-              <DateSeparator key={entry.key} label={entry.label} />
-            ) : (
-              <React.Fragment key={entry.key}>
-                <MessageBubble message={entry.message} viewerRole="renter" otherPartyInitial="L" hideAvatar onMediaPress={handleMediaPress} />
-                {entry.message.id === lastReadRenterId && <ReadMark />}
-              </React.Fragment>
-            )
-          )}
-          {/* Quick questions until the renter has written something. */}
-          {!hasRenterMessage && <QuickQuestions onAsk={q => sendText(q, false)} />}
-        </ScrollView>
+        <ChatThread
+          messages={messages}
+          viewerRole="renter"
+          otherPartyInitial="L"
+          hideAvatar
+          onMediaPress={handleMediaPress}
+          afterMessage={m => (m.id === lastReadRenterId ? <ReadMark /> : null)}
+          footer={showQuick ? <QuickQuestions questions={quickQuestions} onAsk={q => sendText(q, false)} /> : null}
+        />
 
         {/* Inline error banner — appears transiently above the input bar */}
         {chatError ? (

@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,12 +16,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
-import { InitialAvatar, MessageBubble } from '@/components/chat/MessageBubble';
+import { InitialAvatar } from '@/components/chat/MessageBubble';
+import { ChatThread } from '@/components/chat/ChatThread';
+import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
 import { useSavedReplies } from '@/lib/savedReplies';
 import { SHADES } from '@/constants/brandShades';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
-import { DateSeparator, buildDaySeparatedList } from '@/components/chat/DateSeparator';
 import { MediaViewer } from '@/components/MediaViewer';
 import {
   ChatMessage,
@@ -40,7 +43,8 @@ export default function AdminChatScreen() {
     renterName?: string;
   }>();
   const ADMIN_ID = user!.uid;
-  const { scrollRef, keyboardShown, handleContentSizeChange } = useChatKeyboard();
+  const { keyboardShown } = useChatKeyboard();
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const [renterName, setRenterName] = useState(renterNameParam ?? '');
   const [messages,   setMessages]   = useState<ChatMessage[]>([]);
@@ -181,7 +185,6 @@ export default function AdminChatScreen() {
 
   // ── Day-separated render list ──────────────────────────────────────────────
 
-  const listEntries = useMemo(() => buildDaySeparatedList(messages), [messages]);
 
   // ── Fullscreen media viewer ──────────────────────────────────────────────────
   // Lives at screen level, not inside MessageBubble — prev/next navigation needs
@@ -218,11 +221,24 @@ export default function AdminChatScreen() {
 
         <InitialAvatar initial={(renterName || '?').charAt(0).toUpperCase()} size={36} />
 
-        <View style={styles.headerInfo}>
+        {/* Tap the name → the renter's info (the admin renter block). */}
+        <TouchableOpacity style={styles.headerInfo} onPress={() => setInfoOpen(true)} activeOpacity={0.7}>
           <Text style={styles.headerTitle} numberOfLines={1}>{renterName || 'Renter'}</Text>
-          <Text style={styles.headerSubtitle}>Renter</Text>
-        </View>
+          <Text style={styles.headerSubtitle}>Renter · see info ›</Text>
+        </TouchableOpacity>
       </View>
+
+      <Modal visible={infoOpen} transparent animationType="slide" onRequestClose={() => setInfoOpen(false)} statusBarTranslucent>
+        <View style={styles.sheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setInfoOpen(false)} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <RenterNameBlock renterId={String(conversationId)} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       <View style={styles.headerDivider} />
 
       <KeyboardAvoidingView
@@ -230,28 +246,14 @@ export default function AdminChatScreen() {
         behavior="padding"
         keyboardVerticalOffset={insets.top}
       >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.messageList}
-          contentContainerStyle={styles.messageListContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={handleContentSizeChange}
-        >
-          {listEntries.map(entry =>
-            entry.kind === 'separator' ? (
-              <DateSeparator key={entry.key} label={entry.label} />
-            ) : (
-              <MessageBubble
-                key={entry.key}
-                message={entry.message}
-                viewerRole="business"
-                otherPartyInitial={(renterName || '?').charAt(0).toUpperCase()}
-                onMediaPress={handleMediaPress}
-              />
-            )
-          )}
-        </ScrollView>
+        <ChatThread
+          messages={messages}
+          viewerRole="business"
+          otherPartyInitial={(renterName || '?').charAt(0).toUpperCase()}
+          onMediaPress={handleMediaPress}
+          // "About: …" → the product page, or the admin reservation detail for a rental.
+          onAboutPress={about => router.push((about.kind === 'product' ? `/product/${about.id}` : `/admin/reservations/${about.id}`) as never)}
+        />
 
         {chatError ? (
           <View style={styles.errorBanner}>
@@ -360,4 +362,7 @@ const styles = StyleSheet.create({
   savedRowContent: { gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
   savedChip: { maxWidth: 220, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.cream },
   savedChipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '80%' },
+  sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
 });

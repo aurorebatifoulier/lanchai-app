@@ -36,9 +36,11 @@ interface MessageBubbleProps {
   onMediaPress: (url: string) => void;
   /** Renter chat: no avatar next to LANCHAI's bubbles (the header carries the mark). */
   hideAvatar?: boolean;
+  /** Admin chat: "About: …" opens the product / rental. */
+  onAboutPress?: (about: NonNullable<ChatMessage['about']>) => void;
 }
 
-export function MessageBubble({ message, viewerRole, otherPartyInitial, onMediaPress, hideAvatar }: MessageBubbleProps) {
+export function MessageBubble({ message, viewerRole, otherPartyInitial, onMediaPress, hideAvatar, onAboutPress }: MessageBubbleProps) {
   const isOwn = message.senderType === viewerRole;
 
   return (
@@ -46,7 +48,13 @@ export function MessageBubble({ message, viewerRole, otherPartyInitial, onMediaP
       {!isOwn && !hideAvatar && <InitialAvatar initial={otherPartyInitial} />}
 
       <View style={[styles.msgContent, isOwn && styles.msgContentOwn]}>
-        {!!message.about && <Text style={[styles.aboutLine, isOwn && styles.msgTimeOwn]}>{CHAT_COPY.aboutLine(message.about.name)}</Text>}
+        {!!message.about && (onAboutPress ? (
+          <TouchableOpacity onPress={() => onAboutPress(message.about!)} hitSlop={6} activeOpacity={0.7}>
+            <Text style={[styles.aboutLine, styles.aboutLink, isOwn && styles.msgTimeOwn]}>{`${CHAT_COPY.aboutLine(message.about.name)} ›`}</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={[styles.aboutLine, isOwn && styles.msgTimeOwn]}>{CHAT_COPY.aboutLine(message.about.name)}</Text>
+        ))}
         {message.videoUrl || message.imageUrl ? (
           <>
             <MediaTile message={message} onOpen={onMediaPress} />
@@ -115,6 +123,7 @@ function MediaTile({ message, onOpen }: { message: ChatMessage; onOpen: (url: st
 
 const styles = StyleSheet.create({
   aboutLine: { fontSize: 12, fontWeight: '600', color: SHADES.amberText, marginBottom: 3 },
+  aboutLink: { textDecorationLine: 'underline' },
   mediaFrame: { overflow: 'hidden', backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
   mediaFallback: {
     backgroundColor: SHADES.amberPale, borderWidth: 0.5, borderColor: SHADES.border,
