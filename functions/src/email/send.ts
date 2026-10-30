@@ -81,7 +81,13 @@ export async function sendEmail(email: OutgoingEmail, mode?: EmailMode): Promise
           ...(email.attachments?.length ? { attachment: email.attachments } : {}),
         }),
       });
-      if (res.ok) return 'sent';
+      if (res.ok) {
+        // Trace every accepted send (tag + Brevo messageId, never the address or the
+        // key) — look it up in Brevo → Transactional → Logs when an email "doesn't arrive".
+        const messageId = await res.json().then((j: { messageId?: string }) => j?.messageId).catch(() => undefined);
+        logger.info('[email] accepted by Brevo', { tag: email.tag, messageId, redirected });
+        return 'sent';
+      }
 
       const body = await res.text().catch(() => '');
       if (res.status === 401 || res.status === 403) {
