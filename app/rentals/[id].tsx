@@ -381,6 +381,16 @@ export default function RentalDetailScreen() {
           </View>
         )}
 
+        {/* ── Message us about this rental (chat with the "About" card) ── */}
+        <TouchableOpacity
+          style={s.cancelPolicyLink}
+          onPress={() => router.push({ pathname: '/chat', params: { rentalId: rental.id } } as never)}
+          activeOpacity={0.7}
+        >
+          <Feather name="message-circle" size={14} color={SHADES.amberText} />
+          <Text style={[s.cancelPolicyLinkText, { color: SHADES.amberText, fontWeight: '700' }]}>Message us about this rental</Text>
+        </TouchableOpacity>
+
         {/* ── Cancel section ── */}
         {isCancellable && (
           <View style={s.cancelSection}>

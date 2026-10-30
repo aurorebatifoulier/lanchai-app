@@ -75,7 +75,6 @@ export const PRODUCT_COPY = {
 
   pairs: 'Pairs well with',
   question: { title: 'A question about this item?', sub: 'Real humans in Vientiane. Usually fast.' },
-  chatPrefill: (name: string) => `About: ${name}\n`,
 
   bar: {
     from: 'From',

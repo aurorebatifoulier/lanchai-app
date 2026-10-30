@@ -14,13 +14,19 @@ import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
-import { InitialAvatar, MessageBubble } from '@/components/chat/MessageBubble';
+import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ChatMark, ContextCard, QuickQuestions, ReplyLine, ReadMark } from '@/components/chat/ChatHeaderParts';
+import { CHAT_COPY } from '@/constants/chatCopy';
+import { useShopInfo } from '@/lib/shop';
+import { shopOpenState } from '@/functions/src/shared/shop';
+import { getRenterProduct, getReservationById } from '@/lib/firestore';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
 import { DateSeparator, buildDaySeparatedList } from '@/components/chat/DateSeparator';
 import { MediaViewer } from '@/components/MediaViewer';
 import {
   ChatMessage,
+  type ChatAbout,
   initConversation,
   markConversationReadByRenter,
   sendMessage,
@@ -42,14 +48,25 @@ export default function ChatScreen() {
 
   const [messages,  setMessages]  = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  // ?about=… (product page "A question about this item?") → first line pre-filled once.
-  const { about } = useLocalSearchParams<{ about?: string }>();
-  const prefilled = useRef(false);
+  // ?productId= / ?rentalId= → pinned "About" card; the first message sent from here
+  // carries `about` so staff see what it's about.
+  const { productId, rentalId } = useLocalSearchParams<{ productId?: string; rentalId?: string }>();
+  const [context, setContext] = useState<(ChatAbout & { image: string | null; category: string | null }) | null>(null);
+  const aboutSent = useRef(false);
   useEffect(() => {
-    if (!about || prefilled.current) return;
-    prefilled.current = true;
-    setInputText(String(about));
-  }, [about]);
+    if (productId) {
+      getRenterProduct(String(productId))
+        .then(p => { if (p) setContext({ kind: 'product', id: p.id, name: p.name, image: p.images?.[0] ?? null, category: p.category ?? null }); })
+        .catch(() => {});
+    } else if (rentalId) {
+      getReservationById(String(rentalId))
+        .then(r => { if (r) setContext({ kind: 'rental', id: r.id, name: r.productName, image: r.productImage ?? null, category: null }); })
+        .catch(() => {});
+    }
+  }, [productId, rentalId]);
+  const shop = useShopInfo();
+  const openState = shopOpenState(shop);
+  const openText = openState?.kind === 'open' ? CHAT_COPY.openUntil(openState.until) : openState ? CHAT_COPY.closedNow : null;
   const [sending,   setSending]   = useState(false);
   const [uploading, setUploading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -89,20 +106,25 @@ export default function ChatScreen() {
 
   // ── Sending ─────────────────────────────────────────────────────────────────
 
-  const handleSend = useCallback(async () => {
-    const text = inputText.trim();
+  const sendText = useCallback(async (raw: string, fromInput: boolean) => {
+    const text = raw.trim();
     if (!text || sending || uploading) return;
     setSending(true);
-    setInputText('');
+    if (fromInput) setInputText('');
+    const about = context && !aboutSent.current
+      ? { kind: context.kind, id: context.id, name: context.name }
+      : null;
     try {
-      await sendMessage(RENTER_ID, text, null);
+      await sendMessage(RENTER_ID, text, null, null, about ? { about } : {});
+      if (about) aboutSent.current = true;
     } catch {
       showError('Could not send your message. Please try again.');
-      setInputText(text);
+      if (fromInput) setInputText(text);
     } finally {
       setSending(false);
     }
-  }, [inputText, sending, uploading]);
+  }, [sending, uploading, context, RENTER_ID, showError]);
+  const handleSend = useCallback(() => sendText(inputText, true), [sendText, inputText]);
 
   const handlePickImage = useCallback(async () => {
     if (sending || uploading) return;
@@ -187,6 +209,13 @@ export default function ChatScreen() {
   // ── Day-separated render list ──────────────────────────────────────────────
 
   const listEntries = useMemo(() => buildDaySeparatedList(messages), [messages]);
+  const hasRenterMessage = messages.some(m => m.senderType === 'renter');
+  // "Read" under the LAST renter message, once LANCHAI has read it.
+  const lastReadRenterId = useMemo(() => {
+    const mine = messages.filter(m => m.senderType === 'renter');
+    const last = mine[mine.length - 1];
+    return last?.read ? last.id : null;
+  }, [messages]);
 
   // ── Fullscreen media viewer ──────────────────────────────────────────────────
   // Lives at screen level, not inside MessageBubble — prev/next navigation needs
@@ -214,11 +243,11 @@ export default function ChatScreen() {
       <View style={styles.header}>
         <BackButton onPress={() => router.back()} variant="bare" size={22} boxSize={36} />
 
-        <InitialAvatar initial="L" size={36} />
+        <ChatMark size={44} />
 
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>LANCHAI</Text>
-          <Text style={styles.headerSubtitle}>Here to help</Text>
+          <Text style={styles.headerTitle}>{CHAT_COPY.title}</Text>
+          <ReplyLine openText={openText} />
         </View>
       </View>
       <View style={styles.headerDivider} />
@@ -241,13 +270,26 @@ export default function ChatScreen() {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={handleContentSizeChange}
         >
+          {context && (
+            <ContextCard
+              name={context.name}
+              image={context.image}
+              category={context.category}
+              onView={() => router.push((context.kind === 'product' ? `/product/${context.id}` : `/rentals/${context.id}`) as never)}
+            />
+          )}
           {listEntries.map(entry =>
             entry.kind === 'separator' ? (
               <DateSeparator key={entry.key} label={entry.label} />
             ) : (
-              <MessageBubble key={entry.key} message={entry.message} viewerRole="renter" otherPartyInitial="L" onMediaPress={handleMediaPress} />
+              <React.Fragment key={entry.key}>
+                <MessageBubble message={entry.message} viewerRole="renter" otherPartyInitial="L" hideAvatar onMediaPress={handleMediaPress} />
+                {entry.message.id === lastReadRenterId && <ReadMark />}
+              </React.Fragment>
             )
           )}
+          {/* Quick questions until the renter has written something. */}
+          {!hasRenterMessage && <QuickQuestions onAsk={q => sendText(q, false)} />}
         </ScrollView>
 
         {/* Inline error banner — appears transiently above the input bar */}

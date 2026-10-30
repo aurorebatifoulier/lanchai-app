@@ -336,7 +336,7 @@ export default function ProductDetailScreen() {
             </View>
           )}
 
-          <QuestionRow onPress={() => router.push({ pathname: '/chat', params: { about: PRODUCT_COPY.chatPrefill(product.name) } } as never)} />
+          <QuestionRow onPress={() => router.push({ pathname: '/chat', params: { productId: product.id } } as never)} />
         </View>
       </Animated.ScrollView>
 
