@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/search-vocabulary' | '/admin/promo-codes';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies';
 }
 
 const CARDS: HubCard[] = [
@@ -53,6 +53,13 @@ const CARDS: HubCard[] = [
     title: 'Collections',
     sub: 'Home "Got plans?" occasion picks',
     route: '/admin/collections',
+  },
+  {
+    icon: 'message-square',
+    iconBg: COLORS.warmBeige,
+    title: 'Saved replies',
+    sub: 'Quick answers for the chat',
+    route: '/admin/saved-replies',
   },
   {
     icon: 'tag',

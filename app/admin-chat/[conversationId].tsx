@@ -16,6 +16,8 @@ import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { InitialAvatar, MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
+import { useSavedReplies } from '@/lib/savedReplies';
+import { SHADES } from '@/constants/brandShades';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
 import { DateSeparator, buildDaySeparatedList } from '@/components/chat/DateSeparator';
 import { MediaViewer } from '@/components/MediaViewer';
@@ -43,6 +45,7 @@ export default function AdminChatScreen() {
   const [renterName, setRenterName] = useState(renterNameParam ?? '');
   const [messages,   setMessages]   = useState<ChatMessage[]>([]);
   const [inputText,  setInputText]  = useState('');
+  const savedReplies = useSavedReplies();
   const [sending,    setSending]    = useState(false);
   const [uploading,  setUploading]  = useState(false);
   const [chatError,  setChatError]  = useState<string | null>(null);
@@ -257,6 +260,18 @@ export default function AdminChatScreen() {
           </View>
         ) : null}
 
+        {/* Saved replies — one tap inserts the text (Admin → Saved replies). */}
+        {!!savedReplies?.length && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.savedRow} contentContainerStyle={styles.savedRowContent} keyboardShouldPersistTaps="handled">
+            {savedReplies.map(r => (
+              <TouchableOpacity key={r.id} style={styles.savedChip} activeOpacity={0.8}
+                onPress={() => setInputText(prev => (prev.trim() ? `${prev.trim()} ${r.text}` : r.text))}>
+                <Text style={styles.savedChipText} numberOfLines={1}>{r.text}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
         <ChatInputBar
           value={inputText}
           onChangeText={setInputText}
@@ -341,4 +356,8 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 14,
   },
+  savedRow: { flexGrow: 0, borderTopWidth: 0.5, borderTopColor: SHADES.border, backgroundColor: SHADES.white },
+  savedRowContent: { gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  savedChip: { maxWidth: 220, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.cream },
+  savedChipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
 });
