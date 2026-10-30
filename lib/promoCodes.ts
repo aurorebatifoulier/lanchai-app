@@ -1,5 +1,5 @@
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, runTransaction, serverTimestamp, updateDoc,
+  collection, deleteDoc, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, updateDoc, where,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
@@ -48,6 +48,55 @@ export async function setPromoActive(code: string, active: boolean): Promise<voi
 /** Only while unused (firestore.rules: usedCount == 0). */
 export async function deletePromoCode(code: string): Promise<void> {
   await deleteDoc(doc(db, 'promoCodes', code));
+}
+
+// ── Wallet (promoGrants/{CODE}_{uid}) — server-written; admin reads all ──────────
+
+export interface PromoGrant {
+  code: string; uid: string; source: 'admin' | 'saved' | 'referral';
+  grantedAt?: { toMillis: () => number }; expiresAt?: { toMillis: () => number } | null;
+  used: boolean; usedAt?: { toMillis: () => number } | null; usedOrderId?: string | null;
+  override?: { type: 'percent' | 'fixed'; value: number } | null;
+}
+
+/** Admin: who has this code in their wallet (equality query, no index). */
+export async function listGrantsForCode(code: string): Promise<PromoGrant[]> {
+  const snap = await getDocs(query(collection(db, 'promoGrants'), where('code', '==', code)));
+  return snap.docs.map(d => d.data() as PromoGrant);
+}
+
+export interface RenterPick { uid: string; name: string; phone: string }
+
+/** Admin: every renter (users docs) for the "give a code" search — filtered in code. */
+export async function listRentersForPicker(): Promise<RenterPick[]> {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map(d => {
+    const u = d.data() as { firstName?: string; lastName?: string; displayName?: string; phoneNumber?: string; phone?: string };
+    return {
+      uid: d.id,
+      name: [u.firstName, u.lastName].filter(Boolean).join(' ') || u.displayName || 'Renter',
+      phone: u.phoneNumber || u.phone || '',
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+const callableError = (err: unknown, fallback: string) => (err as { message?: string })?.message || fallback;
+
+export async function adminGrantPromo(code: string, uids: string[], expiresAtMs: number | null): Promise<{ granted: number; skipped: number }> {
+  try {
+    const r = await httpsCallable(functions, 'adminGrantPromo')({ code, uids, expiresAtMs });
+    return r.data as { granted: number; skipped: number };
+  } catch (err) {
+    throw new Error(callableError(err, 'Couldn’t give the code. Please try again.'));
+  }
+}
+
+export async function adminRevokeGrant(code: string, uid: string): Promise<void> {
+  try {
+    await httpsCallable(functions, 'adminRevokeGrant')({ code, uid });
+  } catch (err) {
+    throw new Error(callableError(err, 'Couldn’t remove the code. Please try again.'));
+  }
 }
 
 // ── Renter ────────────────────────────────────────────────────────────────────

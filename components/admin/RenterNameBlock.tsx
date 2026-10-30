@@ -4,6 +4,8 @@ import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { functions } from '@/lib/firebase';
+import { GiveCodeBox } from '@/components/admin/GiveCodeBox';
+import { PROMO_COPY } from '@/constants/promoCopy';
 
 // Admin: the account's name, big, next to the ID photos (pick-up ID check, reservation
 // detail ID card) so staff compare it with the document — plus phone and email in grey
@@ -15,6 +17,8 @@ interface Contact {
 }
 
 export function RenterNameBlock({ renterId, onNameChanged }: { renterId: string; onNameChanged?: () => void }) {
+  // "Give a code": a promo code in this renter's wallet (adminGrantPromo).
+  const [giving, setGiving] = useState(false);
   const [contact, setContact] = useState<Contact | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -104,6 +108,13 @@ export function RenterNameBlock({ renterId, onNameChanged }: { renterId: string;
             contact.referralCount ? `${contact.referralCount} referral${contact.referralCount > 1 ? 's' : ''}` : null]
             .filter(Boolean).join(' · ')}
         </Text>
+      )}
+      {giving ? (
+        <GiveCodeBox renterId={renterId} onClose={() => setGiving(false)} />
+      ) : (
+        <TouchableOpacity onPress={() => setGiving(true)} hitSlop={8} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+          <Text style={s.edit}>{PROMO_COPY.admin.giveCodeTitle}</Text>
+        </TouchableOpacity>
       )}
       {error && <Text style={s.error}>{error}</Text>}
     </View>

@@ -12,6 +12,7 @@ import BackButton from '@/components/BackButton';
 import AdminDateTimePicker from '@/components/AdminDateTimePicker';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import PressScale from '@/components/PressScale';
+import { PromoGrantPanel } from '@/components/admin/PromoGrantPanel';
 import { UI, SectionTitle, ToggleRow, StatusChip, useScreenInsets } from '@/components/account/ui';
 import { getProducts } from '@/lib/firestore';
 import { CATEGORIES, type Product } from '@/lib/mockData';
@@ -53,6 +54,7 @@ export default function PromoCodeFormScreen() {
   const [perRenter, setPerRenter] = useState('1');
   const [firstRentalOnly, setFirstRentalOnly] = useState(false);
   const [businessAllowed, setBusinessAllowed] = useState(false);
+  const [personal, setPersonal] = useState(false);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [productIds, setProductIds] = useState<string[]>([]);
 
@@ -76,7 +78,7 @@ export default function PromoCodeFormScreen() {
         setMinRental(p.minRentalLak ? String(p.minRentalLak) : '');
         setValidFrom(fromIsoDay(p.validFrom)); setValidTo(fromIsoDay(p.validTo));
         setMaxUses(p.maxUses ? String(p.maxUses) : ''); setPerRenter(String(p.maxUsesPerRenter ?? 1));
-        setFirstRentalOnly(!!p.firstRentalOnly); setBusinessAllowed(!!p.businessAllowed);
+        setFirstRentalOnly(!!p.firstRentalOnly); setBusinessAllowed(!!p.businessAllowed); setPersonal(!!p.personal);
         setCategoryIds(p.scope?.categoryIds ?? []); setProductIds(p.scope?.productIds ?? []);
       }
     }).finally(() => setLoading(false));
@@ -93,7 +95,9 @@ export default function PromoCodeFormScreen() {
   const codeOk = PROMO_CODE_RE.test(normalized);
   const valueOk = valueNum != null && (type === 'fixed' || valueNum <= 100);
   const datesOk = !validFrom || !validTo || validFrom.getTime() <= validTo.getTime();
-  const canSave = codeOk && valueOk && datesOk && !saving;
+  // The automatic referral code: core fields come from Admin → Loyalty (read-only here).
+  const system = !!existing?.system;
+  const canSave = codeOk && valueOk && datesOk && !saving && !system;
   const used = (existing?.usedCount ?? 0) > 0;
 
   const save = async () => {
@@ -108,7 +112,7 @@ export default function PromoCodeFormScreen() {
       validTo: validTo ? toIsoDay(validTo) : null,
       maxUses: intOrNull(maxUses),
       maxUsesPerRenter: intOrNull(perRenter) ?? 1,
-      firstRentalOnly, businessAllowed,
+      firstRentalOnly, businessAllowed, personal,
       scope: { categoryIds, productIds },
     };
     try {
@@ -155,6 +159,8 @@ export default function PromoCodeFormScreen() {
 
       {loading ? <ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} /> : (
         <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]} keyboardShouldPersistTaps="handled">
+          {system && <Text style={[UI.body, s.systemNote]}>{c.system}</Text>}
+          <View pointerEvents={system ? 'none' : 'auto'} style={system ? { opacity: 0.55 } : undefined}>
           <SectionTitle>{c.fields.code}</SectionTitle>
           <View style={[UI.card, UI.cardPadded]}>
             <TextInput
@@ -223,6 +229,8 @@ export default function PromoCodeFormScreen() {
             <ToggleRow title={c.fields.firstRental} sub={c.fields.firstRentalSub} value={firstRentalOnly} onValueChange={setFirstRentalOnly} />
             <View style={s.sep} />
             <ToggleRow title={c.fields.business} sub={c.fields.businessSub} value={businessAllowed} onValueChange={setBusinessAllowed} />
+            <View style={s.sep} />
+            <ToggleRow title={c.personal} sub={c.personalSub} value={personal} onValueChange={setPersonal} />
           </View>
 
           <SectionTitle>{c.fields.scope}</SectionTitle>
@@ -254,11 +262,17 @@ export default function PromoCodeFormScreen() {
             </View>
           </View>
 
+          </View>
+
           {!!error && <Text style={[UI.errorText, { marginTop: 14 }]}>{error}</Text>}
 
-          <PressScale style={[UI.btnPrimary, { marginTop: 20 }, !canSave && UI.btnDisabled]} onPress={save} disabled={!canSave}>
-            {saving ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{c.save}</Text>}
-          </PressScale>
+          {!system && (
+            <PressScale style={[UI.btnPrimary, { marginTop: 20 }, !canSave && UI.btnDisabled]} onPress={save} disabled={!canSave}>
+              {saving ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{c.save}</Text>}
+            </PressScale>
+          )}
+
+          {existing && !system && <PromoGrantPanel code={existing.code} />}
 
           {existing && (
             <View style={{ marginTop: 12, gap: 10 }}>
@@ -269,7 +283,7 @@ export default function PromoCodeFormScreen() {
                   <Text style={UI.btnSecondaryText}>{existing.active ? c.deactivate : c.reactivate}</Text>
                 </PressScale>
               )}
-              {used ? (
+              {used || system ? (
                 <Text style={[UI.small, { textAlign: 'center' }]}>{c.usedNoDelete}</Text>
               ) : confirm === 'delete' ? (
                 <ConfirmBox text={c.deleteAsk} confirmLabel="Delete" destructive onCancel={() => setConfirm(null)} onConfirm={remove} confirmDisabled={saving} />
@@ -314,6 +328,7 @@ const s = StyleSheet.create({
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   dateBtn: { flex: 1, justifyContent: 'center' },
   sep: { height: 0.5, backgroundColor: SHADES.border, marginLeft: 14 },
+  systemNote: { marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: SHADES.amberLight, color: SHADES.amberDeep },
   productRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: SHADES.border },
   check: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: SHADES.carbonFaint, alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: SHADES.amber, borderColor: SHADES.amber },
