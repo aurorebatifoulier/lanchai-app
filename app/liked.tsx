@@ -21,6 +21,7 @@ import SearchBar from '@/components/SearchBar';
 import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProducts, getFavorites, removeFavorite } from '@/lib/firestore';
+import { cached, HOME_TTL } from '@/lib/homeCache';
 import { Product } from '@/lib/mockData';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import {
@@ -117,7 +118,7 @@ export default function LikedScreen() {
     const uid = user.uid;
     Promise.all([
       getFavorites(uid),
-      getProducts(),
+      cached('products', HOME_TTL.products, getProducts), // shared 5-min cache (Home)
     ])
       .then(([ids, products]) => {
         const idSet = new Set(ids);
@@ -128,7 +129,7 @@ export default function LikedScreen() {
         setLoadError(true);
         setLoading(false);
       });
-    fetchAllOccupancy().then(setOccupancy).catch(() => setOccupancy(null));
+    cached('occupancy', HOME_TTL.occupancy, fetchAllOccupancy).then(setOccupancy).catch(() => setOccupancy(null));
   }, [user]);
 
   // ── Unlike ────────────────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ export default function LikedScreen() {
     removeFavorite(user.uid, productId).catch(() => {
       setUnlikeError(true);
       getFavorites(user.uid).then(ids =>
-        getProducts().then(products => {
+        cached('products', HOME_TTL.products, getProducts).then(products => {
           const idSet = new Set(ids);
           setLikedProducts(products.filter(p => idSet.has(p.id)));
         }),

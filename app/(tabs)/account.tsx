@@ -16,6 +16,7 @@ import { COLORS } from '@/constants/Colors';
 import LanchaiMark from '@/components/LanchaiMark';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserProfile, getMyReservations, getProducts, saveUserProfile, UserProfile } from '@/lib/firestore';
+import { cached, HOME_TTL } from '@/lib/homeCache';
 import { getCustomerTypeConfig } from '@/utils/customerType';
 import { useShopInfo, buildWhatsappUrl, normalizeWhatsappNumber, isValidWhatsappNumber } from '@/lib/shop';
 import * as ImagePicker from 'expo-image-picker';
@@ -111,7 +112,8 @@ export default function AccountScreen() {
     Promise.all([
       getUserProfile(uid).catch(() => null),
       getMyReservations(uid).catch(() => []),
-      getProducts().catch(() => []),
+      // Shared products cache (5 min, same as Home) — not a full read on every visit.
+      cached('products', HOME_TTL.products, getProducts).catch(() => []),
     ]).then(([prof, rentals, products]) => {
       setProfile(prof);
       setAvatarUri(prof?.photoURL ?? null);
