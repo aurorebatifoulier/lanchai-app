@@ -3,7 +3,7 @@
 // Separate from the loyalty coupons; ONE discount per booking (coupon OR promo).
 // Dependency-free (see latePenalty.ts). Discount always computed server-side.
 
-import { vteIsoDay } from './dates';
+import { vteIsoDay, vteIsoDayEndMs } from './dates';
 
 export type PromoType = 'percent' | 'fixed';
 
@@ -22,6 +22,11 @@ export interface PromoCode {
   firstRentalOnly?: boolean;
   scope?: { categoryIds?: string[]; productIds?: string[] } | null;
   businessAllowed?: boolean;
+  /** Personal: only renters who have it in their wallet (promoGrants) can use it — for
+   *  anyone else it "doesn't exist". */
+  personal?: boolean;
+  /** Created by the system (REFERRALWELCOME) — not deletable, core fields fixed. */
+  system?: boolean;
   active: boolean;
   usedCount?: number;
   discountGivenLak?: number;
@@ -54,6 +59,15 @@ export type PromoError =
 
 export interface PromoLine { subtotal: number; productId: string; categoryId: string | null }
 
+/** The renter's wallet entry for this code (promoGrants/{CODE}_{uid}), when they have one. */
+export interface PromoGrantInfo {
+  used: boolean;
+  /** Personal expiry (ms), null = the code's own dates only. */
+  expiresAtMs: number | null;
+  /** Frozen at grant time (referral welcome %): overrides the code's type / value. */
+  override?: { type: PromoType; value: number } | null;
+}
+
 export interface PromoContext {
   lines: PromoLine[];
   nowMs: number;
@@ -61,6 +75,41 @@ export interface PromoContext {
   /** The renter has a booking that isn't cancelled (NOT_FIRST_RENTAL_STATUSES). */
   hasPriorBooking: boolean;
   usesByRenter: number;
+  grant?: PromoGrantInfo | null;
+}
+
+// ── Wallet (promoGrants) ───────────────────────────────────────────────────────
+
+export type GrantSource = 'admin' | 'saved' | 'referral';
+export const grantId = (code: string, uid: string) => `${code}_${uid}`;
+/** System code granted to invited friends (personal, first rental, 1 use; % frozen per grant). */
+export const REFERRAL_WELCOME_CODE = 'REFERRALWELCOME';
+export const DEFAULT_REFERRAL_WELCOME_PERCENT = 10;
+export const DEFAULT_REFERRAL_WELCOME_DAYS = 30;
+export const EXPIRY_REMINDER_DAYS = 3;
+
+/** A grant's expiry = the earliest of its own date and the code's last valid day. */
+export function grantExpiryMs(p: Pick<PromoCode, 'validTo'>, personalMs: number | null): number | null {
+  const codeEnd = p.validTo ? vteIsoDayEndMs(p.validTo) : null;
+  if (codeEnd == null) return personalMs;
+  if (personalMs == null) return codeEnd;
+  return Math.min(codeEnd, personalMs);
+}
+
+/** "10% off" / "50,000 LAK off". */
+export const promoValueText = (type: PromoType, value: number) =>
+  type === 'percent' ? `${value}% off` : `${Math.round(value).toLocaleString('en-US')} LAK off`;
+
+/** One-line conditions, e.g. "First rental · Outdoor only · min. 300,000 LAK". */
+export function promoConditionsText(p: PromoCode, categoryName: (id: string) => string = id => id.charAt(0).toUpperCase() + id.slice(1)): string {
+  const parts: string[] = [];
+  if (p.firstRentalOnly) parts.push('First rental');
+  const cats = p.scope?.categoryIds ?? [];
+  const prods = p.scope?.productIds ?? [];
+  if (cats.length > 0) parts.push(`${cats.map(categoryName).join(', ')} only`);
+  else if (prods.length > 0) parts.push('Selected items only');
+  if (p.minRentalLak) parts.push(`min. ${p.minRentalLak.toLocaleString('en-US')} LAK`);
+  return parts.length ? parts.join(' · ') : 'Any rental';
 }
 
 export type PromoResult =
@@ -90,7 +139,13 @@ export function spreadDiscount(subtotals: number[], inScope: boolean[], total: n
   return out;
 }
 
-export function evaluatePromo(p: PromoCode, ctx: PromoContext): PromoResult {
+export function evaluatePromo(code: PromoCode, ctx: PromoContext): PromoResult {
+  const g = ctx.grant ?? null;
+  // Personal codes exist only for renters who hold them (never reveal them to others).
+  if (code.personal && !g) return { ok: false, error: 'not-found' };
+  if (g?.used) return { ok: false, error: 'already-used' };
+  if (g?.expiresAtMs != null && ctx.nowMs >= g.expiresAtMs) return { ok: false, error: 'expired' };
+  const p: PromoCode = g?.override ? { ...code, type: g.override.type, value: g.override.value } : code;
   const status = promoStatus(p, ctx.nowMs);
   if (status === 'inactive') return { ok: false, error: 'inactive' };
   if (status === 'expired') return { ok: false, error: 'expired' };

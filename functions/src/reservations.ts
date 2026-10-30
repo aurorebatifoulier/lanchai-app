@@ -223,6 +223,8 @@ export const createReservations = onCall({ region: REGION }, async request => {
     // Promo code: re-validated HERE with the same rule as validatePromoCode, discount
     // computed from server prices only (shared/promo.ts evaluatePromo).
     let promo: { code: string; type: string; value: number } | null = null;
+    let promoGrantRef: admin.firestore.DocumentReference | null = null;
+    let promoGrantUsedUp = false;
     if (promoCode) {
       const ctx = await readPromo(r => tx.get(r), q => tx.get(q), promoCode, uid!);
       if (!ctx) fail('promo-invalid', promoErrorText('not-found'), { promoError: 'not-found' });
@@ -230,10 +232,18 @@ export const createReservations = onCall({ region: REGION }, async request => {
         lines: lines.map(l => promoLine(l.it.productId, l.p, l.subtotal)),
         nowMs: now, isBusiness: excluded,
         hasPriorBooking: ctx!.hasPriorBooking, usesByRenter: ctx!.usesByRenter,
+        // Wallet entry: personal codes need it, its expiry / used flag / frozen % apply.
+        grant: ctx!.grant,
       });
       if (!res.ok) fail('promo-invalid', promoErrorText(res.error, res.minLak), { promoError: res.error, minLak: res.minLak });
       discount = { total: (res as { total: number }).total, perLine: (res as { perLine: number[] }).perLine };
-      promo = { code: promoCode, type: ctx!.promo.type, value: ctx!.promo.value };
+      const o = ctx!.grant?.override;
+      promo = { code: promoCode, type: o?.type ?? ctx!.promo.type, value: o?.value ?? ctx!.promo.value };
+      if (ctx!.grant) {
+        promoGrantRef = ctx!.grantRef;
+        // The wallet entry is "used" once this renter has no use left.
+        promoGrantUsedUp = ctx!.usesByRenter + 1 >= Math.max(1, ctx!.promo.maxUsesPerRenter ?? 1);
+      }
     }
 
     // Writes.
@@ -289,6 +299,9 @@ export const createReservations = onCall({ region: REGION }, async request => {
         orderIds: FieldValue.arrayUnion(orderId),
         lastUsedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+      if (promoGrantRef && promoGrantUsedUp) {
+        tx.update(promoGrantRef, { used: true, usedAt: FieldValue.serverTimestamp(), usedOrderId: orderId });
+      }
     }
     lockRefs.forEach((r, i) => tx.set(r, {
       lastBookingAt: FieldValue.serverTimestamp(),

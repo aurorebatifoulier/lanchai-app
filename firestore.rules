@@ -423,6 +423,15 @@ service cloud.firestore {
       }
     }
 
+    // ── promoGrants/{CODE}_{uid} ──────────────────────────────────────────
+    // Personal promo wallet: written ONLY by Cloud Functions (adminGrantPromo,
+    // savePromoCode, applyInviteCode, createReservations, restoreCancelledPromo,
+    // promoWalletDaily). The renter reads their own; admins read all.
+    match /promoGrants/{grantId} {
+      allow read:  if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
     // ── rentalAgreements/{agreementId} ─────────────────────────────────────
     // Rental agreement signed at pick-up (functions/src/agreements.ts). Written ONLY by
     // the finalizeRentalAgreement callable (Admin SDK). The renter reads their own; the

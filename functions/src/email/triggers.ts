@@ -18,7 +18,7 @@ import {
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
   idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
-  welcomeEmail, rentalAgreementEmail,
+  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -369,9 +369,11 @@ export async function sendAccountEmail(
   uid: string,
   build: (shop: EmailShop, recipient: Recipient) => Rendered,
   tag: string,
+  /** respectOptOut: skipped when users/{uid}.emailRemindersOptOut (promo code emails). */
+  opts: { respectOptOut?: boolean } = {},
 ): Promise<SendResult | 'opted_out' | 'error'> {
   try {
-    const result = await deliver(uid, null, (_name, shop, recipient) => build(shop, recipient), tag);
+    const result = await deliver(uid, null, (_name, shop, recipient) => build(shop, recipient), tag, opts);
     if (result !== 'sent') logger.warn('[email] account email not sent', { uid, tag, result });
     return result;
   } catch (err) {
@@ -380,7 +382,7 @@ export async function sendAccountEmail(
   }
 }
 
-export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail };
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail };
 
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
@@ -483,6 +485,9 @@ export const sendTestEmails = onCall(
       ['residency-rejected-A-fixable',     residencyRejectedEmail(shop, { firstName: name, reason: 'proof_missing', text: 'The lease contract isn\u2019t in your name.', fixable: true })],
       ['residency-rejected-B-final',       residencyRejectedEmail(shop, { firstName: name, reason: 'not_eligible', text: null, fixable: false })],
       ['residency-expired',                residencyExpiredEmail(shop, { firstName: name })],
+      ['promo-granted-admin',              promoGrantedEmail(shop, { firstName: name, code: 'THANKYOU15', valueText: '15% off', conditions: 'Any rental', expiresLabel: 'Sat 28 Nov', source: 'admin' })],
+      ['promo-granted-referral',           promoGrantedEmail(shop, { firstName: name, code: 'REFERRALWELCOME', valueText: '10% off', conditions: 'First rental', expiresLabel: 'Sun 29 Nov', source: 'referral' })],
+      ['promo-expiring',                   promoExpiringEmail(shop, { firstName: name, code: 'THANKYOU15', valueText: '15% off', conditions: 'Any rental', expiresLabel: 'Sat 28 Nov' })],
       ['rental-agreement',                 rentalAgreementEmail(shop, {
         firstName: name, orderLabel: base.orderId ?? 'LNC-261020-TEST', paper: false, firstReservationId: base.id,
         signedLabel: 'Sat, 24 Oct · 10:06',

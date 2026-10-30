@@ -1245,3 +1245,66 @@ export function rentalAgreementEmail(shop: EmailShop, ctx: {
     ctx.attachment ? [ctx.attachment] : undefined,
   );
 }
+
+// ── Promo code wallet — a code added (admin / referral welcome) and the expiry
+// reminder (3 days before, unused). Respect emailRemindersOptOut (sendAccountEmail opts).
+export function promoGrantedEmail(shop: EmailShop, ctx: {
+  firstName: string; code: string; valueText: string; conditions: string; expiresLabel: string | null; source: 'admin' | 'referral';
+}): Rendered {
+  const referral = ctx.source === 'referral';
+  return build(
+    referral ? 'A welcome gift from LANCHAI' : 'A promo code for you',
+    `${ctx.valueText} — saved in your LANCHAI account`,
+    referral ? 'Your welcome gift' : 'A promo code for you',
+    [
+      {
+        type: 'hero',
+        pill: referral ? 'Welcome gift' : 'Promo code',
+        title: referral ? `${ctx.valueText} your first rental` : `${ctx.valueText} your next rental`,
+        sub: referral
+          ? `Hi ${ctx.firstName} — a friend invited you to LANCHAI. Here’s ${ctx.valueText} your first rental, already saved in your account.`
+          : `Hi ${ctx.firstName} — we’ve added a promo code to your account. It’s applied when you book.`,
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+      },
+      {
+        type: 'card',
+        items: [
+          { type: 'row', label: 'Code', value: ctx.code, strong: true },
+          { type: 'row', label: 'Discount', value: ctx.valueText },
+          { type: 'row', label: 'Conditions', value: ctx.conditions, tone: 'muted' },
+          ...(ctx.expiresLabel ? [{ type: 'row' as const, label: 'Expires', value: ctx.expiresLabel, tone: 'muted' as const }] : []),
+          { type: 'text', text: 'Find it in the app: Account › Loyalty › Your codes. One discount per booking.', tone: 'muted', small: true },
+        ],
+      },
+    ],
+    shop,
+  );
+}
+
+export function promoExpiringEmail(shop: EmailShop, ctx: {
+  firstName: string; code: string; valueText: string; conditions: string; expiresLabel: string;
+}): Rendered {
+  return build(
+    `Your ${ctx.valueText} code expires soon`,
+    `${ctx.code} expires on ${ctx.expiresLabel}`,
+    'Your code expires soon',
+    [
+      {
+        type: 'hero',
+        pill: 'Promo code',
+        title: `${ctx.valueText} — until ${ctx.expiresLabel}`,
+        sub: `Hi ${ctx.firstName} — your code ${ctx.code} hasn’t been used yet. Book before ${ctx.expiresLabel} to get it.`,
+        primary: { label: 'Browse the catalogue', url: appLink('explore') },
+      },
+      {
+        type: 'card',
+        items: [
+          { type: 'row', label: 'Code', value: ctx.code, strong: true },
+          { type: 'row', label: 'Conditions', value: ctx.conditions, tone: 'muted' },
+          { type: 'text', text: 'It’s in the app: Account › Loyalty › Your codes.', tone: 'muted', small: true },
+        ],
+      },
+    ],
+    shop,
+  );
+}

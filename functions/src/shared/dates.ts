@@ -86,3 +86,9 @@ export function vteIsoDay(ms: number): string {
   const d = local(ms);
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
+
+/** End (exclusive) of the Vientiane day "2026-10-29" in epoch ms. */
+export function vteIsoDayEndMs(isoDay: string): number {
+  const [y, m, d] = isoDay.split('-').map(Number);
+  return Date.UTC(y, m - 1, d + 1) - VIENTIANE_OFFSET_MS;
+}
