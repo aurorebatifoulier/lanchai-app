@@ -3,8 +3,6 @@
 export const CHAT_COPY = {
   title: 'LANCHAI',
   replies: 'Usually replies within a few hours',
-  openUntil: (t: string) => `Open until ${t}`,
-  closedNow: 'Closed now',
   about: 'About',
   view: 'View',
   placeholder: 'Message LANCHAI…',

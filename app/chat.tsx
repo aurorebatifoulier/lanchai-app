@@ -7,7 +7,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
@@ -17,9 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatMark, ContextCard, QuickQuestions, ReplyLine, ReadMark } from '@/components/chat/ChatHeaderParts';
 import { CHAT_COPY } from '@/constants/chatCopy';
-import { useShopInfo } from '@/lib/shop';
-import { shopOpenState } from '@/functions/src/shared/shop';
-import { getRenterProduct, getReservationById } from '@/lib/firestore';
+import { getProduct, getReservationById } from '@/lib/firestore';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
 import { DateSeparator, buildDaySeparatedList } from '@/components/chat/DateSeparator';
@@ -53,20 +51,26 @@ export default function ChatScreen() {
   const { productId, rentalId } = useLocalSearchParams<{ productId?: string; rentalId?: string }>();
   const [context, setContext] = useState<(ChatAbout & { image: string | null; category: string | null }) | null>(null);
   const aboutSent = useRef(false);
-  useEffect(() => {
-    if (productId) {
-      getRenterProduct(String(productId))
+  // Read on EVERY focus (the chat may already be mounted and reopened from another
+  // product / rental): new params → new card, no params → no card.
+  const loadContext = useCallback(() => {
+    const pid = productId ? String(productId) : null;
+    const rid = rentalId ? String(rentalId) : null;
+    if (!pid && !rid) { setContext(null); return; }
+    const key = pid ? `product:${pid}` : `rental:${rid}`;
+    setContext(prev => (prev && `${prev.kind}:${prev.id}` === key ? prev : null));
+    aboutSent.current = false;
+    if (pid) {
+      getProduct(pid)
         .then(p => { if (p) setContext({ kind: 'product', id: p.id, name: p.name, image: p.images?.[0] ?? null, category: p.category ?? null }); })
         .catch(() => {});
-    } else if (rentalId) {
-      getReservationById(String(rentalId))
+    } else if (rid) {
+      getReservationById(rid)
         .then(r => { if (r) setContext({ kind: 'rental', id: r.id, name: r.productName, image: r.productImage ?? null, category: null }); })
         .catch(() => {});
     }
   }, [productId, rentalId]);
-  const shop = useShopInfo();
-  const openState = shopOpenState(shop);
-  const openText = openState?.kind === 'open' ? CHAT_COPY.openUntil(openState.until) : openState ? CHAT_COPY.closedNow : null;
+  useFocusEffect(loadContext);
   const [sending,   setSending]   = useState(false);
   const [uploading, setUploading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -247,10 +251,23 @@ export default function ChatScreen() {
 
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>{CHAT_COPY.title}</Text>
-          <ReplyLine openText={openText} />
+          <ReplyLine />
         </View>
       </View>
       <View style={styles.headerDivider} />
+
+      {/* Pinned "About" card — outside the message list, which auto-scrolls to the
+          newest message (inside it, the card scrolled out of view). */}
+      {context && (
+        <View style={styles.contextPin}>
+          <ContextCard
+            name={context.name}
+            image={context.image}
+            category={context.category}
+            onView={() => router.push((context.kind === 'product' ? `/product/${context.id}` : `/rentals/${context.id}`) as never)}
+          />
+        </View>
+      )}
 
       {/* Messages + input inside KAV.
           keyboardVerticalOffset = insets.top because SafeAreaView applies paddingTop
@@ -270,14 +287,6 @@ export default function ChatScreen() {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={handleContentSizeChange}
         >
-          {context && (
-            <ContextCard
-              name={context.name}
-              image={context.image}
-              category={context.category}
-              onView={() => router.push((context.kind === 'product' ? `/product/${context.id}` : `/rentals/${context.id}`) as never)}
-            />
-          )}
           {listEntries.map(entry =>
             entry.kind === 'separator' ? (
               <DateSeparator key={entry.key} label={entry.label} />
@@ -381,4 +390,5 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     gap: 14,
   },
+  contextPin: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, backgroundColor: COLORS.porcelain },
 });

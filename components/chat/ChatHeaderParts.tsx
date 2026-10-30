@@ -1,24 +1,23 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Polygon } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { CHAT_COPY } from '@/constants/chatCopy';
 import { categoryStyle } from '@/constants/categoryStyle';
 import PressScale from '@/components/PressScale';
 
-/** LANCHAI mark for the chat: amber honeycomb hexagon in a light-amber circle. */
+/** The real LANCHAI bee logo (same asset as the Home header) in a round avatar. */
 export function ChatMark({ size = 40 }: { size?: number }) {
-  const hex = size * 0.42;
   return (
     <View style={[s.mark, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Svg width={hex} height={hex} viewBox="0 0 24 24">
-        <Polygon points="12,1 22,6.75 22,17.25 12,23 2,17.25 2,6.75" fill={SHADES.amber} />
-      </Svg>
+      {/* The asset has generous margins — scaled up so the bee fills the circle. */}
+      <Image source={LOGO} style={{ width: size * 1.45, height: size * 1.45 }} contentFit="contain" />
     </View>
   );
 }
+
+const LOGO = require('@/assets/images/lanchai-logo.png');
 
 /** Pinned "About" card (chat opened from a product or a rental) → View. */
 export function ContextCard({ name, image, category, onView }: {
@@ -54,12 +53,12 @@ export function QuickQuestions({ onAsk }: { onAsk: (q: string) => void }) {
   );
 }
 
-/** "· Open until 19:30" / "· Closed now" dot line. */
-export function ReplyLine({ openText }: { openText: string | null }) {
+/** "Usually replies within a few hours" — one line (ellipsis as a last resort). */
+export function ReplyLine() {
   return (
     <View style={s.replyRow}>
       <View style={s.dot} />
-      <Text style={s.reply} numberOfLines={1}>{openText ? `${CHAT_COPY.replies} · ${openText}` : CHAT_COPY.replies}</Text>
+      <Text style={s.reply} numberOfLines={1} ellipsizeMode="tail">{CHAT_COPY.replies}</Text>
     </View>
   );
 }
@@ -67,10 +66,10 @@ export function ReplyLine({ openText }: { openText: string | null }) {
 export const ReadMark = () => <Text style={s.read}>{CHAT_COPY.read}</Text>;
 
 const s = StyleSheet.create({
-  mark: { backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center' },
+  mark: { backgroundColor: SHADES.cream, borderWidth: 0.5, borderColor: SHADES.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18,
-    backgroundColor: SHADES.white, borderWidth: 0.5, borderColor: SHADES.border, marginBottom: 14,
+    backgroundColor: SHADES.white, borderWidth: 0.5, borderColor: SHADES.border,
   },
   thumb: { width: 52, height: 52, borderRadius: 12, overflow: 'hidden', backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center' },
   about: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
