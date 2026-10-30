@@ -639,14 +639,16 @@ a snapshot indefinitely).
   convention used everywhere else pricing is shown (`app/bag.tsx`,
   `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
 
-- **Legal texts (`lib/legalContent.ts`) — updated 2026-10-29, still NEED LAWYER REVIEW
+- **Legal texts (`lib/legalContent.ts`) — updated 2026-10-30, still NEED LAWYER REVIEW
   before public launch.** Lawyer list: limitation of liability, deposit retention on
   non-return, ID copy retention + the document retention periods (Privacy §6), data
   transfers outside Laos — Singapore / Brevo France (incl. Brevo link tracking),
   operating before company registration, governing law & court, damage charges (per unit
   concerned) and the per-unit deposit, tax/VAT once registered, the loyalty programme &
   referrals (Terms §16: no cash value, not transferable, may change/end, abuse →
-  cancelled, lost on account deletion), and the **validity of an electronic signature in
+  cancelled, lost on account deletion; the invited friend's welcome discount; promo /
+  personal codes — no cash value, not transferable, one discount per booking, conditions
+  and expiry in the app), and the **validity of an electronic signature in
   Lao PDR** (the rental agreement is signed at pick-up on the staff device, with a finger
   signature — texts say "the rental agreement you sign at pick-up"; also the paper
   fallback, the Terms annexed to the PDF, and keeping agreements as business records,
@@ -1143,6 +1145,34 @@ a snapshot indefinitely).
   shared `discountOf` / `orderDiscountOf` ("Loyalty coupon (10%)" / "Promo CODE"):
   confirmation, rental + admin detail, receipt summary (screen/PDF/email), booking
   email, agreement. Loyalty points stay on the pre-discount subtotal.
+  - **Wallet (2026-10-30).** `promoGrants/{CODE}_{uid}` (top-level — equality queries
+    `uid ==` / `code ==` / `used ==`, no collectionGroup), server-written only, renter
+    reads own: `{code, uid, source admin|saved|referral, valueText, conditions (display
+    copy — renters never read promoCodes), expiresAt (min of the personal date and the
+    code's validTo), used/usedAt/usedOrderId, override {type,value} (frozen % of the
+    referral welcome), reminderSentAt}`. `personal` codes "don't exist" without a grant;
+    `evaluatePromo` applies the grant (used / expiry / override). Callables (all in
+    `functions/src/promo.ts`): `evaluateMyCodes` (the renter's own codes for the booking
+    being prepared, not rate-limited), `savePromoCode` ("Save to my codes" / "Add a code",
+    failed tries counted), `adminGrantPromo` (promo form "Give to renters" +
+    `<GiveCodeBox>` in `RenterNameBlock`), `adminRevokeGrant` (unused only). Grant →
+    in-app notification + `promoGrantedEmail`; `promoWalletDaily` (10:00 Vientiane)
+    reminds once 3 days before expiry (`promoExpiringEmail`) — both emails respect
+    `emailRemindersOptOut` (`sendAccountEmail(..., { respectOptOut: true })`).
+    `createReservations` marks the grant used when the renter has no use left;
+    `restoreCancelledPromo` gives it back. App: Loyalty → `<YourCodes>`; "Your total" is
+    built by `lib/discountChoice.ts` (`useDiscountChoice`: coupons + applicable wallet
+    codes + typed code as radio rows, best preselected until the renter picks, "n of your
+    codes don't apply…", "Save to my codes"; the chosen row carries the amount — no
+    extra discount line).
+  - **Referral "Give X%, get N points".** `applyInviteCode` grants the system personal
+    code `REFERRALWELCOME` (created by `ensureReferralWelcomeCode`, read-only in the admin
+    form) with the % FROZEN on the grant (`config/loyalty.referralWelcomePercent`, default
+    10) for `referralWelcomeValidityDays` (default 30) and sets `referrals.welcomeGrant`;
+    `creditReferralIfAny` then credits the REFERRER only (older referrals without
+    `welcomeGrant` keep both-sides points). Copy everywhere: "they get X% off their first
+    rental, you get N points" (`LOYALTY_COPY.referralSub`, Home card, share message,
+    invite-code screen, FAQ — built from config).
 
 ## Security follow-ups
 

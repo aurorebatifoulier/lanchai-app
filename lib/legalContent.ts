@@ -5,14 +5,16 @@
 // no-show rule, progressive late fees, company not registered yet), and 29 Oct 2026
 // (identity / residency documents + retention, loyalty & referrals, per-unit deposit,
 // charges on the units concerned, rental agreement signed at pick-up, rental agreements
-// collected + kept as business records — Privacy §2 / §6).
+// collected + kept as business records — Privacy §2 / §6), and 30 Oct 2026 (referral
+// welcome discount + promo codes in Terms §16, FAQ "inviting a friend").
 //
 // ⚠️ NEEDS LAWYER REVIEW before public launch (see CLAUDE.md "Legal texts"): limitation
 // of liability, deposit retention on non-return, ID copy retention, data transfers
 // outside Laos (Singapore / Brevo in France), operating before registration, governing
 // law & competent court, damage charges, tax/VAT obligations once registered, document
 // retention periods, loyalty programme & referrals (Terms §16), per-unit deposit,
-// Brevo link tracking, validity of an electronic signature in Lao PDR, "our contract
+// Brevo link tracking, validity of an electronic signature in Lao PDR, referral welcome
+// discount + promo codes / personal codes (Terms §16), "our contract
 // procedure applies" on a non-return (Terms §9 + FAQ — kept as is on purpose).
 //
 // Placeholders filled at render time from config/shop (LegalScreen.tsx), so they stay in
@@ -132,7 +134,8 @@ export const TERMS_MARKDOWN: string = [
   '## 16. Loyalty programme and referrals',
   '',
   '- You earn points for completed rentals and for reviews, and may reach tiers that give coupons and other perks shown in the app. Business accounts are not part of the programme.',
-  '- **Invite a friend:** a new user who enters your invite code before their first booking is linked to you. When their first rental is returned, you both receive bonus points. A code can\'t be used on your own account, and each account can be invited only once.',
+  '- **Invite a friend:** a new user who enters your invite code before their first booking is linked to you and receives a welcome discount on their first rental, valid for a limited time. When that first rental is returned, you receive bonus points. A code can\'t be used on your own account, and each account can be invited only once.',
+  '- Promo codes, including personal codes in your account, have no cash value, can\'t be transferred, can be used once per booking (one discount per booking), and may have conditions and an expiry date shown in the app.',
   '- Points, tiers and coupons have **no cash value**, can\'t be exchanged for money, and are **not transferable** to another account.',
   '- We may change, suspend or end the programme, including how points are earned or used. The current rules are shown in the app.',
   '- Points or coupons obtained through abuse — for example fake accounts or fake referrals — may be cancelled.',

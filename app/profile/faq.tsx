@@ -15,12 +15,17 @@ import { SHADES } from '@/constants/brandShades';
 import { UI, IconCircle, useScreenInsets } from '@/components/account/ui';
 import { useShopInfo, openHoursText } from '@/lib/shop';
 import WhatsAppButton from '@/components/WhatsAppButton';
+import {
+  useLoyaltyConfig, referralWelcomePercent, DEFAULT_REFERRAL_WELCOME_DAYS, DEFAULT_REFERRAL_REWARD_POINTS,
+} from '@/lib/loyalty';
 
 // ── FAQ content ───────────────────────────────────────────────────────────────
 
 type FaqItem =
   | { q: string; a: string;       icon: string }
-  | { q: string; dynamic: true;   icon: string };
+  | { q: string; dynamic: true;   icon: string }
+  /** Answer built from config/loyalty (welcome %, validity, referrer points). */
+  | { q: string; referral: true;  icon: string };
 
 const PICKUP_IDX = 4;
 
@@ -78,7 +83,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'gift',
     q: 'How does inviting a friend work?',
-    a: "Share your invite code (Account → Loyalty, or Invite a friend). Your friend enters it when signing up, or before their first booking. When their first rental is returned, you both get bonus points. Codes can't be used on your own account, and business accounts aren't part of the programme.",
+    referral: true,
   },
   {
     icon: 'cloud',
@@ -93,6 +98,7 @@ export default function FaqScreen() {
   const screen = useScreenInsets();
   const router = useRouter();
   const shop   = useShopInfo();
+  const loyaltyConfig = useLoyaltyConfig();
 
   const [openSet, setOpenSet] = useState<ReadonlySet<number>>(new Set());
 
@@ -107,6 +113,12 @@ export default function FaqScreen() {
 
   function resolveAnswer(idx: number): string {
     const item = ITEMS[idx];
+    if ('referral' in item) {
+      const pct = referralWelcomePercent(loyaltyConfig);
+      const days = loyaltyConfig?.referralWelcomeValidityDays ?? DEFAULT_REFERRAL_WELCOME_DAYS;
+      const pts = loyaltyConfig?.referralRewardPoints ?? DEFAULT_REFERRAL_REWARD_POINTS;
+      return `Share your invite code (Account → Loyalty). Your friend enters it when signing up, or before their first booking, and gets ${pct}% off their first rental (valid ${days} days, in Account → Loyalty → Your codes). When that first rental is returned, you get ${pts} points. Codes can't be used on your own account, and business accounts aren't part of the programme.`;
+    }
     if ('dynamic' in item) {
       return `Pick-up and return both happen at our shop: ${shop.name}, ${shop.addressLine}, ${shop.city}. ${openHoursText(shop.hours)}.`;
     }
