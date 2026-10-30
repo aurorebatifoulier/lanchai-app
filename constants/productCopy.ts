@@ -92,4 +92,5 @@ export const PRODUCT_COPY = {
   loadError: "Couldn't load this item",
   loadErrorSub: 'Check your connection and try again.',
   goBack: 'Go back',
+  favError: 'Couldn’t save your like — try again.',
 } as const;

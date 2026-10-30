@@ -22,6 +22,7 @@ export const BAG_COPY = {
   },
 
   addMore: 'Add more items',
+  updateError: 'Couldn’t update your bag — try again.',
 
   total: 'Your total',
   rental: (n: number) => `Rental · ${n} ${n === 1 ? 'item' : 'items'}`,

@@ -75,6 +75,18 @@ export default function BagScreen() {
   const [stockMap,   setStockMap]   = useState<Record<string, number>>({});
   const [datePickerItemId, setDatePickerItemId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  // One-line error in the item card when a bag write fails (remove / quantity / dates).
+  const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
+  const failOn = useCallback((ids: string[]) => () => setItemErrors(prev => {
+    const next = { ...prev };
+    ids.forEach(i => { next[i] = BAG_COPY.updateError; });
+    return next;
+  }), []);
+  const clearErrors = useCallback((ids: string[]) => setItemErrors(prev => {
+    const next = { ...prev };
+    ids.forEach(i => { delete next[i]; });
+    return next;
+  }), []);
   // null = follow the bag (on when every item already shares the same dates).
   const [sameDatesPref, setSameDatesPref] = useState<boolean | null>(null);
   const [barH, setBarH] = useState(0); // fixed bottom bar height → scroll padding
@@ -174,8 +186,10 @@ export default function BagScreen() {
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleRemove = useCallback((itemId: string) => {
     setRemovingId(null);
-    if (user) removeFromBag(user.uid, itemId).catch(() => {});
-  }, [user]);
+    if (!user) return;
+    clearErrors([itemId]);
+    removeFromBag(user.uid, itemId).catch(failOn([itemId]));
+  }, [user, clearErrors, failOn]);
 
   const handleQuantity = useCallback((item: BagItem, delta: number) => {
     if (!user) return;
@@ -183,8 +197,10 @@ export default function BagScreen() {
     const avail = stockMap[item.id];
     const max = avail !== undefined ? avail : (product ? effectiveStock(product) : 1);
     const next = Math.max(1, Math.min(max, item.quantity + delta));
-    if (next !== item.quantity) updateBagItemQuantity(user.uid, item.id, next).catch(() => {});
-  }, [user, productMap, stockMap]);
+    if (next === item.quantity) return;
+    clearErrors([item.id]);
+    updateBagItemQuantity(user.uid, item.id, next).catch(failOn([item.id]));
+  }, [user, productMap, stockMap, clearErrors, failOn]);
 
   // "Same dates for everything" on: one item's new dates go to every item (conflicts
   // then show on the items that aren't free — the usual availability check).
@@ -192,11 +208,13 @@ export default function BagScreen() {
     if (!user || !datePickerItemId) return;
     const itemId = datePickerItemId;
     setDatePickerItemId(null);
+    const ids = sameDates ? items.map(i => i.id) : [itemId];
+    clearErrors(ids);
     const write = sameDates
-      ? updateAllBagItemDates(user.uid, items.map(i => i.id), pickup, ret)
+      ? updateAllBagItemDates(user.uid, ids, pickup, ret)
       : updateBagItemDates(user.uid, itemId, pickup, ret);
-    write.catch(() => {});
-  }, [user, datePickerItemId, sameDates, items]);
+    write.catch(failOn(ids));
+  }, [user, datePickerItemId, sameDates, items, clearErrors, failOn]);
 
   // Turning it on copies the first dated item's dates / times to every other item.
   const toggleSameDates = useCallback((on: boolean) => {
@@ -206,8 +224,9 @@ export default function BagScreen() {
     if (!src?.pickupAt || !src.returnAt) return;
     const p = minuteOf(src.pickupAt), r = minuteOf(src.returnAt);
     const ids = items.filter(i => minuteOf(i.pickupAt) !== p || minuteOf(i.returnAt) !== r).map(i => i.id);
-    updateAllBagItemDates(user.uid, ids, src.pickupAt.toDate(), src.returnAt.toDate()).catch(() => {});
-  }, [user, items]);
+    clearErrors(ids);
+    updateAllBagItemDates(user.uid, ids, src.pickupAt.toDate(), src.returnAt.toDate()).catch(failOn(ids));
+  }, [user, items, clearErrors, failOn]);
 
   const addMore = () => {
     if (sharedWindow) router.push(`/explore?from=${sharedWindow.pickupAt}&to=${sharedWindow.returnAt}`);
@@ -286,6 +305,7 @@ export default function BagScreen() {
               rental={rentalOf(item)}
               userTier={profile?.loyaltyTier ?? null}
               removing={removingId === item.id}
+              error={itemErrors[item.id] ?? null}
               onOpen={() => router.push(`/product/${item.productId}`)}
               onEditDates={() => setDatePickerItemId(item.id)}
               onAskRemove={() => setRemovingId(item.id)}
@@ -354,7 +374,7 @@ export default function BagScreen() {
 // ── Item card ─────────────────────────────────────────────────────────────────
 
 function ItemCard({
-  item, product, avail, conflict, rental, userTier, removing,
+  item, product, avail, conflict, rental, userTier, removing, error,
   onOpen, onEditDates, onAskRemove, onCancelRemove, onRemove, onQuantity,
 }: {
   item: BagItem;
@@ -364,6 +384,8 @@ function ItemCard({
   rental: number | null;
   userTier: UserProfile['loyaltyTier'] | null;
   removing: boolean;
+  /** A bag write for this item failed. */
+  error: string | null;
   onOpen: () => void;
   onEditDates: () => void;
   onAskRemove: () => void;
@@ -438,6 +460,7 @@ function ItemCard({
         {rental != null && !conflict && <Text style={s.amount}>{`${n(rental)} LAK`}</Text>}
       </View>
       {signal != null && <Text style={s.signal}>{signal}</Text>}
+      {!!error && <Text style={[UI.errorText, { marginTop: 8 }]}>{error}</Text>}
     </View>
   );
 }

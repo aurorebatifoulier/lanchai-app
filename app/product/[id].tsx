@@ -93,6 +93,7 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [favIds, setFavIds] = useState<Set<string>>(new Set());
+  const [favError, setFavError] = useState<string | null>(null);
   const [occupancy, setOccupancy] = useState<Map<string, OccupancyRecord[]> | null>(null);
   const [latest, setLatest] = useState<ReviewDoc | null>(null);
   const [catalogue, setCatalogue] = useState<Product[]>([]);
@@ -117,28 +118,37 @@ export default function ProductDetailScreen() {
     getRenterProduct(id)
       .then(p => { setProduct(p); setLoading(false); })
       .catch(() => { setLoadError(true); setLoading(false); });
+    // Secondary data — on failure the block simply has less (rating without a quote,
+    // no "Pairs well with"); never an error screen for these.
     // Latest review only (the "See all" screen pages the rest) — 1 read.
-    getProductReviewsPage(id, 1).then(r => setLatest(r.reviews[0] ?? null)).catch(() => {});
-    cached('products', HOME_TTL.products, getProducts).then(setCatalogue).catch(() => {});
+    getProductReviewsPage(id, 1).then(r => setLatest(r.reviews[0] ?? null)).catch(() => setLatest(null));
+    cached('products', HOME_TTL.products, getProducts).then(setCatalogue).catch(() => setCatalogue([]));
     cached('occupancy', HOME_TTL.occupancy, fetchAllOccupancy).then(setOccupancy).catch(() => setOccupancy(null));
   }, [id]);
 
   useEffect(() => {
     if (!user || !id) return;
-    getFavorites(user.uid).then(ids => setFavIds(new Set(ids))).catch(() => {});
+    // Unknown favourites → hearts start empty (a later tap still writes the right state).
+    getFavorites(user.uid).then(ids => setFavIds(new Set(ids))).catch(() => setFavIds(new Set()));
   }, [user, id]);
 
   // One favourites set for this product and the "Pairs well with" cards.
+  // Optimistic heart; on a failed write it rolls back with a one-line error.
   const toggleFavFor = useCallback((pid: string) => {
     if (!user) return;
-    setFavIds(prev => {
+    const liked = !favIds.has(pid);
+    const apply = (on: boolean) => setFavIds(prev => {
       const next = new Set(prev);
-      const liked = !next.has(pid);
-      if (liked) next.add(pid); else next.delete(pid);
-      (liked ? addFavorite(user.uid, pid) : removeFavorite(user.uid, pid)).catch(() => {});
+      if (on) next.add(pid); else next.delete(pid);
       return next;
     });
-  }, [user]);
+    apply(liked);
+    setFavError(null);
+    (liked ? addFavorite(user.uid, pid) : removeFavorite(user.uid, pid)).catch(() => {
+      apply(!liked);
+      setFavError(PRODUCT_COPY.favError);
+    });
+  }, [user, favIds]);
   const isFav = !!id && favIds.has(id);
   const toggleFav = useCallback(() => { if (id) toggleFavFor(id); }, [id, toggleFavFor]);
 
@@ -264,6 +274,7 @@ export default function ProductDetailScreen() {
         />
 
         <View style={s.content}>
+          {!!favError && <Text style={[UI.errorText, { marginBottom: 8 }]}>{favError}</Text>}
           <ProductIntro product={product} categoryName={categoryName} badges={badges} signal={signal} />
 
           <View style={{ marginTop: 16 }}>
