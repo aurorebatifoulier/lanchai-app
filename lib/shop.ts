@@ -32,6 +32,8 @@ export interface ShopInfo {
   longitude?: number;
   /** Weekly closing days, 0 = Sunday … 6 (Vientiane). Home "Open now" line only — does not block bookings. */
   closedDays?: number[];
+  /** Chat auto-reply outside opening hours ({open time} is replaced) — functions/src/chat.ts. */
+  autoReplyText?: string;
 }
 
 export const SHOP_FALLBACK: ShopInfo = {

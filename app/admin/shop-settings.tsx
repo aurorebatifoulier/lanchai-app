@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { DEFAULT_AUTO_REPLY } from '@/functions/src/shared/shop';
 import {
   View,
   Text,
@@ -44,6 +45,7 @@ interface Form {
   lastPickupOffsetMin: string;
   whatsappNumber: string;
   paymentMethods: string;
+  autoReplyText: string;
   /** "17.950063, 102.622828" — empty = Get directions falls back to the address search. */
   coordinates: string;
   graceHours: string;
@@ -69,6 +71,7 @@ const toForm = (shop: ShopInfo, graceHours: number): Form => ({
   lastPickupOffsetMin: String(shop.lastPickupOffsetMin),
   whatsappNumber:      shop.whatsappNumber,
   paymentMethods:      shop.paymentMethods,
+  autoReplyText:       shop.autoReplyText ?? DEFAULT_AUTO_REPLY,
   coordinates:         shop.latitude != null && shop.longitude != null ? `${shop.latitude}, ${shop.longitude}` : '',
   graceHours:          String(graceHours),
 });
@@ -325,6 +328,7 @@ export default function AdminShopSettingsScreen() {
         closedDays:          [...closedDays].sort((a, b) => a - b),
         whatsappNumber:      normalizeWhatsappNumber(form.whatsappNumber),
         paymentMethods:      form.paymentMethods.trim(),
+        autoReplyText:       form.autoReplyText.trim() || DEFAULT_AUTO_REPLY,
         // Exact pin for "Get directions" (app + emails, shared mapsUrl); cleared → address search.
         ...(parseCoordinates(form.coordinates)
           ?? ({ latitude: deleteField(), longitude: deleteField() } as unknown as { latitude: number; longitude: number })),
@@ -401,6 +405,13 @@ export default function AdminShopSettingsScreen() {
               hint="Listed under “What to bring” in booking emails. Keep it consistent with the Terms of service."
               value={form.paymentMethods}
               onChangeText={set('paymentMethods')}
+              editable={!saving}
+            />
+            <Field
+              label="Chat auto-reply when closed"
+              hint="Sent once per closed period when a renter writes outside opening hours. {open time} becomes “9:00”, “tomorrow at 9:00” or “Monday at 9:00”."
+              value={form.autoReplyText}
+              onChangeText={set('autoReplyText')}
               editable={!saving}
             />
 

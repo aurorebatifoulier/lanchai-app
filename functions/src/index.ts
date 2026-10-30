@@ -50,6 +50,9 @@ export * from './agreements';
 // Promo codes (validatePromoCode, restoreCancelledPromo) — see shared/promo.ts.
 export * from './promo';
 
+// Chat: auto-reply outside opening hours + notification when LANCHAI replies.
+export * from './chat';
+
 admin.initializeApp();
 const db = admin.firestore();
 

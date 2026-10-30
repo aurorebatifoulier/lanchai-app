@@ -83,3 +83,26 @@ export function shopOpenState(
   }
   return { kind: 'closed', allDay: closed.has(today), next };
 }
+
+/** Default chat auto-reply outside opening hours (config/shop.autoReplyText overrides). */
+export const DEFAULT_AUTO_REPLY = 'We’re closed for now. We’ll reply from {open time}.';
+
+/**
+ * Closed now → the next opening as text ("9:00", "tomorrow at 9:00", "Monday at 9:00")
+ * and a key identifying THIS closed period (one auto-reply per period per conversation).
+ * null while open (or when the hours can't be read).
+ */
+export function closedPeriod(
+  shop: { openTime: string; closeTime: string; closedDays?: number[] },
+  nowMs: number,
+  isoDay: (ms: number) => string,
+): { opensText: string; key: string } | null {
+  const st = shopOpenState(shop, nowMs);
+  if (!st || st.kind === 'open') return null;
+  const DAY = 24 * 60 * 60 * 1000;
+  if (st.kind === 'opensLater') return { opensText: st.at, key: `${isoDay(nowMs)}T${st.at}` };
+  if (!st.next) return { opensText: 'our next opening', key: `${isoDay(nowMs)}Tclosed` };
+  const day = isoDay(nowMs + st.next.dayOffset * DAY);
+  const opensText = st.next.dayOffset === 1 ? `tomorrow at ${st.next.at}` : `${weekdayName(st.next.weekday)} at ${st.next.at}`;
+  return { opensText, key: `${day}T${st.next.at}` };
+}
