@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import InsetCarousel from '@/components/home/InsetCarousel';
 
@@ -43,7 +43,7 @@ export const WHY_RENT_SLIDES: WhyRentSlide[] = [
     id: 'eco',
     image: null, // → assets/images/why-consume-better.jpg (eco / nature / green scene)
     tint: SHADES.carbon,
-    icon: 'leaf-outline',
+    icon: 'leaf',
     title: 'Consume better',
     tagline: 'Use. Return. Repeat.',
     description: 'A smarter way to access things without owning everything.',
@@ -71,7 +71,7 @@ export default function WhyRentSection() {
           )}
           <View style={styles.overlay} />
           <View style={styles.slideContent}>
-            <Ionicons name={slide.icon as never} size={30} color={SHADES.white} style={styles.slideIcon} />
+            <MaterialCommunityIcons name={slide.icon as never} size={30} color={SHADES.white} style={styles.slideIcon} />
             <Text style={styles.slideTitle}>{slide.title}</Text>
             <Text style={styles.slideTagline}>{slide.tagline}</Text>
             <Text style={styles.slideDesc}>{slide.description}</Text>

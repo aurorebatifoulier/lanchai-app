@@ -46,8 +46,7 @@ export function convertLakTo(
 // email) — re-exported here so app imports stay unchanged.
 export { splitHtVat } from '@/functions/src/shared/receiptData';
 
-/** Compact kip format for product cards and price chips, e.g. "₭120,000". */
-// Prices are always shown as "126,000 LAK" (never the ₭ sign).
+/** Price format for product cards and price chips: "126,000 LAK" (never the kip sign). */
 export function formatKip(value: number): string {
   return `${value.toLocaleString('en-US')} LAK`;
 }

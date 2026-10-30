@@ -163,12 +163,11 @@ export default function PersonalInfoScreen() {
       if (!nameLocked) await updateProfile(cu, { displayName });
       setSavedPhone(normalizePhone(phone));
 
-      console.log('[PersonalInfo] Profile saved successfully');
       setSaving(false);
       setSaveStatus('success');
       scheduleHide();
     } catch (err) {
-      console.log('[PersonalInfo] Save error:', err);
+      console.warn('[PersonalInfo] save failed', (err as { code?: string })?.code ?? err);
       setSaving(false);
       setSaveStatus('error');
       scheduleHide();

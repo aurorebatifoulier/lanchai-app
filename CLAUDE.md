@@ -80,7 +80,7 @@ a snapshot indefinitely).
   handling.
 - **Backend:** real Firebase Auth, Firestore security rules (admin-gated throughout,
   cross-checked against every collection/subcollection actually used in code with no
-  gaps found), 38 Cloud Functions (scheduled, Firestore-triggered and 18 callables, Node 22). The
+  gaps found), Cloud Functions (scheduled, Firestore-triggered and 24 callables — each probed public-invoker OK on 2026-10-30, Node 22). The
   project is on the **Blaze (paid) plan** — Storage uploads (chat images/videos,
   claim evidence, product photos, profile photos, business documents) and Cloud
   Functions are live in production, not just configured. Do not reintroduce a

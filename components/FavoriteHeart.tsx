@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { TouchableOpacity, View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming, ReduceMotion,
 } from 'react-native-reanimated';
@@ -31,10 +31,10 @@ export default function FavoriteHeart({ liked, size = 15 }: { liked: boolean; si
   const filled = useAnimatedStyle(() => ({ opacity: fill.value }));
   return (
     <Animated.View style={[{ width: size, height: size }, wrap]}>
-      <Ionicons name="heart-outline" size={size} color={SHADES.carbon} />
+      <MaterialCommunityIcons name="heart-outline" size={size} color={SHADES.carbon} />
       <Animated.View style={[StyleSheet.absoluteFill, filled]}>
         <View style={{ width: size, height: size }}>
-          <Ionicons name="heart" size={size} color={SHADES.amber} />
+          <MaterialCommunityIcons name="heart" size={size} color={SHADES.amber} />
         </View>
       </Animated.View>
     </Animated.View>

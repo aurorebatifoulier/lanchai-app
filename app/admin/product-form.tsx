@@ -536,14 +536,12 @@ export default function AdminProductFormScreen() {
   // ── Archive / Restore / Duplicate ─────────────────────────────────────────
   const handleArchiveConfirm = useCallback(async () => {
     if (!id) return;
-    console.log('[AdminProductForm] archive start', id);
     setArchiveConfirm(false);
     try {
       await updateDoc(doc(db, 'products', id), {
         status: 'archived',
         updatedAt: serverTimestamp(),
       });
-      console.log('[AdminProductForm] archive success');
       router.back();
     } catch (err: any) {
       console.error('[AdminProductForm] archive error:', err?.code, err?.message);
@@ -553,13 +551,11 @@ export default function AdminProductFormScreen() {
 
   const handleRestore = useCallback(async () => {
     if (!id) return;
-    console.log('[AdminProductForm] restore start', id);
     try {
       await updateDoc(doc(db, 'products', id), {
         status: 'draft',
         updatedAt: serverTimestamp(),
       });
-      console.log('[AdminProductForm] restore success');
       router.back();
     } catch (err: any) {
       console.error('[AdminProductForm] restore error:', err?.code, err?.message);

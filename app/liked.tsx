@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import ProductGridCard from '@/components/ProductGridCard';
 import BackButton from '@/components/BackButton';
@@ -59,7 +59,7 @@ function LikedEmptyState({
     return (
       <View style={s.empty}>
         <View style={s.emptyIconWrap}>
-          <Ionicons name="heart-outline" size={30} color={SHADES.carbon} />
+          <MaterialCommunityIcons name="heart-outline" size={30} color={SHADES.carbon} />
         </View>
         <Text style={s.emptyTitle}>No liked items yet</Text>
         <Text style={s.emptySub}>
