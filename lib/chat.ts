@@ -14,6 +14,8 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { db, storage } from './firebase';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -25,9 +27,18 @@ export interface ChatMessage {
   text: string | null;
   imageUrl: string | null;
   videoUrl: string | null;
+  /** Poster frame of a video (made at send time) — older videos have none. */
+  videoThumbUrl?: string | null;
+  /** What the renter was looking at when they wrote (product / rental context card). */
+  about?: ChatAbout | null;
   createdAt: Timestamp | null;
   read: boolean;
 }
+
+export interface ChatAbout { kind: 'product' | 'rental'; id: string; name: string }
+
+/** Optional message fields (video poster, context). */
+export interface MessageExtra { videoThumbUrl?: string | null; about?: ChatAbout | null }
 
 export interface Conversation {
   id: string;
@@ -86,6 +97,7 @@ export async function sendMessage(
   text: string | null,
   imageUrl: string | null,
   videoUrl: string | null = null,
+  extra: MessageExtra = {},
 ): Promise<void> {
   const preview = text ?? (imageUrl ? '📷 Photo' : videoUrl ? '🎥 Video' : '');
 
@@ -95,6 +107,8 @@ export async function sendMessage(
     text,
     imageUrl,
     videoUrl,
+    ...(extra.videoThumbUrl ? { videoThumbUrl: extra.videoThumbUrl } : {}),
+    ...(extra.about ? { about: extra.about } : {}),
     createdAt:  serverTimestamp(),
     read:       false,
   });
@@ -132,6 +146,7 @@ export async function sendBusinessMessage(
   text: string | null,
   imageUrl: string | null,
   videoUrl: string | null = null,
+  extra: MessageExtra = {},
 ): Promise<void> {
   const preview = text ?? (imageUrl ? '📷 Photo' : videoUrl ? '🎥 Video' : '');
 
@@ -141,6 +156,7 @@ export async function sendBusinessMessage(
     text,
     imageUrl,
     videoUrl,
+    ...(extra.videoThumbUrl ? { videoThumbUrl: extra.videoThumbUrl } : {}),
     createdAt:  serverTimestamp(),
     read:       false,
   });
@@ -214,12 +230,24 @@ export function subscribeToMessages(
 
 /** Uploads a local image URI to Firebase Storage and returns its download URL.
  * Path: chat-images/{uid}/{timestamp} */
+// Always a JPEG (1600 px, like the other photo uploads) with its content type — a raw
+// HEIC / untyped upload can fail to display on Android (empty bubble).
 export async function uploadChatImage(uid: string, localUri: string): Promise<string> {
-  const storageRef = ref(storage, `chat-images/${uid}/${Date.now()}`);
-  const response = await fetch(localUri);
-  const blob = await response.blob();
-  await uploadBytes(storageRef, blob);
+  const jpeg = await manipulateAsync(localUri, [{ resize: { width: 1600 } }], { compress: 0.75, format: SaveFormat.JPEG });
+  const storageRef = ref(storage, `chat-images/${uid}/${Date.now()}.jpg`);
+  const blob = await (await fetch(jpeg.uri)).blob();
+  await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
   return getDownloadURL(storageRef);
+}
+
+/** Poster frame of a local video (0.5 s), uploaded like a chat photo; null if it fails. */
+async function uploadVideoThumb(uid: string, localUri: string): Promise<string | null> {
+  try {
+    const { uri } = await VideoThumbnails.getThumbnailAsync(localUri, { time: 500, quality: 0.7 });
+    return await uploadChatImage(uid, uri);
+  } catch {
+    return null;
+  }
 }
 
 // ── Video upload ──────────────────────────────────────────────────────────────
@@ -230,9 +258,9 @@ export async function uploadChatImage(uid: string, localUri: string): Promise<st
  * instead (duration + quality), so they never hit this limit in practice. */
 export const CHAT_VIDEO_MAX_BYTES = 50 * 1024 * 1024; // 50MB
 
-/** Uploads a local video URI to Firebase Storage and returns its download URL.
+/** Uploads a local video URI to Firebase Storage → its download URL + a poster frame.
  * Path: chat-videos/{uid}/{timestamp}.mp4 */
-export async function uploadChatVideo(uid: string, localUri: string): Promise<string> {
+export async function uploadChatVideo(uid: string, localUri: string): Promise<{ url: string; thumbUrl: string | null }> {
   const storageRef = ref(storage, `chat-videos/${uid}/${Date.now()}.mp4`);
 
   const response = await fetch(localUri);
@@ -242,6 +270,7 @@ export async function uploadChatVideo(uid: string, localUri: string): Promise<st
     throw new Error('VIDEO_TOO_LARGE');
   }
 
-  await uploadBytes(storageRef, blob);
-  return getDownloadURL(storageRef);
+  await uploadBytes(storageRef, blob, { contentType: blob.type && blob.type.startsWith('video/') ? blob.type : 'video/mp4' });
+  const [url, thumbUrl] = await Promise.all([getDownloadURL(storageRef), uploadVideoThumb(uid, localUri)]);
+  return { url, thumbUrl };
 }

@@ -134,8 +134,8 @@ export default function ChatScreen() {
   const uploadAndSendVideo = useCallback(async (localUri: string) => {
     setUploading(true);
     try {
-      const url = await uploadChatVideo(RENTER_ID, localUri);
-      await sendMessage(RENTER_ID, null, null, url);
+      const { url, thumbUrl } = await uploadChatVideo(RENTER_ID, localUri);
+      await sendMessage(RENTER_ID, null, null, url, { videoThumbUrl: thumbUrl });
     } catch (err: any) {
       console.error('[handleRecordVideo/handlePickVideo] video upload failed:', err);
       showError(

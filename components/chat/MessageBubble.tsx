@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { Timestamp } from 'firebase/firestore';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { ChatMessage } from '@/lib/chat';
+import { CHAT_COPY } from '@/constants/chatCopy';
 
 const BUBBLE_RADIUS = 16;
 
@@ -43,37 +44,9 @@ export function MessageBubble({ message, viewerRole, otherPartyInitial, onMediaP
       {!isOwn && <InitialAvatar initial={otherPartyInitial} />}
 
       <View style={[styles.msgContent, isOwn && styles.msgContentOwn]}>
-        {message.videoUrl ? (
+        {message.videoUrl || message.imageUrl ? (
           <>
-            <TouchableOpacity
-              style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther, styles.bubbleImage]}
-              onPress={() => onMediaPress(message.videoUrl!)}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.msgImage, styles.msgVideoPlaceholder]}>
-                <View style={styles.playBadge}>
-                  <Feather name="play" size={20} color={COLORS.white} />
-                </View>
-              </View>
-            </TouchableOpacity>
-            <Text style={[styles.msgTime, isOwn && styles.msgTimeOwn]}>
-              {formatTime(message.createdAt)}
-            </Text>
-          </>
-        ) : message.imageUrl ? (
-          <>
-            <TouchableOpacity
-              style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther, styles.bubbleImage]}
-              onPress={() => onMediaPress(message.imageUrl!)}
-              activeOpacity={0.85}
-            >
-              <Image
-                source={{ uri: message.imageUrl }}
-                style={styles.msgImage}
-                contentFit="cover"
-                transition={200}
-              />
-            </TouchableOpacity>
+            <MediaTile message={message} onOpen={onMediaPress} />
             <Text style={[styles.msgTime, isOwn && styles.msgTimeOwn]}>
               {formatTime(message.createdAt)}
             </Text>
@@ -95,7 +68,59 @@ export function MessageBubble({ message, viewerRole, otherPartyInitial, onMediaP
   );
 }
 
+// Photo / video tile — never an empty dark block: a video shows its poster frame (or a
+// light "Video · Tap to play" card for older videos without one); a photo that can't
+// load shows a light frame with "Tap to retry" (remounts the image).
+function MediaTile({ message, onOpen }: { message: ChatMessage; onOpen: (url: string) => void }) {
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const isVideo = !!message.videoUrl;
+  const url = (message.videoUrl ?? message.imageUrl)!;
+  const poster = isVideo ? message.videoThumbUrl ?? null : message.imageUrl;
+
+  if (failed && !isVideo) {
+    return (
+      <TouchableOpacity style={[styles.msgImage, styles.mediaFallback]} activeOpacity={0.8}
+        onPress={() => { setFailed(false); setAttempt(a => a + 1); }}>
+        <Feather name="image" size={22} color={SHADES.carbonMuted} />
+        <Text style={styles.mediaFallbackText}>{CHAT_COPY.photoFailed}</Text>
+      </TouchableOpacity>
+    );
+  }
+  if (isVideo && (!poster || failed)) {
+    return (
+      <TouchableOpacity style={[styles.msgImage, styles.mediaFallback]} activeOpacity={0.8} onPress={() => onOpen(url)}>
+        <View style={styles.playBadgeLight}><Feather name="play" size={18} color={SHADES.carbon} /></View>
+        <Text style={styles.mediaFallbackText}>{CHAT_COPY.videoTap}</Text>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity style={[styles.msgImage, styles.mediaFrame]} activeOpacity={0.85} onPress={() => onOpen(url)}>
+      <Image
+        key={attempt}
+        source={{ uri: poster! }}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+        transition={200}
+        onError={() => setFailed(true)}
+      />
+      {isVideo && <View style={styles.playBadge}><Feather name="play" size={20} color={COLORS.white} /></View>}
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
+  mediaFrame: { overflow: 'hidden', backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', marginBottom: 3 },
+  mediaFallback: {
+    backgroundColor: SHADES.amberPale, borderWidth: 0.5, borderColor: SHADES.border,
+    alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 3,
+  },
+  mediaFallbackText: { fontSize: 13, fontWeight: '600', color: SHADES.carbonMuted },
+  playBadgeLight: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: SHADES.white,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: SHADES.border,
+  },
   // ── Avatar ─────────────────────────────────────────────────────────────
   avatar: {
     backgroundColor: COLORS.carbon,
@@ -174,7 +199,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(30,30,30,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },

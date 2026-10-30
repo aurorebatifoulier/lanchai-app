@@ -126,8 +126,8 @@ export default function AdminChatScreen() {
   const uploadAndSendVideo = useCallback(async (localUri: string) => {
     setUploading(true);
     try {
-      const url = await uploadChatVideo(conversationId, localUri);
-      await sendBusinessMessage(conversationId, ADMIN_ID, null, null, url);
+      const { url, thumbUrl } = await uploadChatVideo(conversationId, localUri);
+      await sendBusinessMessage(conversationId, ADMIN_ID, null, null, url, { videoThumbUrl: thumbUrl });
     } catch (err: any) {
       console.error('[handleRecordVideo/handlePickVideo] video upload failed:', err);
       showError(
