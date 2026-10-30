@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { SHADES } from '@/constants/brandShades';
 import {
   View,
   Text,
@@ -78,7 +79,7 @@ function getBadge(r: RentalDoc, cat: TabId): Badge {
     return { label: 'Active', color: COLORS.success, bg: 'rgba(46,139,87,0.1)' };
   }
   if (r.status === 'pending_payment') {
-    return { label: 'Pending payment at pick-up', color: '#854F0B', bg: '#FBE8C4' };
+    return { label: 'Pending payment at pick-up', color: SHADES.amberDeep, bg: SHADES.amberLight };
   }
   return { label: 'Confirmed', color: COLORS.success, bg: 'rgba(46,139,87,0.1)' };
 }
@@ -555,7 +556,7 @@ function RentalCard({
 
   return (
     <TouchableOpacity
-      style={[s.card, isOverdue && { backgroundColor: '#FFF8F8', borderColor: '#FCA5A5' }]}
+      style={[s.card, isOverdue && { backgroundColor: SHADES.amberPale, borderColor: SHADES.amberSoft }]}
       onPress={onPress}
       activeOpacity={0.75}
     >
@@ -946,7 +947,7 @@ const s = StyleSheet.create({
   cancelWarningTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#854F0B',
+    color: SHADES.amberDeep,
   },
   cancelAgreeRow: {
     flexDirection: 'row',
@@ -1015,7 +1016,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 7,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: 'transparent',
     borderRadius: 8,
     padding: 8,
     marginBottom: 4,

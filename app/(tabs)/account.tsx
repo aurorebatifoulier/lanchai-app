@@ -31,23 +31,20 @@ import { AccountStickers } from '@/components/account/AccountStickers';
 import { computeAccountStats, type AccountStats as AccountStatsData } from '@/lib/accountStats';
 import { TIER_LABELS, isLoyaltyExcluded } from '@/lib/loyalty';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
-import { Row, RowGroup, SectionTitle, type IconTone, type AnyIcon } from '@/components/account/ui';
+import { UI, Row, RowGroup, SectionTitle, type IconTone, type AnyIcon } from '@/components/account/ui';
 import { SHADES } from '@/constants/brandShades';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 
-// BtoB accounts show a verification-status badge in place of the customerType badge —
-// keyed by btobStatus, with an 'unverified' fallback for missing/unrecognized status.
-const BTOB_STATUS_BADGE: Record<string, {
-  icon: React.ComponentProps<typeof Feather>['name'];
-  label: string; bg: string; border: string; text: string;
-}> = {
-  approved:         { icon: 'check-circle', label: 'Verified',       bg: '#D1FAE5', border: '#A7F3D0', text: '#065F46' },
-  pending_approval: { icon: 'clock',        label: 'Pending review', bg: COLORS.amberTint, border: COLORS.amberTintBorder, text: COLORS.amberTintText },
-  rejected:         { icon: 'x-circle',     label: 'Not approved',   bg: '#FEE2E2', border: '#FECACA', text: '#991B1B' },
-  unverified:       { icon: 'help-circle',  label: 'Unverified',     bg: COLORS.softGray200, border: COLORS.softGray200, text: COLORS.fg3 },
+// BtoB accounts: the header status chip (palette chip, AccountHeader) shows the review
+// status label — keyed by btobStatus, 'unverified' for a missing/unknown status.
+const BTOB_STATUS_LABEL: Record<string, string> = {
+  approved: 'Verified',
+  pending_approval: 'Pending review',
+  rejected: 'Not approved',
+  unverified: 'Unverified',
 };
 
 // ── Components ────────────────────────────────────────────────────────────────
@@ -210,11 +207,11 @@ export default function AccountScreen() {
     : (profile?.firstName || headerName.split(' ')[0] || headerName);
   // Status chip: business → "Business" (or the BtoB review status), else Tourist/Resident.
   const isBusinessStatus = isBtob || profile?.customerType === 'business';
-  const btobBadge = isBtob
-    ? (profile?.btobStatus ? BTOB_STATUS_BADGE[profile.btobStatus] : undefined) ?? BTOB_STATUS_BADGE.unverified
+  const btobLabel = isBtob
+    ? (profile?.btobStatus ? BTOB_STATUS_LABEL[profile.btobStatus] : undefined) ?? BTOB_STATUS_LABEL.unverified
     : null;
   const statusLabel = isBusinessStatus
-    ? (!isBtob || profile?.btobStatus === 'approved' ? ACCOUNT_COPY.businessChip : btobBadge?.label ?? ACCOUNT_COPY.businessChip)
+    ? (!isBtob || profile?.btobStatus === 'approved' ? ACCOUNT_COPY.businessChip : btobLabel ?? ACCOUNT_COPY.businessChip)
     : ctConfig.label;
 
   return (
@@ -229,7 +226,7 @@ export default function AccountScreen() {
       >
         {/* ── Header (validated mockup) — scrolls with the page; the top inset is
             applied inside it so the white band reaches the status bar ── */}
-        <View style={{ paddingTop: insets.top, backgroundColor: '#FFFFFF', marginHorizontal: -16 }}>
+        <View style={{ paddingTop: insets.top, backgroundColor: SHADES.white, marginHorizontal: -16 }}>
           <View style={{ marginHorizontal: 16 }}>
             <AccountHeader
               firstName={headerFirstName}
@@ -518,7 +515,7 @@ export default function AccountScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  statusBarBg: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#FFFFFF' },
+  statusBarBg: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: SHADES.white },
   container: {
     flex: 1,
     backgroundColor: COLORS.porcelain,
@@ -553,7 +550,7 @@ const styles = StyleSheet.create({
   },
 
 
-  // Upload error banner
+  // One-line error (UI.errorText look) — no red frame.
   uploadErrorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -561,18 +558,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: -4,
     marginBottom: 4,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 6,
   },
   uploadErrorText: {
+    ...UI.errorText,
     flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.danger,
   },
 
   // Photo action sheet (bottom modal)

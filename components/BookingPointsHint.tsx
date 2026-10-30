@@ -35,7 +35,7 @@ export function BookingPointsHint({ subtotals, style, compact }: { subtotals: nu
   }
   return (
     <View style={[s.box, style]}>
-      <Feather name="award" size={18} color="#B07A12" />
+      <Feather name="award" size={18} color={SHADES.amberText} />
       <Text style={s.text}>
         <Text style={s.bold}>{line.bold}</Text>{line.rest}
       </Text>
@@ -46,9 +46,9 @@ export function BookingPointsHint({ subtotals, style, compact }: { subtotals: nu
 const s = StyleSheet.create({
   box: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: '#F7ECD9', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10,
+    backgroundColor: SHADES.amberLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10,
   },
-  text: { flex: 1, fontSize: 14, fontWeight: '500', color: '#3D2E12', lineHeight: 20 },
+  text: { flex: 1, fontSize: 14, fontWeight: '500', color: SHADES.carbon, lineHeight: 20 },
   bold: { fontWeight: '800' },
   compact: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   compactText: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.amberDeep, lineHeight: 18 },

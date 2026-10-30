@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { SHADES } from '@/constants/brandShades';
 import {
   View,
   Text,
@@ -145,7 +146,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: SHADES.carbon,
   },
   skipBtn: {
     position: 'absolute',
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: SHADES.white,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: SHADES.white,
     letterSpacing: -0.4,
     textAlign: 'center',
     marginBottom: 10,
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#FFFFFF',
+    color: SHADES.white,
     textAlign: 'center',
     lineHeight: 20,
     alignSelf: 'center',

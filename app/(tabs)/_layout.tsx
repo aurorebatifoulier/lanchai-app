@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
@@ -206,14 +207,14 @@ export default function TabLayout() {
       {successBannerVisible && (
         <View style={[styles.successBanner, { paddingTop: insets.top }]}>
           <View style={styles.successRow}>
-            <Feather name="check-circle" size={15} color="#065F46" />
+            <Feather name="check-circle" size={16} color={SHADES.amber} />
             <Text style={styles.successMsg}>Email verified! Your account is fully set up.</Text>
             <TouchableOpacity
               style={styles.successDismissBtn}
               onPress={() => setSuccessBannerVisible(false)}
               activeOpacity={0.7}
             >
-              <Feather name="x" size={15} color="#065F46" />
+              <Feather name="x" size={15} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>
         </View>
@@ -229,7 +230,7 @@ export default function TabLayout() {
               onPress={checkVerification}
               activeOpacity={0.7}
             >
-              <Feather name="mail" size={13} color="#7A5F00" />
+              <Feather name="mail" size={14} color={SHADES.amberDeep} />
               <Text style={styles.verifyMsg}>
                 Please verify your email to secure your account.{'\n'}
                 <Text style={styles.verifySpamHint}>It may land in your spam folder.</Text>
@@ -250,7 +251,7 @@ export default function TabLayout() {
               onPress={() => setBannerDismissed(true)}
               activeOpacity={0.7}
             >
-              <Feather name="x" size={15} color="#7A5F00" />
+              <Feather name="x" size={15} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>
           {resendStatus === 'sent' && (
@@ -315,9 +316,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 101,
-    backgroundColor: '#D1FAE5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#A7F3D0',
+    // Palette only: white band + amber check (no green banner).
+    backgroundColor: SHADES.white,
+    borderBottomWidth: 0.5,
+    borderBottomColor: SHADES.border,
     paddingHorizontal: 14,
     paddingBottom: 10,
   },
@@ -331,7 +333,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: '#065F46',
+    color: SHADES.carbon,
     lineHeight: 18,
   },
   successDismissBtn: {
@@ -349,9 +351,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    backgroundColor: '#FEF9E5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0D56A',
+    // Palette only: white band + amber mail icon (no yellow banner).
+    backgroundColor: SHADES.white,
+    borderBottomWidth: 0.5,
+    borderBottomColor: SHADES.border,
     paddingHorizontal: 14,
     paddingBottom: 10,
   },
@@ -371,7 +374,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12.5,
     fontWeight: '500',
-    color: '#5C4400',
+    color: SHADES.carbon,
     lineHeight: 17,
   },
   verifyResendBtn: {
@@ -396,13 +399,13 @@ const styles = StyleSheet.create({
   verifySpamHint: {
     fontSize: 11,
     fontWeight: '400',
-    color: '#A07C00',
+    color: SHADES.carbonMuted,
     lineHeight: 15,
   },
   verifyConfirm: {
     fontSize: 11.5,
     fontWeight: '500',
-    color: '#0F6E56',
+    color: SHADES.amberDeep,
     paddingTop: 4,
     paddingLeft: 21,
   },

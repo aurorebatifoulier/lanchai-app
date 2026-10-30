@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { SHADES } from '@/constants/brandShades';
 import {
   View,
   Text,
@@ -854,10 +855,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   resetBannerSuccess: {
-    backgroundColor: '#E1F5EE',
+    backgroundColor: SHADES.amberPale,
   },
   resetBannerWarn: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: SHADES.amberLight,
   },
   resetBannerText: {
     fontSize: 13,
@@ -865,10 +866,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   resetBannerTextSuccess: {
-    color: '#0F6E56',
+    color: SHADES.carbon,
   },
   resetBannerTextWarn: {
-    color: '#92400E',
+    color: SHADES.amberDeep,
   },
 
   error: {
