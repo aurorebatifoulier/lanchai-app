@@ -189,6 +189,9 @@ export async function grantPromo(uid: string, promo: PromoCode, opts: {
   const expiresAtMs = grantExpiryMs(promo, opts.personalExpiryMs);
   await ref.set({
     code: promo.code, uid, source: opts.source,
+    // Display copy for the renter's wallet (renters never read promoCodes).
+    valueText: promoValueText(opts.override?.type ?? promo.type, opts.override?.value ?? promo.value),
+    conditions: promoConditionsText(promo),
     grantedAt: FieldValue.serverTimestamp(),
     expiresAt: expiresAtMs != null ? Timestamp.fromMillis(expiresAtMs) : null,
     used: false, usedAt: null, usedOrderId: null, reminderSentAt: null,

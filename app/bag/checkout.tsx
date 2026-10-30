@@ -11,7 +11,7 @@ import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
 import {
   BookingProductCard, TotalCard, DepositExplainer, CancellationLine, NoteField, TermsCheck, BusinessDocCard,
-  BookingBottomBar, bookingBarSpace, type CouponOption,
+  BookingBottomBar, bookingBarSpace,
 } from '@/components/booking/BookingBlocks';
 import { useBookingHold } from '@/lib/bookingHold';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,8 +25,7 @@ import {
   type LoyaltyCoupon,
 } from '@/lib/firestore';
 import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
-import { usePromoCode } from '@/lib/promoCodes';
-import { PROMO_COPY } from '@/constants/promoCopy';
+import { useDiscountChoice } from '@/lib/discountChoice';
 import { clearBag, listenBagItems, BagItem } from '@/lib/bag';
 import { sendNotif } from '@/lib/notifications';
 import { Product } from '@/lib/mockData';
@@ -80,7 +79,6 @@ export default function BagSummaryScreen() {
 
   // ── Loyalty ──────────────────────────────────────────────────────────────────
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [selectedCouponId, setSelectedCouponId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -93,7 +91,6 @@ export default function BagSummaryScreen() {
   const unusedCoupons: LoyaltyCoupon[] = isLoyaltyExcluded(profile ?? {})
     ? []
     : (profile?.coupons ?? []).filter(c => !c.used && couponPct(c) > 0);
-  const selectedCoupon = unusedCoupons.find(c => c.id === selectedCouponId) ?? null;
 
   // ── Bag data ────────────────────────────────────────────────────────────────
   const [rawItems,   setRawItems]   = useState<BagItem[]>([]);
@@ -159,31 +156,25 @@ export default function BagSummaryScreen() {
 
   const totalRental  = items.reduce((sum, i) => sum + i.subtotal, 0);
   const totalDeposit = items.reduce((sum, i) => sum + i.deposit, 0);
-  // Promo code (re-checked when the bag changes) — ONE discount per booking: the loyalty
-  // coupon OR the promo, the better one preselected.
+  // ONE discount per booking (lib/discountChoice.ts): loyalty coupons, wallet codes that
+  // apply, a typed promo code — the best one preselected, the renter can switch.
   const itemsKey = items.map(i => `${i.productId}:${i.pickupAt}:${i.returnAt}:${i.quantity}`).join('|');
   const promoItems = useMemo(
     () => (items.length > 0 ? items.map(i => ({ productId: i.productId, pickupAt: new Date(i.pickupAt), returnAt: new Date(i.returnAt), quantity: i.quantity })) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [itemsKey],
   );
-  const promo = usePromoCode(promoItems);
-  const [promoChosen, setPromoChosen] = useState(false);
-  const promoActive = promoChosen && !!promo.applied;
-  // Same order-level discount + per-line split as the server (shared orderDiscount).
-  const couponSplit = orderDiscount(items.map(i => i.subtotal), selectedCoupon && !promoActive ? couponPct(selectedCoupon) : 0);
-  const discountAmount = promoActive ? promo.applied!.discountTotal : couponSplit.total;
-  const discountLabel = promoActive ? PROMO_COPY.line(promo.applied!.code, discountAmount.toLocaleString('en-US')) : undefined;
+  const discountChoice = useDiscountChoice({
+    coupons: unusedCoupons.map(cp => ({
+      id: cp.id,
+      label: BOOKING_COPY.coupon(TIER_LABELS[cp.tier], couponPct(cp)),
+      // Same order-level discount + per-line split as the server (shared orderDiscount).
+      savings: orderDiscount(items.map(i => i.subtotal), couponPct(cp)).total,
+    })),
+    items: promoItems,
+  });
+  const discountAmount = discountChoice.discountTotal;
   const finalTotal = totalRental - discountAmount;
-  const applyPromo = async (code: string) => {
-    const r = await promo.apply(code);
-    if (!r) return;
-    const best = unusedCoupons
-      .map(cp => ({ id: cp.id, savings: orderDiscount(items.map(i => i.subtotal), couponPct(cp)).total }))
-      .sort((a, b) => b.savings - a.savings)[0];
-    if (!best || r.discountTotal >= best.savings) { setPromoChosen(true); setSelectedCouponId(null); }
-    else { setPromoChosen(false); setSelectedCouponId(best.id); }
-  };
   const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
   const { ht: vatHt, vat: vatAmount } = splitHtVat(finalTotal, vatPct);
 
@@ -230,8 +221,8 @@ export default function BagSummaryScreen() {
           returnAt:  new Date(item.returnAt),
           quantity:  item.quantity,
         })),
-        couponId: promoActive ? null : selectedCoupon?.id ?? null,
-        promoCode: promoActive ? promo.applied!.code : null,
+        couponId: discountChoice.couponId,
+        promoCode: discountChoice.promoCode,
         idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes,
       });
@@ -295,11 +286,6 @@ export default function BagSummaryScreen() {
 
   // ── Main render ──────────────────────────────────────────────────────────────
   const c = BOOKING_COPY;
-  const couponOptions: CouponOption[] = unusedCoupons.map(cp => ({
-    id: cp.id,
-    label: c.coupon(TIER_LABELS[cp.tier], couponPct(cp)),
-    savings: orderDiscount(items.map(i => i.subtotal), couponPct(cp)).total,
-  }));
   const vat = vatPercent != null ? { ht: vatHt, amount: vatAmount, pct: vatPct } : null;
 
   return (
@@ -341,17 +327,8 @@ export default function BagSummaryScreen() {
 
         <TotalCard
           lines={[{ label: c.rentalItems(items.length), value: totalRental }]}
-          coupons={couponOptions}
-          selectedCouponId={selectedCouponId}
-          onToggleCoupon={id => { setPromoChosen(false); setSelectedCouponId(cur => (cur === id ? null : id)); }}
-          discount={discountAmount}
-          discountLabel={discountLabel}
-          promo={{
-            applied: promo.applied, selected: promoActive, checking: promo.checking, error: promo.error,
-            onApply: applyPromo,
-            onSelect: () => { setPromoChosen(true); setSelectedCouponId(null); },
-            onRemove: () => { promo.remove(); setPromoChosen(false); },
-          }}
+          discountRows={discountChoice.rows}
+          promoField={discountChoice.promoField}
           vat={vat}
           toPay={finalTotal}
           deposit={totalDeposit}

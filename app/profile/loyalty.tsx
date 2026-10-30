@@ -9,6 +9,7 @@ import { auth } from '@/lib/auth';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { LoyaltyCard } from '@/components/LoyaltyCard';
+import { YourCodes } from '@/components/profile/YourCodes';
 import { ReferralCard } from '@/components/ReferralCard';
 import {
   TIER_ORDER, TIER_LABELS, tierPerksText, DEFAULT_REVIEW_REWARD_POINTS, DEFAULT_REFERRAL_REWARD_POINTS,
@@ -119,6 +120,9 @@ export default function LoyaltyScreen() {
               </RowGroup>
             </>
           )}
+
+          {/* ── Your codes (loyalty coupons + promo wallet) ── */}
+          <YourCodes coupons={coupons} config={config} />
 
           {/* ── Earn more points ── */}
           <SectionTitle>Earn more points</SectionTitle>

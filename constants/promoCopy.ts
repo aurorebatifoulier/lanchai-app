@@ -11,6 +11,26 @@ export const PROMO_COPY = {
   line: (code: string, amount: string) => `Promo ${code} · −${amount} LAK`,
   discount: 'One discount per booking — choose the one you prefer.',
   generic: 'Couldn’t check this code. Please try again.',
+  save: 'Save to my codes',
+  saved: 'Saved to your codes.',
+  notApplicable: (n: number) => `${n} of your codes ${n === 1 ? 'doesn’t' : 'don’t'} apply to this booking.`,
+
+  // Loyalty → Your codes (wallet)
+  wallet: {
+    title: 'Your codes',
+    empty: 'No codes yet. Loyalty coupons and promo codes you get will show here.',
+    couponLine: (tier: string, pct: number) => `${tier} coupon · ${pct}% off`,
+    couponConditions: 'Any rental · loyalty reward',
+    expires: (d: string) => `Expires ${d}`,
+    noExpiry: 'No end date',
+    status: { ready: 'Ready', used: 'Used', expired: 'Expired' },
+    add: 'Add a code',
+    addPlaceholder: 'Promo code',
+    addButton: 'Add',
+    added: 'Added to your codes.',
+    already: 'Already in your codes.',
+    oneDiscount: 'One discount per booking — the best one is picked for you, and you can switch.',
+  },
 
   // Admin
   admin: {

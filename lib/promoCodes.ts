@@ -1,5 +1,5 @@
 import {
-  collection, deleteDoc, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, updateDoc, where,
+  collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where,
 } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
@@ -54,6 +54,8 @@ export async function deletePromoCode(code: string): Promise<void> {
 
 export interface PromoGrant {
   code: string; uid: string; source: 'admin' | 'saved' | 'referral';
+  /** Display copy written by the server ("10% off", "First rental · Outdoor only"). */
+  valueText?: string; conditions?: string;
   grantedAt?: { toMillis: () => number }; expiresAt?: { toMillis: () => number } | null;
   used: boolean; usedAt?: { toMillis: () => number } | null; usedOrderId?: string | null;
   override?: { type: 'percent' | 'fixed'; value: number } | null;
@@ -170,4 +172,54 @@ export function usePromoCode(items: PromoItem[] | null) {
   }, [itemsKey]);
 
   return { applied, error, checking, apply, remove };
+}
+
+// ── Renter wallet ────────────────────────────────────────────────────────────
+
+/** The signed-in renter's wallet, live (rules: own grants only). */
+export function useMyGrants(): PromoGrant[] | null {
+  const [grants, setGrants] = useState<PromoGrant[] | null>(null);
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) { setGrants([]); return; }
+    return onSnapshot(query(collection(db, 'promoGrants'), where('uid', '==', uid)),
+      snap => setGrants(snap.docs.map(d => d.data() as PromoGrant)),
+      () => setGrants([]));
+  }, []);
+  return grants;
+}
+
+/** "Save to my codes" / wallet "Add a code" (savePromoCode — failed tries count). */
+export async function savePromoCode(code: string): Promise<{ ok: true; alreadySaved: boolean } | { ok: false; message: string }> {
+  try {
+    const r = await httpsCallable(functions, 'savePromoCode')({ code: normalizePromoCode(code) });
+    return { ok: true, alreadySaved: !!(r.data as { alreadySaved?: boolean }).alreadySaved };
+  } catch (err) {
+    const e = err as { message?: string; details?: { code?: string } };
+    return { ok: false, message: e.details?.code === 'promo-invalid' && e.message ? e.message : PROMO_COPY.generic };
+  }
+}
+
+export interface WalletCodeOption { code: string; discountTotal: number; valueText: string; expiresAtMs: number | null }
+
+/** The renter's OWN codes that apply to this booking (evaluateMyCodes, 400 ms after changes). */
+export function useMyCodes(items: PromoItem[] | null): { codes: WalletCodeOption[]; notApplicable: number } {
+  const [state, setState] = useState<{ codes: WalletCodeOption[]; notApplicable: number }>({ codes: [], notApplicable: 0 });
+  const itemsKey = items ? items.map(i => `${i.productId}:${i.pickupAt.getTime()}:${i.returnAt.getTime()}:${i.quantity}`).join('|') : '';
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  useEffect(() => {
+    const current = itemsRef.current;
+    if (!itemsKey || !current || !auth.currentUser) { setState({ codes: [], notApplicable: 0 }); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      httpsCallable(functions, 'evaluateMyCodes')({
+        items: current.map(i => ({ productId: i.productId, pickupAtMs: i.pickupAt.getTime(), returnAtMs: i.returnAt.getTime(), quantity: i.quantity })),
+      })
+        .then(r => { if (alive) setState(r.data as { codes: WalletCodeOption[]; notApplicable: number }); })
+        .catch(() => { if (alive) setState({ codes: [], notApplicable: 0 }); });
+    }, 400);
+    return () => { alive = false; clearTimeout(t); };
+  }, [itemsKey]);
+  return state;
 }

@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { SHADES } from '@/constants/brandShades';
 import { BOOKING_COPY } from '@/constants/bookingCopy';
 import { PROMO_COPY } from '@/constants/promoCopy';
+import type { DiscountRowUi, PromoFieldUi } from '@/lib/discountChoice';
 import { UI, SectionTitle, IconCircle } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { BookingPointsHint } from '@/components/BookingPointsHint';
@@ -133,29 +134,14 @@ export function QuantityRow({ quantity, available, onChange }: { quantity: numbe
 
 export interface CouponOption { id: string; label: string; savings: number }
 
-/** Promo code block of "Your total" (state from usePromoCode + the screen's choice). */
-export interface PromoUi {
-  applied: { code: string; discountTotal: number } | null;
-  /** The promo is the chosen discount (one discount per booking). */
-  selected: boolean;
-  onSelect: () => void;
-  onRemove: () => void;
-  onApply: (code: string) => void;
-  checking: boolean;
-  error: string | null;
-}
-
 export function TotalCard({
-  lines, coupons, selectedCouponId, onToggleCoupon, discount, discountLabel, promo, vat, toPay, deposit, depositDetail, pointsSubtotals,
+  lines, discountRows, promoField, vat, toPay, deposit, depositDetail, pointsSubtotals,
 }: {
   lines: { label: string; value: number }[];
-  coupons: CouponOption[];
-  selectedCouponId: string | null;
-  onToggleCoupon: (id: string) => void;
-  discount: number;
-  /** Discount line label ("Coupon −x LAK" / "Promo CODE · −x LAK"); default = coupon. */
-  discountLabel?: string;
-  promo?: PromoUi;
+  /** Loyalty coupons + wallet codes + a typed code — radio-like, ONE at a time
+   *  (lib/discountChoice.ts). The chosen one carries its amount: no extra line. */
+  discountRows: DiscountRowUi[];
+  promoField: PromoFieldUi;
   /** null = VAT display off. */
   vat: { ht: number; amount: number; pct: number } | null;
   toPay: number;
@@ -175,33 +161,24 @@ export function TotalCard({
             <Text style={s.lineValue}>{`${n(l.value)} LAK`}</Text>
           </View>
         ))}
-        {/* Discounts — radio-like rows: loyalty coupons and the promo code, ONE at a time. */}
-        {coupons.map(cp => {
-          const on = cp.id === selectedCouponId;
-          return (
-            <TouchableOpacity key={cp.id} style={s.coupon} onPress={() => onToggleCoupon(cp.id)} activeOpacity={0.8}>
-              <Radio on={on} />
-              <Text style={s.couponText}>{on && cp.savings > 0 ? `${cp.label} · −${n(cp.savings)} LAK` : cp.label}</Text>
-              <Text style={s.couponAction}>{on ? c.remove : c.apply}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        {promo?.applied && (
-          <TouchableOpacity style={s.coupon} onPress={promo.onSelect} activeOpacity={0.8}>
-            <Radio on={promo.selected} />
-            <Text style={s.couponText}>{PROMO_COPY.line(promo.applied.code, n(promo.applied.discountTotal))}</Text>
-            <Text style={s.couponAction} onPress={promo.onRemove} suppressHighlighting>{PROMO_COPY.remove}</Text>
+        {discountRows.map(r => (
+          <TouchableOpacity key={r.key} style={s.coupon} onPress={r.onPress} activeOpacity={0.8}>
+            <Radio on={r.selected} />
+            <Text style={s.couponText}>{r.label}</Text>
+            {r.onRemove
+              ? <Text style={s.couponAction} onPress={r.onRemove} suppressHighlighting>{PROMO_COPY.remove}</Text>
+              : <Text style={s.couponAction}>{r.selected ? c.remove : c.apply}</Text>}
+          </TouchableOpacity>
+        ))}
+        {discountRows.length > 1 && <Text style={UI.small}>{PROMO_COPY.discount}</Text>}
+        {!!promoField.save && (
+          <TouchableOpacity onPress={promoField.save.onSave} disabled={promoField.save.disabled} hitSlop={8} style={{ alignSelf: 'flex-start' }}>
+            <Text style={s.promoLink}>{promoField.save.label}</Text>
           </TouchableOpacity>
         )}
-        {promo?.applied && coupons.length > 0 && <Text style={UI.small}>{PROMO_COPY.discount}</Text>}
-        {promo && !promo.applied && <PromoField promo={promo} />}
-        {/* The chosen discount is shown ONCE — on its selected row (amount included). A
-            plain line only when no row carries it. */}
-        {discount > 0 && !(promo?.selected && promo.applied) && !coupons.some(cp => cp.id === selectedCouponId) && (
-          <View style={s.line}>
-            <Text style={s.lineLabel}>{discountLabel ?? c.couponApplied(n(discount))}</Text>
-          </View>
-        )}
+        {!!promoField.saveMessage && <Text style={UI.small}>{promoField.saveMessage}</Text>}
+        {promoField.visible && <PromoField promo={promoField} />}
+        {!!promoField.walletNote && <Text style={UI.small}>{promoField.walletNote}</Text>}
         <View style={s.sep} />
         {vat && (
           <>
@@ -233,7 +210,7 @@ function Radio({ on }: { on: boolean }) {
 }
 
 /** "Have a promo code?" — discreet dark-amber link → field + Apply, one-line error. */
-function PromoField({ promo }: { promo: PromoUi }) {
+function PromoField({ promo }: { promo: PromoFieldUi }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   if (!open) {
