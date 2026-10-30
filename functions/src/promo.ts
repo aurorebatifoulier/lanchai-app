@@ -170,7 +170,7 @@ export const evaluateMyCodes = onCall({ region: REGION }, async request => {
 
 async function notify(uid: string, title: string, body: string): Promise<void> {
   await db().collection('notifications').doc(uid).collection('items').add({
-    type: 'system', icon: 'gift', iconColor: 'amber', title, body, deepLink: '/profile/loyalty',
+    type: 'code', icon: 'gift', iconColor: 'amber', title, body, deepLink: '/profile/loyalty?section=codes',
     createdAt: FieldValue.serverTimestamp(), readAt: null,
   }).catch(() => {});
 }

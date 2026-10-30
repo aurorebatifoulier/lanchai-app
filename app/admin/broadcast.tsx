@@ -66,6 +66,10 @@ function formatDate(ts: Timestamp | null): string {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+// Broadcast deep links must open a real screen (renters tap them in Notifications).
+const APP_LINK_RE = /^\/(explore(\?[\w=&%.-]*)?|category\/[\w-]+|product\/[\w-]+|collection\/[\w-]+|profile\/loyalty(\?section=(codes|referral))?|bag|chat|\(tabs\)(\/(reservations|account))?)$/;
+const isAppLink = (link: string) => APP_LINK_RE.test(link);
+
 export default function AdminBroadcastScreen() {
   const insets = useSafeAreaInsets();
   const router  = useRouter();
@@ -114,6 +118,10 @@ export default function AdminBroadcastScreen() {
   async function askSend() {
     if (!title.trim() || !body.trim()) {
       setSendErr('Title and message are required.');
+      return;
+    }
+    if (deepLink.trim() && !isAppLink(deepLink.trim())) {
+      setSendErr('This link doesn’t open a screen in the app — e.g. /product/abc123, /category/outdoor, /collection/xyz, /explore.');
       return;
     }
     setSendErr('');

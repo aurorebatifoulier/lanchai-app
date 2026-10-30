@@ -122,7 +122,17 @@ export default function LoyaltyScreen() {
           )}
 
           {/* ── Your codes (loyalty coupons + promo wallet) ── */}
-          <YourCodes coupons={coupons} config={config} />
+          {/* ?section=codes (code notifications) → scroll here once laid out. */}
+          <View
+            onLayout={e => {
+              if (section !== 'codes' || scrolled.current) return;
+              scrolled.current = true;
+              const y = e.nativeEvent.layout.y;
+              setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }), 250);
+            }}
+          >
+            <YourCodes coupons={coupons} config={config} />
+          </View>
 
           {/* ── Earn more points ── */}
           <SectionTitle>Earn more points</SectionTitle>

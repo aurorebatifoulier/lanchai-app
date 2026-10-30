@@ -134,7 +134,7 @@ export default function AdminBusinessAccountDetailScreen() {
         iconColor: 'green',
         title: 'Business account approved',
         body: 'Your business account has been approved — you can now use LANCHAI.',
-        deepLink: '/',
+        deepLink: '/(tabs)/account',
       }),
     );
   };
