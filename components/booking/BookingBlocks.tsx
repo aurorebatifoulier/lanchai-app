@@ -181,7 +181,7 @@ export function TotalCard({
           return (
             <TouchableOpacity key={cp.id} style={s.coupon} onPress={() => onToggleCoupon(cp.id)} activeOpacity={0.8}>
               <Radio on={on} />
-              <Text style={s.couponText}>{cp.label}</Text>
+              <Text style={s.couponText}>{on && cp.savings > 0 ? `${cp.label} · −${n(cp.savings)} LAK` : cp.label}</Text>
               <Text style={s.couponAction}>{on ? c.remove : c.apply}</Text>
             </TouchableOpacity>
           );
@@ -195,7 +195,9 @@ export function TotalCard({
         )}
         {promo?.applied && coupons.length > 0 && <Text style={UI.small}>{PROMO_COPY.discount}</Text>}
         {promo && !promo.applied && <PromoField promo={promo} />}
-        {discount > 0 && (
+        {/* The chosen discount is shown ONCE — on its selected row (amount included). A
+            plain line only when no row carries it. */}
+        {discount > 0 && !(promo?.selected && promo.applied) && !coupons.some(cp => cp.id === selectedCouponId) && (
           <View style={s.line}>
             <Text style={s.lineLabel}>{discountLabel ?? c.couponApplied(n(discount))}</Text>
           </View>
