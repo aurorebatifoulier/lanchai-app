@@ -110,7 +110,7 @@ function ProductGridCard({
     product.isPremium     ? { label: 'Premium', icon: 'award', bg: SHADES.amber, text: SHADES.carbon } :
     product.showInNew     ? { label: 'New', bg: SHADES.amberLight, text: SHADES.amberDeep } :
     null;
-  const signal = productSignal(product, { availability, weekendUnits });
+  const signal = productSignal(product, { weekendUnits });
 
   return (
     <PressScale style={[UI.card, s.card, { width, height: layout.card + (footer || reserveFooter ? FOOTER_H : 0) }]} onPress={onPress}>

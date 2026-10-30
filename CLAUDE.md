@@ -1004,14 +1004,15 @@ a snapshot indefinitely).
   request flow.
   - **Cards:** `ProductGridCard` = Home/My Account style, price "126,000 LAK / day"
     (`formatKip` now prints "… LAK" — never "₭"), ONE signal line from
-    `lib/productSignal.ts` (back on / fully booked / not available; only 1 left this
-    weekend while that chip is on; rented n× this month (≥ 3); ★ rating · ↻ n rentals;
-    ↻ n rentals) — real data only, never invented urgency. ONE renderer `<SignalLine>`
-    on every card (Home rail, Explore, Liked, category page), amber star / repeat icons,
-    the "+" width reserved on that line. A rating shows from `MIN_REVIEWS_FOR_RATING`
-    (3) reviews on every card. Grid cards (Explore, Liked, category page) combine it with
-    the rentals; Home rail cards are narrow → `compact`: ONE piece (back on → ★ rating →
-    ↻ n rentals → nothing). Price digits in the same grey as "LAK / day" on every card.
+    `lib/productSignal.ts` — NEVER availability on a card (no Unavailable / Back on /
+    Fully booked: that's the product page AvailabilityCard + the quick-add sheet; the "+"
+    colour is the only hint on cards). Positive signals first: only 1 left this weekend
+    (while that chip is on), rented n× this month (≥ 3); then grid cards "★ r · ↻ n
+    rentals" (rating from `MIN_REVIEWS_GRID` = 1 review, parts that exist) and Home rail
+    cards (`compact`) ONE piece: ★ r from `MIN_REVIEWS_HOME_RAIL` = 3 reviews, else ↻ n
+    rentals, else nothing — real data only. ONE renderer `<SignalLine>` on every card,
+    amber star / repeat icons, the "+" width reserved on that line. Price digits in the
+    same grey as "LAK / day" on every card.
   - **Quick add:** `QuickAddProvider` (root layout, `useQuickAdd().openQuickAdd`) owns one
     sheet + toast. "+" (`QuickAddButton`: amber = free today, outline = not → Pick dates
     pre-filled with the next free day; none when tier-locked) on Explore, Liked, category
@@ -1215,8 +1216,8 @@ a snapshot indefinitely).
     the next 30 days — in-app + email (respects `emailRemindersOptOut`) — then deletes the
     watch. "Recently viewed" rail = `recentViews/{uid}` (≤ 10, written by
     `recordProductView` on the product page). Liked cards keep their own height (rows
-    top-aligned, a "Notify me" card is simply taller). Cards say "Unavailable"; the product page
-    keeps "Not available right now".
+    top-aligned, a "Notify me" card is simply taller). The "Notify me" button (items not
+    free today) sits under the rating / rentals line — no availability text on cards.
 
 ## Security follow-ups
 
