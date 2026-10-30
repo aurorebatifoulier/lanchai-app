@@ -15,7 +15,8 @@
 // retention periods, loyalty programme & referrals (Terms §16), per-unit deposit,
 // Brevo link tracking, validity of an electronic signature in Lao PDR, referral welcome
 // discount + promo codes / personal codes (Terms §16), "our contract
-// procedure applies" on a non-return (Terms §9 + FAQ — kept as is on purpose).
+// procedure applies" on a non-return (Terms §9 + FAQ — kept as is on purpose), force
+// majeure wording (Terms §14 + FAQ, aligned 2026-10-30).
 //
 // Placeholders filled at render time from config/shop (LegalScreen.tsx), so they stay in
 // sync with Admin → Shop settings:

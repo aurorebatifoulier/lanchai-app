@@ -88,7 +88,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'cloud',
     q: 'What about events beyond your control?',
-    a: "In case of force majeure (natural disasters, major power outages, administrative or political/health disruptions), rentals may be suspended. Days already used aren't refunded, and we'll arrange a postponement when possible.",
+    a: "In case of force majeure (natural disasters, major power outages, administrative or political/health disruptions), rentals may be suspended. We'll work with you in good faith to find a fair solution.",
   },
 ];
 
