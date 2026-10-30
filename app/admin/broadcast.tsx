@@ -22,9 +22,12 @@ import {
   query,
   serverTimestamp,
   Timestamp,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { ConfirmBox } from '@/components/ConfirmBox';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -75,6 +78,8 @@ export default function AdminBroadcastScreen() {
   const [sending,  setSending]  = useState(false);
   const [sent,     setSent]     = useState(false);
   const [sendErr,  setSendErr]  = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [recipients, setRecipients] = useState<number | null>(null);
 
   // ── List state ──────────────────────────────────────────────────────────────
   const [broadcasts,  setBroadcasts]  = useState<BroadcastDoc[]>([]);
@@ -104,11 +109,21 @@ export default function AdminBroadcastScreen() {
   }, []);
 
   // ── Send ────────────────────────────────────────────────────────────────────
-  async function handleSend() {
+  // Step 1: check the fields, then ask "Send to all renters?" with a preview and the
+  // number of accounts (a broadcast shows in EVERY account's notifications — final).
+  async function askSend() {
     if (!title.trim() || !body.trim()) {
       setSendErr('Title and message are required.');
       return;
     }
+    setSendErr('');
+    setConfirming(true);
+    setRecipients(null);
+    getCountFromServer(collection(db, 'users')).then(c => setRecipients(c.data().count)).catch(() => setRecipients(null));
+  }
+
+  async function handleSend() {
+    setConfirming(false);
     setSending(true);
     setSendErr('');
     try {
@@ -179,15 +194,6 @@ export default function AdminBroadcastScreen() {
           ))}
         </View>
 
-        {type === 'new_item' && (
-          <View style={s.infoBox}>
-            <Feather name="info" size={13} color={COLORS.amber} />
-            <Text style={s.infoText}>
-              Auto-trigger on product publish requires a Cloud Function — EAS build phase TODO. Use this form to send manually for now.
-            </Text>
-          </View>
-        )}
-
         {/* Fields */}
         <Text style={s.fieldLabel}>Title</Text>
         <TextInput
@@ -242,11 +248,29 @@ export default function AdminBroadcastScreen() {
           </View>
         )}
 
+        {confirming && (
+          <View style={{ marginTop: 16 }}>
+            <ConfirmBox
+              text={`Send to all renters?${recipients != null ? ` It will show in the notifications of all ${recipients} accounts.` : ''} This can't be undone.`}
+              confirmLabel="Send to all"
+              cancelLabel="Keep editing"
+              onCancel={() => setConfirming(false)}
+              onConfirm={handleSend}
+            >
+              <View style={s.preview}>
+                <Text style={s.previewTitle}>{title.trim()}</Text>
+                <Text style={s.previewBody}>{body.trim()}</Text>
+                {!!deepLink.trim() && <Text style={s.previewLink}>{`Opens ${deepLink.trim()}`}</Text>}
+              </View>
+            </ConfirmBox>
+          </View>
+        )}
+
         <TouchableOpacity
-          style={[s.sendBtn, sending && s.sendBtnDisabled]}
-          onPress={handleSend}
+          style={[s.sendBtn, (sending || confirming) && s.sendBtnDisabled]}
+          onPress={askSend}
           activeOpacity={0.8}
-          disabled={sending}
+          disabled={sending || confirming}
         >
           {sending
             ? <ActivityIndicator size="small" color={COLORS.carbon} />
@@ -313,6 +337,10 @@ export default function AdminBroadcastScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  preview: { marginTop: 10, padding: 12, borderRadius: 12, backgroundColor: SHADES.cream, borderWidth: 0.5, borderColor: SHADES.border, gap: 4 },
+  previewTitle: { fontSize: 15, fontWeight: '800', color: SHADES.carbon },
+  previewBody: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
+  previewLink: { fontSize: 12.5, fontWeight: '600', color: SHADES.amberText },
   root: { flex: 1, backgroundColor: COLORS.porcelain },
 
   header: {
