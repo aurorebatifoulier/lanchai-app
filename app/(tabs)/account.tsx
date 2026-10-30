@@ -79,6 +79,10 @@ function ProfileSection({ title, children }: { title: string; children: React.Re
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
+// "Language" / "Appearance" rows (not built yet) — hidden for the beta, flip to show
+// them again as "Soon". Nothing is paid online, so there is no "Payment methods" row.
+const SHOW_SOON_PREFERENCES = false;
+
 export default function AccountScreen() {
   const router = useRouter();
   const { user, signOut, isAdmin } = useAuth();
@@ -299,12 +303,6 @@ export default function AccountScreen() {
             onPress={() => router.push('/profile/pickup-location')}
           />
           <ProfileRow
-            icon="credit-card"
-            title="Payment methods"
-            sub="Cards, mobile money"
-            comingSoon
-          />
-          <ProfileRow
             icon="file-text"
             title="Receipts & reports"
             sub="Receipts and pick-up / return reports"
@@ -314,18 +312,22 @@ export default function AccountScreen() {
 
         {/* ── Preferences section ── */}
         <ProfileSection title="Preferences">
-          <ProfileRow
-            icon="globe"
-            title="Language"
-            sub="Display language"
-            comingSoon
-          />
-          <ProfileRow
-            icon="moon"
-            title="Appearance"
-            sub="Light / dark / system"
-            comingSoon
-          />
+          {SHOW_SOON_PREFERENCES && (
+            <>
+              <ProfileRow
+                icon="globe"
+                title="Language"
+                sub="Display language"
+                comingSoon
+              />
+              <ProfileRow
+                icon="moon"
+                title="Appearance"
+                sub="Light / dark / system"
+                comingSoon
+              />
+            </>
+          )}
           <ProfileRow
             icon="bell"
             title="Notifications"
