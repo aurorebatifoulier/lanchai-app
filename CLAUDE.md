@@ -1209,15 +1209,14 @@ a snapshot indefinitely).
     AsyncStorage `notifications.hiddenBroadcasts`). Code notifications are type `code` →
     `/profile/loyalty?section=codes` (scrolls to Your codes). Broadcast deep links must
     match an app route (`APP_LINK_RE`, `app/admin/broadcast.tsx`).
-  - **Liked:** "Notify me" on unavailable cards (`ProductGridCard` `footer` /
-    `reserveFooter`) → `availabilityWatches/{uid}_{productId}` (renter-written);
+  - **"Notify me when it's free"** — on the PRODUCT PAGE only (`AvailabilityCard`,
+    when not free today; "We'll notify you · Cancel" once set; never on cards) →
+    `availabilityWatches/{uid}_{productId}` (renter-written);
     `availabilityWatchJob` (hourly, `functions/src/watches.ts`) notifies when the first
     FULL free day (opening time → same time next day, booking rule, ≥ 2h away) exists in
     the next 30 days — in-app + email (respects `emailRemindersOptOut`) — then deletes the
-    watch. "Recently viewed" rail = `recentViews/{uid}` (≤ 10, written by
-    `recordProductView` on the product page). Liked cards keep their own height (rows
-    top-aligned, a "Notify me" card is simply taller). The "Notify me" button (items not
-    free today) sits under the rating / rentals line — no availability text on cards.
+    watch. Liked cards = Explore cards (signal line + "+"). "Recently viewed" rail = `recentViews/{uid}` (≤ 10, written by
+    `recordProductView` on the product page).
 
 ## Security follow-ups
 

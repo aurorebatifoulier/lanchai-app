@@ -19,7 +19,6 @@ import { SHADES } from '@/constants/brandShades';
 import { UI, IconCircle, Chip, SectionTitle, useScreenInsets } from '@/components/account/ui';
 import ProductRailCard from '@/components/ProductRailCard';
 import { LIKED_COPY } from '@/constants/likedCopy';
-import { useMyWatches, watchProduct, unwatchProduct } from '@/lib/availabilityWatch';
 import { useRecentViews } from '@/lib/recentViews';
 import SearchBar from '@/components/SearchBar';
 import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
@@ -246,14 +245,6 @@ export default function LikedScreen() {
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const { openQuickAdd } = useQuickAdd();
-  // "Notify me" — availabilityWatches (hourly server job notifies, then clears it).
-  const watches = useMyWatches();
-  const [watchError, setWatchError] = useState<string | null>(null);
-  const toggleWatch = useCallback((productId: string) => {
-    setWatchError(null);
-    (watches.has(productId) ? unwatchProduct(productId) : watchProduct(productId))
-      .catch(() => setWatchError(LIKED_COPY.notifyError));
-  }, [watches]);
   // "Recently viewed" — last 10 opened products that are still renter-visible.
   const recentIds = useRecentViews();
   const [catalogue, setCatalogue] = useState<Product[]>([]);
@@ -277,16 +268,12 @@ export default function LikedScreen() {
       availability={availability}
       bestMatch={item.id === bestId}
       matchPercent={isAdmin && search.active ? (search.scoreById.get(item.id) ?? null) : null}
-      // Free items keep the small "+"; unavailable ones get "Notify me" instead.
-      quickAdd={locked || availability ? null : 'now'}
-      onQuickAdd={() => openQuickAdd(item, { availableToday: true })}
-      footerKey={availability ? (watches.has(item.id) ? 'on' : 'off') : ''}
-      footer={availability ? (
-        <NotifyButton on={watches.has(item.id)} onPress={() => toggleWatch(item.id)} />
-      ) : null}
+      // Same card as Explore: signal line + "+" (amber = free today, outline = not).
+      quickAdd={locked ? null : availability ? 'later' : 'now'}
+      onQuickAdd={() => openQuickAdd(item, { availableToday: !availability })}
     />
     );
-  }, [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, openQuickAdd, watches, toggleWatch]);
+  }, [handleUnlike, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, openQuickAdd]);
 
   const keyExtractor = useCallback((item: Product) => item.id, []);
 
@@ -356,7 +343,6 @@ export default function LikedScreen() {
         </View>
       )}
 
-      {!!watchError && <Text style={[UI.errorText, { marginHorizontal: H_PAD, marginTop: 6 }]}>{watchError}</Text>}
       </View>
 
       {/* Body */}
@@ -520,21 +506,3 @@ const s = StyleSheet.create({
   exploreBtn: { paddingHorizontal: 24 },
 });
 
-/** "Notify me" (outline) → "We'll notify you" (light amber) — tap again to cancel. */
-function NotifyButton({ on, onPress }: { on: boolean; onPress: () => void }) {
-  return (
-    <PressScale style={[nb.btn, on && nb.on]} onPress={onPress}>
-      <Feather name="bell" size={14} color={on ? SHADES.amberDeep : SHADES.carbon} />
-      <Text style={[nb.text, on && nb.textOn]} numberOfLines={1}>{on ? LIKED_COPY.notifying : LIKED_COPY.notify}</Text>
-    </PressScale>
-  );
-}
-const nb = StyleSheet.create({
-  btn: {
-    height: 36, borderRadius: 12, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-  },
-  on: { backgroundColor: SHADES.amberLight, borderColor: SHADES.amberLight },
-  text: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
-  textOn: { color: SHADES.amberDeep },
-});

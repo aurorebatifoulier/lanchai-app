@@ -4,6 +4,8 @@ import { SHADES } from '@/constants/brandShades';
 import { PRODUCT_COPY } from '@/constants/productCopy';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
+import { auth } from '@/lib/auth';
+import { useMyWatches, watchProduct, unwatchProduct } from '@/lib/availabilityWatch';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import type { Product } from '@/lib/mockData';
 import {
@@ -28,6 +30,14 @@ export default function AvailabilityCard({ product, onPickRange }: {
   const [occ, setOcc] = useState<OccupancyRecord[] | null>(null);
   const [sheet, setSheet] = useState(false);
   const [range, setRange] = useState<{ start: Date | null; end: Date | null }>({ start: null, end: null });
+  const signedIn = !!auth.currentUser;
+  const watches = useMyWatches();
+  const watched = watches.has(product.id);
+  const [watchError, setWatchError] = useState<string | null>(null);
+  const toggleWatch = () => {
+    setWatchError(null);
+    (watched ? unwatchProduct(product.id) : watchProduct(product.id)).catch(() => setWatchError(PRODUCT_COPY.availability.notifyError));
+  };
 
   useEffect(() => {
     fetchOccupancy(product.id).then(setOcc).catch(() => setOcc(null));
@@ -67,6 +77,22 @@ export default function AvailabilityCard({ product, onPickRange }: {
           </TouchableOpacity>
         )}
       </View>
+      {/* Not free today → "Notify me when it's free" (availabilityWatches; the hourly
+          server job notifies once there's a free full day in the next 30 days). */}
+      {status && !status.free && signedIn && (
+        <View style={s.notifyRow}>
+          {watched ? (
+            <>
+              <Text style={s.notifyOn}>{a.notifying}</Text>
+              <Text style={s.notifySep}>·</Text>
+              <TouchableOpacity onPress={toggleWatch} hitSlop={8}><Text style={s.notifyCancel}>{a.notifyCancel}</Text></TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity onPress={toggleWatch} hitSlop={8}><Text style={s.notifyLink}>{a.notify}</Text></TouchableOpacity>
+          )}
+        </View>
+      )}
+      {!!watchError && <Text style={[UI.errorText, { marginBottom: 8 }]}>{watchError}</Text>}
       <View style={s.strip}>
         {days.map(d => (
           <View key={d.start.toISOString()} style={s.day}>
@@ -105,6 +131,11 @@ export default function AvailabilityCard({ product, onPickRange }: {
 const s = StyleSheet.create({
   card: { padding: 16 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -6, marginBottom: 12 },
+  notifyLink: { fontSize: 13.5, fontWeight: '700', color: SHADES.amberDeep },
+  notifyOn: { fontSize: 13.5, fontWeight: '600', color: SHADES.amberDeep },
+  notifySep: { fontSize: 13.5, color: SHADES.carbonFaint },
+  notifyCancel: { fontSize: 13.5, fontWeight: '600', color: SHADES.carbonMuted, textDecorationLine: 'underline' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotFree: { backgroundColor: SHADES.amber },

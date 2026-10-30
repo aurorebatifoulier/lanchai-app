@@ -18,6 +18,10 @@ export const PRODUCT_COPY = {
     seeCalendar: 'See calendar',
     calendarTitle: 'Pick your dates',
     calendarHint: 'Choose a pick-up day, then a return day.',
+    notify: 'Notify me when it’s free',
+    notifying: 'We’ll notify you',
+    notifyCancel: 'Cancel',
+    notifyError: 'Couldn’t save — try again.',
   },
 
   perfectFor: 'Perfect for',
