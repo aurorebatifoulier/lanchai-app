@@ -22,6 +22,7 @@ export const PRODUCT_COPY = {
     notifying: 'We’ll notify you',
     notifyCancel: 'Cancel',
     notifyError: 'Couldn’t save — try again.',
+    notifyNote: 'We’ll message you as soon as it’s back. You can still book later dates.',
   },
 
   perfectFor: 'Perfect for',

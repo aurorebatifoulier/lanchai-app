@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Modal, Pressable, StyleSheet, TouchableOpacity } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import PressScale from '@/components/PressScale';
 import { PRODUCT_COPY } from '@/constants/productCopy';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
@@ -13,6 +15,7 @@ import {
 } from '@/utils/availability';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS = 7;
 
 // Real availability (product page): the same occupancy + full-day rule as Explore's
@@ -58,7 +61,9 @@ export default function AvailabilityCard({ product, onPickRange }: {
   const status = product.available === false ? { text: a.unavailable, free: false }
     : grid === undefined ? null
     : grid === null ? { text: a.freeToday, free: true }
-    : grid.kind === 'backOn' ? { text: a.backOn(`${DOW[grid.date.getDay()]} ${grid.date.getDate()}`), free: false }
+    // A known next free date always wins ("Back on Sun 8 Nov"); "Not available right
+    // now" / "Fully booked" only when no date is known.
+    : grid.kind === 'backOn' ? { text: a.backOn(`${DOW[grid.date.getDay()]} ${grid.date.getDate()} ${MON[grid.date.getMonth()]}`), free: false }
     : grid.kind === 'fullyBooked' ? { text: a.fullyBooked, free: false }
     : { text: a.unavailable, free: false };
 
@@ -77,22 +82,6 @@ export default function AvailabilityCard({ product, onPickRange }: {
           </TouchableOpacity>
         )}
       </View>
-      {/* Not free today → "Notify me when it's free" (availabilityWatches; the hourly
-          server job notifies once there's a free full day in the next 30 days). */}
-      {status && !status.free && signedIn && (
-        <View style={s.notifyRow}>
-          {watched ? (
-            <>
-              <Text style={s.notifyOn}>{a.notifying}</Text>
-              <Text style={s.notifySep}>·</Text>
-              <TouchableOpacity onPress={toggleWatch} hitSlop={8}><Text style={s.notifyCancel}>{a.notifyCancel}</Text></TouchableOpacity>
-            </>
-          ) : (
-            <TouchableOpacity onPress={toggleWatch} hitSlop={8}><Text style={s.notifyLink}>{a.notify}</Text></TouchableOpacity>
-          )}
-        </View>
-      )}
-      {!!watchError && <Text style={[UI.errorText, { marginBottom: 8 }]}>{watchError}</Text>}
       <View style={s.strip}>
         {days.map(d => (
           <View key={d.start.toISOString()} style={s.day}>
@@ -103,6 +92,29 @@ export default function AvailabilityCard({ product, onPickRange }: {
           </View>
         ))}
       </View>
+
+      {/* Not free today → "Notify me when it's free" (availabilityWatches; the hourly
+          server job notifies once there's a free full day in the next 30 days). */}
+      {status && !status.free && signedIn && (
+        <View style={s.notifyBlock}>
+          {watched ? (
+            <View style={s.notifyOn}>
+              <MaterialCommunityIcons name="bell-check-outline" size={20} color={SHADES.amberDeep} />
+              <Text style={s.notifyOnText}>{a.notifying}</Text>
+              <TouchableOpacity onPress={toggleWatch} hitSlop={10} style={{ marginLeft: 'auto' }}>
+                <Text style={s.notifyCancel}>{a.notifyCancel}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <PressScale style={[UI.btnSecondary, s.notifyBtn]} onPress={toggleWatch}>
+              <Feather name="bell" size={17} color={SHADES.carbon} />
+              <Text style={UI.btnSecondaryText}>{a.notify}</Text>
+            </PressScale>
+          )}
+          {!!watchError && <Text style={UI.errorText}>{watchError}</Text>}
+          <Text style={s.notifyNote}>{a.notifyNote}</Text>
+        </View>
+      )}
 
       <Modal visible={sheet} transparent animationType="slide" onRequestClose={close} statusBarTranslucent>
         <Pressable style={s.overlay} onPress={close}>
@@ -131,11 +143,15 @@ export default function AvailabilityCard({ product, onPickRange }: {
 const s = StyleSheet.create({
   card: { padding: 16 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -6, marginBottom: 12 },
-  notifyLink: { fontSize: 13.5, fontWeight: '700', color: SHADES.amberDeep },
-  notifyOn: { fontSize: 13.5, fontWeight: '600', color: SHADES.amberDeep },
-  notifySep: { fontSize: 13.5, color: SHADES.carbonFaint },
-  notifyCancel: { fontSize: 13.5, fontWeight: '600', color: SHADES.carbonMuted, textDecorationLine: 'underline' },
+  notifyBlock: { marginTop: 16, gap: 10 },
+  notifyBtn: { flexDirection: 'row', gap: 8, height: 50 },
+  notifyOn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, height: 50, borderRadius: 16,
+    paddingHorizontal: 16, backgroundColor: SHADES.amberLight,
+  },
+  notifyOnText: { fontSize: 15, fontWeight: '700', color: SHADES.amberDeep },
+  notifyCancel: { fontSize: 14, fontWeight: '700', color: SHADES.amberDeep },
+  notifyNote: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 18 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotFree: { backgroundColor: SHADES.amber },
