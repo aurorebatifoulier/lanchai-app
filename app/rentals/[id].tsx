@@ -587,7 +587,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
 
   content: { paddingHorizontal: 16, paddingTop: 20 },
-  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 10 },
+  productName: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 10 },
 
   // Pick-up QR card
   qrCard: { ...CARD, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginBottom: 4 },
@@ -609,7 +609,7 @@ const s = StyleSheet.create({
   refId: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginBottom: 4 },
 
   // Section title (UI.sectionTitle)
-  sectionLabel: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginTop: 24, marginBottom: 12 },
+  sectionLabel: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, marginTop: 24, marginBottom: 12 },
 
   // Location card
   locationCard: { ...CARD, padding: 16, flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 12 },

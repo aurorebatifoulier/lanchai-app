@@ -86,7 +86,7 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
   content: { paddingHorizontal: 16, paddingTop: 20 },
-  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 4 },
+  productName: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 4 },
   refId: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginBottom: 4, lineHeight: 18 },
   errorBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 40 },
   errorText: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },

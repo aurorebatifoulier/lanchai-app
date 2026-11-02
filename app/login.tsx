@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.5,
     color: COLORS.carbon,
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    height: 50,
+    height: 46,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: COLORS.softGray,
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   submitBtn: {
-    height: 52,
+    height: 46,
     borderRadius: 10,
     backgroundColor: COLORS.amber,
     alignItems: 'center',

@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.amber,
   },
   ctaBtn: {
-    height: 54,
+    height: 48,
     backgroundColor: COLORS.amber,
     borderRadius: 12,
     alignItems: 'center',
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.carbon,
   },

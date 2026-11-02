@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 40, alignItems: 'center' },
   iconBox: { marginBottom: 18 },
   title: {
-    fontSize: 22, fontWeight: '800', color: SHADES.carbon,
+    fontSize: 17, fontWeight: '800', color: SHADES.carbon,
     letterSpacing: -0.3, textAlign: 'center', marginBottom: 10,
   },
   msg: {
@@ -139,7 +139,7 @@ const s = StyleSheet.create({
   infoRow: { paddingVertical: 7, gap: 2 },
   infoRowLabel: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted },
   infoRowValue: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
-  fullBtn: { alignSelf: 'stretch', height: 50, marginBottom: 12 },
+  fullBtn: { alignSelf: 'stretch', height: 46, marginBottom: 12 },
   signOutBtn: { paddingVertical: 8 },
   signOutText: { fontSize: 14, fontWeight: '600', color: SHADES.carbonMuted },
 });

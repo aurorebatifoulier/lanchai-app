@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 20, gap: 8 },
-  productName: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 12 },
+  productName: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.4, marginBottom: 12 },
   fieldLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbon, marginBottom: 8, marginTop: 4 },
   starsRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
   starBtn: { padding: 4 },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   submitBtn: { marginTop: 12 },
   submitBtnBusy: { opacity: 0.65 },
-  stateTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon, textAlign: 'center' },
+  stateTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, textAlign: 'center' },
   stateSub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
   doneBtn: { marginTop: 16, paddingHorizontal: 28 },
 });

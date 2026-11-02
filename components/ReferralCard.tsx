@@ -44,7 +44,7 @@ export function ReferralCard({ points, percent }: { points: number; percent: num
 
 const s = StyleSheet.create({
   card: { alignItems: 'center', marginTop: 24, padding: 20 },
-  title: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, textAlign: 'center', marginTop: 12, lineHeight: 24 },
+  title: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, textAlign: 'center', marginTop: 12, lineHeight: 23 },
   sub: { textAlign: 'center', marginTop: 6 },
   btn: { alignSelf: 'stretch', marginTop: 16 },
   code: { fontWeight: '600', marginTop: 12 },

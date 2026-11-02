@@ -152,7 +152,7 @@ const s = StyleSheet.create({
   lineAmountMuted: { fontSize: 13, fontWeight: '600', color: COLORS.fg3 },
   divider: { height: 1, backgroundColor: COLORS.softGray200, marginVertical: 2 },
   netLabel: { fontSize: 14, fontWeight: '800', color: COLORS.carbon },
-  netAmount: { fontSize: 16, fontWeight: '800' },
+  netAmount: { fontSize: 15, fontWeight: '800' },
   settledBadge: {
     flexDirection: 'row',
     alignItems: 'center',

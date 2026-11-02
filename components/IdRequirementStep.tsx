@@ -52,7 +52,7 @@ export function IdRequirementStep({
                   <Feather name="camera" size={16} color={SHADES.carbon} />
                   <Text style={UI.btnPrimaryText}>Add my ID now</Text>
                 </PressScale>
-                <PressScale style={[UI.btnSecondary, { height: 50, marginTop: 10 }]} onPress={onAtCounter} activeOpacity={0.85}>
+                <PressScale style={[UI.btnSecondary, { height: 46, marginTop: 10 }]} onPress={onAtCounter} activeOpacity={0.85}>
                   <Feather name="map-pin" size={16} color={SHADES.carbon} />
                   <Text style={UI.btnSecondaryText}>I&apos;ll show my ID at the shop</Text>
                 </PressScale>
@@ -74,7 +74,7 @@ const s = StyleSheet.create({
   },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  title: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, flex: 1 },
+  title: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, flex: 1 },
   body: { marginBottom: 16 },
   note: { textAlign: 'center', marginTop: 12 },
 });

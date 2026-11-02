@@ -73,7 +73,7 @@ const s = StyleSheet.create({
   card: { ...UI.card, flex: 1, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8 },
   cardDark: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
   iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  value: { fontSize: 26, fontWeight: '800', color: SHADES.carbon, marginTop: 8, letterSpacing: -0.5 },
+  value: { fontSize: 22, fontWeight: '800', color: SHADES.carbon, marginTop: 8, letterSpacing: -0.5 },
   valueLight: { color: SHADES.cream },
   label: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 16, marginTop: 2 },
   labelLight: { color: 'rgba(250,250,247,0.75)' },

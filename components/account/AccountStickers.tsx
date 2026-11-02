@@ -78,7 +78,7 @@ const s = StyleSheet.create({
   item: { width: '25%', alignItems: 'center' },
   sticker: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },
   locked: { borderWidth: 2, borderStyle: 'dashed', borderColor: SHADES.carbonFaint, backgroundColor: 'transparent' },
-  q: { fontSize: 24, fontWeight: '600', color: SHADES.carbonFaint },
+  q: { fontSize: 22, fontWeight: '600', color: SHADES.carbonFaint },
   label: { fontSize: 12.5, fontWeight: '600', color: SHADES.carbon, textAlign: 'center', marginTop: 8, paddingHorizontal: 2, lineHeight: 16 },
   lockedLabel: { color: SHADES.carbonMuted, fontWeight: '500' },
   overlay: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
@@ -87,7 +87,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 10, alignItems: 'center',
   },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 20 },
-  sheetTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon, marginTop: 16, textAlign: 'center' },
+  sheetTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, marginTop: 16, textAlign: 'center' },
   sheetSub: { textAlign: 'center', marginTop: 6 },
   sheetBtn: { alignSelf: 'stretch', marginTop: 20 },
 });

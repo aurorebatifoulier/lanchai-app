@@ -954,6 +954,19 @@ a snapshot indefinitely).
     + `app/admin/collection-form.tsx?id=` (flat files, no `[id]` folder), "Create example
     drafts" seeds `COLLECTION_SEEDS`.
 
+- **Typography (2026-11-02) — ONE type scale: `constants/typography.ts` (`TYPE`, `SIZES`).**
+  Screen title 24/700 · display 22/800 (big numbers ONLY: stats, podium rank, hero
+  figures, slide titles) · section / sheet / stack-header title 17/700 · card title
+  15/600 · body 14 · secondary (dates, prices, meta) 13 · chips & small labels 12 ·
+  buttons 15/600, height 46 (secondary 44, bottom-bar CTAs 48) · tab chips 13, height 34.
+  The `UI` tokens (`components/account/ui.tsx`) and `ConfirmBox` are built on it; never
+  hardcode a size above 24 or a button above 48 on a new screen — pick the level. System
+  font size is respected but CAPPED at `MAX_FONT_SCALE` (1.3) on every `<Text>` /
+  `<TextInput>` by `lib/fontScaleCap.ts` (imported FIRST in `app/_layout.tsx`: wraps the
+  `default` export of RN's Text / TextInput modules — React 19 ignores defaultProps on
+  function components; a dev warning says if the patch didn't apply). Animated.Text
+  created before it loads keeps the system scale.
+
 - **Motion system (2026-10-27).** `constants/motion.ts` is the ONE source: durations
   (fast 120 / base 220 / slow 450 / count 500 ms), easings, springs (`press`, `bounce`),
   `pressScale` 0.97, `riseY` 8, and `useReducedMotion()` (the old AccountHeader

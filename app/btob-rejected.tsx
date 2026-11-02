@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 40, alignItems: 'center' },
   iconBox: { marginBottom: 18 },
   title: {
-    fontSize: 22, fontWeight: '800', color: SHADES.carbon,
+    fontSize: 17, fontWeight: '800', color: SHADES.carbon,
     letterSpacing: -0.3, textAlign: 'center', marginBottom: 10,
   },
   msg: {
@@ -136,7 +136,7 @@ const s = StyleSheet.create({
   bulletRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bulletText: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 18 },
   noteText: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 17, marginTop: 6 },
-  fullBtn: { alignSelf: 'stretch', height: 50, marginBottom: 12 },
+  fullBtn: { alignSelf: 'stretch', height: 46, marginBottom: 12 },
   signOutBtn: { paddingVertical: 8 },
   signOutText: { fontSize: 14, fontWeight: '600', color: SHADES.carbonMuted },
 });

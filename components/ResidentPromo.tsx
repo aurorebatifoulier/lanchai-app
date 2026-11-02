@@ -75,6 +75,6 @@ const s = StyleSheet.create({
   hintLink: { fontWeight: '800', textDecorationLine: 'underline' },
   card: { ...UI.card, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   cardIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: SHADES.carbon },
+  cardTitle: { fontSize: 15, fontWeight: '800', color: SHADES.carbon },
   cardBody: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
 });
