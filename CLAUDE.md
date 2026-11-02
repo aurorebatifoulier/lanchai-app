@@ -1292,6 +1292,21 @@ a snapshot indefinitely).
   Account tab = `<GuestAccount>`, My rentals = `<GuestRentals>`
   (`components/auth/GuestAccount.tsx`, copy `constants/authCopy.ts`). `useMyLoyalty`
   follows the session (excluded for guests).
+  - **Guest gate** (`components/auth/GuestGate.tsx`, mounted in `app/_layout.tsx` around
+    `QuickAddProvider`): `useRequireAccount()({ action, itemName?, run })` runs `run` for an
+    account, else opens the sheet "Good taste. Now, who are you?" (lines per action in
+    `AUTH_COPY.sheet` — rent / book / save / notify / chat / codes / other; invite reminder
+    with `referralWelcomePercent`) and RESUMES `run` once there's an account and `/login`
+    is closed (dropped if the guest leaves `/login` without signing in). Guarded: every
+    "+" (`openQuickAdd`), every heart (`FavoriteButton` `itemName`, product gallery), Rent
+    it, Notify me, Explore "Ask for an item"; account-only ROUTES (header bag / liked /
+    bell, chat…) are guarded by the root layout (back + sheet + reopen the route after).
+    Sign-up LINKS the guest session (`linkWithCredential(EmailAuthProvider…)`, same uid,
+    then `getIdToken(true)`); `lib/authFlow.ts` `busy` keeps the layout from leaving
+    `/login` before the profile is saved — the screen leaves itself (back, else Home).
+    Sign-in to an existing account replaces the guest session (guest recent views are
+    dropped). `addFavorite` / `removeFavorite` write to the CURRENT session uid (a resumed
+    closure may carry the guest uid).
 
 ## Security follow-ups
 

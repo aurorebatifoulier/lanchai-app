@@ -26,6 +26,7 @@ import { fetchOccupancy, computeAvailableUnits, effectiveStock, nextAvailableDay
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { getEffectiveRate, billableDaysFromDates, depositForLine } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
+import { useRequireAccount } from '@/components/auth/GuestGate';
 
 // Quick add (validated mockup): one provider (root layout) owns the bottom sheet and the
 // "Added to your bag" toast for every product card ("+" on Explore, category pages,
@@ -71,13 +72,21 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Every "+" of the app goes through here — guests get the sign-in sheet first, and the
+  // quick add opens right after they have an account.
+  const requireAccount = useRequireAccount();
   const openQuickAdd = useCallback((p: Product, opts?: QuickAddOpts) => {
-    const w = opts?.window ?? null;
-    setStartOnPick(opts?.availableToday === false || !!opts?.range || !!w);
-    setPresetRange(w ? { start: dayOf(w.pickupAt), end: dayOf(w.returnAt) } : opts?.range ?? null);
-    setPresetWindow(w);
-    setProduct(p);
-  }, []);
+    requireAccount({
+      action: 'rent', itemName: p.name,
+      run: () => {
+        const w = opts?.window ?? null;
+        setStartOnPick(opts?.availableToday === false || !!opts?.range || !!w);
+        setPresetRange(w ? { start: dayOf(w.pickupAt), end: dayOf(w.returnAt) } : opts?.range ?? null);
+        setPresetWindow(w);
+        setProduct(p);
+      },
+    });
+  }, [requireAccount]);
 
   const onAdded = useCallback(() => {
     setProduct(null);

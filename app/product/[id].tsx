@@ -22,6 +22,7 @@ import {
   ProductIntro, PerfectFor, KeyFeatures, ExpandableText, PriceTiers, WhyBuyProduct, DetailsCard,
   HowItWorks, ReviewsBlock, QuestionRow, type Badge, type Tier,
 } from '@/components/product/ProductSections';
+import { useRequireAccount } from '@/components/auth/GuestGate';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -157,7 +158,11 @@ export default function ProductDetailScreen() {
     });
   }, [user, favIds]);
   const isFav = !!id && favIds.has(id);
-  const toggleFav = useCallback(() => { if (id) toggleFavFor(id); }, [id, toggleFavFor]);
+  // Guests: the sheet first, then the like once signed in (pairs-well cards guard in FavoriteButton).
+  const requireAccount = useRequireAccount();
+  const toggleFav = useCallback(() => {
+    if (id) requireAccount({ action: 'save', itemName: product?.name, run: () => toggleFavFor(id) });
+  }, [id, toggleFavFor, requireAccount, product?.name]);
 
   // Pairs well with: same published collections first, then the same category.
   const pairs = useMemo(() => {
@@ -244,8 +249,13 @@ export default function ProductDetailScreen() {
     openQuickAdd(product);
   };
   const rent = () => {
-    if (needsBtobDocument(profile as UserProfile | null)) { setDocRequiredNotice(true); return; }
-    router.push({ pathname: '/booking/new', params: { productId: product.id } });
+    requireAccount({
+      action: 'book', itemName: product.name,
+      run: () => {
+        if (needsBtobDocument(profile as UserProfile | null)) { setDocRequiredNotice(true); return; }
+        router.push({ pathname: '/booking/new', params: { productId: product.id } });
+      },
+    });
   };
   const barBottom = Math.max(insets.bottom, 12);
 

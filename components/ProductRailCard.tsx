@@ -51,7 +51,7 @@ function ProductRailCard({
         {image
           ? <Image source={{ uri: image }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
           : <Feather name={(product.iconName || 'package') as never} size={40} color={SHADES.carbonFaint} />}
-        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} />
+        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} itemName={product.name} />
         {badge && (
           <View style={[s.badge, badge.dark ? s.badgeDark : s.badgeAmber]}>
             {badge.icon && <Feather name={badge.icon} size={9} color={badge.dark ? SHADES.cream : SHADES.carbon} />}

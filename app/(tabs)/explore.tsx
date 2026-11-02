@@ -61,6 +61,7 @@ import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
 import { SurpriseCard, AskCard, type Surprise } from '@/components/explore/SurpriseCards';
+import { useRequireAccount } from '@/components/auth/GuestGate';
 import { getReviewQuotes, type ReviewQuote } from '@/lib/reviewQuotes';
 import { useResidentPromo } from '@/lib/residency';
 import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
@@ -222,13 +223,20 @@ export default function ExploreScreen() {
 
   // ── Request modal ─────────────────────────────────────────────────────────
 
+  // "Ask for an item" writes a request — guests sign in first, then the form opens.
+  const requireAccount = useRequireAccount();
   const openRequest = useCallback(() => {
-    setRequestText(searchQuery.trim());
-    setRequestContact('');
-    setRequestSent(false);
-    setRequestBusy(false);
-    setRequestVisible(true);
-  }, [searchQuery]);
+    requireAccount({
+      action: 'other',
+      run: () => {
+        setRequestText(searchQuery.trim());
+        setRequestContact('');
+        setRequestSent(false);
+        setRequestBusy(false);
+        setRequestVisible(true);
+      },
+    });
+  }, [searchQuery, requireAccount]);
 
   const closeRequest = useCallback(() => setRequestVisible(false), []);
 

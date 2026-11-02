@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TouchableOpacity, View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRequireAccount } from '@/components/auth/GuestGate';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withSpring, withTiming, ReduceMotion,
 } from 'react-native-reanimated';
@@ -47,18 +48,22 @@ export default function FavoriteHeart({ liked, size = 15 }: { liked: boolean; si
  * Position it with `style` (e.g. top/right); diameter `diameter`.
  */
 export function FavoriteButton({
-  liked, onPress, diameter = 30, iconSize, style,
+  liked, onPress, diameter = 30, iconSize, style, itemName,
 }: {
   liked: boolean;
   onPress: () => void;
+  /** Guest sheet: "Sign in to save the {item}." */
+  itemName?: string;
   diameter?: number;
   iconSize?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  // Guests: the sheet first, then the like once signed in.
+  const requireAccount = useRequireAccount();
   return (
     <TouchableOpacity
       style={[s.btn, { width: diameter, height: diameter, borderRadius: diameter / 2 }, style]}
-      onPress={e => { e.stopPropagation(); onPress(); }}
+      onPress={e => { e.stopPropagation(); requireAccount({ action: 'save', itemName, run: onPress }); }}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       activeOpacity={0.8}
     >

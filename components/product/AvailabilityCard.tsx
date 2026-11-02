@@ -9,6 +9,7 @@ import { UI, useScreenInsets } from '@/components/account/ui';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
 import { auth } from '@/lib/auth';
 import { useMyWatches, watchProduct, unwatchProduct } from '@/lib/availabilityWatch';
+import { useRequireAccount } from '@/components/auth/GuestGate';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import type { Product } from '@/lib/mockData';
 import {
@@ -38,9 +39,16 @@ export default function AvailabilityCard({ product, onPickRange }: {
   const watches = useMyWatches();
   const watched = watches.has(product.id);
   const [watchError, setWatchError] = useState<string | null>(null);
+  // Guests: the sign-in sheet first, then the watch is set right after.
+  const requireAccount = useRequireAccount();
   const toggleWatch = () => {
-    setWatchError(null);
-    (watched ? unwatchProduct(product.id) : watchProduct(product.id)).catch(() => setWatchError(PRODUCT_COPY.availability.notifyError));
+    requireAccount({
+      action: 'notify', itemName: product.name,
+      run: () => {
+        setWatchError(null);
+        (watched ? unwatchProduct(product.id) : watchProduct(product.id)).catch(() => setWatchError(PRODUCT_COPY.availability.notifyError));
+      },
+    });
   };
 
   useEffect(() => {

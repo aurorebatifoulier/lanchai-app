@@ -1,13 +1,15 @@
 // FIRST: caps the system font size on every Text / TextInput (constants/typography.ts).
 import '@/lib/fontScaleCap';
 import { useEffect, useRef, useState } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname, useGlobalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { QuickAddProvider } from '@/components/quickadd/QuickAddProvider';
+import { GuestGateProvider, useRequireAccount } from '@/components/auth/GuestGate';
+import { authFlow } from '@/lib/authFlow';
 import { getOnboardingComplete } from '@/lib/onboarding';
 import SplashOverlay from '@/components/SplashOverlay';
 
@@ -33,6 +35,9 @@ function RootLayoutNav() {
   const { user, hasAccount, isGuest, loading, accountType, btobStatus, businessLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useGlobalSearchParams();
+  const requireAccount = useRequireAccount();
 
   // null = not read yet. Fails toward `false` (show onboarding) on a storage error —
   // see lib/onboarding.ts.
@@ -84,9 +89,14 @@ function RootLayoutNav() {
       return;
     }
 
-    // An account never sits on onboarding / sign-in.
+    // An account never sits on onboarding / sign-in — back to where it came from (the
+    // guest sheet's pending action then resumes), or Home. Not while the sign-up screen
+    // is still saving the new profile (it leaves by itself).
     if (hasAccount) {
-      if (onLoginScreen || onOnboardingScreen) router.replace('/');
+      if (onOnboardingScreen) router.replace('/');
+      else if (onLoginScreen && !authFlow.busy) {
+        if (router.canGoBack()) router.back(); else router.replace('/');
+      }
       return;
     }
 
@@ -110,8 +120,17 @@ function RootLayoutNav() {
     }
     const accountOnly = !!first && (ACCOUNT_ONLY.has(first) ||
       (first === 'profile' && !GUEST_PROFILE_PAGES.has(String((segments as string[])[1] ?? ''))));
-    if (accountOnly) router.replace('/login');
-  }, [ready, user, hasAccount, isGuest, onboardingComplete, accountType, btobStatus, segments, router]);
+    if (accountOnly) {
+      // Leave the screen, show the guest sheet, and open it again once signed in.
+      const query = Object.entries(searchParams)
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(Array.isArray(v) ? v[0] : v))}`)
+        .join('&');
+      const href = query ? `${pathname}?${query}` : pathname;
+      if (router.canGoBack()) router.back(); else router.replace('/');
+      requireAccount({ action: first === 'chat' ? 'chat' : 'other', run: () => router.push(href as never) });
+    }
+  }, [ready, user, hasAccount, isGuest, onboardingComplete, accountType, btobStatus, segments, router, pathname, searchParams, requireAccount]);
 
   if (!ready) {
     return <SplashOverlay onFinish={() => setSplashAnimDone(true)} />;
@@ -154,10 +173,13 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <AuthProvider>
-        {/* Quick add sheet + "Added to your bag" toast for every product card. */}
-        <QuickAddProvider>
-          <RootLayoutNav />
-        </QuickAddProvider>
+        {/* Guest sheet ("Good taste. Now, who are you?") + resume after sign-in. */}
+        <GuestGateProvider>
+          {/* Quick add sheet + "Added to your bag" toast for every product card. */}
+          <QuickAddProvider>
+            <RootLayoutNav />
+          </QuickAddProvider>
+        </GuestGateProvider>
       </AuthProvider>
       <StatusBar style="dark" />
     </GestureHandlerRootView>

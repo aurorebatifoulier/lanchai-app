@@ -20,6 +20,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db, functions } from './firebase';
+import { auth } from './auth';
 import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product, ProductCategory } from './mockData';
@@ -75,9 +76,14 @@ export async function getFavorites(userId: string): Promise<string[]> {
   }
 }
 
+// The CURRENT session's uid wins over the one passed in: a like resumed after the guest
+// sheet runs a closure from the guest render (signing in to an existing account changes
+// the uid).
+const sessionUid = (fallback: string) => auth.currentUser?.uid ?? fallback;
+
 export async function addFavorite(userId: string, productId: string): Promise<void> {
   try {
-    await setDoc(doc(db, 'users', userId, 'favorites', productId), {
+    await setDoc(doc(db, 'users', sessionUid(userId), 'favorites', productId), {
       createdAt: Timestamp.now(),
     });
   } catch {}
@@ -85,7 +91,7 @@ export async function addFavorite(userId: string, productId: string): Promise<vo
 
 export async function removeFavorite(userId: string, productId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, 'users', userId, 'favorites', productId));
+    await deleteDoc(doc(db, 'users', sessionUid(userId), 'favorites', productId));
   } catch {}
 }
 

@@ -127,7 +127,7 @@ function ProductGridCard({
           </View>
         )}
 
-        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} />
+        <FavoriteButton liked={isFavorite} onPress={onToggleFavorite} itemName={product.name} />
       </View>
 
       <View style={s.cardBody}>

@@ -19,7 +19,10 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import {
   createUserWithEmailAndPassword,
   updateProfile,
+  linkWithCredential,
+  EmailAuthProvider,
 } from 'firebase/auth';
+import { authFlow } from '@/lib/authFlow';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COLORS } from '@/constants/Colors';
@@ -44,7 +47,8 @@ function firebaseAuthErrorMessage(err: unknown): string {
     case 'auth/invalid-credential':
       return 'Incorrect email or password.';
     case 'auth/email-already-in-use':
-      return 'An account already exists with this email.';
+    case 'auth/credential-already-in-use':
+      return 'An account already exists with this email. Sign in instead.';
     case 'auth/weak-password':
       return 'Password must be at least 6 characters.';
     default:
@@ -218,7 +222,15 @@ export default function LoginScreen() {
           }
         }
       } else {
-        const { user } = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        // A guest (anonymous session) is LINKED to the new email account — same uid, so
+        // whatever they did as a guest (recently viewed) stays theirs. The root layout
+        // waits (authFlow.busy) until the profile below is saved.
+        authFlow.busy = true;
+        const current = auth.currentUser;
+        const { user } = current?.isAnonymous
+          ? await linkWithCredential(current, EmailAuthProvider.credential(email.trim(), password))
+          : await createUserWithEmailAndPassword(auth, email.trim(), password);
+        await user.getIdToken(true); // rules / callables now see a real account
 
         if (isBtob) {
           const displayName = companyName.trim();
@@ -290,10 +302,19 @@ export default function LoginScreen() {
       setError(firebaseAuthErrorMessage(err));
     } finally {
       setBusy(false);
+      // Sign-up done (or failed after the account was created): leave the screen — back
+      // to where the guest came from, where the guest sheet's action resumes.
+      if (authFlow.busy) {
+        authFlow.busy = false;
+        const cu = auth.currentUser;
+        if (cu && !cu.isAnonymous) {
+          if (router.canGoBack()) router.back(); else router.replace('/');
+        }
+      }
     }
   }, [
     canSubmit, mode, email, password, firstName, lastName, phone, path, isBtob, businessAccounts,
-    companyName, licenseNumber, responsibleName, docUri, idType, idPhotos, inviteCode, signIn, signOut,
+    companyName, licenseNumber, responsibleName, docUri, idType, idPhotos, inviteCode, signIn, signOut, router,
   ]);
 
   // Rendered at two different positions in the form depending on path (see below) —
