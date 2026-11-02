@@ -27,6 +27,10 @@ export const RENTALS_COPY = {
   items: (n: number) => `${n} items`,
   pickups: (n: number) => `${n} pick-ups`,
 
+  // Pick-up time passed, not handed over
+  missedChip: 'Pick-up missed?',
+  missedText: (date: string) => `Your pick-up was ${date}. Message us if you still want it.`,
+
   // Active
   dueChip: (n: number) => (n <= 0 ? 'Due back today' : n === 1 ? 'Due back tomorrow' : `Due back in ${n} days`),
   returnLine: (when: string) => `Return ${when}`,
@@ -64,6 +68,7 @@ export const RENTALS_COPY = {
   showQr: 'Show this at pick-up for the whole order',
   cancelOrder: (n: number) => `Cancel ${n === 1 ? '1 item' : `${n} items`}`,
   cancelAsk: 'Free cancellation — nothing is charged before pick-up. You can book again anytime.',
+  cancelList: 'These items will be cancelled:',
   cancelConfirm: 'Cancel order',
   cancelError: 'Could not cancel. Please try again.',
   cancelledNotifTitle: 'Order cancelled',

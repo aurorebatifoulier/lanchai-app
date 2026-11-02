@@ -1225,7 +1225,10 @@ a snapshot indefinitely).
   Upcoming · n / Active · n / Past (Returned / Cancelled / All, default Returned; no-show
   sits under Cancelled). ONE card per order (past orders split by outcome). Upcoming: the
   nearest pick-up as the carbon card (QR → lightbox, Directions = `mapsUrl`, Add to
-  calendar = `addBookingToCalendar`), others with an "In n days" chip; money = "X LAK to
+  calendar = `addBookingToCalendar`) = the nearest FUTURE pick-up only; a booking whose
+  pick-up TIME has passed without hand-over (`isPickupPassed`) is never the hero nor
+  "Today": it's a "Pick-up missed?" card at the top (+ "Message us" with the rental
+  context); others with an "In n days" chip; money = "X LAK to
   pay at pick-up" until hand-over — "Paid" only in Past. Active: grey "Due back …" chip +
   "Extend" → `/chat?rentalId=…&ask=Can I extend it?` (`ask` PREFILLS the input, never
   sent); late = white card + dark-amber left border, carbon chip "n days late", "A late
@@ -1237,7 +1240,9 @@ a snapshot indefinitely).
   "★ You rated it n"; cancelled = muted, "nothing charged", no buttons. Multi-item card →
   `<OrderSheet>` (order QR, rows → `/rentals/{id}`, "Cancel order" with `ConfirmBox`; past
   items get the same `<PastItemActions>` / `<RatedLine>` as single cards, and the grouped
-  past card shows "Tap to review or rent again" while an item is still unreviewed). No
+  past card shows "Tap to review or rent again" while an item is still unreviewed). Photos: stored `productImage`, else the product's first
+  photo from the shared `cached('products')` (`withProductImages`). Order labels are
+  `displayOrderId()` (LNC-…) or nothing — never the raw Firestore id. No
   status chips ("Pending payment at pick-up", green "Confirmed") on renter cards.
 
 ## Security follow-ups

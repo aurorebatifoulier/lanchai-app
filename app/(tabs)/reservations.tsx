@@ -10,16 +10,17 @@ import { UI } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { QRLightbox } from '@/components/QRLightbox';
 import { useAuth } from '@/contexts/AuthContext';
-import { getMyReservations, cancelReservations, type RentalDoc } from '@/lib/firestore';
+import { getMyReservations, cancelReservations, getProducts, type RentalDoc } from '@/lib/firestore';
+import { cached, HOME_TTL } from '@/lib/homeCache';
 import { sendNotif } from '@/lib/notifications';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { DEFAULT_REVIEW_REWARD_POINTS } from '@/lib/loyalty';
 import {
   type RentalsTab, type PastFilter, type RentalEntry,
-  tabOf, groupEntries, matchesPastFilter, heroEntry,
+  tabOf, groupEntries, matchesPastFilter, heroEntry, isPickupPassed, withProductImages,
 } from '@/lib/rentalsList';
 import {
-  NextPickupHero, UpcomingCard, ActiveCard, PastCard, RentalsEmpty, clearReviewCache,
+  NextPickupHero, UpcomingCard, MissedPickupCard, ActiveCard, PastCard, RentalsEmpty, clearReviewCache,
 } from '@/components/rentals/RentalCards';
 import { OrderSheet } from '@/components/rentals/OrderSheet';
 
@@ -51,8 +52,15 @@ export default function ReservationsScreen() {
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const data = await getMyReservations(user.uid);
-      setRentals(data);
+      // Photos: the stored one, else the product's first photo (shared 5-min products
+      // cache — the catalogue failing to load only costs the fallback photos).
+      const [data, products] = await Promise.all([
+        getMyReservations(user.uid),
+        cached('products', HOME_TTL.products, getProducts).catch(() => []),
+      ]);
+      const imageOf = new Map<string, string>();
+      for (const p of products) if (p.images?.[0]) imageOf.set(p.id, p.images[0]);
+      setRentals(withProductImages(data, imageOf));
       setFailed(false);
       // First load only: open the first tab with something in it.
       if (!tabChosen.current) {
@@ -85,8 +93,12 @@ export default function ReservationsScreen() {
   const hero = useMemo(() => heroEntry(byTab.upcoming), [byTab.upcoming]);
   const returnedCount = useMemo(() => rentals.filter(r => r.status === 'returned').length, [rentals]);
 
+  // Upcoming: "Pick-up missed?" cards first (pick-up time passed, no hand-over — in the
+  // list header, above the carbon card), then the future pick-ups. A passed pick-up is
+  // never "Today" nor the hero.
+  const missed = tab === 'upcoming' ? byTab.upcoming.filter(e => isPickupPassed(e)) : [];
   const list: RentalEntry[] =
-    tab === 'upcoming' ? byTab.upcoming.filter(e => e !== hero)
+    tab === 'upcoming' ? byTab.upcoming.filter(e => e !== hero && !isPickupPassed(e))
     : tab === 'active' ? byTab.active
     : byTab.past.filter(e => matchesPastFilter(e, pastFilter));
 
@@ -113,6 +125,11 @@ export default function ReservationsScreen() {
 
   const header = (
     <>
+      {missed.map(e => (
+        <Reanimated.View key={e.key} entering={ENTER}>
+          <MissedPickupCard entry={e} onOpenOrder={setOrder} />
+        </Reanimated.View>
+      ))}
       {tab === 'upcoming' && hero && (
         <Reanimated.View entering={ENTER}>
           <NextPickupHero entry={hero} onOpenOrder={setOrder} onOpenQR={(value, label) => setQr({ value, label })} />
@@ -129,7 +146,7 @@ export default function ReservationsScreen() {
 
   const pastHasAny = byTab.past.length > 0;
   const emptyText = tab === 'upcoming' ? c.empty.upcoming : tab === 'active' ? c.empty.active : c.empty.past;
-  const showEmpty = list.length === 0 && !(tab === 'upcoming' && hero);
+  const showEmpty = list.length === 0 && missed.length === 0 && !(tab === 'upcoming' && hero);
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>

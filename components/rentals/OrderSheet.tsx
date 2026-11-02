@@ -41,7 +41,7 @@ export function OrderSheet({ entry, onClose, onOpenQR, onCancel, reviewPoints }:
 
   const { items } = entry;
   const first = items[0];
-  const orderLabel = displayOrderId(first) ?? entry.orderId ?? first.id;
+  const lnc = displayOrderId(first); // LNC-… or null — never the raw Firestore id
   const now = Date.now();
   const cancellable = items.filter(r => isPrePickup(r) && r.pickupAt.toMillis() > now);
   const showQr = !!entry.orderId && items.some(r => isPrePickup(r) || r.status === 'active');
@@ -66,12 +66,12 @@ export function OrderSheet({ entry, onClose, onOpenQR, onCancel, reviewPoints }:
         <View style={[s.sheet, { paddingBottom: screen.bottom + 16 }]}>
           <View style={s.handle} />
           <Text style={s.title}>{c.yourOrder}</Text>
-          <Text style={UI.subtitle}>{`${c.orderLabel(orderLabel)} · ${c.items(items.length)} · ${lak(orderTotal(items))}`}</Text>
+          <Text style={UI.subtitle}>{[lnc ? c.orderLabel(lnc) : null, c.items(items.length), lak(orderTotal(items))].filter(Boolean).join(' · ')}</Text>
           <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ paddingTop: 14, gap: 10 }} showsVerticalScrollIndicator={false}>
             {showQr && (
               <View style={[UI.card, s.qrRow]}>
                 <Text style={[UI.body, { flex: 1 }]}>{c.showQr}</Text>
-                <QRThumb value={qr} size={64} variant="order" onPress={() => { close(); onOpenQR(qr, c.orderLabel(orderLabel)); }} />
+                <QRThumb value={qr} size={64} variant="order" onPress={() => { close(); onOpenQR(qr, lnc ? c.orderLabel(lnc) : c.items(items.length)); }} />
               </View>
             )}
             {items.map(r => {
@@ -104,7 +104,13 @@ export function OrderSheet({ entry, onClose, onOpenQR, onCancel, reviewPoints }:
                   destructive
                   onCancel={() => setAsking(false)}
                   onConfirm={doCancel}
-                />
+                >
+                  {/* Only the lines that are still cancellable (booked, pick-up ahead). */}
+                  <Text style={[UI.small, { marginTop: 6 }]}>{c.cancelList}</Text>
+                  {cancellable.map(r => (
+                    <Text key={r.id} style={UI.small} numberOfLines={1}>{`• ${r.productName}${r.quantity > 1 ? ` × ${r.quantity}` : ''}`}</Text>
+                  ))}
+                </ConfirmBox>
               ) : (
                 <PressScale style={[UI.btnDestructive, { marginTop: 4 }]} onPress={() => setAsking(true)}>
                   <Text style={UI.dangerText}>{c.cancelOrder(cancellable.length)}</Text>

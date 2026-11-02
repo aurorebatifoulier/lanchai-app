@@ -1,5 +1,5 @@
 import type { RentalDoc } from '@/lib/firestore';
-import { vteEndOfDayMs, isPickupMissed } from '@/functions/src/shared/dates';
+import { vteEndOfDayMs } from '@/functions/src/shared/dates';
 import { deriveReceiptData, deriveSettlementOutcome } from '@/utils/receiptData';
 import { RENTALS_COPY as c } from '@/constants/rentalsCopy';
 
@@ -86,20 +86,29 @@ export function matchesPastFilter(e: RentalEntry, f: PastFilter): boolean {
   return f === 'cancelled' ? cancelled : !cancelled;
 }
 
-/**
- * The carbon "Next pick-up" card: the order of the nearest booking whose pick-up day
- * isn't over (same rule as the Home card), only its lines with that same pick-up day.
- */
+/** The carbon "Next pick-up" card: the order with the nearest FUTURE pick-up. */
 export function heroEntry(entries: RentalEntry[], nowMs: number = Date.now()): RentalEntry | null {
   let best: { e: RentalEntry; ms: number } | null = null;
   for (const e of entries) {
-    for (const r of e.items) {
-      const ms = r.pickupAt.toMillis();
-      if (isPickupMissed(ms, nowMs)) continue;
-      if (!best || ms < best.ms) best = { e, ms };
-    }
+    if (isPickupPassed(e, nowMs)) continue;
+    const ms = Math.min(...e.items.map(r => r.pickupAt.toMillis()));
+    if (!best || ms < best.ms) best = { e, ms };
   }
   return best?.e ?? null;
+}
+
+/**
+ * Booked, but the (earliest) pick-up TIME is already past with no hand-over — never the
+ * "Next pick-up" card; shown as "Pick-up missed?" at the top of Upcoming. An alert only:
+ * staff still hand it over normally, or mark it as a no-show.
+ */
+export function isPickupPassed(e: RentalEntry, nowMs: number = Date.now()): boolean {
+  return Math.min(...e.items.map(r => r.pickupAt.toMillis())) <= nowMs;
+}
+
+/** Stored photo, else the product's first photo from the catalogue (older / imageless lines). */
+export function withProductImages(rentals: RentalDoc[], imageOf: Map<string, string>): RentalDoc[] {
+  return rentals.map(r => (r.productImage || !imageOf.get(r.productId) ? r : { ...r, productImage: imageOf.get(r.productId)! }));
 }
 
 // ── Lines ────────────────────────────────────────────────────────────────────

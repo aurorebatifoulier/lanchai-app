@@ -94,9 +94,9 @@ export function NextPickupHero({ entry, onOpenQR, onOpenOrder }: {
   const ms = Math.min(...items.map(pickupMs));
   const n = daysUntil(ms);
   const whenText = n <= 0 ? c.today : n === 1 ? c.tomorrow : c.inDays(n);
-  const orderLabel = displayOrderId(first) ?? entry.orderId ?? first.id;
+  const lnc = displayOrderId(first); // LNC-… or null — never the raw Firestore id
   const qr = single || !entry.orderId ? `LANCHAI-RES:${first.id}` : `LANCHAI-ORDER:${entry.orderId}`;
-  const qrLabel = single ? first.productName : c.orderLabel(orderLabel);
+  const qrLabel = single ? first.productName : lnc ? c.orderLabel(lnc) : c.items(items.length);
 
   return (
     <PressScale style={s.hero} onPress={open}>
@@ -113,7 +113,7 @@ export function NextPickupHero({ entry, onOpenQR, onOpenOrder }: {
           <Feather name="map-pin" size={15} color={SHADES.amber} />
           <Text style={s.heroBtnText}>{c.directions}</Text>
         </PressScale>
-        <PressScale style={s.heroBtn} onPress={() => addBookingToCalendar(orderLabel, items, shop)}>
+        <PressScale style={s.heroBtn} onPress={() => addBookingToCalendar(lnc ?? entry.orderId ?? first.id, items, shop)}>
           <Feather name="calendar" size={15} color={SHADES.amber} />
           <Text style={s.heroBtnText}>{c.addToCalendar}</Text>
         </PressScale>
@@ -149,9 +149,37 @@ export function UpcomingCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpe
   );
 }
 
+// ── Pick-up time passed, not handed over ──────────────────────────────────────
+
+export function MissedPickupCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenOrder: (e: RentalEntry) => void }) {
+  const router = useRouter();
+  const open = useOpen(entry, onOpenOrder);
+  const { items } = entry;
+  const ms = Math.min(...items.map(pickupMs));
+  return (
+    <PressScale style={[UI.card, s.card]} onPress={open}>
+      <View style={s.row}>
+        <Thumbs items={items} />
+        <View style={s.body}>
+          <CardHead items={items} chip={c.missedChip} />
+          <Text style={s.lateText}>{c.missedText(when(ms))}</Text>
+        </View>
+      </View>
+      <PressScale
+        style={[UI.btnSecondary, s.extendBtn]}
+        onPress={() => router.push({ pathname: '/chat', params: { rentalId: items[0].id } } as never)}
+      >
+        <Feather name="message-circle" size={15} color={SHADES.carbon} />
+        <Text style={UI.btnSecondaryText}>{c.messageUs}</Text>
+      </PressScale>
+    </PressScale>
+  );
+}
+
 // ── Active ───────────────────────────────────────────────────────────────────
 
-// "I'm on my way" sent this app session (per rental) — the button then stays "sent".
+// "I'm on my way" sent this app session, per card (entry.key = the order, or the single
+// rental) — the button then stays "sent" on THAT card only.
 const onMyWaySent = new Set<string>();
 
 export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenOrder: (e: RentalEntry) => void }) {
@@ -162,7 +190,7 @@ export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenO
   const lateItems = items.filter(r => returnMs(r) < now);
   const late = lateItems.length > 0;
   const due = Math.min(...items.map(returnMs));
-  const key = items[0].id;
+  const key = entry.key;
   const [sent, setSent] = useState(onMyWaySent.has(key));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(false);
