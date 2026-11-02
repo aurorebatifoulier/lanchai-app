@@ -10,6 +10,8 @@ import PressScale from '@/components/PressScale';
 
 // Home "Got plans?" (validated mockup): 2-column grid of large tiles in the collection's
 // shade — big icon, title, one short line. 4 tiles max, "See all" shows the rest inline.
+// Odd count (incl. a single collection): the LAST tile takes the full width — never a
+// half-empty row.
 const MAX = 4;
 
 export default function CollectionTiles({ collections }: { collections: CollectionDoc[] }) {
@@ -24,12 +26,13 @@ export default function CollectionTiles({ collections }: { collections: Collecti
         onSeeAll={!all && collections.length > MAX ? () => setAll(true) : undefined}
       />
       <View style={s.grid}>
-        {shown.map(c => {
+        {shown.map((c, i) => {
           const t = COLLECTION_TILE[c.shade] ?? COLLECTION_TILE.carbonLight;
+          const wide = shown.length % 2 === 1 && i === shown.length - 1;
           return (
             <PressScale
               key={c.id}
-              style={[s.tile, { backgroundColor: t.bg }]}
+              style={[s.tile, wide && s.tileWide, { backgroundColor: t.bg }]}
               onPress={() => router.push(`/collection/${c.id}`)}
               activeOpacity={0.85}
             >
@@ -49,5 +52,6 @@ export default function CollectionTiles({ collections }: { collections: Collecti
 const s = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   tile: { width: '48.4%', minHeight: 150, borderRadius: 18, padding: 16, gap: 18 },
+  tileWide: { width: '100%', minHeight: 130 },
   title: { fontSize: 15, fontWeight: '800', lineHeight: 19, letterSpacing: -0.2 },
 });

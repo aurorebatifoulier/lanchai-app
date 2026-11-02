@@ -111,7 +111,7 @@ export function ExpandableText({ text }: { text: string }) {
       </Text>
       {long && (
         <TouchableOpacity onPress={() => setOpen(o => !o)} hitSlop={8} style={{ marginTop: 6 }}>
-          <Text style={UI.link}>{open ? PRODUCT_COPY.showLess : PRODUCT_COPY.readMore}</Text>
+          <Text style={s.readMore}>{open ? PRODUCT_COPY.showLess : PRODUCT_COPY.readMore}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -353,7 +353,8 @@ const s = StyleSheet.create({
   bLight: { backgroundColor: SHADES.amberLight },
   bCarbon: { backgroundColor: SHADES.carbon },
   badgeText: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
-  title: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, letterSpacing: -0.3, lineHeight: 22, marginTop: 14 },
+  // Product name = the page title (display level).
+  title: { fontSize: 22, fontWeight: '700', color: SHADES.carbon, letterSpacing: -0.3, lineHeight: 27, marginTop: 14 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pfChip: { backgroundColor: SHADES.white, borderRadius: 10, borderWidth: 0.5, borderColor: SHADES.border, paddingHorizontal: 12, paddingVertical: 7 },
   pfText: { fontSize: 14, fontWeight: '500', color: SHADES.carbon },
@@ -362,7 +363,8 @@ const s = StyleSheet.create({
   featureText: { flex: 1, fontSize: 14, fontWeight: '600', color: SHADES.carbon },
   fCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   fCircle44: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  desc: { fontSize: 15, fontWeight: '500', color: SHADES.carbonSoft, lineHeight: 22 },
+  desc: { fontSize: 14, fontWeight: '500', color: SHADES.carbonSoft, lineHeight: 20 },
+  readMore: { fontSize: 13, fontWeight: '600', color: SHADES.amberText },
   tierRow: { flexDirection: 'row', gap: 6 },
   tier: {
     flex: 1, alignItems: 'center', borderRadius: 14, paddingVertical: 10, backgroundColor: SHADES.white,
