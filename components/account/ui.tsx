@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
+import { TYPE, SIZES } from '@/constants/typography';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import { categoryStyle } from '@/constants/categoryStyle';
@@ -27,48 +28,48 @@ export const UI = StyleSheet.create({
     backgroundColor: SHADES.white, borderRadius: 18, borderWidth: 0.5, borderColor: SHADES.border,
   },
   cardPadded: { padding: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginTop: 24, marginBottom: 12 },
-  title: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
-  subtitle: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2, lineHeight: 17 },
+  sectionTitle: { ...TYPE.sectionTitle, color: SHADES.carbon, marginTop: 24, marginBottom: 12 },
+  title: { ...TYPE.cardTitle, color: SHADES.carbon },
+  subtitle: { ...TYPE.secondary, color: SHADES.carbonMuted, marginTop: 2 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 6 },
   chipGrey: { backgroundColor: SHADES.carbonLight },
   chipCarbon: { backgroundColor: SHADES.carbon },
-  chipText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
-  chipTextSmall: { fontSize: 12, fontWeight: '700', color: SHADES.carbonMuted },
+  chipText: { ...TYPE.small, color: SHADES.carbon },
+  chipTextSmall: { ...TYPE.small, color: SHADES.carbonMuted },
 
   // Profile sub-screens
   screenContent: { paddingHorizontal: 16, paddingTop: 4 },
-  body: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
-  small: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 17 },
+  body: { ...TYPE.body, color: SHADES.carbonMuted },
+  small: { ...TYPE.small, fontWeight: '500', color: SHADES.carbonMuted },
   fieldLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbon, marginBottom: 8 },
   input: {
-    height: 50, borderRadius: 12, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.cream,
+    height: SIZES.btn, borderRadius: 12, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.cream,
     paddingHorizontal: 14, fontSize: 15, fontWeight: '500', color: SHADES.carbon,
   },
   inputReadonly: { backgroundColor: SHADES.carbonLight, borderColor: SHADES.carbonLight, justifyContent: 'center' },
   inputReadonlyText: { fontSize: 15, fontWeight: '500', color: SHADES.carbonMuted },
   btnPrimary: {
-    height: 50, borderRadius: 14, backgroundColor: SHADES.amber,
+    height: SIZES.btn, borderRadius: 14, backgroundColor: SHADES.amber,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  btnPrimaryText: { fontSize: 15, fontWeight: '800', color: SHADES.carbon },
+  btnPrimaryText: { ...TYPE.button, color: SHADES.carbon },
   btnSecondary: {
-    height: 46, borderRadius: 14, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
+    height: SIZES.btnSecondary, borderRadius: 14, borderWidth: 1.5, borderColor: SHADES.carbon, backgroundColor: SHADES.white,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14,
   },
-  btnSecondaryText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
+  btnSecondaryText: { ...TYPE.button, color: SHADES.carbon },
   btnDisabled: { opacity: 0.45 },
-  dangerText: { fontSize: 14, fontWeight: '700', color: COLORS.danger },
+  dangerText: { ...TYPE.button, color: COLORS.danger },
   /** Destructive button: white, light border, label in UI.dangerText (never a red fill). */
   btnDestructive: {
-    height: 50, borderRadius: 14, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.white,
+    height: SIZES.btn, borderRadius: 14, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.white,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  errorText: { fontSize: 12, fontWeight: '500', color: COLORS.danger, lineHeight: 17 },
+  errorText: { ...TYPE.small, fontWeight: '500', color: COLORS.danger },
   /** Choice chips (forms): grey, carbon when selected. */
   choice: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: SHADES.carbonLight },
   choiceOn: { backgroundColor: SHADES.carbon },
-  choiceText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  choiceText: { ...TYPE.tab, color: SHADES.carbon },
   choiceTextOn: { color: SHADES.cream },
   divider: { height: 0.5, backgroundColor: SHADES.border, marginVertical: 14 },
   /** Text link ("See all", "Directions"): dark amber, never the bright brand yellow. */

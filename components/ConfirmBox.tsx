@@ -83,7 +83,7 @@ const cb = StyleSheet.create({
     borderWidth: 1.5, borderColor: SHADES.carbon,
     alignItems: 'center', justifyContent: 'center',
   },
-  keepText: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
+  keepText: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
   confirmBtn: {
     flex: 1, height: 44, borderRadius: 12,
     backgroundColor: SHADES.amber,
@@ -95,7 +95,7 @@ const cb = StyleSheet.create({
     borderWidth: 1, borderColor: SHADES.border,
   },
   confirmBtnDisabled: { opacity: 0.4 },
-  confirmText: { fontSize: 14, fontWeight: '800', color: SHADES.carbon },
+  confirmText: { fontSize: 15, fontWeight: '600', color: SHADES.carbon },
   confirmTextDestructive: { color: COLORS.danger, fontWeight: '700' },
   confirmTextMuted: { color: SHADES.carbonMuted },
 });
