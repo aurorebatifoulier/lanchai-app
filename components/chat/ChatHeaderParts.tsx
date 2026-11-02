@@ -73,7 +73,7 @@ const s = StyleSheet.create({
   },
   thumb: { width: 52, height: 52, borderRadius: 12, overflow: 'hidden', backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center' },
   about: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
-  name: { fontSize: 16, fontWeight: '700', color: SHADES.carbon, marginTop: 1 },
+  name: { fontSize: 15, fontWeight: '700', color: SHADES.carbon, marginTop: 1 },
   view: { fontSize: 15, fontWeight: '700', color: SHADES.amberText },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
   chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.white },

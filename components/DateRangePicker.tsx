@@ -303,7 +303,7 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   mainTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.carbon,
     letterSpacing: -0.3,
@@ -337,7 +337,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   subTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.carbon,
     letterSpacing: -0.2,
@@ -416,7 +416,7 @@ const s = StyleSheet.create({
 
   // Confirm button
   confirmBtn: {
-    height: 52,
+    height: 46,
     backgroundColor: COLORS.amber,
     borderRadius: 12,
     alignItems: 'center',

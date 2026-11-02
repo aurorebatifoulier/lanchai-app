@@ -112,5 +112,5 @@ const s = StyleSheet.create({
   rowGap: { marginTop: 18 },
   circle: { width: CIRCLE, height: CIRCLE, borderRadius: CIRCLE / 2, alignItems: 'center', justifyContent: 'center' },
   text: { flex: 1, paddingTop: 2 },
-  title: { fontSize: 16, fontWeight: '700', color: SHADES.carbon },
+  title: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
 });

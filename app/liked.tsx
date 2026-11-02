@@ -435,7 +435,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10,
     backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
 
   // Search bar
   searchRow: {
@@ -452,7 +452,7 @@ const s = StyleSheet.create({
 
   // States
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  errorText: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, textAlign: 'center', marginBottom: 4 },
+  errorText: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, textAlign: 'center', marginBottom: 4 },
   errorSub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center' },
 
   // Results bar
@@ -501,7 +501,7 @@ const s = StyleSheet.create({
     width: 64, height: 64, borderRadius: 32, backgroundColor: SHADES.carbonLight,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
   emptySub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   exploreBtn: { paddingHorizontal: 24 },
 });

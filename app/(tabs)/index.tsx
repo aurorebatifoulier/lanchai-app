@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
   slide: { flex: 1, overflow: 'hidden' },
   slideOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.35)' },
   slideContent: { flex: 1, justifyContent: 'flex-end', padding: 18 },
-  slideTitle: { fontSize: 21, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 25, marginBottom: 4 },
+  slideTitle: { fontSize: 22, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 26, marginBottom: 4 },
   slideSub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 18, marginBottom: 12 },
   slideCta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12 },
   slideCtaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },

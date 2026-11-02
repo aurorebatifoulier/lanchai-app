@@ -30,7 +30,7 @@ const returnMs = (r: RentalDoc) => r.returnAt.toMillis();
 // ── Thumbnails ───────────────────────────────────────────────────────────────
 
 /** Product photo, else the product's category badge (never an empty grey square). */
-export function RentalThumb({ rental, size = 64 }: { rental: RentalDoc; size?: number }) {
+export function RentalThumb({ rental, size = 56 }: { rental: RentalDoc; size?: number }) {
   if (!rental.productImage && rental.productCategory) {
     return <View style={{ width: size, height: size }}><CategoryBadge cat={rental.productCategory} size={size} /></View>;
   }
@@ -51,8 +51,8 @@ export function Thumbs({ items }: { items: RentalDoc[] }) {
   return (
     <View style={s.stack}>
       {shown.map((r, i) => (
-        <View key={r.id} style={[s.stackItem, { left: i * 9, top: i * 6, zIndex: 3 - i }]}>
-          <Thumb rental={r} size={52} />
+        <View key={r.id} style={[s.stackItem, { left: i * 8, top: i * 5, zIndex: 3 - i }]}>
+          <Thumb rental={r} size={46} />
         </View>
       ))}
     </View>
@@ -402,15 +402,15 @@ export function RentalsEmpty({ text, onExplore }: { text: string; onExplore?: ()
 
 const s = StyleSheet.create({
   thumb: { borderRadius: 14, backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  stack: { width: 70, height: 64 },
+  stack: { width: 62, height: 56 },
   stackItem: { position: 'absolute', borderRadius: 15, borderWidth: 1.5, borderColor: SHADES.white },
 
-  card: { padding: 14, marginBottom: 10 },
-  row: { flexDirection: 'row', gap: 14 },
+  card: { padding: 12, marginBottom: 8 },
+  row: { flexDirection: 'row', gap: 12 },
   body: { flex: 1, minWidth: 0 },
   headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 },
-  name: { flex: 1, fontSize: 16, fontWeight: '700', color: SHADES.carbon, letterSpacing: -0.1 },
-  status: { fontSize: 12.5, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
+  name: { flex: 1, fontSize: 15, fontWeight: '600', color: SHADES.carbon, lineHeight: 20 },
+  status: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   chip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, flexShrink: 0 },
   chipAmber: { backgroundColor: SHADES.amberLight },
   chipGrey: { backgroundColor: SHADES.carbonLight },
@@ -419,37 +419,37 @@ const s = StyleSheet.create({
   chipTextAmber: { color: SHADES.amberDeep },
   chipTextGrey: { color: SHADES.carbon },
   chipTextLate: { color: SHADES.amber },
-  line: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
+  line: { fontSize: 13, fontWeight: '500', color: SHADES.carbon, lineHeight: 18 },
   muted: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2, lineHeight: 18 },
   muted60: { opacity: 0.6 },
   ratedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   rated: { fontSize: 13, fontWeight: '600', color: SHADES.amberDeep },
-  tapHint: { fontSize: 12.5, fontWeight: '600', color: SHADES.amberText, marginTop: 4 },
+  tapHint: { fontSize: 12, fontWeight: '600', color: SHADES.amberText, marginTop: 4 },
 
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  btn: { flex: 1, height: 46, paddingHorizontal: 8 },
-  extendBtn: { marginTop: 14, height: 42 },
+  btnRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  btn: { flex: 1, height: 44, paddingHorizontal: 8 },
+  extendBtn: { marginTop: 12, height: 40 },
 
   missedHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   missedIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center' },
   missedLine: { borderTopWidth: 0.5, borderTopColor: SHADES.border, marginTop: 14, paddingTop: 14 },
   lateCard: { borderLeftWidth: 4, borderLeftColor: SHADES.amberText },
-  lateText: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
+  lateText: { fontSize: 13, fontWeight: '500', color: SHADES.carbon, lineHeight: 18 },
 
   hero: { backgroundColor: SHADES.carbon, borderRadius: 18, padding: 16, marginBottom: 12 },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   heroLabel: { fontSize: 13, fontWeight: '700', color: SHADES.amber },
-  heroWhen: { fontSize: 19, fontWeight: '800', color: SHADES.white, marginTop: 3, letterSpacing: -0.2 },
+  heroWhen: { fontSize: 17, fontWeight: '800', color: SHADES.white, marginTop: 3, letterSpacing: -0.2 },
   heroSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 3, lineHeight: 18 },
-  heroBtns: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  heroBtns: { flexDirection: 'row', gap: 10, marginTop: 14 },
   heroBtn: {
     flex: 1, height: 44, borderRadius: 12, backgroundColor: SHADES.carbonSoft,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
   },
-  heroBtnText: { fontSize: 14, fontWeight: '700', color: SHADES.white },
+  heroBtnText: { fontSize: 15, fontWeight: '600', color: SHADES.white },
 
   empty: { alignItems: 'center', paddingTop: 56, paddingHorizontal: 32 },
   emptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emptyText: { fontSize: 16, fontWeight: '700', color: SHADES.carbon, textAlign: 'center', lineHeight: 22 },
+  emptyText: { fontSize: 15, fontWeight: '700', color: SHADES.carbon, textAlign: 'center', lineHeight: 21 },
   emptyBtn: { marginTop: 20, alignSelf: 'stretch' },
 });

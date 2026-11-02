@@ -152,5 +152,5 @@ const s = StyleSheet.create({
     borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  barName: { flex: 1, fontSize: 16, fontWeight: '800', color: SHADES.carbon },
+  barName: { flex: 1, fontSize: 15, fontWeight: '800', color: SHADES.carbon },
 });

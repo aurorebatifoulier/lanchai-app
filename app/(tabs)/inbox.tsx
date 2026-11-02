@@ -117,7 +117,7 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.porcelain },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  title: { fontSize: 26, fontWeight: '800', letterSpacing: -0.6, color: SHADES.carbon, marginTop: 2 },
+  title: { fontSize: 24, fontWeight: '700', letterSpacing: -0.6, color: SHADES.carbon, marginTop: 2 },
 
   listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20 },
   separator: { height: 10 },
@@ -147,6 +147,6 @@ const styles = StyleSheet.create({
     width: 64, height: 64, borderRadius: 32, backgroundColor: SHADES.carbonLight,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, marginBottom: 8 },
   emptySub: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 20 },
 });

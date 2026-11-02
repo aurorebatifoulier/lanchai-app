@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     color: COLORS.fg3,
     marginBottom: 4,
   },
-  title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6, color: SHADES.carbon, lineHeight: 33 },
+  title: { fontSize: 24, fontWeight: '700', letterSpacing: -0.6, color: SHADES.carbon, lineHeight: 28 },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -971,7 +971,7 @@ const styles = StyleSheet.create({
     color: COLORS.carbon,
   },
   requestItemBtn: {
-    height: 52,
+    height: 46,
     paddingHorizontal: 32,
     borderRadius: 10,
     backgroundColor: COLORS.amber,
@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sheetTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     letterSpacing: -0.3,
     color: COLORS.carbon,
@@ -1114,7 +1114,7 @@ const styles = StyleSheet.create({
   },
   resetBtn: {
     flex: 1,
-    height: 52,
+    height: 46,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: COLORS.softGray,
@@ -1128,7 +1128,7 @@ const styles = StyleSheet.create({
   },
   applyBtn: {
     flex: 2,
-    height: 52,
+    height: 46,
     borderRadius: 10,
     backgroundColor: COLORS.amber,
     alignItems: 'center',
@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   requestTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '800',
     letterSpacing: -0.4,
     color: COLORS.carbon,
@@ -1205,7 +1205,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   requestConfirmTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.carbon,
     marginBottom: 8,

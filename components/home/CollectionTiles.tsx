@@ -49,5 +49,5 @@ export default function CollectionTiles({ collections }: { collections: Collecti
 const s = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   tile: { width: '48.4%', minHeight: 150, borderRadius: 18, padding: 16, gap: 18 },
-  title: { fontSize: 17, fontWeight: '800', lineHeight: 21, letterSpacing: -0.2 },
+  title: { fontSize: 15, fontWeight: '800', lineHeight: 19, letterSpacing: -0.2 },
 });

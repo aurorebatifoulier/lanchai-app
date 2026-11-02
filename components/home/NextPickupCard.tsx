@@ -55,5 +55,5 @@ const s = StyleSheet.create({
   },
   circle: { width: 46, height: 46, borderRadius: 23, backgroundColor: SHADES.carbonSoft, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 13, fontWeight: '500', color: SHADES.carbonFaint },
-  when: { fontSize: 17, fontWeight: '800', color: SHADES.white, marginTop: 2, letterSpacing: -0.2 },
+  when: { fontSize: 15, fontWeight: '800', color: SHADES.white, marginTop: 2, letterSpacing: -0.2 },
 });

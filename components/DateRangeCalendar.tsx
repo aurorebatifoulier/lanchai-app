@@ -219,7 +219,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   calMonthTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.carbon,
     letterSpacing: -0.2,

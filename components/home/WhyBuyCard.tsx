@@ -30,6 +30,6 @@ export default function WhyBuyCard({ pick }: { pick: WhyBuy }) {
 const s = StyleSheet.create({
   card: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon, padding: 20 },
   label: { fontSize: 14, fontWeight: '700', color: SHADES.amber, marginBottom: 8 },
-  big: { fontSize: 19, fontWeight: '800', color: SHADES.white, lineHeight: 25, letterSpacing: -0.2 },
+  big: { fontSize: 17, fontWeight: '800', color: SHADES.white, lineHeight: 22, letterSpacing: -0.2 },
   kicker: { fontSize: 14, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 10 },
 });

@@ -49,5 +49,5 @@ const s = StyleSheet.create({
   col: { flex: 1, alignItems: 'center' },
   name: { fontSize: 13, fontWeight: '600', color: SHADES.carbon, textAlign: 'center', marginTop: 8, marginBottom: 8, minHeight: 17 },
   block: { alignSelf: 'stretch', borderTopLeftRadius: 16, borderTopRightRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  rank: { fontSize: 28, fontWeight: '800' },
+  rank: { fontSize: 22, fontWeight: '800' },
 });

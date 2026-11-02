@@ -432,7 +432,7 @@ export default function ProductDetailScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.porcelain },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: COLORS.porcelain },
-  notFound: { fontSize: 18, fontWeight: '800', color: SHADES.carbon, marginBottom: 6 },
+  notFound: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, marginBottom: 6 },
   content: { paddingHorizontal: 16, paddingTop: 16 },
   railScroll: { marginHorizontal: -16 },
   rail: { paddingHorizontal: 16, gap: 12 },
@@ -441,12 +441,12 @@ const s = StyleSheet.create({
     borderTopWidth: 0.5, borderTopColor: SHADES.border, paddingHorizontal: 16, paddingTop: 12,
   },
   bottomRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  price: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  price: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
   bagBtn: {
-    width: 54, height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: SHADES.carbon,
+    width: 54, height: 48, borderRadius: 16, borderWidth: 1.5, borderColor: SHADES.carbon,
     backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
   },
-  rentBtn: { height: 54, paddingHorizontal: 26, borderRadius: 16 },
+  rentBtn: { height: 48, paddingHorizontal: 26, borderRadius: 16 },
   docNotice: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   lightbox: { flex: 1, backgroundColor: 'rgba(0,0,0,0.93)', justifyContent: 'center' },
   lbClose: {

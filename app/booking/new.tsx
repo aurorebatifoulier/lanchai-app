@@ -351,6 +351,6 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10,
     backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
 });

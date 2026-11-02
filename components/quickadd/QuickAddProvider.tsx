@@ -382,8 +382,8 @@ const s = StyleSheet.create({
   scroll: { flexGrow: 0, flexShrink: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 16 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  name: { fontSize: 19, fontWeight: '800', color: SHADES.carbon },
-  when: { fontSize: 16, fontWeight: '800', color: SHADES.carbon, marginTop: 20, marginBottom: 10 },
+  name: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
+  when: { fontSize: 14, fontWeight: '800', color: SHADES.carbon, marginTop: 20, marginBottom: 10 },
   shortRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   short: {
     flexDirection: 'row', alignItems: 'center', gap: 6, height: 42, paddingHorizontal: 14, borderRadius: 12,

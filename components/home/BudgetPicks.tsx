@@ -52,7 +52,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: SHADES.amberLight, borderRadius: 18, padding: 16, marginTop: 24 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
   label: { fontSize: 13, fontWeight: '700', color: SHADES.amberDeep },
-  title: { fontSize: 20, fontWeight: '800', color: SHADES.carbon, marginTop: 2, letterSpacing: -0.3 },
+  title: { fontSize: 17, fontWeight: '800', color: SHADES.carbon, marginTop: 2, letterSpacing: -0.3 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
   mini: { width: '48.5%', backgroundColor: SHADES.white, borderRadius: 16, padding: 10 },
   thumbBox: { height: 78, borderRadius: 12, overflow: 'hidden' },

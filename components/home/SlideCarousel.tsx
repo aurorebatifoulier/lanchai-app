@@ -58,7 +58,7 @@ const s = StyleSheet.create({
   slide: { flex: 1, overflow: 'hidden', backgroundColor: SHADES.carbon },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.35)' },
   content: { flex: 1, justifyContent: 'flex-end', padding: 18, gap: 4 },
-  title: { fontSize: 21, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 25 },
+  title: { fontSize: 22, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 26 },
   sub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 18 },
   cta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, marginTop: 8 },
   ctaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },

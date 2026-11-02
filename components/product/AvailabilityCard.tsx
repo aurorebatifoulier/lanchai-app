@@ -144,9 +144,9 @@ const s = StyleSheet.create({
   card: { padding: 16 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   notifyBlock: { marginTop: 16, gap: 10 },
-  notifyBtn: { flexDirection: 'row', gap: 8, height: 50 },
+  notifyBtn: { flexDirection: 'row', gap: 8, height: 46 },
   notifyOn: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, height: 50, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 10, height: 46, borderRadius: 16,
     paddingHorizontal: 16, backgroundColor: SHADES.amberLight,
   },
   notifyOnText: { fontSize: 15, fontWeight: '700', color: SHADES.amberDeep },
@@ -156,7 +156,7 @@ const s = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   dotFree: { backgroundColor: SHADES.amber },
   dotBusy: { backgroundColor: SHADES.carbonFaint },
-  status: { fontSize: 16, fontWeight: '700', color: SHADES.carbon },
+  status: { fontSize: 15, fontWeight: '700', color: SHADES.carbon },
   strip: { flexDirection: 'row', gap: 6 },
   day: { flex: 1, alignItems: 'center', gap: 6 },
   dow: { fontSize: 11.5, fontWeight: '500', color: SHADES.carbonMuted },
@@ -169,5 +169,5 @@ const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
-  sheetTitle: { fontSize: 18, fontWeight: '800', color: SHADES.carbon },
+  sheetTitle: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
 });

@@ -28,5 +28,5 @@ export default function ReferralPromoCard({ points, percent }: { points: number;
 
 const s = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
-  title: { fontSize: 16, fontWeight: '700', color: SHADES.carbon, lineHeight: 21 },
+  title: { fontSize: 15, fontWeight: '700', color: SHADES.carbon, lineHeight: 20 },
 });

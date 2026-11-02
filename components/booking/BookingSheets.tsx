@@ -75,11 +75,11 @@ const s = StyleSheet.create({
   sheet: { backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '90%' },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
   head: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
-  title: { fontSize: 18, fontWeight: '800', color: SHADES.carbon },
+  title: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
   sub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   done: { fontSize: 15, fontWeight: '700', color: SHADES.amberText },
   slot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 14, borderRadius: 12 },
   slotOn: { backgroundColor: SHADES.carbon },
-  slotText: { fontSize: 16, fontWeight: '600', color: SHADES.carbon },
+  slotText: { fontSize: 14, fontWeight: '600', color: SHADES.carbon },
   slotTextOn: { color: SHADES.white },
 });

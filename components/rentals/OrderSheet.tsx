@@ -125,7 +125,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: SHADES.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 10 },
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
-  title: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  title: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
   qrRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
   item: { padding: 12 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

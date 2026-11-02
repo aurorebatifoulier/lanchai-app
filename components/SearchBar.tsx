@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.softGray,
   },
   fieldAccount: {
-    height: 50,
+    height: 46,
     borderRadius: 14,
     borderWidth: 0.5,
     borderColor: SHADES.border,
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.carbon,
   },
   // 'account' variant: carbon square button with an amber icon (Explore mockup).
-  filterBtnAccount: { width: 50, height: 50, borderRadius: 14, backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
+  filterBtnAccount: { width: 46, height: 46, borderRadius: 14, backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
   filterDot: {
     position: 'absolute',
     top: 8,

@@ -276,10 +276,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.6,
-    lineHeight: 30,
+    lineHeight: 26,
   },
   heroSub: {
     fontSize: 13,
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyStateTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.carbon,
     marginTop: 8,

@@ -93,7 +93,7 @@ const s = StyleSheet.create({
     color: COLORS.carbon,
   },
   totalValue: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: '800',
     color: COLORS.carbon,
     letterSpacing: -0.4,
