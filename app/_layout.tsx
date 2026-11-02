@@ -32,7 +32,7 @@ const ACCOUNT_ONLY = new Set([
 const GUEST_PROFILE_PAGES = new Set(['faq']);
 
 function RootLayoutNav() {
-  const { user, hasAccount, isGuest, loading, accountType, btobStatus, businessLoading, profileComplete } = useAuth();
+  const { user, hasAccount, isGuest, isAdmin, adminLoading, loading, accountType, btobStatus, businessLoading, profileComplete } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const pathname = usePathname();
@@ -60,7 +60,12 @@ function RootLayoutNav() {
     setOnboardingCompleteState(true);
   }, [hasAccount]);
   const appReady = !loading && onboardingComplete !== null && (!hasAccount || !businessLoading);
-  const ready = appReady && splashAnimDone;
+  // Once the app has been ready, it STAYS ready: a later account change (sign-up linking
+  // the guest session, sign-in) briefly sets businessLoading again, and falling back to
+  // the splash would unmount the whole Stack — sending a sign-up in progress to Home.
+  const everReady = useRef(false);
+  if (appReady && splashAnimDone) everReady.current = true;
+  const ready = everReady.current;
 
   useEffect(() => {
     if (!ready) return;
@@ -93,6 +98,15 @@ function RootLayoutNav() {
     // screen — move on into the app.
     if (hasAccount && (onBtobPendingScreen || onBtobRejectedScreen)) {
       router.replace('/');
+      return;
+    }
+
+    // An account whose sign-up isn't finished (no first name / phone) always goes to
+    // step 2 — never Home — whatever the entry point. Legal pages stay readable; admins
+    // are exempt (staff accounts). Not while the sign-up screen is still working.
+    if (hasAccount && !businessLoading && !adminLoading && !profileComplete && !isAdmin && !authFlow.busy
+        && !onLoginScreen && !onLegalScreen) {
+      router.push({ pathname: '/login', params: { mode: 'signup', step: '2' } } as never);
       return;
     }
 
@@ -142,7 +156,7 @@ function RootLayoutNav() {
       if (router.canGoBack()) router.back(); else router.replace('/');
       requireAccount({ action: first === 'chat' ? 'chat' : 'other', run: () => router.push(href as never) });
     }
-  }, [ready, user, hasAccount, isGuest, onboardingComplete, accountType, btobStatus, businessLoading, profileComplete, segments, router, pathname, searchParams, requireAccount]);
+  }, [ready, user, hasAccount, isGuest, isAdmin, adminLoading, onboardingComplete, accountType, btobStatus, businessLoading, profileComplete, segments, router, pathname, searchParams, requireAccount]);
 
   if (!ready) {
     return <SplashOverlay onFinish={() => setSplashAnimDone(true)} />;

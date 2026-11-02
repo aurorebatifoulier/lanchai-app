@@ -1,19 +1,21 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing, ReduceMotion,
 } from 'react-native-reanimated';
 import { SHADES } from '@/constants/brandShades';
 import { useReducedMotion } from '@/constants/motion';
 import { CategoryBadge } from '@/components/account/ui';
+import { DASH, PATH_OPACITY } from '@/components/account/AccountHeader';
 import RotatingLine from '@/components/explore/RotatingLine';
 import { AUTH_COPY } from '@/constants/authCopy';
 
 // Sign-in header (validated mockup): the LANCHAI wordmark + tagline, a dotted "bee
-// flight" in the BACKGROUND (amber, low opacity) with category bubbles floating around
-// it and the hexagon at its end, then a rotating witty line. Bubbles drift a few pixels
-// (slow loop); everything is static with reduce motion.
+// flight" in the BACKGROUND — EXACTLY the My Account header style (round dots DASH, width
+// 2, amber fading 3% → 30% from the left edge, small hexagon in amberSoft at 55%) — with
+// discreet category bubbles floating around it, then a rotating witty line. Bubbles drift
+// a few pixels (slow loop); everything is static with reduce motion.
 
 const H = 210;
 
@@ -23,7 +25,7 @@ function Bubble({ cat, size, x, y, delay }: { cat: string; size: number; x: numb
   useEffect(() => {
     if (reduce) { dy.value = 0; return; }
     dy.value = withDelay(delay, withRepeat(
-      withTiming(-6, { duration: 2600, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
+      withTiming(-4, { duration: 2800, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
       -1, true,
     ));
   }, [reduce, delay, dy]);
@@ -45,16 +47,18 @@ export function AuthHeaderDecor() {
   return (
     <View style={[s.box, { width: w }]}>
       <Svg width={w} height={H} style={StyleSheet.absoluteFill}>
-        <Path d={d} stroke={SHADES.amber} strokeOpacity={0.35} strokeWidth={2.5} strokeDasharray="0.1 8" strokeLinecap="round" fill="none" />
-        <Polygon
-          points={hexagon(w * (318 / 340), 24, 9)}
-          fill={SHADES.amberSoft}
-          opacity={0.9}
-        />
+        <Defs>
+          <LinearGradient id="authFade" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={w * 0.45} y2={0}>
+            <Stop offset={0} stopColor={SHADES.amber} stopOpacity={0.03} />
+            <Stop offset={1} stopColor={SHADES.amber} stopOpacity={PATH_OPACITY} />
+          </LinearGradient>
+        </Defs>
+        <Path d={d} stroke="url(#authFade)" strokeWidth={2} strokeDasharray={DASH} strokeLinecap="round" fill="none" />
+        <Polygon points={hexagon(w * (318 / 340), 24, 8)} fill={SHADES.amberSoft} opacity={0.55} />
       </Svg>
-      <Bubble cat="fun" size={52} x={w * 0.06} y={18} delay={0} />
-      <Bubble cat="tools" size={52} x={w * 0.76} y={92} delay={600} />
-      <Bubble cat="outdoor" size={44} x={w * 0.2} y={150} delay={1200} />
+      <Bubble cat="fun" size={44} x={w * 0.07} y={22} delay={0} />
+      <Bubble cat="tools" size={44} x={w * 0.78} y={96} delay={600} />
+      <Bubble cat="outdoor" size={38} x={w * 0.21} y={152} delay={1200} />
 
       <View style={s.center}>
         <Text style={s.wordmark}>LANCHAI</Text>

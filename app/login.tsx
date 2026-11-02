@@ -17,6 +17,7 @@ import { ForgotPasswordSheet } from '@/components/auth/ForgotPasswordSheet';
 import LegacyAuthForm from '@/components/auth/LegacyAuthForm';
 import { useFeatureFlags } from '@/lib/features';
 import { useLoyaltyConfig, referralWelcomePercent } from '@/lib/loyalty';
+import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/auth';
 import { authFlow } from '@/lib/authFlow';
 import { continueWithGoogle, GoogleCancelled } from '@/lib/googleSignIn';
@@ -72,6 +73,11 @@ export default function LoginScreen() {
     if (router.canGoBack()) router.back(); else router.replace('/');
   };
   const go = (v: View_) => { setError(null); setView(v); };
+  const abandon = () => {
+    authFlow.busy = false;
+    signOut(auth).catch(() => {});
+    if (router.canGoBack()) router.back(); else router.replace('/');
+  };
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const signIn = async () => {
@@ -207,7 +213,10 @@ export default function LoginScreen() {
             <View style={s.stepHead}>
               <TouchableOpacity
                 hitSlop={10}
-                onPress={() => (view === 'signup1' ? (startedOnSignUp ? leave() : go('signin')) : leave())}
+                // Step 2 can't be skipped (the root layout sends an unfinished account back
+                // here): its back arrow abandons the sign-up for now — signed out, a guest
+                // again; signing in later resumes at step 2.
+                onPress={() => (view === 'signup1' ? (startedOnSignUp ? leave() : go('signin')) : abandon())}
                 accessibilityLabel="Back"
               >
                 <Feather name="arrow-left" size={22} color={SHADES.carbon} />

@@ -1319,7 +1319,12 @@ a snapshot indefinitely).
   Google, or any guarded action). `ForgotPasswordSheet` replaces the old inline message.
   Business sign-up / sign-in (flag `businessAccounts`) = the old form, kept as
   `components/auth/LegacyAuthForm.tsx` ("Business account? Apply here"). Strings:
-  `constants/authCopy.ts`.
+  `constants/authCopy.ts`. The sign-in decor uses the My Account trajectory style
+  (`DASH`, `PATH_OPACITY`, 3% → 30% fade). ROUTING: once ready, the root layout never goes
+  back to the splash (`everReady` — a businessLoading flip after linking used to unmount
+  the Stack and drop step 2); any account with `profileComplete` false (not admin, not
+  while `authFlow.busy`) is pushed to `/login?mode=signup&step=2` from anywhere; step 2's
+  back arrow signs out (a guest again; next sign-in resumes at step 2).
   - **Google** (`lib/googleSignIn.ts`, `@react-native-google-signin/google-signin`): only in
     a dev / EAS build — `googleSignInAvailable()` = not Expo Go AND
     `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` set; the module is required lazily. Links the guest
