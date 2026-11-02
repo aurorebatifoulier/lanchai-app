@@ -327,7 +327,7 @@ export default function AdminReservationDetailScreen() {
         icon: 'calendar',
         iconColor: 'amber',
         title: 'We missed you',
-        body: 'Your pick-up didn’t happen, so we released the items. Nothing to pay — message us to book again.',
+        body: 'Your pick-up didn’t happen. Your booking was released. Message us to book again.',
         deepLink: ids.length > 1 ? '/reservations' : `/rentals/${reservation.id}`,
       });
     } catch (err: any) {

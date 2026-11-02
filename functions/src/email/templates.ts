@@ -502,7 +502,7 @@ export function noShowEmail(_name: string, rawItems: ResData[], shop: EmailShop)
 
   return build(
     `We missed you · ${orderId}`,
-    'Nothing to pay — just send us a message to book again',
+    'Your booking was released. Message us to book again.',
     'We missed you',
     [
       {
@@ -516,8 +516,7 @@ export function noShowEmail(_name: string, rawItems: ResData[], shop: EmailShop)
       {
         type: 'card',
         items: [
-          { type: 'text', text: `Your pick-up on ${day} didn’t happen, so we’ve released your items for other renters.` },
-          { type: 'outcome', title: 'Nothing to pay', text: 'Nothing is charged until you collect your items.' },
+          { type: 'text', text: `Your pick-up on ${day} didn’t happen. Your booking was released. Message us to book again.` },
           { type: 'divider' },
           { type: 'text', text: 'To keep bookings fair for everyone, new bookings are paused on your account until we hear from you — just send us a quick message and we’ll sort it out.', tone: 'muted' },
         ],
@@ -1173,7 +1172,7 @@ export function welcomeEmail(shop: EmailShop, ctx: { firstName: string; resident
         type: 'card',
         title: 'How it works',
         items: [
-          { type: 'bullet', text: 'Book in the app — nothing to pay online', icon: { name: 'shopping-bag', alt: 'Book' } },
+          { type: 'bullet', text: 'Book in the app — pay at pick-up', icon: { name: 'shopping-bag', alt: 'Book' } },
           { type: 'bullet', text: 'Pick up at the shop — pay there, bring your ID', icon: { name: 'map-pin', alt: 'Pick up' } },
           { type: 'bullet', text: 'Return and get your deposit back on the spot', icon: { name: 'check-circle', alt: 'Return' } },
         ],

@@ -38,7 +38,7 @@ const ITEMS: FaqItem[] = [
   {
     icon: 'credit-card',
     q: 'How do I pay?',
-    a: "Nothing to pay online and no advance — you pay the rental fee in store at pick-up, in cash (LAK, USD or THB), by Lao bank transfer or by QR payment. Prices are in Lao Kip (LAK); USD and THB are accepted at the day's exchange rate. The deposit is paid at pick-up too, and refunded on the spot when you return the item.",
+    a: "Pay at pick-up. You pay the rental fee in store at pick-up, in cash (LAK, USD or THB), by Lao bank transfer or by QR payment. Prices are in Lao Kip (LAK); USD and THB are accepted at the day's exchange rate. The deposit is paid at pick-up too, and refunded on the spot when you return the item.",
   },
   {
     icon: 'clock',

@@ -41,7 +41,7 @@ export const EXPLORE_COPY = {
     return: 'Return',
     days: (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`,
     add: 'Add to bag',
-    payLater: 'Nothing to pay now. Pay at pick-up.',
+    payLater: 'Pay at pick-up.',
     added: 'Added to your bag',
     viewBag: 'View bag',
     error: "Couldn't add it to your bag. Please try again.",

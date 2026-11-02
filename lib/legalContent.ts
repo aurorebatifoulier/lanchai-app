@@ -69,7 +69,7 @@ export const TERMS_MARKDOWN: string = [
   '',
   '## 4. Reservations and payment',
   '',
-  '- **Nothing is paid online and there is no advance.** Your booking is confirmed in the app as soon as you book.',
+  '- **You pay at pick-up, in store. There is no online payment and no advance.** Your booking is confirmed in the app as soon as you book.',
   '- The rental fee is paid **in store at pick-up**, in cash (LAK, USD or THB), by Lao bank transfer, or by QR payment.',
   "- Prices are shown in **Lao Kip (LAK)**. Payment in USD or THB is accepted at the day's exchange rate.",
   '',

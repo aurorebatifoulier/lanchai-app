@@ -654,7 +654,7 @@ a snapshot indefinitely).
   fallback, the Terms annexed to the PDF, and keeping agreements as business records,
   Privacy §2 / §6), and the wording "our contract procedure applies" on a non-return
   (Terms §9, FAQ "What happens if I return late?" — kept as is on purpose; what that
-  procedure is and whether it's enforceable), the anonymous guest identifier (Privacy §2 "Browsing without an account" — deleted after 30 days without sign-up by `guestCleanupDaily`), and force majeure (Terms §14 + FAQ "What about events beyond
+  procedure is and whether it's enforceable), the payment wording of Terms §4 ("You pay at pick-up, in store. There is no online payment and no advance." — renter copy says "Pay at pick-up.", never "nothing to pay" except for a CANCELLATION; no-show = "Your booking was released. Message us to book again."), the anonymous guest identifier (Privacy §2 "Browsing without an account" — deleted after 30 days without sign-up by `guestCleanupDaily`), and force majeure (Terms §14 + FAQ "What about events beyond
   your control?" — aligned on 2026-10-30: "we'll work with you in good faith to find a
   fair solution", no statement about refunding used days). No "DRAFT" banner is shown to renters; the review note lives in
   the file header and here. Placeholders filled by `components/LegalScreen.tsx`

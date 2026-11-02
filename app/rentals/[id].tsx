@@ -460,7 +460,7 @@ export default function RentalDetailScreen() {
           <View style={s.cancelledBanner}>
             <Feather name="calendar" size={14} color={COLORS.fg3} />
             <Text style={s.cancelledBannerText}>
-              We missed you at pick-up, so this booking was released. Nothing to pay — message us to book again.
+              We missed you at pick-up. Your booking was released. Message us to book again.
             </Text>
           </View>
         )}
