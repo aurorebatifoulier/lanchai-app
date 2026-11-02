@@ -10,17 +10,17 @@ import { UI } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { QRLightbox } from '@/components/QRLightbox';
 import { useAuth } from '@/contexts/AuthContext';
-import { getMyReservations, cancelReservations, getProducts, type RentalDoc } from '@/lib/firestore';
+import { getMyReservations, cancelReservations, getProducts, getProduct, type RentalDoc } from '@/lib/firestore';
 import { cached, HOME_TTL } from '@/lib/homeCache';
 import { sendNotif } from '@/lib/notifications';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { DEFAULT_REVIEW_REWARD_POINTS } from '@/lib/loyalty';
 import {
   type RentalsTab, type PastFilter, type RentalEntry,
-  tabOf, groupEntries, matchesPastFilter, heroEntry, isPickupPassed, withProductImages,
+  tabOf, groupEntries, matchesPastFilter, heroEntry, isPickupPassed, withProductImages, type ProductLook,
 } from '@/lib/rentalsList';
 import {
-  NextPickupHero, UpcomingCard, MissedPickupCard, ActiveCard, PastCard, RentalsEmpty, clearReviewCache,
+  NextPickupHero, UpcomingCard, MissedPickupsCard, ActiveCard, PastCard, RentalsEmpty, clearReviewCache,
 } from '@/components/rentals/RentalCards';
 import { OrderSheet } from '@/components/rentals/OrderSheet';
 
@@ -28,6 +28,25 @@ import { OrderSheet } from '@/components/rentals/OrderSheet';
 // + countdown cards), Active (due-back countdown, Extend, calm late card with "I'm on my
 // way"), Past (Returned / Cancelled / All). One card per order; a multi-item card opens
 // the order sheet. Pure picks in lib/rentalsList.ts, cards in components/rentals/.
+
+// Products the renter catalogue doesn't hold (drafts, archived — getProducts hides them):
+// read once by id for their photo / category, kept for the app session.
+const extraLooks = new Map<string, ProductLook>();
+
+async function productLooks(rentals: RentalDoc[]): Promise<Map<string, ProductLook>> {
+  const looks = new Map<string, ProductLook>();
+  const products = await cached('products', HOME_TTL.products, getProducts).catch(() => []);
+  for (const p of products) looks.set(p.id, { image: p.images?.[0] ?? p.imageUrl ?? null, category: p.category ?? null });
+  const missing = [...new Set(rentals.map(r => r.productId))].filter(id => id && !looks.has(id));
+  await Promise.all(missing.map(async id => {
+    if (!extraLooks.has(id)) {
+      const p = await getProduct(id).catch(() => null);
+      extraLooks.set(id, { image: p?.images?.[0] ?? p?.imageUrl ?? null, category: p?.category ?? null });
+    }
+    looks.set(id, extraLooks.get(id)!);
+  }));
+  return looks;
+}
 
 const ENTER = FadeInUp.duration(MOTION.duration.base)
   .withInitialValues({ opacity: 0, transform: [{ translateY: MOTION.riseY }] })
@@ -53,14 +72,10 @@ export default function ReservationsScreen() {
     if (!user) return;
     try {
       // Photos: the stored one, else the product's first photo (shared 5-min products
-      // cache — the catalogue failing to load only costs the fallback photos).
-      const [data, products] = await Promise.all([
-        getMyReservations(user.uid),
-        cached('products', HOME_TTL.products, getProducts).catch(() => []),
-      ]);
-      const imageOf = new Map<string, string>();
-      for (const p of products) if (p.images?.[0]) imageOf.set(p.id, p.images[0]);
-      setRentals(withProductImages(data, imageOf));
+      // cache + a by-id read for hidden products), else its category badge.
+      const data = await getMyReservations(user.uid);
+      const looks = await productLooks(data).catch(() => new Map<string, ProductLook>());
+      setRentals(withProductImages(data, looks));
       setFailed(false);
       // First load only: open the first tab with something in it.
       if (!tabChosen.current) {
@@ -93,9 +108,8 @@ export default function ReservationsScreen() {
   const hero = useMemo(() => heroEntry(byTab.upcoming), [byTab.upcoming]);
   const returnedCount = useMemo(() => rentals.filter(r => r.status === 'returned').length, [rentals]);
 
-  // Upcoming: "Pick-up missed?" cards first (pick-up time passed, no hand-over — in the
-  // list header, above the carbon card), then the future pick-ups. A passed pick-up is
-  // never "Today" nor the hero.
+  // Upcoming: the carbon hero (next FUTURE pick-up) first, then ONE collapsible card for
+  // the pick-ups missed in the last 48h (older ones are in Past), then the others.
   const missed = tab === 'upcoming' ? byTab.upcoming.filter(e => isPickupPassed(e)) : [];
   const list: RentalEntry[] =
     tab === 'upcoming' ? byTab.upcoming.filter(e => e !== hero && !isPickupPassed(e))
@@ -125,14 +139,14 @@ export default function ReservationsScreen() {
 
   const header = (
     <>
-      {missed.map(e => (
-        <Reanimated.View key={e.key} entering={ENTER}>
-          <MissedPickupCard entry={e} onOpenOrder={setOrder} />
-        </Reanimated.View>
-      ))}
       {tab === 'upcoming' && hero && (
         <Reanimated.View entering={ENTER}>
           <NextPickupHero entry={hero} onOpenOrder={setOrder} onOpenQR={(value, label) => setQr({ value, label })} />
+        </Reanimated.View>
+      )}
+      {missed.length > 0 && (
+        <Reanimated.View entering={ENTER}>
+          <MissedPickupsCard entries={missed} />
         </Reanimated.View>
       )}
       {tab === 'past' && returnedCount > 0 && pastFilter !== 'cancelled' && (

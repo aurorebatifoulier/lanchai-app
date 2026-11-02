@@ -1225,10 +1225,14 @@ a snapshot indefinitely).
   Upcoming · n / Active · n / Past (Returned / Cancelled / All, default Returned; no-show
   sits under Cancelled). ONE card per order (past orders split by outcome). Upcoming: the
   nearest pick-up as the carbon card (QR → lightbox, Directions = `mapsUrl`, Add to
-  calendar = `addBookingToCalendar`) = the nearest FUTURE pick-up only; a booking whose
-  pick-up TIME has passed without hand-over (`isPickupPassed`) is never the hero nor
-  "Today": it's a "Pick-up missed?" card at the top (+ "Message us" with the rental
-  context); others with an "In n days" chip; money = "X LAK to
+  calendar = `addBookingToCalendar`) = the nearest FUTURE pick-up, ALWAYS first; a
+  booking whose pick-up TIME has passed without hand-over (`isPickupPassed`) is never the
+  hero nor "Today": within 48h (`MISSED_VISIBLE_MS`) it sits under the hero in ONE
+  collapsible "{n} missed pick-ups" card (`<MissedPickupsCard>`, collapsed by default,
+  each line "Your pick-up was … Message us if you still want it." + "Message us"); after
+  48h (`isStaleMissed`) it moves to Past → Cancelled as "Pick-up missed · nothing
+  charged" — renter DISPLAY only, the status is never changed (admin no-show flow
+  unchanged); others with an "In n days" chip; money = "X LAK to
   pay at pick-up" until hand-over — "Paid" only in Past. Active: grey "Due back …" chip +
   "Extend" → `/chat?rentalId=…&ask=Can I extend it?` (`ask` PREFILLS the input, never
   sent); late = white card + dark-amber left border, carbon chip "n days late", "A late
@@ -1241,7 +1245,9 @@ a snapshot indefinitely).
   `<OrderSheet>` (order QR, rows → `/rentals/{id}`, "Cancel order" with `ConfirmBox`; past
   items get the same `<PastItemActions>` / `<RatedLine>` as single cards, and the grouped
   past card shows "Tap to review or rent again" while an item is still unreviewed). Photos: stored `productImage`, else the product's first
-  photo from the shared `cached('products')` (`withProductImages`). Order labels are
+  photo (shared `cached('products')`, plus a by-id `getProduct` for drafts / archived
+  products that `getProducts` hides), else the product's `<CategoryBadge>` (`RentalThumb`,
+  `withProductImages`; `RentalDoc.productCategory` is display-only, never stored). Order labels are
   `displayOrderId()` (LNC-…) or nothing — never the raw Firestore id. No
   status chips ("Pending payment at pick-up", green "Confirmed") on renter cards.
 

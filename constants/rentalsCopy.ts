@@ -29,6 +29,7 @@ export const RENTALS_COPY = {
 
   // Pick-up time passed, not handed over
   missedChip: 'Pick-up missed?',
+  missedCount: (n: number) => `${n} missed pick-up${n === 1 ? '' : 's'}`,
   missedText: (date: string) => `Your pick-up was ${date}. Message us if you still want it.`,
 
   // Active
@@ -48,7 +49,7 @@ export const RENTALS_COPY = {
   // Past
   returned: 'Returned',
   cancelled: 'Cancelled',
-  missedPickup: 'Missed pick-up',
+  missedPickup: 'Pick-up missed',
   notReturned: 'Not returned',
   day: (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`,
   nothingCharged: 'nothing charged',

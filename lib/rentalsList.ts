@@ -14,11 +14,24 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 
 /** Booked, not picked up yet (still "to pay at pick-up"). */
 export const isPrePickup = (r: RentalDoc) => r.status === 'pending_payment' || r.status === 'confirmed';
-/** Cancelled before pick-up — nothing charged. */
-export const isCancelledLike = (r: RentalDoc) => r.status === 'cancelled' || r.status === 'no_show';
 
-export function tabOf(r: RentalDoc): RentalsTab {
-  if (isPrePickup(r)) return 'upcoming';
+/** Missed pick-ups stay in Upcoming this long after the pick-up time, then go to Past. */
+export const MISSED_VISIBLE_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Booked, never handed over, pick-up time more than 48h ago — shown in Past (Cancelled)
+ * as "Pick-up missed · nothing charged". Renter-side DISPLAY only: the status is
+ * untouched (staff still mark no-shows through the admin flow).
+ */
+export function isStaleMissed(r: RentalDoc, nowMs: number = Date.now()): boolean {
+  return isPrePickup(r) && r.pickupAt.toMillis() + MISSED_VISIBLE_MS <= nowMs;
+}
+
+/** Cancelled / no-show / stale missed pick-up — nothing charged. */
+export const isCancelledLike = (r: RentalDoc) => r.status === 'cancelled' || r.status === 'no_show' || isStaleMissed(r);
+
+export function tabOf(r: RentalDoc, nowMs: number = Date.now()): RentalsTab {
+  if (isPrePickup(r)) return isStaleMissed(r, nowMs) ? 'past' : 'upcoming';
   if (r.status === 'active') return 'active';
   return 'past'; // returned, lost, cancelled, no_show
 }
@@ -106,9 +119,15 @@ export function isPickupPassed(e: RentalEntry, nowMs: number = Date.now()): bool
   return Math.min(...e.items.map(r => r.pickupAt.toMillis())) <= nowMs;
 }
 
-/** Stored photo, else the product's first photo from the catalogue (older / imageless lines). */
-export function withProductImages(rentals: RentalDoc[], imageOf: Map<string, string>): RentalDoc[] {
-  return rentals.map(r => (r.productImage || !imageOf.get(r.productId) ? r : { ...r, productImage: imageOf.get(r.productId)! }));
+export interface ProductLook { image: string | null; category: string | null }
+
+/** Stored photo, else the product's first photo; plus its category (badge when no photo). */
+export function withProductImages(rentals: RentalDoc[], lookOf: Map<string, ProductLook>): RentalDoc[] {
+  return rentals.map(r => {
+    const look = lookOf.get(r.productId);
+    if (!look) return r;
+    return { ...r, productImage: r.productImage || look.image, productCategory: look.category ?? undefined };
+  });
 }
 
 // ── Lines ────────────────────────────────────────────────────────────────────
@@ -149,7 +168,7 @@ export function pastMoneyLine(items: RentalDoc[]): string {
 /** Past status word (grey). */
 export function pastStatus(r: RentalDoc): string {
   if (r.status === 'cancelled') return c.cancelled;
-  if (r.status === 'no_show') return c.missedPickup;
+  if (r.status === 'no_show' || isStaleMissed(r)) return c.missedPickup;
   if (r.status === 'lost') return c.notReturned;
   return c.returned;
 }

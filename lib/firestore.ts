@@ -214,6 +214,8 @@ export interface RentalDoc {
   productId: string;
   productName: string;
   productImage: string | null;
+  /** Display-only, filled client-side on My rentals from the product (never stored). */
+  productCategory?: string;
   renterId: string;
   renterName: string | null;
   pickupAt: Timestamp;

@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { RENTALS_COPY as c } from '@/constants/rentalsCopy';
-import { UI } from '@/components/account/ui';
+import { UI, CategoryBadge } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { QRThumb } from '@/components/QRThumb';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
@@ -29,15 +29,20 @@ const returnMs = (r: RentalDoc) => r.returnAt.toMillis();
 
 // ── Thumbnails ───────────────────────────────────────────────────────────────
 
-function Thumb({ rental, size = 64 }: { rental: RentalDoc; size?: number }) {
+/** Product photo, else the product's category badge (never an empty grey square). */
+export function RentalThumb({ rental, size = 64 }: { rental: RentalDoc; size?: number }) {
+  if (!rental.productImage && rental.productCategory) {
+    return <View style={{ width: size, height: size }}><CategoryBadge cat={rental.productCategory} size={size} /></View>;
+  }
   return (
-    <View style={[s.thumb, { width: size, height: size }]}>
+    <View style={[s.thumb, { width: size, height: size, borderRadius: size >= 52 ? 14 : 12 }]}>
       {rental.productImage
         ? <Image source={{ uri: rental.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
         : <Feather name="package" size={Math.round(size * 0.4)} color={SHADES.carbonFaint} />}
     </View>
   );
 }
+const Thumb = RentalThumb;
 
 /** One photo, or up to 3 stacked (offset) for an order. */
 export function Thumbs({ items }: { items: RentalDoc[] }) {
@@ -151,28 +156,43 @@ export function UpcomingCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpe
 
 // ── Pick-up time passed, not handed over ──────────────────────────────────────
 
-export function MissedPickupCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenOrder: (e: RentalEntry) => void }) {
+/**
+ * Pick-ups whose time passed in the last 48h without a hand-over — ONE collapsible card
+ * under the hero (collapsed by default). Older ones move to Past (lib/rentalsList).
+ */
+export function MissedPickupsCard({ entries }: { entries: RentalEntry[] }) {
   const router = useRouter();
-  const open = useOpen(entry, onOpenOrder);
-  const { items } = entry;
-  const ms = Math.min(...items.map(pickupMs));
+  const [open, setOpen] = useState(false);
+  if (entries.length === 0) return null;
   return (
-    <PressScale style={[UI.card, s.card]} onPress={open}>
-      <View style={s.row}>
-        <Thumbs items={items} />
-        <View style={s.body}>
-          <CardHead items={items} chip={c.missedChip} />
-          <Text style={s.lateText}>{c.missedText(when(ms))}</Text>
-        </View>
-      </View>
-      <PressScale
-        style={[UI.btnSecondary, s.extendBtn]}
-        onPress={() => router.push({ pathname: '/chat', params: { rentalId: items[0].id } } as never)}
-      >
-        <Feather name="message-circle" size={15} color={SHADES.carbon} />
-        <Text style={UI.btnSecondaryText}>{c.messageUs}</Text>
+    <View style={[UI.card, s.card]}>
+      <PressScale style={s.missedHead} onPress={() => setOpen(o => !o)}>
+        <View style={s.missedIcon}><Feather name="clock" size={16} color={SHADES.amberDeep} /></View>
+        <Text style={[s.name, { flex: 1 }]}>{c.missedCount(entries.length)}</Text>
+        <Feather name={open ? 'chevron-up' : 'chevron-down'} size={20} color={SHADES.carbonMuted} />
       </PressScale>
-    </PressScale>
+      {open && entries.map(e => {
+        const ms = Math.min(...e.items.map(pickupMs));
+        return (
+          <View key={e.key} style={s.missedLine}>
+            <View style={s.row}>
+              <Thumbs items={e.items} />
+              <View style={s.body}>
+                <CardHead items={e.items} chip={c.missedChip} />
+                <Text style={s.lateText}>{c.missedText(when(ms))}</Text>
+              </View>
+            </View>
+            <PressScale
+              style={[UI.btnSecondary, s.extendBtn]}
+              onPress={() => router.push({ pathname: '/chat', params: { rentalId: e.items[0].id } } as never)}
+            >
+              <Feather name="message-circle" size={15} color={SHADES.carbon} />
+              <Text style={UI.btnSecondaryText}>{c.messageUs}</Text>
+            </PressScale>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -410,6 +430,9 @@ const s = StyleSheet.create({
   btn: { flex: 1, height: 46, paddingHorizontal: 8 },
   extendBtn: { marginTop: 14, height: 42 },
 
+  missedHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  missedIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center' },
+  missedLine: { borderTopWidth: 0.5, borderTopColor: SHADES.border, marginTop: 14, paddingTop: 14 },
   lateCard: { borderLeftWidth: 4, borderLeftColor: SHADES.amberText },
   lateText: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbon, lineHeight: 19 },
 

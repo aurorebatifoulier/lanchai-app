@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { RENTALS_COPY as c } from '@/constants/rentalsCopy';
@@ -12,7 +11,7 @@ import { ConfirmBox } from '@/components/ConfirmBox';
 import { displayOrderId } from '@/utils/rentalDocs';
 import type { RentalDoc } from '@/lib/firestore';
 import { type RentalEntry, isPrePickup, isCancelledLike, tabOf, lak, orderTotal } from '@/lib/rentalsList';
-import { useMyRatings, PastItemActions, RatedLine } from '@/components/rentals/RentalCards';
+import { useMyRatings, PastItemActions, RatedLine, RentalThumb } from '@/components/rentals/RentalCards';
 
 // "Your order" sheet — a multi-item card's tap: the order QR (while something is still
 // to pick up / return), one row per item → its rental detail, and "Cancel order" for the
@@ -79,11 +78,7 @@ export function OrderSheet({ entry, onClose, onOpenQR, onCancel, reviewPoints }:
               return (
                 <PressScale key={r.id} style={[UI.card, s.item]} onPress={() => { close(); router.push(`/rentals/${r.id}`); }}>
                   <View style={s.itemRow}>
-                    <View style={s.thumb}>
-                      {r.productImage
-                        ? <Image source={{ uri: r.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-                        : <Feather name="package" size={18} color={SHADES.carbonFaint} />}
-                    </View>
+                    <RentalThumb rental={r} size={44} />
                     <View style={{ flex: 1 }}>
                       <Text style={UI.title} numberOfLines={1}>{r.productName}</Text>
                       <Text style={UI.subtitle} numberOfLines={1}>{`${r.pickupLabel} → ${r.returnLabel}`}</Text>
@@ -134,5 +129,4 @@ const s = StyleSheet.create({
   qrRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
   item: { padding: 12 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  thumb: { width: 44, height: 44, borderRadius: 12, backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
 });
