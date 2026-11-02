@@ -639,7 +639,7 @@ a snapshot indefinitely).
   convention used everywhere else pricing is shown (`app/bag.tsx`,
   `app/rentals/[id].tsx`, `app/booking/new.tsx`, `app/product/[id].tsx`).
 
-- **Legal texts (`lib/legalContent.ts`) — updated 2026-10-30, still NEED LAWYER REVIEW
+- **Legal texts (`lib/legalContent.ts`) — updated 2026-11-02, still NEED LAWYER REVIEW
   before public launch.** Lawyer list: limitation of liability, deposit retention on
   non-return, ID copy retention + the document retention periods (Privacy §6), data
   transfers outside Laos — Singapore / Brevo France (incl. Brevo link tracking),
@@ -654,7 +654,7 @@ a snapshot indefinitely).
   fallback, the Terms annexed to the PDF, and keeping agreements as business records,
   Privacy §2 / §6), and the wording "our contract procedure applies" on a non-return
   (Terms §9, FAQ "What happens if I return late?" — kept as is on purpose; what that
-  procedure is and whether it's enforceable), and force majeure (Terms §14 + FAQ "What about events beyond
+  procedure is and whether it's enforceable), the anonymous guest identifier (Privacy §2 "Browsing without an account" — deleted after 30 days without sign-up by `guestCleanupDaily`), and force majeure (Terms §14 + FAQ "What about events beyond
   your control?" — aligned on 2026-10-30: "we'll work with you in good faith to find a
   fair solution", no statement about refunding used days). No "DRAFT" banner is shown to renters; the review note lives in
   the file header and here. Placeholders filled by `components/LegalScreen.tsx`
@@ -853,7 +853,7 @@ a snapshot indefinitely).
   `BookingHoldNotice` = white card + amber pause icon + WhatsApp row. `WhatsAppButton` has
   no green anywhere (button variant = white, carbon outline; row variant on the booking
   confirmation, hold notice, overdue rental). Small stock dots / chips keep green / red.
-  Main app screens (category, login, onboarding) are
+  Main app screens (category) are
   NOT on this design yet (Explore, product and the Reservations tab are) — Home is (see "Home" below).
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
@@ -1307,6 +1307,40 @@ a snapshot indefinitely).
     Sign-in to an existing account replaces the guest session (guest recent views are
     dropped). `addFavorite` / `removeFavorite` write to the CURRENT session uid (a resumed
     closure may carry the guest uid).
+
+- **Auth screens + onboarding (validated mockups, 2026-11-02).** `app/login.tsx` = sign in
+  (`AuthHeaderDecor`: wordmark, dotted bee flight + floating category bubbles, rotating
+  line `AUTH_COPY.signIn.lines`; "Just looking? Browse first →" leaves as a guest) + 2-step
+  sign-up (step 1 email / password / confirm with live "Passwords match", LINKS the guest
+  session via `createEmailAccount`; step 2 names + `PhoneField` country picker
+  (`constants/countryCodes.ts`, `toE164`) + collapsible invite code → `saveIndividualProfile`
+  in `lib/authActions.ts`). `?mode=signup`, `?step=2`, `?invite=1`. An account without
+  name + phone (`isProfileComplete`, `useAuth().profileComplete`) resumes at step 2 (sign-in,
+  Google, or any guarded action). `ForgotPasswordSheet` replaces the old inline message.
+  Business sign-up / sign-in (flag `businessAccounts`) = the old form, kept as
+  `components/auth/LegacyAuthForm.tsx` ("Business account? Apply here"). Strings:
+  `constants/authCopy.ts`.
+  - **Google** (`lib/googleSignIn.ts`, `@react-native-google-signin/google-signin`): only in
+    a dev / EAS build — `googleSignInAvailable()` = not Expo Go AND
+    `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` set; the module is required lazily. Links the guest
+    session when the Google account is new, else `signInWithCredential`. No config plugin
+    in app.json (Android autolinks); iOS will need it with `iosUrlScheme`. Apple sign-in:
+    empty slot in `SocialButtons` (required on iOS later).
+  - **Onboarding** (`app/onboarding.tsx`, first launch only): 3 photo slides (slow zoom, off
+    with reduce motion), white cards / carbon last card (last sentence of its title in
+    amber), Skip / Start exploring → Home as a guest, "I already have an account · Sign in".
+    Content: `config/onboarding.slides[0..2]` {title, text, imageUrl, imagePath} via
+    `lib/onboardingContent.ts`, edited at Admin → Onboarding (`app/admin/onboarding.tsx`,
+    picker crop 9:16, saved 1080×1920 JPEG 0.7, Storage `onboarding/{slot}/…` admin write,
+    session read). Empty slot → bundled Unsplash placeholders
+    (`assets/images/onboarding/`, CREDITS.md).
+  - **Guest cleanup** (`functions/src/guestCleanup.ts`, `guestCleanupDaily` 04:30
+    Vientiane): Admin SDK `listUsers`; deletes ONLY users with no provider, email or phone
+    (anonymous) whose last activity (creation / sign-in / token refresh) is > 30 days old,
+    plus their `recentViews` doc. Never touches an account with a provider.
+  - Verify-email / "Email verified!" banners: `components/auth/AccountBanners.tsx` — state
+    in the tabs layout provider, rendered INLINE under each tab's header (never an overlay
+    on the app header).
 
 ## Security follow-ups
 

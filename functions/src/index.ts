@@ -56,6 +56,9 @@ export * from './chat';
 // "Notify me" (Liked): hourly availability watch job.
 export * from './watches';
 
+// Anonymous guest accounts inactive for 30 days (+ their recentViews) — daily.
+export * from './guestCleanup';
+
 admin.initializeApp();
 const db = admin.firestore();
 
