@@ -6,21 +6,27 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { SHADES } from '@/constants/brandShades';
 import { TYPE } from '@/constants/typography';
+import {
+  ONBOARDING_DEFAULT_TEXTS, ONBOARDING_STICKER_LABELS, ONBOARDING_PHOTO_SLOTS,
+} from '@/constants/onboardingCopy';
 import BackButton from '@/components/BackButton';
 import PressScale from '@/components/PressScale';
 import { UI, useScreenInsets, SectionTitle, CheckLine } from '@/components/account/ui';
 import {
-  ONBOARDING_DEFAULTS, getOnboardingDocs, saveOnboardingSlides, uploadOnboardingPhoto, deleteOnboardingPhoto,
+  bundledPhoto, getOnboardingDocs, saveOnboardingSlides, uploadOnboardingPhoto, deleteOnboardingPhoto,
   type OnboardingSlideDoc,
 } from '@/lib/onboardingContent';
 
-// Admin → Onboarding: the 3 first-launch slides. Photo (portrait, cropped 9:16, saved
-// 1080×1920), title, text. Empty fields / no photo = the bundled default for that slot.
+const SLIDE_NAMES = ['Slide 1 · The idea', 'Slide 2 · How it works', 'Slide 3 · Why LANCHAI'];
+
+// Admin → Onboarding ("living cards"): per slide the photo slots (2 / 3 / 1, cropped 4:5,
+// saved ~1080 px JPEG 0.7), the title ([brackets] = highlighted words), the sub-line and
+// the sticker texts. Empty = the default (shown as placeholder). Shown once per device.
 export default function AdminOnboardingScreen() {
   const router = useRouter();
   const screen = useScreenInsets();
   const [slides, setSlides] = useState<OnboardingSlideDoc[] | null>(null);
-  const [busySlot, setBusySlot] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,26 +35,32 @@ export default function AdminOnboardingScreen() {
     getOnboardingDocs().then(d => setSlides([0, 1, 2].map(i => d[i] ?? {})));
   }, []);
 
-  const patch = (i: number, p: Partial<OnboardingSlideDoc>) => {
+  const patch = (i: number, fn: (x: OnboardingSlideDoc) => OnboardingSlideDoc) => {
     setSaved(false);
-    setSlides(prev => prev && prev.map((x, j) => (j === i ? { ...x, ...p } : x)));
+    setSlides(prev => prev && prev.map((x, j) => (j === i ? fn(x) : x)));
   };
+  const setPhoto = (i: number, j: number, photo: { url: string | null; path: string | null }) =>
+    patch(i, x => {
+      const photos = Array.from({ length: ONBOARDING_PHOTO_SLOTS[i] }, (_, k) => x.photos?.[k] ?? {});
+      photos[j] = photo;
+      return { ...x, photos };
+    });
 
-  const pick = async (i: number) => {
+  const pick = async (i: number, j: number) => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [9, 16], quality: 1 });
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 5], quality: 1 });
     if (res.canceled || !res.assets?.[0]) return;
-    setBusySlot(i); setError(null);
+    setBusy(`${i}-${j}`); setError(null);
     try {
-      const up = await uploadOnboardingPhoto(i, res.assets[0].uri);
-      const old = slides?.[i]?.imagePath;
-      patch(i, up);
+      const up = await uploadOnboardingPhoto(i, j, res.assets[0].uri);
+      const old = slides?.[i]?.photos?.[j]?.path;
+      setPhoto(i, j, up);
       if (old) deleteOnboardingPhoto(old);
     } catch {
       setError('Upload failed — try again.');
     } finally {
-      setBusySlot(null);
+      setBusy(null);
     }
   };
 
@@ -68,41 +80,57 @@ export default function AdminOnboardingScreen() {
       </View>
       {!slides ? <ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} /> : (
         <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]} keyboardShouldPersistTaps="handled">
-          <Text style={[UI.body, { marginTop: 12 }]}>Shown once, on first launch. Leave a field empty to keep the default.</Text>
+          <Text style={[UI.body, { marginTop: 12 }]}>
+            Shown once per device, on first launch. Leave a field empty to keep the default. In titles, put the highlighted words in [brackets].
+          </Text>
           {slides.map((sl, i) => {
-            const d = ONBOARDING_DEFAULTS[i];
+            const d = ONBOARDING_DEFAULT_TEXTS[i];
             return (
               <View key={i}>
-                <SectionTitle>{`Slide ${i + 1}`}</SectionTitle>
+                <SectionTitle>{SLIDE_NAMES[i]}</SectionTitle>
                 <View style={[UI.card, UI.cardPadded, { gap: 10 }]}>
-                  <View style={s.photoRow}>
-                    <View style={s.photo}>
-                      <Image source={sl.imageUrl ? { uri: sl.imageUrl } : d.image} style={StyleSheet.absoluteFill} contentFit="cover" />
-                      {busySlot === i && <View style={s.photoBusy}><ActivityIndicator color={SHADES.white} /></View>}
-                    </View>
-                    <View style={{ flex: 1, gap: 8 }}>
-                      <Text style={UI.small}>{sl.imageUrl ? 'Your photo' : 'Default photo'} · portrait 9:16</Text>
-                      <PressScale style={[UI.btnSecondary, UI.btnCard]} onPress={() => pick(i)} disabled={busySlot !== null}>
-                        <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{sl.imageUrl ? 'Replace photo' : 'Upload photo'}</Text>
-                      </PressScale>
-                      {!!sl.imageUrl && (
-                        <Text style={UI.link} onPress={() => { if (sl.imagePath) deleteOnboardingPhoto(sl.imagePath); patch(i, { imageUrl: undefined, imagePath: undefined }); }}>
-                          Use the default photo
-                        </Text>
-                      )}
-                    </View>
+                  <Text style={UI.fieldLabel}>Photos · 4:5</Text>
+                  <View style={s.photos}>
+                    {Array.from({ length: ONBOARDING_PHOTO_SLOTS[i] }, (_, j) => {
+                      const ph = sl.photos?.[j];
+                      return (
+                        <View key={j} style={s.slot}>
+                          <PressScale style={s.photo} onPress={() => pick(i, j)} disabled={busy !== null}>
+                            <Image source={ph?.url ? { uri: ph.url } : bundledPhoto(i, j)} style={StyleSheet.absoluteFill} contentFit="cover" />
+                            {busy === `${i}-${j}` && <View style={s.photoBusy}><ActivityIndicator color={SHADES.white} /></View>}
+                          </PressScale>
+                          <Text style={UI.small}>{ph?.url ? 'Yours · tap to replace' : 'Default · tap to upload'}</Text>
+                          {!!ph?.url && (
+                            <Text style={[UI.link, s.reset]} onPress={() => { if (ph.path) deleteOnboardingPhoto(ph.path); setPhoto(i, j, { url: null, path: null }); }}>
+                              Use default
+                            </Text>
+                          )}
+                        </View>
+                      );
+                    })}
                   </View>
                   <Text style={UI.fieldLabel}>Title</Text>
-                  <TextInput style={UI.input} value={sl.title ?? ''} onChangeText={t => patch(i, { title: t })} placeholder={d.title} placeholderTextColor={SHADES.carbonFaint} maxLength={60} />
-                  <Text style={UI.fieldLabel}>Text</Text>
-                  <TextInput style={[UI.input, s.multi]} value={sl.text ?? ''} onChangeText={t => patch(i, { text: t })} placeholder={d.text} placeholderTextColor={SHADES.carbonFaint} multiline maxLength={160} />
+                  <TextInput style={UI.input} value={sl.title ?? ''} onChangeText={t => patch(i, x => ({ ...x, title: t }))}
+                    placeholder={d.title} placeholderTextColor={SHADES.carbonFaint} maxLength={80} />
+                  <Text style={UI.fieldLabel}>Sub-line</Text>
+                  <TextInput style={[UI.input, s.multi]} value={sl.sub ?? ''} onChangeText={t => patch(i, x => ({ ...x, sub: t }))}
+                    placeholder={d.sub} placeholderTextColor={SHADES.carbonFaint} multiline maxLength={140} />
+                  {Object.keys(d.stickers).map(k => (
+                    <View key={k}>
+                      <Text style={UI.fieldLabel}>{ONBOARDING_STICKER_LABELS[i][k]}</Text>
+                      <TextInput style={UI.input} value={sl.stickers?.[k] ?? ''}
+                        onChangeText={t => patch(i, x => ({ ...x, stickers: { ...(x.stickers ?? {}), [k]: t } }))}
+                        placeholder={d.stickers[k]} placeholderTextColor={SHADES.carbonFaint} maxLength={40} />
+                    </View>
+                  ))}
+                  {i === 0 && <Text style={UI.small}>The “From … LAK / day” chip is computed from the published catalogue.</Text>}
                 </View>
               </View>
             );
           })}
           {!!error && <Text style={[UI.errorText, { marginTop: 12 }]}>{error}</Text>}
           {saved && <View style={{ marginTop: 12 }}><CheckLine text="Saved. New installs see it on first launch." /></View>}
-          <PressScale style={[UI.btnPrimary, { marginTop: 16 }]} onPress={save} disabled={saving || busySlot !== null}>
+          <PressScale style={[UI.btnPrimary, { marginTop: 16 }]} onPress={save} disabled={saving || busy !== null}>
             {saving ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>Save</Text>}
           </PressScale>
         </ScrollView>
@@ -118,8 +146,10 @@ const s = StyleSheet.create({
     backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
   headerTitle: { ...TYPE.sectionTitle, color: SHADES.carbon },
-  photoRow: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  photo: { width: 72, height: 128, borderRadius: 12, overflow: 'hidden', backgroundColor: SHADES.carbonLight },
+  photos: { flexDirection: 'row', gap: 10 },
+  slot: { width: 92, gap: 4 },
+  photo: { width: 92, height: 115, borderRadius: 12, overflow: 'hidden', backgroundColor: SHADES.carbonLight },
   photoBusy: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.4)', alignItems: 'center', justifyContent: 'center' },
-  multi: { minHeight: 80, textAlignVertical: 'top', paddingTop: 10 },
+  reset: { fontSize: 12 },
+  multi: { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 },
 });

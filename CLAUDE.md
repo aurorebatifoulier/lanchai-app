@@ -1331,14 +1331,23 @@ a snapshot indefinitely).
     session when the Google account is new, else `signInWithCredential`. No config plugin
     in app.json (Android autolinks); iOS will need it with `iosUrlScheme`. Apple sign-in:
     empty slot in `SocialButtons` (required on iOS later).
-  - **Onboarding** (`app/onboarding.tsx`, ONCE PER DEVICE — `lib/onboarding.ts` device flag set on finish / skip AND as soon as any account is seen on the device; never reset on sign-out, sign-in, account switch or deletion; sign-out → guest → Home): 3 photo slides (slow zoom, off
-    with reduce motion), white cards / carbon last card (last sentence of its title in
-    amber), Skip / Start exploring → Home as a guest, "I already have an account · Sign in".
-    Content: `config/onboarding.slides[0..2]` {title, text, imageUrl, imagePath} via
-    `lib/onboardingContent.ts`, edited at Admin → Onboarding (`app/admin/onboarding.tsx`,
-    picker crop 9:16, saved 1080×1920 JPEG 0.7, Storage `onboarding/{slot}/…` admin write,
-    session read). Empty slot → bundled Unsplash placeholders
-    (`assets/images/onboarding/`, CREDITS.md).
+  - **Onboarding "living cards"** (validated mockup 2026-11-03; `app/onboarding.tsx`, ONCE
+    PER DEVICE — `lib/onboarding.ts` device flag set on finish / skip AND as soon as any
+    account is seen on the device; never reset on sign-out, sign-in, account switch or
+    deletion; sign-out → guest → Home). Cream slides 1–2, carbon slide 3: LANCHAI + Skip,
+    tilted white-framed photo cards floating slowly (`components/onboarding/Parts.tsx`
+    `PhotoCard`), stickers popping in staggered (`Sticker`, 0 → 1.1 → 1), titles with
+    [bracketed] words highlighted (`HighlightTitle`: amber band −1.5° on cream, amber text
+    on carbon), hexagon pagination (`HexDots`), round carbon next button; slide 2 = 3
+    cards on the My Account-style dotted trajectory with the amber hexagon travelling along
+    it (`SlideArt.tsx`); slide 1 price chip = lowest `getMinPrice` of the published
+    catalogue in LAK (`useLowestDailyPriceLak`, hidden without a rate). Reduce motion: no
+    float / travelling hexagon, stickers static. Content: `config/onboarding` **version 2**
+    {slides: [{title, sub, stickers{…}, photos[{url, path}]}]} (v1 ignored), defaults in
+    `constants/onboardingCopy.ts`; Admin → Onboarding (`app/admin/onboarding.tsx`): photo
+    slots 2 / 3 / 1 (crop 4:5, ~1080 px JPEG 0.7, Storage `onboarding/s{n}p{m}/…`), title,
+    sub-line, sticker texts. Bundled Unsplash placeholders `assets/images/onboarding/`
+    (CREDITS.md).
   - **Guest cleanup** (`functions/src/guestCleanup.ts`, `guestCleanupDaily` 04:30
     Vientiane): Admin SDK `listUsers`; deletes ONLY users with no provider, email or phone
     (anonymous) whose last activity (creation / sign-in / token refresh) is > 30 days old,

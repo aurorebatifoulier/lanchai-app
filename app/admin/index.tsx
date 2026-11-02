@@ -51,7 +51,7 @@ const CARDS: HubCard[] = [
     icon: 'smartphone',
     iconBg: COLORS.warmBeige,
     title: 'Onboarding',
-    sub: 'The 3 first-launch slides: photo, title, text',
+    sub: 'The 3 first-launch slides: photos, titles, stickers',
     route: '/admin/onboarding',
   },
   {
