@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/onboarding' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies';
 }
 
 const CARDS: HubCard[] = [
@@ -46,6 +46,13 @@ const CARDS: HubCard[] = [
     title: 'Home slides',
     sub: 'Hero carousel and mid-page banner photos',
     route: '/admin/home-slides',
+  },
+  {
+    icon: 'smartphone',
+    iconBg: COLORS.warmBeige,
+    title: 'Onboarding',
+    sub: 'The 3 first-launch slides: photo, title, text',
+    route: '/admin/onboarding',
   },
   {
     icon: 'layers',
