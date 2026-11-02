@@ -186,6 +186,7 @@ export default function ReservationsScreen() {
         onClose={() => setOrder(null)}
         onOpenQR={(value, label) => setQr({ value, label })}
         onCancel={cancelOrder}
+        reviewPoints={reviewPoints}
       />
       {qr && <QRLightbox value={qr.value} label={qr.label} onClose={() => setQr(null)} />}
     </View>

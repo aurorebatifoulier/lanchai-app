@@ -56,6 +56,7 @@ export const RENTALS_COPY = {
   rentAgain: 'Rent again',
   review: (pts: number | null) => (pts ? `Review · +${pts} pts` : 'Review'),
   youRated: (n: number) => `You rated it ${n}`,
+  tapToReview: 'Tap to review or rent again',
 
   // Order sheet
   yourOrder: 'Your order',

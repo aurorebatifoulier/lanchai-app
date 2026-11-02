@@ -1235,7 +1235,9 @@ a snapshot indefinitely).
   "Rent again" + "Review · +N pts" (plain "Review" for excluded accounts) until reviewed
   (direct `getDoc` of `reviews/{productId}/reviews/{reservationId}`, session cache), then
   "★ You rated it n"; cancelled = muted, "nothing charged", no buttons. Multi-item card →
-  `<OrderSheet>` (order QR, rows → `/rentals/{id}`, "Cancel order" with `ConfirmBox`). No
+  `<OrderSheet>` (order QR, rows → `/rentals/{id}`, "Cancel order" with `ConfirmBox`; past
+  items get the same `<PastItemActions>` / `<RatedLine>` as single cards, and the grouped
+  past card shows "Tap to review or rent again" while an item is still unreviewed). No
   status chips ("Pending payment at pick-up", green "Confirmed") on renter cards.
 
 ## Security follow-ups

@@ -11,23 +11,30 @@ import { QRThumb } from '@/components/QRThumb';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { displayOrderId } from '@/utils/rentalDocs';
 import type { RentalDoc } from '@/lib/firestore';
-import { type RentalEntry, isPrePickup, lak, orderTotal } from '@/lib/rentalsList';
+import { type RentalEntry, isPrePickup, isCancelledLike, tabOf, lak, orderTotal } from '@/lib/rentalsList';
+import { useMyRatings, PastItemActions, RatedLine } from '@/components/rentals/RentalCards';
 
 // "Your order" sheet — a multi-item card's tap: the order QR (while something is still
 // to pick up / return), one row per item → its rental detail, and "Cancel order" for the
 // lines not picked up yet (free cancellation, ConfirmBox). The backdrop is a SIBLING of
-// the sheet so the item list scrolls.
-export function OrderSheet({ entry, onClose, onOpenQR, onCancel }: {
+// the sheet so the item list scrolls. Past items (returned / not returned) get the same
+// "Rent again" / "Review · +N pts" / "★ You rated it n" as a single past card.
+const isPastItem = (r: RentalDoc) => tabOf(r) === 'past' && !isCancelledLike(r);
+
+export function OrderSheet({ entry, onClose, onOpenQR, onCancel, reviewPoints }: {
   entry: RentalEntry | null;
   onClose: () => void;
   onOpenQR: (value: string, label: string) => void;
   onCancel: (items: RentalDoc[]) => Promise<void>;
+  /** Review reward points (null = loyalty excluded → plain "Review"). */
+  reviewPoints: number | null;
 }) {
   const router = useRouter();
   const screen = useScreenInsets();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
+  const ratings = useMyRatings(entry ? entry.items.filter(isPastItem) : []);
 
   const close = () => { setAsking(false); setError(false); onClose(); };
   if (!entry) return null;
@@ -67,20 +74,27 @@ export function OrderSheet({ entry, onClose, onOpenQR, onCancel }: {
                 <QRThumb value={qr} size={64} variant="order" onPress={() => { close(); onOpenQR(qr, c.orderLabel(orderLabel)); }} />
               </View>
             )}
-            {items.map(r => (
-              <PressScale key={r.id} style={[UI.card, s.item]} onPress={() => { close(); router.push(`/rentals/${r.id}`); }}>
-                <View style={s.thumb}>
-                  {r.productImage
-                    ? <Image source={{ uri: r.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-                    : <Feather name="package" size={18} color={SHADES.carbonFaint} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={UI.title} numberOfLines={1}>{r.productName}</Text>
-                  <Text style={UI.subtitle} numberOfLines={1}>{`${r.pickupLabel} → ${r.returnLabel}`}</Text>
-                </View>
-                <Feather name="chevron-right" size={18} color={SHADES.carbonFaint} />
-              </PressScale>
-            ))}
+            {items.map(r => {
+              const rating = ratings.get(r.id);
+              return (
+                <PressScale key={r.id} style={[UI.card, s.item]} onPress={() => { close(); router.push(`/rentals/${r.id}`); }}>
+                  <View style={s.itemRow}>
+                    <View style={s.thumb}>
+                      {r.productImage
+                        ? <Image source={{ uri: r.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+                        : <Feather name="package" size={18} color={SHADES.carbonFaint} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={UI.title} numberOfLines={1}>{r.productName}</Text>
+                      <Text style={UI.subtitle} numberOfLines={1}>{`${r.pickupLabel} → ${r.returnLabel}`}</Text>
+                      {isPastItem(r) && rating != null && <RatedLine rating={rating} />}
+                    </View>
+                    <Feather name="chevron-right" size={18} color={SHADES.carbonFaint} />
+                  </View>
+                  {isPastItem(r) && <PastItemActions rental={r} rating={rating} reviewPoints={reviewPoints} onNavigate={close} />}
+                </PressScale>
+              );
+            })}
             {cancellable.length > 0 && (
               asking ? (
                 <ConfirmBox
@@ -112,6 +126,7 @@ const s = StyleSheet.create({
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },
   title: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
   qrRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
+  item: { padding: 12 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   thumb: { width: 44, height: 44, borderRadius: 12, backgroundColor: SHADES.carbonLight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
 });

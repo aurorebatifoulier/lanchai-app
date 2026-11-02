@@ -239,22 +239,61 @@ export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenO
 // Review lookups (direct getDoc — never collectionGroup), cached for the app session.
 const reviewCache = new Map<string, number | null>();
 
-function useMyRating(r: RentalDoc, enabled: boolean): number | null | undefined {
-  const key = `${r.productId}/${r.id}`;
-  const [rating, setRating] = useState<number | null | undefined>(reviewCache.get(key));
+/** The renter's rating per RETURNED reservation: number, null = not reviewed, undefined = loading. */
+export function useMyRatings(rentals: RentalDoc[]): Map<string, number | null | undefined> {
+  const returned = rentals.filter(r => r.status === 'returned');
+  const keyOf = (r: RentalDoc) => `${r.productId}/${r.id}`;
+  const sig = returned.map(keyOf).join('|');
+  const [, bump] = useState(0);
   useEffect(() => {
-    if (!enabled || reviewCache.has(key)) return;
     let alive = true;
-    getReview(r.productId, r.id)
-      .then(doc => {
-        const v = typeof doc?.rating === 'number' ? doc.rating : null;
-        reviewCache.set(key, v);
-        if (alive) setRating(v);
-      })
-      .catch(() => {});
+    const missing = returned.filter(r => !reviewCache.has(keyOf(r)));
+    Promise.all(missing.map(r => getReview(r.productId, r.id)
+      .then(doc => { reviewCache.set(keyOf(r), typeof doc?.rating === 'number' ? doc.rating : null); })
+      .catch(() => {})))
+      .then(() => { if (alive && missing.length > 0) bump(n => n + 1); });
     return () => { alive = false; };
-  }, [enabled, key, r.productId, r.id]);
-  return rating;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+  return new Map(returned.map(r => [r.id, reviewCache.get(keyOf(r))]));
+}
+
+/** "Rent again" + "Review · +N pts" (until reviewed) — single past cards and the order sheet. */
+export function PastItemActions({ rental, rating, reviewPoints, onNavigate }: {
+  rental: RentalDoc;
+  rating: number | null | undefined;
+  reviewPoints: number | null;
+  /** Called before navigating (the order sheet closes itself). */
+  onNavigate?: () => void;
+}) {
+  const router = useRouter();
+  const go = (to: Parameters<typeof router.push>[0]) => { onNavigate?.(); router.push(to); };
+  return (
+    <View style={s.btnRow}>
+      <PressScale style={[UI.btnPrimary, s.btn]} onPress={() => go(`/product/${rental.productId}`)}>
+        <Text style={UI.btnPrimaryText}>{c.rentAgain}</Text>
+      </PressScale>
+      {rental.status === 'returned' && rating === null && (
+        <PressScale
+          style={[UI.btnSecondary, s.btn]}
+          onPress={() => go({ pathname: '/review/[productId]', params: { productId: rental.productId, reservationId: rental.id } } as never)}
+        >
+          <Feather name="star" size={15} color={SHADES.carbon} />
+          <Text style={UI.btnSecondaryText}>{c.review(reviewPoints)}</Text>
+        </PressScale>
+      )}
+    </View>
+  );
+}
+
+/** "★ You rated it n". */
+export function RatedLine({ rating }: { rating: number }) {
+  return (
+    <View style={s.ratedRow}>
+      <Feather name="star" size={14} color={SHADES.amberText} />
+      <Text style={s.rated}>{c.youRated(rating)}</Text>
+    </View>
+  );
 }
 
 /** After the review screen: forget the cached "not reviewed yet" answers. */
@@ -266,14 +305,14 @@ export function PastCard({ entry, onOpenOrder, reviewPoints }: {
   /** Review reward points (null = loyalty excluded → plain "Review"). */
   reviewPoints: number | null;
 }) {
-  const router = useRouter();
   const open = useOpen(entry, onOpenOrder);
   const { items } = entry;
   const first = items[0];
   const single = items.length === 1;
   const cancelled = isCancelledLike(first);
-  const returned = first.status === 'returned';
-  const rating = useMyRating(first, single && returned);
+  const ratings = useMyRatings(cancelled ? [] : items);
+  const rating = ratings.get(first.id);
+  const canReview = [...ratings.values()].some(v => v === null);
   const range = shortRange(Math.min(...items.map(pickupMs)), Math.max(...items.map(returnMs)));
   const days = Math.max(...items.map(r => r.durationDays ?? 0));
 
@@ -285,31 +324,14 @@ export function PastCard({ entry, onOpenOrder, reviewPoints }: {
           <CardHead items={items} status={pastStatus(first)} />
           <Text style={s.line} numberOfLines={1}>{cancelled ? `${range} · ${pastMoneyLine(items)}` : `${range} · ${c.day(days)}`}</Text>
           {!cancelled && single && rating != null ? (
-            <View style={s.ratedRow}>
-              <Feather name="star" size={14} color={SHADES.amberText} />
-              <Text style={s.rated}>{c.youRated(rating)}</Text>
-            </View>
+            <RatedLine rating={rating} />
           ) : !cancelled ? (
             <Text style={s.muted} numberOfLines={2}>{pastMoneyLine(items)}</Text>
           ) : null}
+          {!cancelled && !single && canReview && <Text style={s.tapHint}>{c.tapToReview}</Text>}
         </View>
       </View>
-      {!cancelled && single && (
-        <View style={s.btnRow}>
-          <PressScale style={[UI.btnPrimary, s.btn]} onPress={() => router.push(`/product/${first.productId}`)}>
-            <Text style={UI.btnPrimaryText}>{c.rentAgain}</Text>
-          </PressScale>
-          {returned && rating === null && (
-            <PressScale
-              style={[UI.btnSecondary, s.btn]}
-              onPress={() => router.push({ pathname: '/review/[productId]', params: { productId: first.productId, reservationId: first.id } } as never)}
-            >
-              <Feather name="star" size={15} color={SHADES.carbon} />
-              <Text style={UI.btnSecondaryText}>{c.review(reviewPoints)}</Text>
-            </PressScale>
-          )}
-        </View>
-      )}
+      {!cancelled && single && <PastItemActions rental={first} rating={rating} reviewPoints={reviewPoints} />}
     </PressScale>
   );
 }
@@ -354,6 +376,7 @@ const s = StyleSheet.create({
   muted60: { opacity: 0.6 },
   ratedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   rated: { fontSize: 13, fontWeight: '600', color: SHADES.amberDeep },
+  tapHint: { fontSize: 12.5, fontWeight: '600', color: SHADES.amberText, marginTop: 4 },
 
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   btn: { flex: 1, height: 46, paddingHorizontal: 8 },
