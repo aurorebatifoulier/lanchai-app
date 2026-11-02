@@ -30,6 +30,8 @@ export const AUTH_COPY = {
     signIn: 'Sign in',
     invite: (pct: number) => `Got an invite code? You’ll get ${pct}% off your first rental.`,
   },
+  inviteBanner: (pct: number) => `Sign up with an invite code and get ${pct}% off your first rental.`,
+  inviteBannerCta: 'Sign up',
   guest: {
     accountTitle: 'You’re browsing as a guest',
     accountSub: 'Sign in to rent, save favourites and chat with us.',

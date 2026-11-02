@@ -27,6 +27,7 @@ import SearchBar from '@/components/SearchBar';
 import ProductRailCard from '@/components/ProductRailCard';
 import InsetCarousel from '@/components/home/InsetCarousel';
 import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
+import GuestInviteBanner from '@/components/home/GuestInviteBanner';
 import RentReturnRepeat from '@/components/home/RentReturnRepeat';
 import CollectionTiles from '@/components/home/CollectionTiles';
 import RentAgainList from '@/components/home/RentAgainList';
@@ -80,7 +81,7 @@ const STICKY_PAD = 8;
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isGuest } = useAuth();
   const exchangeRate = useExchangeRate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -408,6 +409,10 @@ export default function HomeScreen() {
               <View style={[UI.card, styles.previewCard]}>
                 <ToggleRow title={HOME_COPY.adminPreviewToggle} sub={HOME_COPY.adminPreviewSub} value={previewAll} onValueChange={togglePreview} />
               </View>
+            )}
+
+            {isGuest && (
+              <View style={{ marginTop: 14 }}><GuestInviteBanner /></View>
             )}
 
             {(pickup || preview) && (
