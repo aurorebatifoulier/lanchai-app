@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { auth } from './auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { getMyReservations } from './firestore';
 import {
   useLoyaltyConfig, tierProgress, isLoyaltyExcluded, loyaltyPointsFor,
@@ -34,15 +35,21 @@ export function useMyLoyalty(): MyLoyalty {
   const config = useLoyaltyConfig();
   const [user, setUser] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Follows the session: a guest who signs in / signs up (same screen still mounted)
+  // gets their profile without a remount.
+  const { user: authUser, isGuest } = useAuth();
+  const uid = authUser?.uid ?? null;
   useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) { setLoaded(true); return; }
+    setUser(null);
+    // Guests (anonymous session) have no profile — never read it.
+    if (!uid || isGuest) { setLoaded(true); return; }
+    setLoaded(false);
     return onSnapshot(doc(db, 'users', uid), s => { setUser(s.data() ?? {}); setLoaded(true); }, () => setLoaded(true));
-  }, []);
+  }, [uid, isGuest]);
   const points = typeof user?.loyaltyPoints === 'number' ? user.loyaltyPoints : 0;
   return {
     loading: !loaded,
-    excluded: !auth.currentUser || !user || isLoyaltyExcluded(user),
+    excluded: !uid || isGuest || !user || isLoyaltyExcluded(user),
     points,
     tier: ((user?.loyaltyTier as LoyaltyTierKey) ?? 'bronze'),
     celebratedTier: (user?.celebratedTier as LoyaltyTierKey) ?? null,

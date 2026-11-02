@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
@@ -40,7 +41,7 @@ export const syncProductRating = onDocumentWritten(
 // reservations are kept as business records (Privacy Policy). Server-side so no
 // client ever needs to re-create a profile with server-only fields after a failure.
 export const deleteMyAccount = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   // Recent sign-in (the app re-authenticates with the password right before calling).
   const authTime = Number(request.auth?.token.auth_time ?? 0) * 1000;
@@ -69,7 +70,7 @@ export const deleteMyAccount = onCall({ region: REGION }, async request => {
 // rejection can't be resubmitted from the app. The document itself is uploaded by the
 // app beforehand (btobDocumentUrl is renter-writable while not approved).
 export const resubmitBusinessApplication = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const d = (request.data ?? {}) as Record<string, unknown>;
   const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');

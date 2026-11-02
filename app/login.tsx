@@ -23,7 +23,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COLORS } from '@/constants/Colors';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/auth';
 import { useFeatureFlags } from '@/lib/features';
@@ -62,7 +62,9 @@ export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [path, setPath]           = useState<Path>('btoc');
-  const [mode, setMode]           = useState<'signin' | 'signup'>('signin');
+  // ?mode=signup (guest "Create account") opens the sign-up form directly.
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode]           = useState<'signin' | 'signup'>(params.mode === 'signup' ? 'signup' : 'signin');
   const [firstName, setFirstName]     = useState('');
   const [lastName, setLastName]       = useState('');
   const [phone, setPhone]             = useState('+856');

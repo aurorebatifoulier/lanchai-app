@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   User,
-  onAuthStateChanged,
+  onIdTokenChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -14,7 +15,13 @@ type AccountType = 'btoc' | 'btob';
 type BtobStatus = 'pending_approval' | 'approved' | 'rejected';
 
 interface AuthContextValue {
+  /** The Firebase user — a GUEST (anonymous session) included. Use `hasAccount` for
+   *  "signed in with a real account". */
   user: User | null;
+  /** Anonymous session: browses everything, must sign in to act. */
+  isGuest: boolean;
+  /** Signed in with a real account (email / Google) — not a guest. */
+  hasAccount: boolean;
   loading: boolean;
   isAdmin: boolean;
   adminLoading: boolean;
@@ -33,6 +40,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  // Primitive copies of the session, so a guest becoming an account (linkWithCredential
+  // keeps the SAME user object and uid) still re-renders and restarts the listeners.
+  const [uid, setUid] = useState<string | null>(null);
+  const [anon, setAnon] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   // adminLoading stays true from the moment a user is confirmed until the
@@ -48,14 +59,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // layout's gate never sees a moment where businessLoading=false but the profile
   // snapshot hasn't actually resolved yet.
   const [businessLoading, setBusinessLoading] = useState(false);
+  const lastAccountUid = useRef<string | null>(null);
 
+  // Guests: when no one is signed in (first launch, after sign-out), open an invisible
+  // anonymous session so every read rule (`request.auth != null`) keeps working. Writes /
+  // callables that need a real account check `isAccount()` / `requireAccount()`.
+  // onIdTokenChanged (not onAuthStateChanged): it also fires when a guest session is
+  // linked to an email / Google account (the token changes, the user object doesn't).
   useEffect(() => {
-    return onAuthStateChanged(auth, u => {
+    return onIdTokenChanged(auth, u => {
+      setUid(u?.uid ?? null);
+      setAnon(!!u?.isAnonymous);
+      if (!u) {
+        // Signed out → the guest session follows within a moment. `loading` stays as it
+        // is (true on first launch: no flash of a signed-out app).
+        setUser(null);
+        signInAnonymously(auth).catch(err => {
+          console.warn('[Auth] anonymous sign-in failed:', err);
+          setUser(null);
+          setLoading(false);
+        });
+        return;
+      }
       setUser(u);
-      if (u) {
-        setAdminLoading(true);     // batch with setUser — prevents premature gate redirect
-        setBusinessLoading(true);
+      if (!u.isAnonymous) {
+        // Batch with setUser — prevents a premature gate redirect. Only when the account
+        // changes (a token refresh of the same account must not flash the gate).
+        if (u.uid !== lastAccountUid.current) {
+          lastAccountUid.current = u.uid;
+          setAdminLoading(true);
+          setBusinessLoading(true);
+        }
       } else {
+        lastAccountUid.current = null;
         setIsAdmin(false);
         setAdminLoading(false);
         setAccountType(undefined);
@@ -69,28 +105,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // admins/{uid} is readable only by that same uid (firestore.rules), so this
   // doubles as the live isAdmin check the moment the doc is granted/revoked.
   useEffect(() => {
-    if (!user) {
+    if (!uid || anon) {
       setIsAdmin(false);
       return;
     }
     return onSnapshot(
-      doc(db, 'admins', user.uid),
+      doc(db, 'admins', uid),
       snap => { setIsAdmin(snap.exists()); setAdminLoading(false); },
       () => { setIsAdmin(false); setAdminLoading(false); },
     );
-  }, [user]);
+  }, [uid, anon]);
 
   // Live listener on the user's own profile doc, scoped (in effect) to just the BtoB
   // gate fields — this is the only reactive read of users/{uid} in the app; every
   // other screen still does its own one-shot getUserProfile() fetch as before.
   useEffect(() => {
-    if (!user) {
+    if (!uid || anon) {
       setAccountType(undefined);
       setBtobStatus(undefined);
       return;
     }
     return onSnapshot(
-      doc(db, 'users', user.uid),
+      doc(db, 'users', uid),
       snap => {
         const data = snap.data();
         setAccountType(data?.accountType);
@@ -103,10 +139,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBusinessLoading(false);
       },
     );
-  }, [user]);
+  }, [uid, anon]);
 
+  const isGuest = !!user && anon;
   const value: AuthContextValue = {
     user,
+    isGuest,
+    hasAccount: !!user && !isGuest,
     loading,
     isAdmin,
     adminLoading,
@@ -119,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp: async (email, password) => {
       await createUserWithEmailAndPassword(auth, email, password);
     },
+    // Back to a fresh guest session (onAuthStateChanged opens it) — never a login wall.
     signOut: async () => {
       await firebaseSignOut(auth);
     },

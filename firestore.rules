@@ -56,6 +56,17 @@ service cloud.firestore {
       return isAuthed() && request.auth.uid == uid;
     }
 
+    // A REAL account (email / Google) — not a guest. Guests browse through an anonymous
+    // Firebase session (contexts/AuthContext.tsx): they pass isAuthed() for every READ,
+    // but every WRITE that needs an account uses these two.
+    function isAccount() {
+      return isAuthed() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isAccountOwner(uid) {
+      return isAccount() && request.auth.uid == uid;
+    }
+
     // ── admins/{uid} ──────────────────────────────────────────────────────
     // Managed only via the Firebase Console / Admin SDK — clients never
     // write here. A signed-in user may read ONLY their own admin doc, which
@@ -195,7 +206,7 @@ service cloud.firestore {
       // Signup adds (create only): accountType ('btoc'|'btob'), btobStatus
       //   ('pending_approval' only), btobCompanyName, btobLicenseNumber,
       //   btobResponsibleName, btobSubmittedAt, createdAt.
-      allow create: if isOwner(userId) &&
+      allow create: if isAccountOwner(userId) &&
         request.resource.data.keys().hasOnly([
           'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
           'whatsapp', 'whatsappSameAsPhone', 'address', 'photoURL', 'emailRemindersOptOut',
@@ -208,7 +219,7 @@ service cloud.firestore {
         (!('btobStatus' in request.resource.data) || request.resource.data.btobStatus == 'pending_approval');
 
       allow update: if isAdmin() || (
-        isOwner(userId) &&
+        isAccountOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
           'whatsapp', 'whatsappSameAsPhone', 'address', 'photoURL', 'emailRemindersOptOut',
@@ -247,17 +258,19 @@ service cloud.firestore {
         )
       );
 
-      allow delete: if isOwner(userId);
+      allow delete: if isAccountOwner(userId);
 
       match /favorites/{productId} {
-        allow read, write: if isOwner(userId);
+        allow read:  if isOwner(userId);
+        allow write: if isAccountOwner(userId);
       }
 
       // ── Bag (multi-item cart) ─────────────────────────────────────────────
       // Path: users/{userId}/bag/{itemId}
       // No admin access needed — admins only see finalized reservations after checkout.
       match /bag/{itemId} {
-        allow read, write: if isOwner(userId);
+        allow read:  if isOwner(userId);
+        allow write: if isAccountOwner(userId);
       }
 
       // ── Loyalty points history ────────────────────────────────────────────
@@ -276,7 +289,7 @@ service cloud.firestore {
     // No userId field is stored, so any authenticated user may create;
     // only admins may read, update, or delete submissions.
     match /requests/{requestId} {
-      allow create:               if isAuthed() &&
+      allow create:               if isAccount() &&
                                      request.resource.data.keys().hasOnly(['text', 'contact', 'createdAt']) &&
                                      request.resource.data.text is string &&
                                      request.resource.data.text.size() > 0 &&
@@ -297,7 +310,7 @@ service cloud.firestore {
 
       // On create, enforce renterId so a user can't forge another user's
       // conversation (lib/chat.ts initConversation sets renterId: uid).
-      allow create: if isOwner(conversationId) &&
+      allow create: if isAccountOwner(conversationId) &&
                        request.resource.data.renterId == request.auth.uid;
 
       // Owner (renter) is restricted to exactly the two updateDoc calls the
@@ -317,7 +330,7 @@ service cloud.firestore {
       // Delete is admin-only — renters must not destroy conversation history
       // (needed for deposit-dispute resolution).
       allow update: if isAdmin() || (
-        isOwner(conversationId) && (
+        isAccountOwner(conversationId) && (
           (request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasOnly(['lastMessage', 'lastMessageAt', 'lastSenderType', 'unreadByBusiness'])
@@ -345,7 +358,7 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read:           if isOwner(conversationId) || isAdmin();
         allow create:         if isAdmin() || (
-                                isOwner(conversationId) && (
+                                isAccountOwner(conversationId) && (
                                   (request.resource.data.senderType == 'renter' &&
                                    request.resource.data.senderId == request.auth.uid) ||
                                   (request.resource.data.senderType == 'business' &&
@@ -428,7 +441,7 @@ service cloud.firestore {
     // once notified. No update.
     match /availabilityWatches/{watchId} {
       allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
-      allow create: if isAuthed()
+      allow create: if isAccount()
                     && request.resource.data.uid == request.auth.uid
                     && watchId == request.auth.uid + '_' + request.resource.data.productId
                     && request.resource.data.keys().hasOnly(['uid', 'productId', 'createdAt']);
@@ -508,7 +521,7 @@ service cloud.firestore {
     // Delete: owner can dismiss their own; admins can delete anyone's.
     match /notifications/{userId}/items/{notifId} {
       allow read:   if isOwner(userId);
-      allow create: if isAdmin() || isOwner(userId);
+      allow create: if isAdmin() || isAccountOwner(userId);
       allow update: if isAdmin() ||
                        (isOwner(userId) &&
                         request.resource.data.diff(resource.data)
@@ -553,7 +566,7 @@ service cloud.firestore {
 
       // Shape validated: integer rating 1–5, text 10–2000 chars, ids matching the
       // path. averageRating/reviewCount are recomputed server-side (syncProductRating).
-      allow create: if isAuthed()
+      allow create: if isAccount()
                     && request.resource.data.keys().hasOnly(['userId', 'reviewerName', 'rating', 'text',
                          'productId', 'reservationId', 'productName', 'createdAt'])
                     && request.resource.data.rating is int
@@ -587,7 +600,7 @@ service cloud.firestore {
     match /claims/{claimId} {
       allow read:   if resource == null || isOwner(resource.data.userId) || isAdmin();
 
-      allow create: if isAuthed()
+      allow create: if isAccount()
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.status == 'open'
                     && request.resource.data.adminResponse == null

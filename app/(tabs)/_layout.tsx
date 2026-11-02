@@ -13,6 +13,13 @@ import { db } from '@/lib/firebase';
 import { subscribeToUnreadInboxCount } from '@/lib/chat';
 import { TierUpCelebration } from '@/components/TierUpCelebration';
 
+// A guest (anonymous session) has no email to verify — treated as verified, so no banner,
+// no polling, no welcome email.
+const isVerifiedOrGuest = () => {
+  const cu = auth.currentUser;
+  return !cu || cu.isAnonymous || cu.emailVerified;
+};
+
 function TabIcon({ name, color, focused }: { name: string; color: string; focused: boolean }) {
   return (
     <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
@@ -23,12 +30,12 @@ function TabIcon({ name, color, focused }: { name: string; color: string; focuse
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, hasAccount } = useAuth();
   const [unreadInboxCount, setUnreadInboxCount] = useState(0);
 
   // ── Email verification banner ──────────────────────────────────────────────
   const [emailVerified, setEmailVerified] = useState<boolean>(
-    auth.currentUser?.emailVerified ?? true,
+    isVerifiedOrGuest(),
   );
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -36,7 +43,7 @@ export default function TabLayout() {
 
   // Success banner — shown once when emailVerified flips false → true
   const [successBannerVisible, setSuccessBannerVisible] = useState(false);
-  const prevEmailVerifiedRef  = useRef<boolean>(auth.currentUser?.emailVerified ?? true);
+  const prevEmailVerifiedRef  = useRef<boolean>(isVerifiedOrGuest());
   const successDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clean up timers on unmount
@@ -49,7 +56,7 @@ export default function TabLayout() {
 
   // Reset banner whenever the signed-in user changes (login / logout / sign-up)
   useEffect(() => {
-    setEmailVerified(auth.currentUser?.emailVerified ?? true);
+    setEmailVerified(isVerifiedOrGuest());
     setBannerDismissed(false);
     if (resendTimerRef.current) clearTimeout(resendTimerRef.current);
     setResendStatus('idle');
@@ -58,10 +65,10 @@ export default function TabLayout() {
   // Re-read emailVerified from Firebase (after user clicks the link in their inbox)
   const checkVerification = useCallback(async () => {
     const cu = auth.currentUser;
-    if (!cu || cu.emailVerified) return;
+    if (!cu || cu.isAnonymous || cu.emailVerified) return;
     try {
       await cu.reload();
-      setEmailVerified(auth.currentUser?.emailVerified ?? false);
+      setEmailVerified(isVerifiedOrGuest());
     } catch {}
   }, []);
 
@@ -116,7 +123,7 @@ export default function TabLayout() {
   // the app was closed (no flip seen). Idempotent server-side (users.welcomeEmailSentAt).
   useEffect(() => {
     const cu = auth.currentUser;
-    if (emailVerified && cu) requestWelcomeEmail(cu.uid);
+    if (emailVerified && cu && !cu.isAnonymous) requestWelcomeEmail(cu.uid);
   }, [emailVerified]);
 
   const handleResend = useCallback(async () => {
@@ -149,7 +156,10 @@ export default function TabLayout() {
     <View style={styles.root}>
       {/* Tier-up celebration — once per tier reached (loyalty) */}
       <TierUpCelebration />
+      {/* Remounted when the session changes (guest → account, sign-out): every tab re-reads
+          its data for the new account. Screens stacked above (product…) stay as they are. */}
       <Tabs
+        key={`${user?.uid ?? 'none'}:${hasAccount ? 'account' : 'guest'}`}
         screenOptions={{
           headerShown: false,
           tabBarStyle: [styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }],

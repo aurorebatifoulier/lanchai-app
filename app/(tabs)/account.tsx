@@ -15,6 +15,7 @@ import Constants from 'expo-constants';
 import { COLORS } from '@/constants/Colors';
 import LanchaiMark from '@/components/LanchaiMark';
 import { useAuth } from '@/contexts/AuthContext';
+import { GuestAccount } from '@/components/auth/GuestAccount';
 import { getUserProfile, getMyReservations, getProducts, saveUserProfile, UserProfile } from '@/lib/firestore';
 import { cached, HOME_TTL } from '@/lib/homeCache';
 import { getCustomerTypeConfig } from '@/utils/customerType';
@@ -81,7 +82,13 @@ function ProfileSection({ title, children }: { title: string; children: React.Re
 // them again as "Soon". Nothing is paid online, so there is no "Payment methods" row.
 const SHOW_SOON_PREFERENCES = false;
 
+// Guest (anonymous session) → the guest version; real accounts → the full screen.
 export default function AccountScreen() {
+  const { isGuest } = useAuth();
+  return isGuest ? <GuestAccount /> : <AccountScreenSignedIn />;
+}
+
+function AccountScreenSignedIn() {
   const router = useRouter();
   const { user, signOut, isAdmin } = useAuth();
   const exchangeRate = useExchangeRate();

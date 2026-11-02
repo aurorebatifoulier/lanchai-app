@@ -1272,6 +1272,27 @@ a snapshot indefinitely).
   `displayOrderId()` (LNC-…) or nothing — never the raw Firestore id. No
   status chips ("Pending payment at pick-up", green "Confirmed") on renter cards.
 
+- **Guest browsing (2026-11-02).** No login wall: when no one is signed in,
+  `contexts/AuthContext.tsx` opens a Firebase **anonymous** session (`signInAnonymously`;
+  needs the Anonymous provider enabled in the console — without it the app falls back to
+  the old `/login` wall). `useAuth()` exposes `isGuest` (anonymous) and `hasAccount` (real
+  email / Google account) — `user` is non-null for guests too, so "signed in" checks must
+  use `hasAccount`. Auth state comes from `onIdTokenChanged` with primitive `uid` / `anon`
+  state, so a guest linked to an account re-renders and restarts listeners; the tab
+  navigator is keyed by uid + account/guest (remount on session change). Routing
+  (`app/_layout.tsx`): onboarding once on first launch → Home as a guest; `ACCOUNT_ONLY`
+  routes (booking, bag, chat, liked, notifications, rentals, review, claim, admin, profile
+  except faq) send a guest to `/login`; product / category / collection / reviews / legal
+  / FAQ deep links open directly. Rules: READS keep `isAuthed()` (guests pass); WRITES
+  that need an account use `isAccount()` / `isAccountOwner()` (sign_in_provider !=
+  'anonymous'): users, favorites, bag, requests, conversations + messages,
+  availabilityWatches, reviews, claims, notifications create. `recentViews` stays open to
+  guests. Callables take the uid from `accountUid(request)` (`functions/src/authGuard.ts`)
+  → a guest is refused as unauthenticated (`requestPasswordReset` stays public). Guest
+  Account tab = `<GuestAccount>`, My rentals = `<GuestRentals>`
+  (`components/auth/GuestAccount.tsx`, copy `constants/authCopy.ts`). `useMyLoyalty`
+  follows the session (excluded for guests).
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import { FieldValue } from 'firebase-admin/firestore';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -84,7 +85,7 @@ function randomOrderCode(length = 4): string {
 }
 
 export const createReservations = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in to book.');
   const { items, couponId, promoCode, notes, idCheckAtCounter } = parseInput(request.data);
   const db = admin.firestore();

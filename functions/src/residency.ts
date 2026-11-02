@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -46,7 +47,7 @@ async function notifyAdmins(p: { title: string; body: string; deepLink: string }
 
 // ── submitResidencyRequest({ path, proofType?, files? }) — renter ───────────────
 export const submitResidencyRequest = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const d = (request.data ?? {}) as { path?: unknown; proofType?: unknown; files?: unknown };
   const path = d.path === 'lao_national' || d.path === 'foreign' ? (d.path as ResidencyPath) : null;
@@ -205,7 +206,7 @@ export const reviewResidency = onCall({ region: REGION, secrets: [BREVO_API_KEY]
 // status and delete the proof of residence now (the ID document follows its own
 // retention — identityChecks). Back to tourist for FUTURE bookings only.
 export const withdrawResidency = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const reqRef = db().collection('residencyRequests').doc(uid!);
   const [reqSnap, userSnap] = await Promise.all([reqRef.get(), db().collection('users').doc(uid!).get()]);

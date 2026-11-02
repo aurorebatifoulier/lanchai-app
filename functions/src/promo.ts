@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
@@ -120,7 +121,7 @@ async function attemptLimiter(uid: string) {
 
 // { code, items } → { code, discountTotal, perLine }
 export const validatePromoCode = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const d = (request.data ?? {}) as { code?: unknown; items?: unknown };
   const code = normalizePromoCode(d.code);
@@ -139,7 +140,7 @@ export const validatePromoCode = onCall({ region: REGION }, async request => {
 // { items } → { codes: [{ code, discountTotal, perLine, valueText, expiresAtMs }], notApplicable }
 // The renter's OWN wallet codes for the booking being prepared — no attempt counting.
 export const evaluateMyCodes = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const now = Date.now();
   const grants = (await db().collection('promoGrants').where('uid', '==', uid).get()).docs
@@ -215,7 +216,7 @@ export async function grantPromo(uid: string, promo: PromoCode, opts: {
 
 // { code } → { code, saved: true, alreadySaved } — "Save to my codes" / wallet "Add a code".
 export const savePromoCode = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const code = normalizePromoCode((request.data as { code?: unknown } | undefined)?.code);
   const failAndCount = await attemptLimiter(uid);

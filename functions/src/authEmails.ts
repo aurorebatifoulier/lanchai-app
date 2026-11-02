@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { createHash } from 'crypto';
@@ -105,7 +106,7 @@ export const requestPasswordReset = onCall({ region: REGION, secrets: [BREVO_API
 
 // ── requestEmailVerification() — signed-in account's own address ────────────────
 export const requestEmailVerification = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const user = await admin.auth().getUser(uid);
   if (!user.email) throw new HttpsError('failed-precondition', 'This account has no email address.', { code: 'no-email' });
@@ -130,7 +131,7 @@ export const requestEmailVerification = onCall({ region: REGION, secrets: [BREVO
 // emailVerified in Auth and claims users.welcomeEmailSentAt in a transaction (once).
 // Business (BtoB) accounts are skipped — they get the business approval email.
 export const sendWelcomeEmail = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const authUser = await admin.auth().getUser(uid);
   if (!authUser.emailVerified) return { sent: false, reason: 'not-verified' };

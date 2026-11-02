@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -116,7 +117,7 @@ const staffName = (token: Record<string, unknown> | undefined) =>
 
 // ── submitIdentityDocument({ docType, files }) — renter's own document ──────────
 export const submitIdentityDocument = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const d = (request.data ?? {}) as { docType?: unknown; files?: unknown };
   const files = await validateIdFiles(uid!, d.files);

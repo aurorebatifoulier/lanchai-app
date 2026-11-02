@@ -1,6 +1,6 @@
 // FIRST: caps the system font size on every Text / TextInput (constants/typography.ts).
 import '@/lib/fontScaleCap';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -20,8 +20,17 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+// Screens that need a REAL account. A guest (anonymous session) sent here goes to the
+// sign-in screen instead. Everything else (Home, Explore, product, category, collection,
+// reviews, legal, FAQ) is open to guests — deep links included.
+const ACCOUNT_ONLY = new Set([
+  'booking', 'bag', 'chat', 'liked', 'notifications', 'rentals', 'review', 'claim',
+  'admin', 'admin-chat', 'btob-pending', 'btob-rejected',
+]);
+const GUEST_PROFILE_PAGES = new Set(['faq']);
+
 function RootLayoutNav() {
-  const { user, loading, accountType, btobStatus, businessLoading } = useAuth();
+  const { user, hasAccount, isGuest, loading, accountType, btobStatus, businessLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -32,26 +41,28 @@ function RootLayoutNav() {
     getOnboardingComplete().then(setOnboardingCompleteState);
   }, []);
 
-  // Held true only once auth + onboarding + (for a signed-in user) the BtoB gate
-  // fields are all known AND the splash's own intro animation has finished — so the
-  // animation always plays out in full, and a blocked BtoB user never sees so much as
-  // a flash of the main app before being routed to the pending/rejected screen.
+  // Held true only once auth (incl. the guest session) + onboarding + (for an account)
+  // the BtoB gate fields are all known AND the splash's own intro animation has finished
+  // — so the animation always plays out in full, and a blocked BtoB user never sees so
+  // much as a flash of the main app before being routed to the pending/rejected screen.
   const [splashAnimDone, setSplashAnimDone] = useState(false);
-  const appReady = !loading && onboardingComplete !== null && (!user || !businessLoading);
+  const onboardingShown = useRef(false);
+  const appReady = !loading && onboardingComplete !== null && (!hasAccount || !businessLoading);
   const ready = appReady && splashAnimDone;
 
   useEffect(() => {
     if (!ready) return;
-    const onLoginScreen = segments[0] === 'login';
-    const onLegalScreen = segments[0] === 'legal';
-    const onOnboardingScreen = segments[0] === 'onboarding';
-    const onBtobPendingScreen = segments[0] === 'btob-pending';
-    const onBtobRejectedScreen = segments[0] === 'btob-rejected';
+    const first = segments[0] as string | undefined;
+    const onLoginScreen = first === 'login';
+    const onLegalScreen = first === 'legal';
+    const onOnboardingScreen = first === 'onboarding';
+    const onBtobPendingScreen = first === 'btob-pending';
+    const onBtobRejectedScreen = first === 'btob-rejected';
 
     // Higher priority than everything below: a signed-in BtoB user who isn't approved
     // yet must land on (and stay on) their status screen, regardless of what the
-    // onboarding/login logic below would otherwise decide.
-    const isBtobBlocked = !!user && accountType === 'btob' && btobStatus !== 'approved';
+    // logic below would otherwise decide.
+    const isBtobBlocked = hasAccount && accountType === 'btob' && btobStatus !== 'approved';
     if (isBtobBlocked) {
       // "Contact us" routes to /chat, and the document-upload reminder routes to
       // /profile/business-document — allow both through rather than bouncing
@@ -59,14 +70,8 @@ function RootLayoutNav() {
       // browse the catalogue (tabs, product/category detail, liked) while they wait —
       // only transactional screens (booking, bag, etc.) stay blocked, redirecting them
       // back to their status screen.
-      const onChatScreen = segments[0] === 'chat';
-      const onProfileScreen = segments[0] === 'profile';
-      const onTabsScreen = segments[0] === '(tabs)';
-      const onProductScreen = segments[0] === 'product';
-      const onCategoryScreen = segments[0] === 'category';
-      const onLikedScreen = segments[0] === 'liked';
-      const onTarget = onBtobPendingScreen || onBtobRejectedScreen || onChatScreen || onProfileScreen ||
-        onTabsScreen || onProductScreen || onCategoryScreen || onLikedScreen;
+      const onTarget = onBtobPendingScreen || onBtobRejectedScreen || first === 'chat' || first === 'profile' ||
+        first === '(tabs)' || first === 'product' || first === 'category' || first === 'liked';
       if (!onTarget) {
         router.replace(btobStatus === 'rejected' ? '/btob-rejected' : '/btob-pending');
       }
@@ -74,25 +79,39 @@ function RootLayoutNav() {
     }
     // No longer blocked (e.g. just got approved) but still sitting on the status
     // screen — move on into the app.
-    if (user && (onBtobPendingScreen || onBtobRejectedScreen)) {
+    if (hasAccount && (onBtobPendingScreen || onBtobRejectedScreen)) {
       router.replace('/');
       return;
     }
 
-    // `onboardingComplete` here is a snapshot read once on mount — the onboarding
-    // screen persists completion to AsyncStorage itself and navigates directly to
-    // /login, without this state ever being told it happened. Excluding
-    // `onLoginScreen` from this branch (matching the branch below) means that once
-    // the user has actually reached /login, this effect stops trying to force them
-    // back to /onboarding based on that now-stale snapshot.
-    if (!user && !onboardingComplete && !onOnboardingScreen && !onLoginScreen && !onLegalScreen) {
-      router.replace('/onboarding');
-    } else if (!user && !onLoginScreen && !onLegalScreen && !onOnboardingScreen) {
-      router.replace('/login');
-    } else if (user && (onLoginScreen || onOnboardingScreen)) {
-      router.replace('/');
+    // An account never sits on onboarding / sign-in.
+    if (hasAccount) {
+      if (onLoginScreen || onOnboardingScreen) router.replace('/');
+      return;
     }
-  }, [ready, user, onboardingComplete, accountType, btobStatus, segments, router]);
+
+    // No session at all: the guest session couldn't open (e.g. Anonymous sign-in
+    // disabled in the Firebase console) — fall back to the old sign-in wall.
+    if (!user) {
+      if (!onLoginScreen && !onLegalScreen && !onOnboardingScreen) {
+        router.replace(onboardingComplete ? '/login' : '/onboarding');
+      }
+      return;
+    }
+
+    // Guest. `onboardingComplete` is a snapshot read once on mount — the onboarding
+    // screen persists completion itself and navigates away, so it's shown at most ONCE
+    // per launch (ref), never forced again after the guest leaves it.
+    if (onOnboardingScreen) onboardingShown.current = true;
+    if (isGuest && !onboardingComplete && !onboardingShown.current && !onLegalScreen && !onLoginScreen) {
+      onboardingShown.current = true;
+      router.replace('/onboarding');
+      return;
+    }
+    const accountOnly = !!first && (ACCOUNT_ONLY.has(first) ||
+      (first === 'profile' && !GUEST_PROFILE_PAGES.has(String((segments as string[])[1] ?? ''))));
+    if (accountOnly) router.replace('/login');
+  }, [ready, user, hasAccount, isGuest, onboardingComplete, accountType, btobStatus, segments, router]);
 
   if (!ready) {
     return <SplashOverlay onFinish={() => setSplashAnimDone(true)} />;

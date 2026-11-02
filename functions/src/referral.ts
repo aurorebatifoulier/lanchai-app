@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -32,7 +33,7 @@ const normalizeCode = (v: unknown) => String(v ?? '').trim().toUpperCase().repla
 
 // ── getMyInviteCode() — creates the renter's code on first request ──────────────
 export const getMyInviteCode = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const userRef = db().collection('users').doc(uid!);
   const user = (await userRef.get()).data() ?? {};
@@ -60,7 +61,7 @@ export const getMyInviteCode = onCall({ region: REGION }, async request => {
 // Checks: code exists; not their own (uid, phone or email); no booking ever created
 // (even cancelled); no referrer yet; neither side excluded (business / BtoB).
 export const applyInviteCode = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
   const code = normalizeCode((request.data as { code?: unknown } | undefined)?.code);
   if (!/^[A-Z]{2,8}-[A-Z0-9]{3}$/.test(code)) fail('invalid-code', 'This invite code doesn’t exist.', 'invalid-argument');

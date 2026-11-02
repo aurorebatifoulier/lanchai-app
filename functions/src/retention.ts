@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -174,7 +175,7 @@ export const documentRetentionDaily = onSchedule(
 // Deleted now only when the retention rule already allows it and nothing blocks it;
 // otherwise returns the planned date (or "kept while a rental is in progress").
 export const deleteMyIdentityDocument = onCall({ region: REGION }, async request => {
-  const uid = request.auth?.uid;
+  const uid = accountUid(request);
   if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
   const ref = db().collection('identityChecks').doc(uid);
   const snap = await ref.get();

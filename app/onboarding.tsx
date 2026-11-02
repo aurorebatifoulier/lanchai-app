@@ -61,9 +61,10 @@ export default function OnboardingScreen() {
   const lastOffsetX = useRef(0);
   const dragDirection = useRef<'forward' | 'backward' | null>(null);
 
+  // Guests land on Home (browse first); sign-in only when they act.
   const finish = () => {
     setOnboardingComplete();
-    router.replace('/login');
+    router.replace('/');
   };
 
   return (

@@ -23,6 +23,7 @@ import {
   NextPickupHero, UpcomingCard, MissedPickupsCard, ActiveCard, PastCard, RentalsEmpty, clearReviewCache,
 } from '@/components/rentals/RentalCards';
 import { OrderSheet } from '@/components/rentals/OrderSheet';
+import { GuestRentals } from '@/components/auth/GuestAccount';
 
 // "My rentals" tab (validated mockup, 2026-11-02) — Upcoming (carbon "Next pick-up" card
 // + countdown cards), Active (due-back countdown, Extend, calm late card with "I'm on my
@@ -54,7 +55,25 @@ const ENTER = FadeInUp.duration(MOTION.duration.base)
   .withInitialValues({ opacity: 0, transform: [{ translateY: MOTION.riseY }] })
   .reduceMotion(ReduceMotion.System);
 
+// Guest (anonymous session) → "Your rentals will live here." + sign in.
 export default function ReservationsScreen() {
+  const { isGuest } = useAuth();
+  const insets = useSafeAreaInsets();
+  if (isGuest) {
+    return (
+      <View style={[s.root, { paddingTop: insets.top }]}>
+        <View style={s.top}>
+          <Text style={s.title}>{c.title}</Text>
+          <Text style={s.sub}>{c.sub}</Text>
+        </View>
+        <View style={{ paddingHorizontal: 16 }}><GuestRentals /></View>
+      </View>
+    );
+  }
+  return <MyRentals />;
+}
+
+function MyRentals() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
