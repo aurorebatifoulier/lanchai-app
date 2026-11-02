@@ -10,7 +10,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { QuickAddProvider } from '@/components/quickadd/QuickAddProvider';
 import { GuestGateProvider, useRequireAccount } from '@/components/auth/GuestGate';
 import { authFlow } from '@/lib/authFlow';
-import { getOnboardingComplete } from '@/lib/onboarding';
+import { getOnboardingComplete, setOnboardingComplete, onboardingDoneNow } from '@/lib/onboarding';
 import SplashOverlay from '@/components/SplashOverlay';
 
 // Hold the native splash open until our own animated JS splash (SplashOverlay) is ready
@@ -52,6 +52,13 @@ function RootLayoutNav() {
   // much as a flash of the main app before being routed to the pending/rejected screen.
   const [splashAnimDone, setSplashAnimDone] = useState(false);
   const onboardingShown = useRef(false);
+  // Any account on this device → first launch is over for good (device flag).
+  useEffect(() => {
+    if (!hasAccount) return;
+    onboardingShown.current = true;
+    setOnboardingComplete();
+    setOnboardingCompleteState(true);
+  }, [hasAccount]);
   const appReady = !loading && onboardingComplete !== null && (!hasAccount || !businessLoading);
   const ready = appReady && splashAnimDone;
 
@@ -111,11 +118,14 @@ function RootLayoutNav() {
       return;
     }
 
+    // A device that has seen an account has had its first launch: never show the
+    // onboarding to the guest session that follows a sign-out / account deletion.
+    // (Device flag, set here and by the onboarding screen — never reset.)
     // Guest. `onboardingComplete` is a snapshot read once on mount — the onboarding
     // screen persists completion itself and navigates away, so it's shown at most ONCE
     // per launch (ref), never forced again after the guest leaves it.
     if (onOnboardingScreen) onboardingShown.current = true;
-    if (isGuest && !onboardingComplete && !onboardingShown.current && !onLegalScreen && !onLoginScreen) {
+    if (isGuest && !onboardingComplete && !onboardingDoneNow() && !onboardingShown.current && !onLegalScreen && !onLoginScreen) {
       onboardingShown.current = true;
       router.replace('/onboarding');
       return;

@@ -1326,7 +1326,7 @@ a snapshot indefinitely).
     session when the Google account is new, else `signInWithCredential`. No config plugin
     in app.json (Android autolinks); iOS will need it with `iosUrlScheme`. Apple sign-in:
     empty slot in `SocialButtons` (required on iOS later).
-  - **Onboarding** (`app/onboarding.tsx`, first launch only): 3 photo slides (slow zoom, off
+  - **Onboarding** (`app/onboarding.tsx`, ONCE PER DEVICE — `lib/onboarding.ts` device flag set on finish / skip AND as soon as any account is seen on the device; never reset on sign-out, sign-in, account switch or deletion; sign-out → guest → Home): 3 photo slides (slow zoom, off
     with reduce motion), white cards / carbon last card (last sentence of its title in
     amber), Skip / Start exploring → Home as a guest, "I already have an account · Sign in".
     Content: `config/onboarding.slides[0..2]` {title, text, imageUrl, imagePath} via
