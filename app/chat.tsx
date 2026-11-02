@@ -46,7 +46,8 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   // ?productId= / ?rentalId= → pinned "About" card; the first message sent from here
   // carries `about` so staff see what it's about.
-  const { productId, rentalId } = useLocalSearchParams<{ productId?: string; rentalId?: string }>();
+  // ?ask= (My rentals "Extend") prefills the input — never sent automatically.
+  const { productId, rentalId, ask } = useLocalSearchParams<{ productId?: string; rentalId?: string; ask?: string }>();
   const [context, setContext] = useState<(ChatAbout & { image: string | null; category: string | null }) | null>(null);
   const aboutSent = useRef(false);
   // Read on EVERY focus (the chat may already be mounted and reopened from another
@@ -54,6 +55,7 @@ export default function ChatScreen() {
   const loadContext = useCallback(() => {
     const pid = productId ? String(productId) : null;
     const rid = rentalId ? String(rentalId) : null;
+    if (ask) setInputText(String(ask).slice(0, 500));
     if (!pid && !rid) { setContext(null); return; }
     const key = pid ? `product:${pid}` : `rental:${rid}`;
     setContext(prev => (prev && `${prev.kind}:${prev.id}` === key ? prev : null));
@@ -67,7 +69,7 @@ export default function ChatScreen() {
         .then(r => { if (r) setContext({ kind: 'rental', id: r.id, name: r.productName, image: r.productImage ?? null, category: null }); })
         .catch(() => {});
     }
-  }, [productId, rentalId]);
+  }, [productId, rentalId, ask]);
   useFocusEffect(loadContext);
   const [sending,   setSending]   = useState(false);
   const [uploading, setUploading] = useState(false);

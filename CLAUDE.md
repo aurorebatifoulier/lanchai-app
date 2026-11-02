@@ -853,8 +853,8 @@ a snapshot indefinitely).
   `BookingHoldNotice` = white card + amber pause icon + WhatsApp row. `WhatsAppButton` has
   no green anywhere (button variant = white, carbon outline; row variant on the booking
   confirmation, hold notice, overdue rental). Small stock dots / chips keep green / red.
-  Main app screens (Explore, product, category, Reservations tab, login, onboarding) are
-  NOT on this design yet — Home is (see "Home" below).
+  Main app screens (category, login, onboarding) are
+  NOT on this design yet (Explore, product and the Reservations tab are) — Home is (see "Home" below).
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled
@@ -1217,6 +1217,26 @@ a snapshot indefinitely).
     the next 30 days — in-app + email (respects `emailRemindersOptOut`) — then deletes the
     watch. Liked cards = Explore cards (signal line + "+"). "Recently viewed" rail = `recentViews/{uid}` (≤ 10, written by
     `recordProductView` on the product page).
+
+- **My rentals tab (validated mockup, 2026-11-02)** — `app/(tabs)/reservations.tsx`, copy
+  `constants/rentalsCopy.ts`, pure picks `lib/rentalsList.ts` (`tabOf`, `groupEntries`,
+  `heroEntry`, Vientiane-day `daysUntil`, `daysLate`, `pastMoneyLine` via
+  `deriveReceiptData` / `deriveSettlementOutcome`), cards `components/rentals/`. Tabs
+  Upcoming · n / Active · n / Past (Returned / Cancelled / All, default Returned; no-show
+  sits under Cancelled). ONE card per order (past orders split by outcome). Upcoming: the
+  nearest pick-up as the carbon card (QR → lightbox, Directions = `mapsUrl`, Add to
+  calendar = `addBookingToCalendar`), others with an "In n days" chip; money = "X LAK to
+  pay at pick-up" until hand-over — "Paid" only in Past. Active: grey "Due back …" chip +
+  "Extend" → `/chat?rentalId=…&ask=Can I extend it?` (`ask` PREFILLS the input, never
+  sent); late = white card + dark-amber left border, carbon chip "n days late", "A late
+  fee may apply — our team will confirm." (no amount, no grace wording), "I'm on my way"
+  → chat message with `about` + `onMyWay: true` → `onChatMessage` notifies every admin
+  (own ACTIVE rental only, once per 2h via `reservations.onMyWayNotifiedAt`). Past:
+  "Rent again" + "Review · +N pts" (plain "Review" for excluded accounts) until reviewed
+  (direct `getDoc` of `reviews/{productId}/reviews/{reservationId}`, session cache), then
+  "★ You rated it n"; cancelled = muted, "nothing charged", no buttons. Multi-item card →
+  `<OrderSheet>` (order QR, rows → `/rentals/{id}`, "Cancel order" with `ConfirmBox`). No
+  status chips ("Pending payment at pick-up", green "Confirmed") on renter cards.
 
 ## Security follow-ups
 

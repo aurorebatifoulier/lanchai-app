@@ -37,8 +37,8 @@ export interface ChatMessage {
 
 export interface ChatAbout { kind: 'product' | 'rental'; id: string; name: string }
 
-/** Optional message fields (video poster, context). */
-export interface MessageExtra { videoThumbUrl?: string | null; about?: ChatAbout | null }
+/** Optional message fields (video poster, context, "I'm on my way" from My rentals). */
+export interface MessageExtra { videoThumbUrl?: string | null; about?: ChatAbout | null; onMyWay?: boolean }
 
 export interface Conversation {
   id: string;
@@ -109,6 +109,8 @@ export async function sendMessage(
     videoUrl,
     ...(extra.videoThumbUrl ? { videoThumbUrl: extra.videoThumbUrl } : {}),
     ...(extra.about ? { about: extra.about } : {}),
+    // Read by onChatMessage (functions/src/chat.ts) → admin notification.
+    ...(extra.onMyWay ? { onMyWay: true } : {}),
     createdAt:  serverTimestamp(),
     read:       false,
   });
