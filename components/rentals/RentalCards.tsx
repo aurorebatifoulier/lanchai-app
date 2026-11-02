@@ -29,16 +29,30 @@ const returnMs = (r: RentalDoc) => r.returnAt.toMillis();
 
 // ── Thumbnails ───────────────────────────────────────────────────────────────
 
-/** Product photo, else the product's category badge (never an empty grey square). */
+/**
+ * Product photo — tries each candidate (current product photos, then the one frozen at
+ * booking) and moves on when one fails to load; none left → the category badge (neutral
+ * badge for an unknown / deleted product). Never an empty grey square.
+ */
 export function RentalThumb({ rental, size = 56 }: { rental: RentalDoc; size?: number }) {
-  if (!rental.productImage && rental.productCategory) {
-    return <View style={{ width: size, height: size }}><CategoryBadge cat={rental.productCategory} size={size} /></View>;
+  const candidates = rental.productImageCandidates ?? (rental.productImage ? [rental.productImage] : []);
+  const [failed, setFailed] = useState(0);
+  const sig = candidates.join('|');
+  useEffect(() => { setFailed(0); }, [sig]); // new photos after a reload → start again
+  const uri = candidates[failed];
+  if (!uri) {
+    return <View style={{ width: size, height: size }}><CategoryBadge cat={rental.productCategory ?? ''} size={size} /></View>;
   }
   return (
     <View style={[s.thumb, { width: size, height: size, borderRadius: size >= 52 ? 14 : 12 }]}>
-      {rental.productImage
-        ? <Image source={{ uri: rental.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
-        : <Feather name="package" size={Math.round(size * 0.4)} color={SHADES.carbonFaint} />}
+      <Image
+        key={uri}
+        source={{ uri }}
+        style={StyleSheet.absoluteFillObject}
+        contentFit="cover"
+        transition={200}
+        onError={() => setFailed(n => n + 1)}
+      />
     </View>
   );
 }
@@ -371,11 +385,9 @@ export function PastCard({ entry, onOpenOrder, reviewPoints }: {
         <View style={s.body}>
           <CardHead items={items} status={pastStatus(first)} />
           <Text style={s.line} numberOfLines={1}>{cancelled ? `${range} · ${pastMoneyLine(items)}` : `${range} · ${c.day(days)}`}</Text>
-          {!cancelled && single && rating != null ? (
-            <RatedLine rating={rating} />
-          ) : !cancelled ? (
-            <Text style={s.muted} numberOfLines={2}>{pastMoneyLine(items)}</Text>
-          ) : null}
+          {/* Payment / settlement line ALWAYS, then the rating once reviewed. */}
+          {!cancelled && <Text style={s.muted} numberOfLines={2}>{pastMoneyLine(items)}</Text>}
+          {!cancelled && single && rating != null && <RatedLine rating={rating} />}
           {!cancelled && !single && canReview && <Text style={s.tapHint}>{c.tapToReview}</Text>}
         </View>
       </View>

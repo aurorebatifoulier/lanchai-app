@@ -1259,8 +1259,12 @@ a snapshot indefinitely).
   items get the same `<PastItemActions>` / `<RatedLine>` as single cards, and the grouped
   past card shows "Tap to review or rent again" while an item is still unreviewed). Photos: stored `productImage`, else the product's first
   photo (shared `cached('products')`, plus a by-id `getProduct` for drafts / archived
-  products that `getProducts` hides), else the product's `<CategoryBadge>` (`RentalThumb`,
-  `withProductImages`; `RentalDoc.productCategory` is display-only, never stored). Order labels are
+  products that `getProducts` hides). `RentalThumb` tries `productImageCandidates` in order
+  (the product's CURRENT photos first — a frozen `productImage` can point to a replaced /
+  deleted file — then the frozen one), moving on `onError`; none left → `<CategoryBadge>`
+  (neutral badge for a deleted product). Never a grey square. `productCategory` /
+  `productImageCandidates` are display-only, never stored. Past cards show the payment /
+  settlement line AND, once reviewed, "★ You rated it n" under it. Order labels are
   `displayOrderId()` (LNC-…) or nothing — never the raw Firestore id. No
   status chips ("Pending payment at pick-up", green "Confirmed") on renter cards.
 

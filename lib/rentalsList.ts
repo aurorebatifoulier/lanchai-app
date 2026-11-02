@@ -119,14 +119,19 @@ export function isPickupPassed(e: RentalEntry, nowMs: number = Date.now()): bool
   return Math.min(...e.items.map(r => r.pickupAt.toMillis())) <= nowMs;
 }
 
-export interface ProductLook { image: string | null; category: string | null }
+export interface ProductLook { images: string[]; category: string | null }
 
-/** Stored photo, else the product's first photo; plus its category (badge when no photo). */
+/**
+ * Photos to try for each line: the product's CURRENT photos first (a reservation's frozen
+ * `productImage` may point to a replaced / deleted file — that's what left grey squares),
+ * then the frozen one; plus the category (badge when none loads). Deleted products keep
+ * only the frozen photo, then the neutral badge.
+ */
 export function withProductImages(rentals: RentalDoc[], lookOf: Map<string, ProductLook>): RentalDoc[] {
   return rentals.map(r => {
     const look = lookOf.get(r.productId);
-    if (!look) return r;
-    return { ...r, productImage: r.productImage || look.image, productCategory: look.category ?? undefined };
+    const candidates = [...new Set([...(look?.images ?? []), r.productImage].filter((u): u is string => typeof u === 'string' && u.length > 0))];
+    return { ...r, productImageCandidates: candidates, productCategory: look?.category ?? undefined };
   });
 }
 

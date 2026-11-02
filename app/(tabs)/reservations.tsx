@@ -36,12 +36,14 @@ const extraLooks = new Map<string, ProductLook>();
 async function productLooks(rentals: RentalDoc[]): Promise<Map<string, ProductLook>> {
   const looks = new Map<string, ProductLook>();
   const products = await cached('products', HOME_TTL.products, getProducts).catch(() => []);
-  for (const p of products) looks.set(p.id, { image: p.images?.[0] ?? p.imageUrl ?? null, category: p.category ?? null });
+  const imagesOf = (p: { images?: string[]; imageUrl?: string } | null) =>
+    [...(p?.images ?? []).slice(0, 2), p?.imageUrl].filter((u): u is string => typeof u === 'string' && u.length > 0);
+  for (const p of products) looks.set(p.id, { images: imagesOf(p), category: p.category ?? null });
   const missing = [...new Set(rentals.map(r => r.productId))].filter(id => id && !looks.has(id));
   await Promise.all(missing.map(async id => {
     if (!extraLooks.has(id)) {
       const p = await getProduct(id).catch(() => null);
-      extraLooks.set(id, { image: p?.images?.[0] ?? p?.imageUrl ?? null, category: p?.category ?? null });
+      extraLooks.set(id, { images: imagesOf(p), category: p?.category ?? null });
     }
     looks.set(id, extraLooks.get(id)!);
   }));

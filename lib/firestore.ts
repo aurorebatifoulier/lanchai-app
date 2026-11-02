@@ -216,6 +216,9 @@ export interface RentalDoc {
   productImage: string | null;
   /** Display-only, filled client-side on My rentals from the product (never stored). */
   productCategory?: string;
+  /** Display-only (My rentals): photos to try in order — the product's CURRENT photos, then
+   *  the one frozen at booking (it can point to a replaced / deleted file). Never stored. */
+  productImageCandidates?: string[];
   renterId: string;
   renterName: string | null;
   pickupAt: Timestamp;
