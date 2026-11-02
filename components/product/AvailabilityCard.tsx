@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Modal, Pressable, StyleSheet, TouchableOpacity } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import { TYPE, SIZES } from '@/constants/typography';
 import PressScale from '@/components/PressScale';
 import { PRODUCT_COPY } from '@/constants/productCopy';
 import { UI, useScreenInsets } from '@/components/account/ui';
@@ -106,9 +107,9 @@ export default function AvailabilityCard({ product, onPickRange }: {
               </TouchableOpacity>
             </View>
           ) : (
-            <PressScale style={[UI.btnSecondary, s.notifyBtn]} onPress={toggleWatch}>
-              <Feather name="bell" size={17} color={SHADES.carbon} />
-              <Text style={UI.btnSecondaryText}>{a.notify}</Text>
+            <PressScale style={[UI.btnSecondary, UI.btnCard, s.notifyBtn]} onPress={toggleWatch}>
+              <Feather name="bell" size={16} color={SHADES.carbon} />
+              <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{a.notify}</Text>
             </PressScale>
           )}
           {!!watchError && <Text style={UI.errorText}>{watchError}</Text>}
@@ -144,13 +145,13 @@ const s = StyleSheet.create({
   card: { padding: 16 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   notifyBlock: { marginTop: 16, gap: 10 },
-  notifyBtn: { flexDirection: 'row', gap: 8, height: 46 },
+  notifyBtn: { flexDirection: 'row', gap: 8 },
   notifyOn: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, height: 46, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 10, height: SIZES.btnCard, borderRadius: SIZES.btnCardRadius,
     paddingHorizontal: 16, backgroundColor: SHADES.amberLight,
   },
-  notifyOnText: { fontSize: 15, fontWeight: '700', color: SHADES.amberDeep },
-  notifyCancel: { fontSize: 14, fontWeight: '700', color: SHADES.amberDeep },
+  notifyOnText: { ...TYPE.buttonCard, color: SHADES.amberDeep },
+  notifyCancel: { ...TYPE.buttonCard, color: SHADES.amberDeep },
   notifyNote: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center', lineHeight: 18 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4 },

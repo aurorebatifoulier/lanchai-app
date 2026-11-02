@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { SHADES } from '@/constants/brandShades';
+import { TYPE, SIZES } from '@/constants/typography';
 import { CategoryBadge } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 
@@ -16,7 +17,7 @@ export default function CategoryFilterRow({
   const { width } = useWindowDimensions();
   const fit = categories.length <= 7;
   const itemW = fit ? (width - 32) / categories.length : 64;
-  const circle = Math.min(48, Math.floor(itemW - 6));
+  const circle = Math.min(SIZES.categoryCircle, Math.floor(itemW - 6));
   const items = categories.map(c => (
     <PressScale key={c.id} style={[s.item, { width: itemW }]} onPress={() => onSelect(c.id)}>
       <CategoryBadge cat={c.id} size={circle} selected={active === c.id} />
@@ -31,6 +32,6 @@ export default function CategoryFilterRow({
 const s = StyleSheet.create({
   row: { flexDirection: 'row' },
   item: { alignItems: 'center' },
-  label: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 6 },
+  label: { ...TYPE.small, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 6 },
   labelOn: { fontWeight: '800', color: SHADES.carbon },
 });

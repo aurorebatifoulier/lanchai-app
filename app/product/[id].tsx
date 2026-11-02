@@ -443,10 +443,10 @@ const s = StyleSheet.create({
   bottomRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   price: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
   bagBtn: {
-    width: 54, height: 48, borderRadius: 16, borderWidth: 1.5, borderColor: SHADES.carbon,
+    width: 52, height: 46, borderRadius: 16, borderWidth: 1.5, borderColor: SHADES.carbon,
     backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
   },
-  rentBtn: { height: 48, paddingHorizontal: 26, borderRadius: 16 },
+  rentBtn: { height: 46, paddingHorizontal: 26, borderRadius: 16 },
   docNotice: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   lightbox: { flex: 1, backgroundColor: 'rgba(0,0,0,0.93)', justifyContent: 'center' },
   lbClose: {

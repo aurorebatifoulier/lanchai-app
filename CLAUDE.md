@@ -958,7 +958,11 @@ a snapshot indefinitely).
   Screen title 24/700 · display 22/800 (big numbers ONLY: stats, podium rank, hero
   figures, slide titles) · section / sheet / stack-header title 17/700 · card title
   15/600 · body 14 · secondary (dates, prices, meta) 13 · chips & small labels 12 ·
-  buttons 15/600, height 46 (secondary 44, bottom-bar CTAs 48) · tab chips 13, height 34.
+  full-width buttons 15/600, height 46 (bottom bars too; secondary 44) · IN-CARD buttons
+  (Rent again, Review, Extend, Directions, Notify me…) `[UI.btnX, UI.btnCard]` + `UI.btnCardText`
+  = 14/600, height 40, radius 12 · tab chips `UI.tabChip` 13 / 32 and filter chips
+  `UI.filterChip` 12 / 30 (padding 12; Explore quick filters too) · category circles
+  `SIZES.categoryCircle` 48, label 12.
   The `UI` tokens (`components/account/ui.tsx`) and `ConfirmBox` are built on it; never
   hardcode a size above 24 or a button above 48 on a new screen — pick the level. System
   font size is respected but CAPPED at `MAX_FONT_SCALE` (1.3) on every `<Text>` /

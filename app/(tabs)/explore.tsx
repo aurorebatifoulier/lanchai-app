@@ -56,6 +56,7 @@ import { SEARCH_COPY } from '@/constants/searchCopy';
 import { cached, HOME_TTL } from '@/lib/homeCache';
 import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
 import { CategoryBadge, UI } from '@/components/account/ui';
+import { TYPE, SIZES } from '@/constants/typography';
 import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
@@ -691,7 +692,7 @@ function SearchEmptyState({ query, collections, onRequestItem }: { query: string
       <View style={styles.suggestRow}>
         {CATEGORIES.filter(c => c.id !== 'all').map(c => (
           <PressScale key={c.id} style={styles.suggestCat} onPress={() => router.push(`/category/${c.id}`)}>
-            <CategoryBadge cat={c.id} size={44} />
+            <CategoryBadge cat={c.id} size={SIZES.categoryCircle} />
             <Text style={styles.suggestCatText} numberOfLines={1}>{c.name}</Text>
           </PressScale>
         ))}
@@ -771,11 +772,11 @@ const styles = StyleSheet.create({
   oneLiner: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   quickRow: { gap: 8, paddingVertical: 14 },
   quickChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: SIZES.tab, paddingHorizontal: SIZES.chipPadX, borderRadius: 11,
     backgroundColor: SHADES.white, borderWidth: 0.5, borderColor: SHADES.border,
   },
   quickChipOn: { backgroundColor: SHADES.carbon, borderColor: SHADES.carbon },
-  quickChipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  quickChipText: { ...TYPE.tab, color: SHADES.carbon },
   quickChipTextOn: { color: SHADES.cream },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   sticky: {

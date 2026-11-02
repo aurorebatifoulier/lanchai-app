@@ -22,6 +22,7 @@ import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { HOME_COPY } from '@/constants/homeCopy';
 import { UI, SectionTitle, CategoryBadge, ToggleRow, SCREEN_BOTTOM_GAP } from '@/components/account/ui';
+import { TYPE, SIZES } from '@/constants/typography';
 import SearchBar from '@/components/SearchBar';
 import ProductRailCard from '@/components/ProductRailCard';
 import InsetCarousel from '@/components/home/InsetCarousel';
@@ -286,7 +287,7 @@ export default function HomeScreen() {
   // Categories: all on one row (≤ 6) sized to the width; horizontal scroll from 7.
   const catFit = HOME_CATEGORIES.length <= 6;
   const catItemW = catFit ? (screenW - 32) / HOME_CATEGORIES.length : 72;
-  const catCircle = Math.min(52, Math.floor(catItemW - 6));
+  const catCircle = Math.min(SIZES.categoryCircle, Math.floor(catItemW - 6));
 
   const { openQuickAdd } = useQuickAdd();
   const rail = (items: Product[]) => (
@@ -688,7 +689,7 @@ const styles = StyleSheet.create({
   catRow: { flexDirection: 'row' },
   catRail: { paddingHorizontal: 12, gap: 4 },
   catItem: { alignItems: 'center' },
-  catLabel: { fontSize: 12, fontWeight: '600', color: SHADES.carbon, marginTop: 7 },
+  catLabel: { ...TYPE.small, color: SHADES.carbon, marginTop: 7 },
   adminLabel: { marginTop: 24, marginBottom: 8, fontStyle: 'italic' },
 
   previewCard: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 4 },

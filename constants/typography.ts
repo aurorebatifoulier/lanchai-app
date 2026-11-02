@@ -15,16 +15,25 @@ export const TYPE = {
   secondary: { fontSize: 13, fontWeight: '500', lineHeight: 18 },
   /** Chips and small labels. */
   small: { fontSize: 12, fontWeight: '600', lineHeight: 16 },
+  /** Full-width buttons (bottom bars, forms). */
   button: { fontSize: 15, fontWeight: '600' },
+  /** Buttons INSIDE cards (Rent again, Review, Extend, Directions, Notify me…). */
+  buttonCard: { fontSize: 14, fontWeight: '600' },
   /** Tab chips (My rentals, filters). */
   tab: { fontSize: 13, fontWeight: '600' },
 } as const;
 
-/** Button heights: primary 46, secondary / compact 44; tab chips 34. */
+/** Heights: full-width buttons 46 (secondary 44), in-card buttons 40 (radius 12), tab /
+ *  filter chips 32 / 30 (padding 12), category circles 48 (label 12). */
 export const SIZES = {
   btn: 46,
   btnSecondary: 44,
-  tab: 34,
+  btnCard: 40,
+  btnCardRadius: 12,
+  tab: 32,
+  chip: 30,
+  chipPadX: 12,
+  categoryCircle: 48,
 } as const;
 
 /** System font size is respected but capped (lib/fontScaleCap.ts). */

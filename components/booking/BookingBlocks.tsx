@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { SHADES } from '@/constants/brandShades';
+import { SIZES } from '@/constants/typography';
 import { BOOKING_COPY } from '@/constants/bookingCopy';
 import { PROMO_COPY } from '@/constants/promoCopy';
 import type { DiscountRowUi, PromoFieldUi } from '@/lib/discountChoice';
@@ -455,5 +456,5 @@ const s = StyleSheet.create({
     backgroundColor: SHADES.white, borderTopWidth: 0.5, borderTopColor: SHADES.border, paddingHorizontal: 16, paddingTop: 12,
   },
   barTotal: { fontSize: 17, fontWeight: '800', color: SHADES.carbon },
-  barBtn: { height: 48, paddingHorizontal: 22, borderRadius: 16 },
+  barBtn: { height: SIZES.btn, paddingHorizontal: 22, borderRadius: 16 },
 });

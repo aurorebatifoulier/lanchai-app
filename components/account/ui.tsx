@@ -58,6 +58,14 @@ export const UI = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14,
   },
   btnSecondaryText: { ...TYPE.button, color: SHADES.carbon },
+  /** In-card button size — add AFTER btnPrimary / btnSecondary: [UI.btnSecondary, UI.btnCard]. */
+  btnCard: { height: SIZES.btnCard, borderRadius: SIZES.btnCardRadius, paddingHorizontal: 12 },
+  btnCardText: { ...TYPE.buttonCard },
+  /** Tab / filter chips (My rentals tabs, Past filters, Explore quick filters). */
+  tabChip: { height: SIZES.tab, paddingHorizontal: SIZES.chipPadX, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  filterChip: { height: SIZES.chip, paddingHorizontal: SIZES.chipPadX, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  tabChipText: { ...TYPE.tab },
+  filterChipText: { ...TYPE.small },
   btnDisabled: { opacity: 0.45 },
   dangerText: { ...TYPE.button, color: COLORS.danger },
   /** Destructive button: white, light border, label in UI.dangerText (never a red fill). */

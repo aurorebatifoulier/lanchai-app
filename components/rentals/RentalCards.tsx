@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import { TYPE, SIZES } from '@/constants/typography';
 import { RENTALS_COPY as c } from '@/constants/rentalsCopy';
 import { UI, CategoryBadge } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
@@ -197,11 +198,11 @@ export function MissedPickupsCard({ entries }: { entries: RentalEntry[] }) {
               </View>
             </View>
             <PressScale
-              style={[UI.btnSecondary, s.extendBtn]}
+              style={[UI.btnSecondary, UI.btnCard, s.extendBtn]}
               onPress={() => router.push({ pathname: '/chat', params: { rentalId: e.items[0].id } } as never)}
             >
               <Feather name="message-circle" size={15} color={SHADES.carbon} />
-              <Text style={UI.btnSecondaryText}>{c.messageUs}</Text>
+              <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{c.messageUs}</Text>
             </PressScale>
           </View>
         );
@@ -263,11 +264,11 @@ export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenO
           </View>
         </View>
         <View style={s.btnRow}>
-          <PressScale style={[UI.btnPrimary, s.btn, (sending || sent) && UI.btnDisabled]} onPress={onMyWay} disabled={sending || sent}>
-            <Text style={UI.btnPrimaryText}>{sent ? c.onMyWaySent : c.onMyWay}</Text>
+          <PressScale style={[UI.btnPrimary, UI.btnCard, s.btn, (sending || sent) && UI.btnDisabled]} onPress={onMyWay} disabled={sending || sent}>
+            <Text style={[UI.btnPrimaryText, UI.btnCardText]}>{sent ? c.onMyWaySent : c.onMyWay}</Text>
           </PressScale>
-          <PressScale style={[UI.btnSecondary, s.btn]} onPress={() => router.push(chatAbout as never)}>
-            <Text style={UI.btnSecondaryText}>{c.messageUs}</Text>
+          <PressScale style={[UI.btnSecondary, UI.btnCard, s.btn]} onPress={() => router.push(chatAbout as never)}>
+            <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{c.messageUs}</Text>
           </PressScale>
         </View>
         {error && <Text style={[UI.errorText, { marginTop: 8 }]}>{c.onMyWayError}</Text>}
@@ -286,11 +287,11 @@ export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenO
         </View>
       </View>
       <PressScale
-        style={[UI.btnSecondary, s.extendBtn]}
+        style={[UI.btnSecondary, UI.btnCard, s.extendBtn]}
         onPress={() => router.push({ pathname: '/chat', params: { rentalId: items[0].id, ask: c.extendQuestion } } as never)}
       >
         <Feather name="clock" size={15} color={SHADES.carbon} />
-        <Text style={UI.btnSecondaryText}>{c.extend}</Text>
+        <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{c.extend}</Text>
       </PressScale>
     </PressScale>
   );
@@ -332,16 +333,16 @@ export function PastItemActions({ rental, rating, reviewPoints, onNavigate }: {
   const go = (to: Parameters<typeof router.push>[0]) => { onNavigate?.(); router.push(to); };
   return (
     <View style={s.btnRow}>
-      <PressScale style={[UI.btnPrimary, s.btn]} onPress={() => go(`/product/${rental.productId}`)}>
-        <Text style={UI.btnPrimaryText}>{c.rentAgain}</Text>
+      <PressScale style={[UI.btnPrimary, UI.btnCard, s.btn]} onPress={() => go(`/product/${rental.productId}`)}>
+        <Text style={[UI.btnPrimaryText, UI.btnCardText]}>{c.rentAgain}</Text>
       </PressScale>
       {rental.status === 'returned' && rating === null && (
         <PressScale
-          style={[UI.btnSecondary, s.btn]}
+          style={[UI.btnSecondary, UI.btnCard, s.btn]}
           onPress={() => go({ pathname: '/review/[productId]', params: { productId: rental.productId, reservationId: rental.id } } as never)}
         >
           <Feather name="star" size={15} color={SHADES.carbon} />
-          <Text style={UI.btnSecondaryText}>{c.review(reviewPoints)}</Text>
+          <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{c.review(reviewPoints)}</Text>
         </PressScale>
       )}
     </View>
@@ -439,8 +440,8 @@ const s = StyleSheet.create({
   tapHint: { fontSize: 12, fontWeight: '600', color: SHADES.amberText, marginTop: 4 },
 
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  btn: { flex: 1, height: 44, paddingHorizontal: 8 },
-  extendBtn: { marginTop: 12, height: 40 },
+  btn: { flex: 1, paddingHorizontal: 8 },
+  extendBtn: { marginTop: 12 },
 
   missedHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   missedIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center' },
@@ -455,10 +456,10 @@ const s = StyleSheet.create({
   heroSub: { fontSize: 13, fontWeight: '500', color: SHADES.carbonFaint, marginTop: 3, lineHeight: 18 },
   heroBtns: { flexDirection: 'row', gap: 10, marginTop: 14 },
   heroBtn: {
-    flex: 1, height: 44, borderRadius: 12, backgroundColor: SHADES.carbonSoft,
+    flex: 1, height: SIZES.btnCard, borderRadius: SIZES.btnCardRadius, backgroundColor: SHADES.carbonSoft,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
   },
-  heroBtnText: { fontSize: 15, fontWeight: '600', color: SHADES.white },
+  heroBtnText: { ...TYPE.buttonCard, color: SHADES.white },
 
   empty: { alignItems: 'center', paddingTop: 56, paddingHorizontal: 32 },
   emptyIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: SHADES.amberLight, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
