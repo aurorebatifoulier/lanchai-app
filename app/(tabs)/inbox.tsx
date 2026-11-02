@@ -8,6 +8,7 @@ import { SHADES } from '@/constants/brandShades';
 import { useAuth } from '@/contexts/AuthContext';
 import { InitialAvatar, formatTime } from '@/components/chat/MessageBubble';
 import { Conversation, subscribeToConversations } from '@/lib/chat';
+import { AccountBanners } from '@/components/auth/AccountBanners';
 
 function ConversationRow({ conversation, onPress }: { conversation: Conversation; onPress: () => void }) {
   const unread = conversation.unreadByBusiness > 0;
@@ -84,6 +85,7 @@ export default function InboxScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Customer messages</Text>
       </View>
+      <AccountBanners />
 
       {loading ? (
         <ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} />

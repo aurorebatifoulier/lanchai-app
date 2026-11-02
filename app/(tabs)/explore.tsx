@@ -65,6 +65,7 @@ import { useRequireAccount } from '@/components/auth/GuestGate';
 import { getReviewQuotes, type ReviewQuote } from '@/lib/reviewQuotes';
 import { useResidentPromo } from '@/lib/residency';
 import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
+import { AccountBanners } from '@/components/auth/AccountBanners';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
@@ -488,6 +489,7 @@ export default function ExploreScreen() {
         </View>
         <View onLayout={e => setPinY(e.nativeEvent.layout.y)}>{searchAndCategories}</View>
       </View>
+      <AccountBanners flush />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
         {period && (

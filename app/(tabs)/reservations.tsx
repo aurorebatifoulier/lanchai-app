@@ -24,6 +24,7 @@ import {
 } from '@/components/rentals/RentalCards';
 import { OrderSheet } from '@/components/rentals/OrderSheet';
 import { GuestRentals } from '@/components/auth/GuestAccount';
+import { AccountBanners } from '@/components/auth/AccountBanners';
 
 // "My rentals" tab (validated mockup, 2026-11-02) — Upcoming (carbon "Next pick-up" card
 // + countdown cards), Active (due-back countdown, Extend, calm late card with "I'm on my
@@ -209,6 +210,7 @@ function MyRentals() {
             ))}
           </View>
         )}
+        <AccountBanners flush />
       </View>
 
       {loading ? (

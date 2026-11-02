@@ -35,6 +35,7 @@ import { TIER_LABELS, isLoyaltyExcluded } from '@/lib/loyalty';
 import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { UI, Row, RowGroup, SectionTitle, type IconTone, type AnyIcon } from '@/components/account/ui';
 import { SHADES } from '@/constants/brandShades';
+import { AccountBanners } from '@/components/auth/AccountBanners';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -250,6 +251,8 @@ function AccountScreenSignedIn() {
             />
           </View>
         </View>
+
+        <AccountBanners flush />
 
         {/* ── Stats (round trips · not in your closet · LAK not spent) ── */}
         <AccountStats stats={stats} />

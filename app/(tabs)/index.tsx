@@ -65,6 +65,7 @@ import { DEFAULT_REFERRAL_REWARD_POINTS, referralWelcomePercent } from '@/lib/lo
 import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
+import { AccountBanners } from '@/components/auth/AccountBanners';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -392,6 +393,8 @@ export default function HomeScreen() {
             },
           })}
         >
+          {/* Verify-email / verified banners — under the top bar, never over it. */}
+          <AccountBanners />
           {heroSlides.length > 0
             ? <SlideCarousel slides={heroSlides} height={190} intervalMs={10000} showDraft={preview} />
             : <HeroCarousel />}
