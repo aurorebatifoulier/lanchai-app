@@ -31,9 +31,20 @@ interface AuthContextValue {
   accountType: AccountType | undefined;
   btobStatus: BtobStatus | undefined;
   businessLoading: boolean;
+  /** Account whose sign-up isn't finished (no name / phone yet — step 2 left, or a new
+   *  Google account). Guests: true (nothing to complete). */
+  profileComplete: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+}
+
+/** Name + phone saved (individual) or a business profile — sign-up finished. */
+export function isProfileComplete(data: Record<string, unknown> | undefined): boolean {
+  if (!data) return false;
+  const phone = data.phone || data.phoneNumber;
+  const name = data.firstName || data.displayName || data.btobCompanyName;
+  return !!phone && !!name;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -59,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // layout's gate never sees a moment where businessLoading=false but the profile
   // snapshot hasn't actually resolved yet.
   const [businessLoading, setBusinessLoading] = useState(false);
+  const [profileComplete, setProfileComplete] = useState(true);
   const lastAccountUid = useRef<string | null>(null);
 
   // Guests: when no one is signed in (first launch, after sign-out), open an invisible
@@ -131,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = snap.data();
         setAccountType(data?.accountType);
         setBtobStatus(data?.btobStatus);
+        setProfileComplete(isProfileComplete(data));
         setBusinessLoading(false);
       },
       () => {
@@ -152,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     accountType,
     btobStatus,
     businessLoading,
+    profileComplete: !user || anon || profileComplete,
     signIn: async (email, password) => {
       await signInWithEmailAndPassword(auth, email, password);
     },

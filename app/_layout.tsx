@@ -32,7 +32,7 @@ const ACCOUNT_ONLY = new Set([
 const GUEST_PROFILE_PAGES = new Set(['faq']);
 
 function RootLayoutNav() {
-  const { user, hasAccount, isGuest, loading, accountType, btobStatus, businessLoading } = useAuth();
+  const { user, hasAccount, isGuest, loading, accountType, btobStatus, businessLoading, profileComplete } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const pathname = usePathname();
@@ -94,7 +94,9 @@ function RootLayoutNav() {
     // is still saving the new profile (it leaves by itself).
     if (hasAccount) {
       if (onOnboardingScreen) router.replace('/');
-      else if (onLoginScreen && !authFlow.busy) {
+      // …and only once the profile is known and complete (an unfinished sign-up stays on
+      // step 2).
+      else if (onLoginScreen && !authFlow.busy && !businessLoading && profileComplete) {
         if (router.canGoBack()) router.back(); else router.replace('/');
       }
       return;
@@ -130,7 +132,7 @@ function RootLayoutNav() {
       if (router.canGoBack()) router.back(); else router.replace('/');
       requireAccount({ action: first === 'chat' ? 'chat' : 'other', run: () => router.push(href as never) });
     }
-  }, [ready, user, hasAccount, isGuest, onboardingComplete, accountType, btobStatus, segments, router, pathname, searchParams, requireAccount]);
+  }, [ready, user, hasAccount, isGuest, onboardingComplete, accountType, btobStatus, businessLoading, profileComplete, segments, router, pathname, searchParams, requireAccount]);
 
   if (!ready) {
     return <SplashOverlay onFinish={() => setSplashAnimDone(true)} />;

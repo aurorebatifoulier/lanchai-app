@@ -1,946 +1,333 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { SHADES } from '@/constants/brandShades';
+import React, { useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  ScrollView,
-  Platform,
-  ActivityIndicator,
-  Image,
+  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, TouchableOpacity, type TextInput,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import {
-  createUserWithEmailAndPassword,
-  updateProfile,
-  linkWithCredential,
-  EmailAuthProvider,
-} from 'firebase/auth';
-import { authFlow } from '@/lib/authFlow';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { COLORS } from '@/constants/Colors';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
-import { auth } from '@/lib/auth';
-import { useFeatureFlags } from '@/lib/features';
-import { requestPasswordReset, requestEmailVerification, AuthEmailRateLimitError } from '@/lib/authEmails';
-import { ID_DOC_TYPES, pickIdPhoto, submitMyIdentityDocument, type IdDocType } from '@/lib/identity';
-import { applyInviteCode } from '@/lib/referral';
-import { db, storage } from '@/lib/firebase';
-import { getUserProfile } from '@/lib/firestore';
+import { StatusBar } from 'expo-status-bar';
+import { Feather } from '@expo/vector-icons';
+import { SHADES } from '@/constants/brandShades';
+import { TYPE } from '@/constants/typography';
+import { AUTH_COPY } from '@/constants/authCopy';
+import { DEFAULT_COUNTRY, toE164, type CountryCode } from '@/constants/countryCodes';
+import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
+import { AuthHeaderDecor } from '@/components/auth/AuthHeaderDecor';
+import { AuthInput, PasswordField, OrDivider, SocialButtons, TermsLine, PhoneField } from '@/components/auth/AuthFields';
+import { ForgotPasswordSheet } from '@/components/auth/ForgotPasswordSheet';
+import LegacyAuthForm from '@/components/auth/LegacyAuthForm';
+import { useFeatureFlags } from '@/lib/features';
+import { useLoyaltyConfig, referralWelcomePercent } from '@/lib/loyalty';
+import { auth } from '@/lib/auth';
+import { authFlow } from '@/lib/authFlow';
+import { continueWithGoogle, GoogleCancelled } from '@/lib/googleSignIn';
+import {
+  authErrorMessage, signInWithEmail, createEmailAccount, hasCompleteProfile, saveIndividualProfile,
+  EMAIL_RE, PHONE_E164, MIN_PASSWORD,
+} from '@/lib/authActions';
 
-function firebaseAuthErrorMessage(err: unknown): string {
-  const code = (err as { code?: string })?.code ?? '';
-  switch (code) {
-    case 'auth/invalid-email':
-      return 'That email address looks invalid.';
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Incorrect email or password.';
-    case 'auth/email-already-in-use':
-    case 'auth/credential-already-in-use':
-      return 'An account already exists with this email. Sign in instead.';
-    case 'auth/weak-password':
-      return 'Password must be at least 6 characters.';
-    default:
-      return 'Something went wrong. Please try again.';
-  }
-}
+// Sign in + 2-step sign-up (validated mockups). Guests are an anonymous session: step 1
+// LINKS it to the new email account, step 2 saves name + phone (+ invite code). Google
+// (dev / EAS build only) skips step 1. While a sign-up is in progress `authFlow.busy`
+// keeps the root layout from leaving this screen; it leaves by itself (back to where the
+// guest came from — the guest sheet's action then resumes — or Home).
+// Params: ?mode=signup, ?step=2 (finish an unfinished sign-up), ?invite=1 (code open).
 
-const EMAIL_RE    = /\S+@\S+\.\S+/;
-const PHONE_E164  = /^\+[1-9]\d{6,14}$/;
+const si = AUTH_COPY.signIn;
+const su = AUTH_COPY.signUp;
 
-type Path = 'btoc' | 'btob';
+type View_ = 'signin' | 'signup1' | 'signup2' | 'business';
 
 export default function LoginScreen() {
-  const { signIn, signOut } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [path, setPath]           = useState<Path>('btoc');
-  // ?mode=signup (guest "Create account") opens the sign-up form directly.
-  const params = useLocalSearchParams<{ mode?: string }>();
-  const [mode, setMode]           = useState<'signin' | 'signup'>(params.mode === 'signup' ? 'signup' : 'signin');
-  const [firstName, setFirstName]     = useState('');
-  const [lastName, setLastName]       = useState('');
-  const [phone, setPhone]             = useState('+856');
-  const [phoneTouched, setPhoneTouched] = useState(false);
-  const [email, setEmail]             = useState('');
-  const [password, setPassword]       = useState('');
-  const [confirmPassword, setConfirmPassword]               = useState('');
-  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
-  const [busy, setBusy]               = useState(false);
-  const [error, setError]             = useState<string | null>(null);
-  const confirmPasswordRef = useRef<TextInput>(null);
-
-  // BtoB-only signup fields
-  const [companyName, setCompanyName]         = useState('');
-  const [licenseNumber, setLicenseNumber]     = useState('');
-  const [responsibleName, setResponsibleName] = useState('');
-  const [docUri, setDocUri]                   = useState<string | null>(null);
-  // Business signup: ID of the responsible person (optional here, required before approval).
-  const [idType, setIdType]                   = useState<IdDocType | null>(null);
-  const [idPhotos, setIdPhotos]               = useState<string[]>([]);
-  // Individual signup: optional friend's invite code (applied right after the account exists).
-  const [inviteCode, setInviteCode]           = useState('');
-
-  // Forgot-password inline feedback
-  const [resetStatus, setResetStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [resetMsg, setResetMsg]       = useState('');
-
-  const isSignUp = mode === 'signup';
-  // Business signup is closed at launch (config/features.businessAccounts, default OFF):
-  // the Individual/Business selector is hidden and every login goes through one path.
+  const screen = useScreenInsets();
+  const params = useLocalSearchParams<{ mode?: string; step?: string; invite?: string }>();
+  const startedOnSignUp = params.mode === 'signup';
+  const [view, setView] = useState<View_>(
+    params.step === '2' && auth.currentUser && !auth.currentUser.isAnonymous ? 'signup2'
+      : startedOnSignUp ? 'signup1' : 'signin',
+  );
   const { businessAccounts } = useFeatureFlags();
-  const isBtob = businessAccounts && path === 'btob';
+  const pct = referralWelcomePercent(useLoyaltyConfig());
 
-  const passwordsMatch = password === confirmPassword;
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
+  const [phone, setPhone] = useState('');
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(params.invite === '1');
+  const [invite, setInvite] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
-  const canSubmit =
-    !busy &&
-    email.trim().length > 0 &&
-    password.length > 0 &&
-    (!isSignUp || (
-      confirmPassword.length > 0 &&
-      passwordsMatch &&
-      PHONE_E164.test(phone.trim()) &&
-      (isBtob
-        ? (companyName.trim().length > 0 && licenseNumber.trim().length > 0 && responsibleName.trim().length > 0)
-        : (firstName.trim().length > 0 && lastName.trim().length > 0))
-    ));
-
-  const resetSignupFields = () => {
-    setFirstName('');
-    setLastName('');
-    setPhone('+856');
-    setPhoneTouched(false);
-    setCompanyName('');
-    setLicenseNumber('');
-    setResponsibleName('');
-    setDocUri(null);
-    setIdType(null);
-    setIdPhotos([]);
+  // Leave: back to where the guest came from, else Home.
+  const leave = () => {
+    authFlow.busy = false;
+    if (router.canGoBack()) router.back(); else router.replace('/');
   };
+  const go = (v: View_) => { setError(null); setView(v); };
 
-  const switchPath = (p: Path) => {
-    if (p === path) return;
-    setError(null);
-    resetSignupFields();
-    setPath(p);
-  };
-
-  const switchMode = () => {
-    setError(null);
-    setResetStatus('idle');
-    setResetMsg('');
-    resetSignupFields();
-    setConfirmPasswordTouched(false);
-    setMode(m => (m === 'signin' ? 'signup' : 'signin'));
-  };
-
-  // Keeps the + prefix fixed and strips all non-digit characters after it.
-  const handlePhoneChange = (v: string) => {
-    const digits = v.replace(/[^\d]/g, '');
-    setPhone('+' + digits);
-  };
-
-  const handleEmailChange = (v: string) => {
-    setEmail(v);
-    if (resetStatus !== 'idle') {
-      setResetStatus('idle');
-      setResetMsg('');
-    }
-  };
-
-  const handlePickDocument = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    setDocUri(result.assets[0].uri);
-  };
-
-  const handleForgotPassword = async () => {
-    const trimmed = email.trim();
-    if (!trimmed || !EMAIL_RE.test(trimmed)) {
-      setResetStatus('error');
-      setResetMsg('Enter your email above, then tap Forgot password.');
-      return;
-    }
-    setResetStatus('sending');
-    setResetMsg('');
+  // ── Actions ────────────────────────────────────────────────────────────────
+  const signIn = async () => {
+    if (busy || !EMAIL_RE.test(email.trim()) || !password) return;
+    setBusy(true); setError(null);
     try {
-      await requestPasswordReset(trimmed);
-      setResetStatus('sent');
-      setResetMsg(
-        `If an account exists for ${trimmed}, a reset link has been sent. Check your inbox.`,
-      );
-    } catch (err: any) {
-      setResetStatus('error');
-      setResetMsg(
-        err instanceof AuthEmailRateLimitError
-          ? 'Too many attempts, please try again later.'
-          : 'Could not send the reset email. Please try again.',
-      );
-    }
-  };
-
-  const handleSubmit = useCallback(async () => {
-    if (!canSubmit) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (mode === 'signin') {
-        await signIn(email.trim(), password);
-        // Cross-path block — a business account signing in via Individual (or vice
-        // versa) is signed straight back out rather than let through to the app.
-        const cu = auth.currentUser;
-        if (cu) {
-          const profile = await getUserProfile(cu.uid);
-          const actualPath: Path = profile?.accountType === 'btob' ? 'btob' : 'btoc';
-          // Selector hidden (business signup closed) → no cross-path block, so existing
-          // business accounts can still sign in.
-          if (businessAccounts && actualPath !== path) {
-            await signOut();
-            setError(
-              actualPath === 'btob'
-                ? 'This is a business account. Please use the Business login.'
-                : 'This is an individual account. Please use the Individual login.',
-            );
-            return;
-          }
-        }
-      } else {
-        // A guest (anonymous session) is LINKED to the new email account — same uid, so
-        // whatever they did as a guest (recently viewed) stays theirs. The root layout
-        // waits (authFlow.busy) until the profile below is saved.
-        authFlow.busy = true;
-        const current = auth.currentUser;
-        const { user } = current?.isAnonymous
-          ? await linkWithCredential(current, EmailAuthProvider.credential(email.trim(), password))
-          : await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await user.getIdToken(true); // rules / callables now see a real account
-
-        if (isBtob) {
-          const displayName = companyName.trim();
-          await updateProfile(user, { displayName });
-
-          let btobDocumentUrl: string | undefined;
-          if (docUri) {
-            const compressed = await manipulateAsync(
-              docUri,
-              [{ resize: { width: 1600 } }],
-              { compress: 0.7, format: SaveFormat.JPEG },
-            );
-            const blob: Blob = await (await fetch(compressed.uri)).blob();
-            const sRef = storageRef(storage, `businessDocs/${user.uid}/${Date.now()}.jpg`);
-            await uploadBytes(sRef, blob);
-            btobDocumentUrl = await getDownloadURL(sRef);
-          }
-          await setDoc(
-            doc(db, 'users', user.uid),
-            {
-              displayName,
-              phoneNumber:   phone.trim(),
-              phone:         phone.trim(),
-              phoneVerified: false,
-              accountType:   'btob',
-              btobStatus:    'pending_approval',
-              btobCompanyName:     companyName.trim(),
-              btobLicenseNumber:   licenseNumber.trim(),
-              btobResponsibleName: responsibleName.trim(),
-              ...(btobDocumentUrl ? { btobDocumentUrl } : {}),
-              btobSubmittedAt: serverTimestamp(),
-              createdAt:     serverTimestamp(),
-            },
-            { merge: true },
-          );
-          // Responsible person's ID — registered after the account exists; a failure here
-          // never blocks the signup (it can be added from ID & residency before approval).
-          if (idType && idPhotos.length > 0) {
-            await submitMyIdentityDocument(idType, idPhotos).catch(err =>
-              console.warn('[Login] responsible ID upload failed:', err));
-          }
-        } else {
-          const displayName = `${firstName.trim()} ${lastName.trim()}`;
-          await updateProfile(user, { displayName });
-
-          await setDoc(
-            doc(db, 'users', user.uid),
-            {
-              firstName:     firstName.trim(),
-              lastName:      lastName.trim(),
-              displayName,
-              phoneNumber:   phone.trim(),
-              phone:         phone.trim(),
-              phoneVerified: false,
-              accountType:   'btoc',
-              createdAt:     serverTimestamp(),
-            },
-            { merge: true },
-          );
-        }
-        try { await requestEmailVerification(user); } catch {}
-        // Never blocks the signup — if it fails, Account → "Have an invite code?" lets
-        // them retry before their first booking.
-        if (!isBtob && inviteCode.trim()) {
-          await applyInviteCode(inviteCode).catch(err => console.warn('[Login] invite code not applied:', err));
-        }
-      }
+      await signInWithEmail(email, password);
+      // An account whose sign-up was never finished → step 2 here.
+      const uid = auth.currentUser?.uid;
+      if (uid && !(await hasCompleteProfile(uid))) { authFlow.busy = true; go('signup2'); }
+      // else: the root layout leaves this screen once the profile is loaded.
     } catch (err) {
-      setError(firebaseAuthErrorMessage(err));
+      setError(authErrorMessage(err));
     } finally {
       setBusy(false);
-      // Sign-up done (or failed after the account was created): leave the screen — back
-      // to where the guest came from, where the guest sheet's action resumes.
-      if (authFlow.busy) {
-        authFlow.busy = false;
-        const cu = auth.currentUser;
-        if (cu && !cu.isAnonymous) {
-          if (router.canGoBack()) router.back(); else router.replace('/');
-        }
-      }
     }
-  }, [
-    canSubmit, mode, email, password, firstName, lastName, phone, path, isBtob, businessAccounts,
-    companyName, licenseNumber, responsibleName, docUri, idType, idPhotos, inviteCode, signIn, signOut, router,
-  ]);
+  };
 
-  // Rendered at two different positions in the form depending on path (see below) —
-  // defined once here so both spots share identical markup/behavior.
-  const phoneField = (
-    <View style={styles.field}>
-      <Text style={styles.label}>Phone number</Text>
-      <TextInput
-        style={[
-          styles.input,
-          phoneTouched && !PHONE_E164.test(phone.trim()) && styles.inputError,
-        ]}
-        value={phone}
-        onChangeText={handlePhoneChange}
-        onBlur={() => setPhoneTouched(true)}
-        placeholder="+856 20 XXXXXXXX"
-        placeholderTextColor={COLORS.fg3}
-        keyboardType="number-pad"
-        autoCorrect={false}
-        textContentType="telephoneNumber"
-        returnKeyType="next"
-      />
-      <Text style={styles.inputHint}>
-        International format — e.g. +856 20 XXXXXXXX for Laos, +33 6 for France.
-      </Text>
-    </View>
+  const google = async () => {
+    if (googleBusy) return;
+    setGoogleBusy(true); setError(null);
+    authFlow.busy = true;
+    try {
+      const { user, names } = await continueWithGoogle();
+      if (await hasCompleteProfile(user.uid)) { leave(); return; }
+      setFirstName(f => f || names.firstName);
+      setLastName(l => l || names.lastName);
+      go('signup2');
+    } catch (err) {
+      authFlow.busy = false;
+      if (!(err instanceof GoogleCancelled)) setError(authErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
+  const passwordsOk = password.length >= MIN_PASSWORD && password === confirm;
+  const step1Ok = EMAIL_RE.test(email.trim()) && passwordsOk;
+  const step1 = async () => {
+    if (busy || !step1Ok) return;
+    setBusy(true); setError(null);
+    authFlow.busy = true;
+    try {
+      await createEmailAccount(email, password);
+      go('signup2');
+    } catch (err) {
+      authFlow.busy = false;
+      setError(authErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const e164 = toE164(country, phone);
+  const phoneOk = PHONE_E164.test(e164) && phone.replace(/\D/g, '').length >= 6;
+  const step2Ok = firstName.trim().length > 0 && lastName.trim().length > 0 && phoneOk;
+  const step2 = async () => {
+    if (busy || !step2Ok) return;
+    setBusy(true); setError(null);
+    try {
+      await saveIndividualProfile({ firstName, lastName, phone: e164, inviteCode: inviteOpen ? invite : '' });
+      leave();
+    } catch (err) {
+      setError(authErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Views ──────────────────────────────────────────────────────────────────
+  if (view === 'business') {
+    return (
+      <View style={[s.root, screen.root]}>
+        <View style={s.topRow}>
+          <TouchableOpacity onPress={() => go('signin')} hitSlop={10}><Feather name="arrow-left" size={22} color={SHADES.carbon} /></TouchableOpacity>
+        </View>
+        <LegacyAuthForm initialPath="btob" initialMode="signup" />
+      </View>
+    );
+  }
+
+  const errorLine = !!error && <Text style={[UI.errorText, s.center]}>{error}</Text>;
+  const primary = (label: string, onPress: () => void, enabled: boolean) => (
+    <PressScale style={[UI.btnPrimary, !enabled && UI.btnDisabled]} onPress={onPress} disabled={!enabled || busy}>
+      {busy ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{label}</Text>}
+    </PressScale>
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[s.content, { paddingTop: screen.top + 12, paddingBottom: screen.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={[styles.content, { paddingTop: insets.top + 32 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Image
-            source={require('@/assets/images/lanchai-mark.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-
-          {/* BtoC / BtoB selector — only while business accounts are open */}
-          {businessAccounts && (
-            <View style={styles.pathRow}>
-              <TouchableOpacity
-                style={[styles.pathBtn, path === 'btoc' && styles.pathBtnActive]}
-                onPress={() => switchPath('btoc')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.pathBtnText, path === 'btoc' && styles.pathBtnTextActive]}>
-                  Individual
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.pathBtn, path === 'btob' && styles.pathBtnActive]}
-                onPress={() => switchPath('btob')}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.pathBtnText, path === 'btob' && styles.pathBtnTextActive]}>
-                  Business
-                </Text>
+        {view === 'signin' ? (
+          <>
+            <View style={s.topRowEnd}>
+              <TouchableOpacity onPress={leave} hitSlop={10} style={s.browse}>
+                <Text style={s.browseText}>{si.browseFirst}</Text>
+                <Feather name="arrow-right" size={16} color={SHADES.amberDeep} />
               </TouchableOpacity>
             </View>
-          )}
-
-          {/* Title + subtitle — sign-up only. Sign-in shows neither, for either
-              path — the Individual/Business toggle is sufficient context. */}
-          {isSignUp && (
-            <>
-              <Text style={styles.title}>
-                {isBtob ? 'Create your business account' : 'Create your account'}
+            <AuthHeaderDecor />
+            <View style={s.form}>
+              <SocialButtons onGoogle={google} busy={googleBusy} />
+              <OrDivider label={si.orEmail} />
+              <AuthInput value={email} onChangeText={setEmail} placeholder={si.email} keyboardType="email-address"
+                autoCapitalize="none" autoCorrect={false} autoComplete="email" returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()} />
+              <PasswordField ref={passwordRef} value={password} onChangeText={setPassword} placeholder={si.password}
+                autoComplete="password" returnKeyType="go" onSubmitEditing={signIn} />
+              <TouchableOpacity onPress={() => setForgotOpen(true)} style={s.forgot} hitSlop={8}>
+                <Text style={s.forgotText}>{si.forgot}</Text>
+              </TouchableOpacity>
+              {errorLine}
+              {primary(si.submit, signIn, EMAIL_RE.test(email.trim()) && password.length > 0)}
+              <Text style={[s.switch, s.center]} onPress={() => go('signup1')}>
+                {si.newHere}<Text style={s.switchStrong}>{si.create}</Text>
               </Text>
-              <Text style={styles.subtitle}>
-                {isBtob
-                  ? "Sign up your company to rent with LANCHAI. We'll review your application before activating the account."
-                  : 'Sign up to start renting equipment.'}
-              </Text>
-            </>
-          )}
-
-          {/* First + last name — sign-up only, individual accounts only */}
-          {isSignUp && !isBtob && (
-            <View style={styles.nameRow}>
-              <View style={[styles.field, styles.nameField]}>
-                <Text style={styles.label}>First name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  placeholder="Ada"
-                  placeholderTextColor={COLORS.fg3}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  textContentType="givenName"
-                  returnKeyType="next"
-                />
-              </View>
-              <View style={[styles.field, styles.nameField]}>
-                <Text style={styles.label}>Last name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={lastName}
-                  onChangeText={setLastName}
-                  placeholder="Lovelace"
-                  placeholderTextColor={COLORS.fg3}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  textContentType="familyName"
-                  returnKeyType="next"
-                />
-              </View>
+              {businessAccounts && (
+                <Text style={[s.switch, s.center]} onPress={() => go('business')}>
+                  {si.business}<Text style={s.switchStrong}>{si.businessLink}</Text>
+                </Text>
+              )}
+              <TermsLine />
             </View>
-          )}
-
-          {/* Phone — sign-up only (rendered inline below for individual accounts;
-              re-used further down, after the company fields, for business accounts) */}
-          {isSignUp && !isBtob && phoneField}
-          {isSignUp && !isBtob && (
-            <View style={styles.field}>
-              <View style={styles.fieldLabelRow}>
-                <Text style={styles.label}>Invite code</Text>
-                <Text style={styles.labelOptional}>Optional</Text>
-              </View>
-              <TextInput
-                style={styles.input}
-                value={inviteCode}
-                onChangeText={t => setInviteCode(t.toUpperCase())}
-                placeholder="e.g. AURORE-7K2"
-                placeholderTextColor={COLORS.fg3}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
+          </>
+        ) : (
+          <>
+            {/* Back + "1 of 2" / "2 of 2" + progress */}
+            <View style={s.stepHead}>
+              <TouchableOpacity
+                hitSlop={10}
+                onPress={() => (view === 'signup1' ? (startedOnSignUp ? leave() : go('signin')) : leave())}
+                accessibilityLabel="Back"
+              >
+                <Feather name="arrow-left" size={22} color={SHADES.carbon} />
+              </TouchableOpacity>
+              <Text style={s.stepOf}>{su.stepOf(view === 'signup1' ? 1 : 2)}</Text>
             </View>
-          )}
+            <View style={s.progress}>
+              <View style={[s.seg, s.segOn]} />
+              <View style={[s.seg, view === 'signup2' && s.segOn]} />
+            </View>
 
-          {/* BtoB-only fields — sign-up only */}
-          {isSignUp && isBtob && (
-            <>
-              <View style={styles.field}>
-                <Text style={styles.label}>Company name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={companyName}
-                  onChangeText={setCompanyName}
-                  placeholder="Your company name"
-                  placeholderTextColor={COLORS.fg3}
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Responsible person</Text>
-                <TextInput
-                  style={styles.input}
-                  value={responsibleName}
-                  onChangeText={setResponsibleName}
-                  placeholder="Full name of the person in charge"
-                  placeholderTextColor={COLORS.fg3}
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>License / registration number</Text>
-                <TextInput
-                  style={styles.input}
-                  value={licenseNumber}
-                  onChangeText={setLicenseNumber}
-                  placeholder="Business registration number"
-                  placeholderTextColor={COLORS.fg3}
-                  autoCapitalize="characters"
-                  returnKeyType="next"
-                />
-              </View>
-              <View style={styles.field}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={styles.label}>Business registration document</Text>
-                  <Text style={styles.labelOptional}>Optional</Text>
-                </View>
-                <TouchableOpacity style={styles.docPicker} onPress={handlePickDocument} activeOpacity={0.8}>
-                  {docUri ? (
-                    <>
-                      <Image source={{ uri: docUri }} style={styles.docThumb} />
-                      <Text style={styles.docPickerText}>Document attached — tap to change</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Feather name="upload" size={18} color={COLORS.fg3} />
-                      <Text style={styles.docPickerText}>
-                        Tap to attach a photo of your license, KBIS, or business
-                        registration document
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.inputHint}>
-                  You can also add this later from your account settings — but it&apos;s
-                  required before you can book.
+            {view === 'signup1' ? (
+              <View style={s.form}>
+                <Text style={s.title}>{su.step1Title}</Text>
+                <Text style={s.sub}>{su.step1Sub}</Text>
+                <SocialButtons onGoogle={google} busy={googleBusy} />
+                <OrDivider label={si.orEmail} />
+                <AuthInput value={email} onChangeText={setEmail} placeholder={si.email} keyboardType="email-address"
+                  autoCapitalize="none" autoCorrect={false} autoComplete="email" returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()} />
+                <PasswordField ref={passwordRef} value={password} onChangeText={setPassword} placeholder={si.password}
+                  autoComplete="new-password" returnKeyType="next" onSubmitEditing={() => confirmRef.current?.focus()} />
+                <PasswordField ref={confirmRef} value={confirm} onChangeText={setConfirm} placeholder={su.confirm}
+                  autoComplete="new-password" returnKeyType="go" onSubmitEditing={step1} />
+                {password.length > 0 && password.length < MIN_PASSWORD ? (
+                  <Text style={s.hint}>{su.minChars}</Text>
+                ) : confirm.length > 0 ? (
+                  <View style={s.matchRow}>
+                    <Feather name={passwordsOk ? 'check' : 'x'} size={15} color={passwordsOk ? SHADES.amberText : SHADES.carbonFaint} />
+                    <Text style={[s.hint, passwordsOk && s.matchOk]}>{passwordsOk ? su.match : su.noMatch}</Text>
+                  </View>
+                ) : (
+                  <Text style={s.hint}>{su.minChars}</Text>
+                )}
+                {errorLine}
+                {primary(su.continue, step1, step1Ok)}
+                <Text style={[s.switch, s.center]} onPress={() => go('signin')}>
+                  {su.already}<Text style={s.switchStrong}>{su.signIn}</Text>
                 </Text>
               </View>
-              <View style={styles.field}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={styles.label}>ID of the responsible person</Text>
-                  <Text style={styles.labelOptional}>Optional</Text>
-                </View>
-                <View style={styles.idChips}>
-                  {ID_DOC_TYPES.map(t => (
-                    <TouchableOpacity
-                      key={t.key}
-                      style={[styles.idChip, idType === t.key && styles.idChipOn]}
-                      onPress={() => setIdType(t.key)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.idChipText, idType === t.key && styles.idChipTextOn]}>{t.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                <TouchableOpacity
-                  style={styles.docPicker}
-                  onPress={async () => { const u = await pickIdPhoto('camera'); if (u) setIdPhotos(p => [...p, u].slice(0, 6)); }}
-                  onLongPress={async () => { const u = await pickIdPhoto('gallery'); if (u) setIdPhotos(p => [...p, u].slice(0, 6)); }}
-                  activeOpacity={0.8}
-                >
-                  {idPhotos.length > 0 ? (
-                    <>
-                      <Image source={{ uri: idPhotos[0] }} style={styles.docThumb} />
-                      <Text style={styles.docPickerText}>
-                        {idPhotos.length} photo{idPhotos.length > 1 ? 's' : ''} — tap to add another (long-press: gallery)
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Feather name="camera" size={18} color={COLORS.fg3} />
-                      <Text style={styles.docPickerText}>Tap to take a photo of the passport or ID card (long-press: gallery)</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <Text style={styles.inputHint}>
-                  Required before we approve your business account — you can also add it later in Account › ID & residency.
-                </Text>
-              </View>
-              {phoneField}
-            </>
-          )}
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={handleEmailChange}
-              placeholder="you@example.com"
-              placeholderTextColor={COLORS.fg3}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={COLORS.fg3}
-              secureTextEntry
-              textContentType={isSignUp ? 'newPassword' : 'password'}
-              returnKeyType={isSignUp ? 'next' : 'done'}
-              onSubmitEditing={isSignUp ? () => confirmPasswordRef.current?.focus() : handleSubmit}
-              blurOnSubmit={!isSignUp}
-            />
-          </View>
-
-          {/* Confirm password — sign-up only, both paths */}
-          {isSignUp && (
-            <View style={styles.field}>
-              <Text style={styles.label}>Confirm password</Text>
-              <TextInput
-                ref={confirmPasswordRef}
-                style={[
-                  styles.input,
-                  confirmPasswordTouched && confirmPassword.length > 0 && !passwordsMatch && styles.inputError,
-                ]}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                onBlur={() => setConfirmPasswordTouched(true)}
-                placeholder="••••••••"
-                placeholderTextColor={COLORS.fg3}
-                secureTextEntry
-                textContentType="newPassword"
-                returnKeyType="done"
-                onSubmitEditing={handleSubmit}
-              />
-              {confirmPasswordTouched && confirmPassword.length > 0 && !passwordsMatch && (
-                <Text style={styles.fieldErrorText}>Passwords do not match</Text>
-              )}
-            </View>
-          )}
-
-          {/* Forgot password link — sign-in only */}
-          {!isSignUp && (
-            <TouchableOpacity
-              style={styles.forgotRow}
-              onPress={handleForgotPassword}
-              disabled={resetStatus === 'sending'}
-              activeOpacity={0.7}
-            >
-              {resetStatus === 'sending' ? (
-                <ActivityIndicator size="small" color={COLORS.fg3} />
-              ) : (
-                <Text style={styles.forgotLink}>Forgot password?</Text>
-              )}
-            </TouchableOpacity>
-          )}
-
-          {/* Reset feedback banner — sign-in only */}
-          {!isSignUp && resetStatus !== 'idle' && resetStatus !== 'sending' && (
-            <View style={[
-              styles.resetBanner,
-              resetStatus === 'sent' ? styles.resetBannerSuccess : styles.resetBannerWarn,
-            ]}>
-              <Text style={[
-                styles.resetBannerText,
-                resetStatus === 'sent' ? styles.resetBannerTextSuccess : styles.resetBannerTextWarn,
-              ]}>
-                {resetMsg}
-              </Text>
-            </View>
-          )}
-
-          {error && <Text style={styles.error}>{error}</Text>}
-
-          <PressScale
-            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
-          >
-            {busy ? (
-              <ActivityIndicator size="small" color={COLORS.carbon} />
             ) : (
-              <Text style={styles.submitText}>
-                {isSignUp ? 'Create account' : 'Sign in'}
-              </Text>
+              <View style={s.form}>
+                <Text style={s.title}>{su.step2Title}</Text>
+                <Text style={s.sub}>{su.step2Sub}</Text>
+                <View style={s.nameRow}>
+                  <AuthInput style={{ flex: 1 }} value={firstName} onChangeText={setFirstName} placeholder={su.firstName}
+                    autoComplete="given-name" textContentType="givenName" />
+                  <AuthInput style={{ flex: 1 }} value={lastName} onChangeText={setLastName} placeholder={su.lastName}
+                    autoComplete="family-name" textContentType="familyName" />
+                </View>
+                <View>
+                  <PhoneField
+                    country={country}
+                    onCountry={setCountry}
+                    value={phone}
+                    onChangeText={v => { setPhone(v); setPhoneTouched(true); }}
+                    invalid={phoneTouched && phone.length > 3 && !phoneOk}
+                  />
+                  <Text style={[s.hint, { marginTop: 8 }]}>
+                    {phoneTouched && phone.length > 3 && !phoneOk ? su.phoneInvalid : su.phoneHint}
+                  </Text>
+                </View>
+                {pct > 0 && (
+                  <View style={s.invite}>
+                    <TouchableOpacity style={s.inviteHead} onPress={() => setInviteOpen(o => !o)} activeOpacity={0.7}>
+                      <Feather name="gift" size={16} color={SHADES.amberDeep} />
+                      <Text style={s.inviteText}>{su.invite(pct)}</Text>
+                      <Feather name={inviteOpen ? 'chevron-up' : 'chevron-down'} size={18} color={SHADES.amberDeep} />
+                    </TouchableOpacity>
+                    {inviteOpen && (
+                      <AuthInput
+                        style={{ marginTop: 10 }}
+                        value={invite}
+                        onChangeText={t => setInvite(t.toUpperCase())}
+                        placeholder={su.invitePlaceholder}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        accessibilityLabel={su.inviteLabel}
+                      />
+                    )}
+                  </View>
+                )}
+                {errorLine}
+                {primary(su.create, step2, step2Ok)}
+                <TermsLine />
+              </View>
             )}
-          </PressScale>
-
-          {/* Consent line */}
-          <Text style={styles.consentText}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.consentLink} onPress={() => router.push('/legal/terms')}>
-              Terms of service
-            </Text>
-            {' '}and{' '}
-            <Text style={styles.consentLink} onPress={() => router.push('/legal/privacy')}>
-              Privacy policy
-            </Text>
-            .
-          </Text>
-
-          <TouchableOpacity style={styles.switchModeBtn} onPress={switchMode}>
-            <Text style={styles.switchModeText}>
-              {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
-              <Text style={styles.switchModeTextBold}>
-                {isSignUp ? 'Sign in' : 'Sign up'}
-              </Text>
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </>
+        )}
+      </ScrollView>
+      <ForgotPasswordSheet visible={forgotOpen} initialEmail={email} onClose={() => setForgotOpen(false)} />
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  idChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  idChip: { borderRadius: 8, borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white, paddingHorizontal: 10, paddingVertical: 6 },
-  idChipOn: { backgroundColor: COLORS.carbon, borderColor: COLORS.carbon },
-  idChipText: { fontSize: 12, fontWeight: '600', color: COLORS.carbon },
-  idChipTextOn: { color: COLORS.white },
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.porcelain,
-  },
-  flex: {
-    flex: 1,
-  },
-  content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  logo: {
-    width: 280,
-    height: 200,
-    alignSelf: 'center',
-    marginBottom: 0,
-  },
-
-  // BtoC / BtoB selector
-  pathRow: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.warmBeige,
-    borderRadius: 12,
-    padding: 4,
-    marginTop: 28,
-    marginBottom: 32,
-  },
-  pathBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pathBtnActive: {
-    backgroundColor: COLORS.carbon,
-  },
-  pathBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.fg2,
-  },
-  pathBtnTextActive: {
-    color: COLORS.white,
-  },
-
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    color: COLORS.carbon,
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    marginBottom: 28,
-    lineHeight: 19,
-  },
-
-  // Name row (sign-up only)
-  nameRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  nameField: {
-    flex: 1,
-    marginBottom: 0,
-  },
-
-  field: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: COLORS.fg3,
-    marginBottom: 8,
-  },
-  fieldLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    marginBottom: 8,
-  },
-  labelOptional: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    letterSpacing: 0.4,
-    opacity: 0.7,
-    marginBottom: 8,
-  },
-  input: {
-    height: 46,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.carbon,
-  },
-  inputError: {
-    borderColor: COLORS.danger,
-  },
-  inputHint: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    marginTop: 5,
-    marginBottom: 4,
-    lineHeight: 15,
-  },
-  fieldErrorText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.danger,
-    marginTop: 5,
-  },
-
-  // Business document picker
-  docPicker: {
-    minHeight: 64,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    borderStyle: 'dashed',
-    backgroundColor: COLORS.white,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  docThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: COLORS.softGray200,
-  },
-  docPickerText: {
-    flex: 1,
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: COLORS.fg3,
-    lineHeight: 17,
-  },
-
-  // Forgot password
-  forgotRow: {
-    alignSelf: 'flex-end',
-    paddingVertical: 4,
-    marginTop: -8,
-    marginBottom: 12,
-  },
-  forgotLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.amber,
-  },
-
-  // Reset feedback
-  resetBanner: {
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
-  },
-  resetBannerSuccess: {
-    backgroundColor: SHADES.amberPale,
-  },
-  resetBannerWarn: {
-    backgroundColor: SHADES.amberLight,
-  },
-  resetBannerText: {
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  resetBannerTextSuccess: {
-    color: SHADES.carbon,
-  },
-  resetBannerTextWarn: {
-    color: SHADES.amberDeep,
-  },
-
-  error: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.danger,
-    marginBottom: 12,
-  },
-  submitBtn: {
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: COLORS.amber,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitBtnDisabled: {
-    backgroundColor: COLORS.softGray,
-  },
-  submitText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
-  consentText: {
-    fontSize: 11.5,
-    fontWeight: '400',
-    color: COLORS.fg3,
-    textAlign: 'center',
-    lineHeight: 17,
-    marginTop: 14,
-    paddingHorizontal: 8,
-  },
-  consentLink: {
-    color: COLORS.amber,
-    fontWeight: '600',
-  },
-  switchModeBtn: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  switchModeText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: COLORS.fg3,
-  },
-  switchModeTextBold: {
-    fontWeight: '800',
-    color: COLORS.carbon,
-  },
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: SHADES.cream },
+  content: { paddingHorizontal: 20 },
+  topRow: { paddingHorizontal: 20, paddingVertical: 10 },
+  topRowEnd: { flexDirection: 'row', justifyContent: 'flex-end' },
+  browse: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
+  browseText: { ...TYPE.body, fontWeight: '700', color: SHADES.amberDeep },
+  form: { gap: 12, marginTop: 8 },
+  forgot: { alignSelf: 'flex-end' },
+  forgotText: { ...TYPE.body, fontWeight: '700', color: SHADES.amberDeep },
+  center: { textAlign: 'center' },
+  switch: { ...TYPE.body, color: SHADES.carbonMuted, marginTop: 4 },
+  switchStrong: { fontWeight: '700', color: SHADES.carbon },
+  stepHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  stepOf: { ...TYPE.secondary, color: SHADES.carbonMuted },
+  progress: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 14 },
+  seg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: SHADES.border },
+  segOn: { backgroundColor: SHADES.amber },
+  title: { ...TYPE.screenTitle, fontWeight: '800', color: SHADES.carbon },
+  sub: { ...TYPE.body, color: SHADES.carbonMuted, marginTop: -6, marginBottom: 6 },
+  hint: { ...TYPE.secondary, color: SHADES.carbonMuted },
+  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  matchOk: { color: SHADES.amberText, fontWeight: '600' },
+  nameRow: { flexDirection: 'row', gap: 10 },
+  invite: { backgroundColor: SHADES.amberPale, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  inviteHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inviteText: { ...TYPE.body, fontWeight: '600', flex: 1, color: SHADES.amberDeep },
 });

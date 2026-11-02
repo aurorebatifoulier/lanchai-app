@@ -38,7 +38,7 @@ export function useRequireAccount() {
 const c = AUTH_COPY.sheet;
 
 export function GuestGateProvider({ children }: { children: React.ReactNode }) {
-  const { hasAccount } = useAuth();
+  const { hasAccount, profileComplete } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const screen = useScreenInsets();
@@ -47,11 +47,14 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
   const pending = useRef<GateRequest | null>(null);
 
   const requireAccount = useCallback((req: GateRequest) => {
-    if (hasAccount) { req.run?.(); return true; }
+    if (hasAccount && profileComplete) { req.run?.(); return true; }
     pending.current = req;
-    setSheet(req);
+    // An account whose sign-up isn't finished (step 2 left, new Google account): finish
+    // it first, then the action resumes.
+    if (hasAccount) router.push({ pathname: '/login', params: { mode: 'signup', step: '2' } } as never);
+    else setSheet(req);
     return false;
-  }, [hasAccount]);
+  }, [hasAccount, profileComplete, router]);
 
   // Resume: once there's an account AND the sign-in / sign-up screen is closed. A guest
   // who leaves that screen WITHOUT signing in drops the action (no surprise later).
@@ -59,7 +62,7 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const leftLogin = prevPath.current === '/login' && pathname !== '/login';
     prevPath.current = pathname;
-    if (!hasAccount) {
+    if (!hasAccount || !profileComplete) {
       if (leftLogin) pending.current = null;
       return;
     }
@@ -68,7 +71,7 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
     pending.current = null;
     const t = setTimeout(() => req.run?.(), 250); // let the navigation settle
     return () => clearTimeout(t);
-  }, [hasAccount, pathname]);
+  }, [hasAccount, profileComplete, pathname]);
 
   const close = (keepPending = false) => {
     if (!keepPending) pending.current = null;
