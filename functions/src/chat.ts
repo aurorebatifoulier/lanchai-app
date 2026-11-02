@@ -10,11 +10,39 @@ import { vteIsoDay } from './shared/dates';
 //   period per conversation ("We're closed for now. We'll reply from {open time}." —
 //   config/shop.autoReplyText), keyed by the next opening (conversation.autoReplyKey);
 // • LANCHAI (staff) replies → in-app notification "New message from LANCHAI" → /chat.
+// • a renter taps "I'm on my way" on a late rental (My rentals) → the message carries
+//   onMyWay + about {kind:'rental'} → every admin gets an in-app notification → the admin
+//   reservation, at most once per 2h per rental (reservation.onMyWayNotifiedAt), and only
+//   for that renter's own ACTIVE rental.
 // The welcome message and the auto-replies (senderId 'lanchai-business') notify nobody.
 
 const REGION = 'asia-southeast1';
 const BUSINESS_ID = 'lanchai-business';
 const db = () => admin.firestore();
+const ON_MY_WAY_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+
+async function notifyOnMyWay(renterId: string, reservationId: string): Promise<void> {
+  const resRef = db().collection('reservations').doc(reservationId);
+  const claimed = await db().runTransaction(async tx => {
+    const snap = await tx.get(resRef);
+    const r = snap.data();
+    if (!r || r.renterId !== renterId || r.status !== 'active') return null;
+    const last = r.onMyWayNotifiedAt?.toMillis?.() ?? 0;
+    if (Date.now() - last < ON_MY_WAY_COOLDOWN_MS) return null;
+    tx.update(resRef, { onMyWayNotifiedAt: FieldValue.serverTimestamp() });
+    return { renterName: String(r.renterName ?? 'A renter'), productName: String(r.productName ?? 'their rental') };
+  });
+  if (!claimed) return;
+  const admins = (await db().collection('admins').get()).docs.map(d => d.id);
+  await Promise.all(admins.map(uid => db().collection('notifications').doc(uid).collection('items').add({
+    type: 'rental', icon: 'navigation', iconColor: 'amber',
+    title: `${claimed.renterName} is on the way`,
+    body: `Coming to return ${claimed.productName}.`,
+    deepLink: `/admin/reservations/${reservationId}`,
+    createdAt: FieldValue.serverTimestamp(), readAt: null,
+  })));
+  logger.info('[chat] on-my-way admin notification', { reservationId, admins: admins.length });
+}
 
 export const onChatMessage = onDocumentCreated(
   { document: 'conversations/{conversationId}/messages/{messageId}', region: REGION },
@@ -35,6 +63,11 @@ export const onChatMessage = onDocumentCreated(
         return;
       }
       if (m.senderType !== 'renter') return;
+
+      if (m.onMyWay === true && m.about?.kind === 'rental' && typeof m.about.id === 'string') {
+        await notifyOnMyWay(conversationId, m.about.id)
+          .catch(err => logger.error('[onChatMessage] on-my-way failed', { conversationId, err: String(err) }));
+      }
 
       const shop = (await db().collection('config').doc('shop').get()).data() ?? {};
       const period = closedPeriod(
