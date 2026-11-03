@@ -1348,6 +1348,16 @@ a snapshot indefinitely).
     slots 2 / 3 / 1 (crop 4:5, ~1080 px JPEG 0.7, Storage `onboarding/s{n}p{m}/…`), title,
     sub-line, sticker texts. Bundled Unsplash placeholders `assets/images/onboarding/`
     (CREDITS.md).
+    Layout: header → flexible visual (≤ 55% of the screen, measured PER PAGE, centred) →
+    title + sub-line anchored above the bottom bar. Highlight = ONE band per line the
+    phrase occupies (`onTextLayout` + hidden single-line measurements, no per-word marks).
+    Life (Reanimated, transforms / opacity only, running only while the slide is visible
+    AND the app is in the foreground AND reduce motion is off — `useRunning`): sticker
+    cycles (pop in → bob ±3 px → pop out → wait, staggered), heartbeat, price count-up on
+    each activation (`CountUpText` with a new id), cards slide in from their side + 18%
+    parallax while swiping, slide 2 cards lift when the hexagon passes, slide 3 sparkles,
+    active pagination hexagon springs. Status bar set imperatively per slide
+    (`setStatusBarStyle`: dark on 1–2, light on 3).
   - **Guest cleanup** (`functions/src/guestCleanup.ts`, `guestCleanupDaily` 04:30
     Vientiane): Admin SDK `listUsers`; deletes ONLY users with no provider, email or phone
     (anonymous) whose last activity (creation / sign-in / token refresh) is > 30 days old,

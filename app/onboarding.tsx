@@ -1,8 +1,9 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedScrollHandler, runOnJS } from 'react-native-reanimated';
 import { SHADES } from '@/constants/brandShades';
 import { TYPE } from '@/constants/typography';
 import { ONBOARDING_COPY as c } from '@/constants/onboardingCopy';
@@ -14,11 +15,11 @@ import { setOnboardingComplete } from '@/lib/onboarding';
 import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingContent';
 
 // Onboarding — "living cards" (validated mockup), shown ONCE per device (lib/onboarding.ts).
-// Cream slides 1–2, carbon slide 3. Top: LANCHAI + Skip (1–2). Middle: tilted photo cards
-// floating slowly + stickers popping in one after the other. Bottom: highlighted title,
-// sub-line, hexagon pagination, round carbon "next" (1–2) or Start exploring + Sign in (3).
-// Swipe both ways, no auto-advance. Reduce motion: no float / travelling hexagon, stickers
-// shown statically. Content from Admin → Onboarding (lib/onboardingContent.ts).
+// Each page: header (LANCHAI + Skip on 1–2) at the top → the animated visual in the
+// flexible middle (≤ 55% of the screen, centred) → title + sub-line anchored just above the
+// bottom bar (hexagon pagination + round next / Start exploring + Sign in) → bottom safe
+// area. Cream slides 1–2 (dark status bar), carbon slide 3 (light status bar). Swipe both
+// ways, no auto-advance. Loops pause off-screen / in background; reduce motion = static.
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -26,37 +27,61 @@ export default function OnboardingScreen() {
   const { width, height } = useWindowDimensions();
   const slides = useOnboardingSlides();
   const priceLak = useLowestDailyPriceLak();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<Animated.ScrollView>(null);
+  const scrollX = useSharedValue(0);
   const [index, setIndex] = useState(0);
+  // Visual area measured PER PAGE (the bottom block of slide 3 is taller).
+  const [arts, setArts] = useState<Record<number, { w: number; h: number }>>({});
   const last = slides.length - 1;
 
-  const artW = width - 40;
-  const artH = Math.round(Math.min(height * 0.44, artW * 1.05));
+  // Status bar follows the active slide (the screens below may have set another style).
+  const applyBar = useCallback((i: number) => setStatusBarStyle(i === last ? 'light' : 'dark', true), [last]);
+  useFocusEffect(useCallback(() => { applyBar(index); }, [applyBar, index]));
+
+  const settle = useCallback((i: number) => {
+    setIndex(prev => (prev === i ? prev : i));
+    applyBar(i);
+  }, [applyBar]);
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: e => { scrollX.value = e.contentOffset.x; },
+    onMomentumEnd: e => { runOnJS(settle)(Math.round(e.contentOffset.x / width)); },
+  });
 
   const finish = (to: '/' | '/login') => {
     setOnboardingComplete();
+    setStatusBarStyle('dark', true);
     router.replace(to);
   };
   const goTo = (i: number) => {
     scrollRef.current?.scrollTo({ x: i * width, animated: true });
-    setIndex(i);
+    settle(i);
+  };
+
+  const onArtLayout = (i: number) => (e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    setArts(prev => {
+      const p = prev[i];
+      return p && Math.abs(p.w - w) < 1 && Math.abs(p.h - h) < 1 ? prev : { ...prev, [i]: { w, h } };
+    });
   };
 
   return (
-    <View style={[s.root, index === last && s.rootDark]}>
-      <StatusBar style={index === last ? 'light' : 'dark'} />
-      <ScrollView
+    <View style={[s.root, index === last && s.dark]}>
+      <Animated.ScrollView
         ref={scrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={e => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         {slides.map((slide, i) => {
           const dark = i === last;
           const active = i === index;
+          const art = arts[i];
+          const artProps = art ? { slide, active, w: art.w, h: art.h, scrollX, page: i, pageW: width } : null;
           return (
-            <View key={i} style={[s.page, dark && s.rootDark, { width, paddingTop: screen.top + 10, paddingBottom: screen.bottom + 16 }]}>
+            <View key={i} style={[s.page, dark && s.dark, { width, paddingTop: screen.top + 8, paddingBottom: screen.bottom + 14 }]}>
               <View style={s.top}>
                 <Text style={[s.wordmark, dark && s.wordmarkDark]}>{c.wordmark}</Text>
                 {!dark && (
@@ -66,53 +91,58 @@ export default function OnboardingScreen() {
                 )}
               </View>
 
-              <View style={[s.art, { height: artH }]}>
-                {i === 0 && <Slide1Art slide={slide} active={active} w={artW} h={artH} priceLak={priceLak} />}
-                {i === 1 && <Slide2Art slide={slide} active={active} w={artW} h={artH} />}
-                {i === 2 && <Slide3Art slide={slide} active={active} w={artW} h={artH} />}
+              {/* Flexible middle: the visual, centred, at most ~55% of the screen. */}
+              <View style={s.middle}>
+                <View style={[s.art, { maxHeight: height * 0.55 }]} onLayout={onArtLayout(i)}>
+                  {artProps && i === 0 && <Slide1Art {...artProps} priceLak={priceLak} />}
+                  {artProps && i === 1 && <Slide2Art {...artProps} />}
+                  {artProps && i === 2 && <Slide3Art {...artProps} />}
+                </View>
               </View>
 
-              <View style={s.bottom}>
+              {/* Title + sub-line anchored just above the bottom bar. */}
+              <View style={s.text}>
                 <HighlightTitle text={slide.title} dark={dark} />
                 <Text style={[s.sub, dark && s.subDark]}>{slide.sub}</Text>
-                <View style={{ flex: 1 }} />
-                {dark ? (
-                  <>
-                    <View style={s.dotsCenter}><HexDots count={slides.length} index={index} dark /></View>
-                    <PressScale style={[UI.btnPrimary, s.start]} onPress={() => finish('/')}>
-                      <Text style={UI.btnPrimaryText}>{c.start}</Text>
-                    </PressScale>
-                    <Text style={s.member} onPress={() => finish('/login')}>
-                      {c.member}<Text style={s.signIn}>{c.signIn}</Text>
-                    </Text>
-                  </>
-                ) : (
-                  <View style={s.navRow}>
-                    <HexDots count={slides.length} index={index} />
-                    <PressScale style={s.next} onPress={() => goTo(i + 1)} accessibilityLabel={c.next}>
-                      <Feather name="arrow-right" size={24} color={SHADES.amber} />
-                    </PressScale>
-                  </View>
-                )}
               </View>
+
+              {dark ? (
+                <View>
+                  <View style={s.dotsCenter}><HexDots count={slides.length} index={index} dark /></View>
+                  <PressScale style={[UI.btnPrimary, s.start]} onPress={() => finish('/')}>
+                    <Text style={UI.btnPrimaryText}>{c.start}</Text>
+                  </PressScale>
+                  <Text style={s.member} onPress={() => finish('/login')}>
+                    {c.member}<Text style={s.signIn}>{c.signIn}</Text>
+                  </Text>
+                </View>
+              ) : (
+                <View style={s.navRow}>
+                  <HexDots count={slides.length} index={index} />
+                  <PressScale style={s.next} onPress={() => goTo(i + 1)} accessibilityLabel={c.next}>
+                    <Feather name="arrow-right" size={24} color={SHADES.amber} />
+                  </PressScale>
+                </View>
+              )}
             </View>
           );
         })}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: SHADES.cream },
-  rootDark: { backgroundColor: SHADES.carbon },
+  dark: { backgroundColor: SHADES.carbon },
   page: { flex: 1, paddingHorizontal: 20, backgroundColor: SHADES.cream },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 36 },
   wordmark: { fontSize: 17, fontWeight: '800', letterSpacing: 3, color: SHADES.carbon },
   wordmarkDark: { color: SHADES.white },
   skip: { ...TYPE.body, fontWeight: '600', color: SHADES.carbonMuted },
-  art: { marginTop: 18 },
-  bottom: { flex: 1, marginTop: 18 },
+  middle: { flex: 1, justifyContent: 'center', paddingVertical: 12 },
+  art: { flex: 1, width: '100%' },
+  text: { marginBottom: 22 },
   sub: { ...TYPE.body, fontSize: 15, lineHeight: 22, color: SHADES.carbonMuted, marginTop: 10 },
   subDark: { color: SHADES.carbonFaint },
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
