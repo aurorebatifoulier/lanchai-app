@@ -29,7 +29,7 @@ export const ONBOARDING_DEFAULT_TEXTS: OnboardingDefaults[] = [
     sub: 'Pick it up at our shop in Vientiane.',
     stickers: {
       step1: 'Book', step2: 'Pick up', step3: 'Bring back',
-      booked: 'Dates picked', place: 'QR scanned · Vientiane shop', points: '+10 pts',
+      booked: 'Dates picked', place: 'QR scanned · Vientiane shop', points: 'Points earned',
     },
   },
   {

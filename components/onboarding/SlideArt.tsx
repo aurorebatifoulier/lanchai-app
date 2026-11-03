@@ -178,7 +178,7 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
             {qrChip}
           </SpotSticker>
           <SpotSticker t={t} {...FOCUS[2]} style={{ right: w * 0.02 + 4, top: card3.y + ch + 6 }}>
-            <Chip tone="amber" text={slide.stickers.points} icon={<MaterialCommunityIcons name="star-four-points" size={14} color={SHADES.carbon} />} />
+            <Chip tone="amber" text={slide.stickers.points} icon={<MaterialCommunityIcons name="star" size={14} color={SHADES.carbon} />} />
           </SpotSticker>
         </>
       )}

@@ -1361,7 +1361,7 @@ a snapshot indefinitely).
     circles), spotlight loop 6 s (`FOCUS` keyframes on one shared `t`: the hexagon stops on
     each card in turn; focused card 1.07 + in front, others 0.96 at 55%; `PhotoCard spot`,
     `SpotSticker`), one sticker per step ("Dates picked" / "QR scanned · Vientiane shop" /
-    "+10 pts", texts in config), trajectory behind the cards at 55%. Reduce motion: no
+    "Points earned", texts in config), trajectory behind the cards at 55%. Reduce motion: no
     loop, cards normal, only the QR sticker.
     Highlight = ONE band per line the
     phrase occupies (`onTextLayout` + hidden single-line measurements, no per-word marks).
