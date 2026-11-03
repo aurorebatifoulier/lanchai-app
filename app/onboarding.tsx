@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -22,13 +22,17 @@ import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingCon
 //   • title + sub-line anchored at ~62%;
 //   • the flexible empty space between the sub-line and the bottom bar (pagination +
 //     next / Start exploring + Sign in), above the bottom safe area.
-// Small screens: the title moves UP when text + bar don't fit (never below ~62%), and the
-// visual area shrinks first. Cream slides 1–2 (dark status bar), carbon slide 3 (light).
+// Small screens: the title moves UP (fixed reserves, same for every slide — never below
+// ~62%), and the visual area shrinks first. Nothing in the layout depends on a measurement
+// that changes while a slide loads (highlight, stickers, count-up are all absolute). Cream slides 1–2 (dark status bar), carbon slide 3 (light).
 // Loops pause off-screen / in background; reduce motion = static.
 
 const VISUAL_TOP = 0.16;
 const VISUAL_BOTTOM = 0.58;
 const TITLE_TOP = 0.62;
+/** Fixed reserves (px) for the tallest title block and the tallest bottom bar. */
+const TEXT_RESERVE = 3 * 32 + 10 + 2 * 22;
+const BAR_RESERVE = 20 + 16 + 46 + 14 + 18;
 const SIDE = 20;
 // The Home header's bee logo, cropped + transparent (carbon wings / white wings).
 const LOGO = {
@@ -47,9 +51,6 @@ export default function OnboardingScreen() {
   const scrollX = useSharedValue(0);
   const [index, setIndex] = useState(0);
   const [H, setH] = useState(win.height);
-  // Measured per page: the title block and the bottom bar (slide 3's bar is taller).
-  const [textH, setTextH] = useState<Record<number, number>>({});
-  const [barH, setBarH] = useState<Record<number, number>>({});
   const last = slides.length - 1;
 
   const applyBar = useCallback((i: number) => setStatusBarStyle(i === last ? 'light' : 'dark', true), [last]);
@@ -73,13 +74,17 @@ export default function OnboardingScreen() {
     scrollRef.current?.scrollTo({ x: i * width, animated: true });
     settle(i);
   };
-  const measure = (set: typeof setTextH, i: number) => (e: LayoutChangeEvent) => {
-    const v = e.nativeEvent.layout.height;
-    set(prev => (prev[i] != null && Math.abs(prev[i] - v) < 1 ? prev : { ...prev, [i]: v }));
-  };
-
   const headerBottom = screen.top + 8 + 36;
   const barBottom = screen.bottom + 14;
+  // ONE title position for all three slides, computed from FIXED reserves (never from a
+  // measurement — nothing that loads, pops or counts can move it): at 62%, or higher on a
+  // small screen so the tallest title block (3-line title + 2-line sub-line) and the
+  // tallest bottom bar (slide 3) still fit.
+  const titleTop = Math.min(H * TITLE_TOP, H - barBottom - BAR_RESERVE - 20 - TEXT_RESERVE);
+  // Visual area 16% → 58%, shrinking first on small screens (keeps a gap to the title).
+  const visualTop = Math.max(H * VISUAL_TOP, headerBottom + 8);
+  const visualBottom = Math.min(H * VISUAL_BOTTOM, titleTop - H * 0.03);
+  const art = { w: width - 2 * SIDE, h: Math.max(120, visualBottom - visualTop) };
 
   return (
     <View style={[s.root, index === last && s.dark]} onLayout={e => setH(e.nativeEvent.layout.height)}>
@@ -98,14 +103,6 @@ export default function OnboardingScreen() {
         {slides.map((slide, i) => {
           const dark = i === last;
           const active = i === index;
-          // Title at 62% — or higher when text + bar wouldn't fit below it (small screens).
-          const tH = textH[i] ?? 110;
-          const bH = barH[i] ?? (dark ? 120 : 60);
-          const titleTop = Math.min(H * TITLE_TOP, H - barBottom - bH - 20 - tH);
-          // Visual area 16% → 58%, shrinking first on small screens (keeps a gap to the title).
-          const visualTop = Math.max(H * VISUAL_TOP, headerBottom + 8);
-          const visualBottom = Math.min(H * VISUAL_BOTTOM, titleTop - H * 0.03);
-          const art = { w: width - 2 * SIDE, h: Math.max(120, visualBottom - visualTop) };
           const artProps = { slide, active, w: art.w, h: art.h, scrollX, page: i, pageW: width };
           return (
             <View key={i} style={[s.page, dark && s.dark, { width, height: H }]}>
@@ -127,12 +124,12 @@ export default function OnboardingScreen() {
                 {i === 2 && <Slide3Art {...artProps} />}
               </View>
 
-              <View style={[s.text, { top: titleTop }]} onLayout={measure(setTextH, i)}>
+              <View style={[s.text, { top: titleTop }]}>
                 <HighlightTitle text={slide.title} dark={dark} />
                 <Text style={[s.sub, dark && s.subDark]}>{slide.sub}</Text>
               </View>
 
-              <View style={[s.bar, { bottom: barBottom }]} onLayout={measure(setBarH, i)}>
+              <View style={[s.bar, { bottom: barBottom }]}>
                 {dark ? (
                   <>
                     <View style={s.dotsCenter}><HexDots count={slides.length} index={index} dark /></View>

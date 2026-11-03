@@ -1356,7 +1356,10 @@ a snapshot indefinitely).
     header (Home bee logo — `lanchai-mark-onb(-light).png`, cropped transparent copies of
     lanchai-logo.png — + LANCHAI, Skip) · visual area 16% → 58% of the height · title at
     62% · flexible space between the sub-line and the bottom bar; small screens move the
-    title up (text + bar measured) and shrink the visual area first. Slide 2 = step-by-step story: strong zigzag (Book −7° top-left, Pick up +2° with
+    title up from FIXED reserves (`TEXT_RESERVE` / `BAR_RESERVE` — never a measurement, so
+    the title is at the same place on every slide and never jumps) and shrink the visual
+    area first. Worklets: no nested functions (Reanimated turns them into objects — inline
+    the maths); easings only inside `withTiming`. Slide 2 = step-by-step story: strong zigzag (Book −7° top-left, Pick up +2° with
     its top at 38% of the visual area, Bring back +7° top-right, ~31% width, numbered
     circles), spotlight loop 6 s (`FOCUS` keyframes on one shared `t`: the hexagon stops on
     each card in turn; focused card 1.07 + in front, others 0.96 at 55%; `PhotoCard spot`,

@@ -122,14 +122,15 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
   }, [running, t]);
   const hexStyle = useAnimatedStyle(() => {
     const v0 = t.value;
-    // Segment progress: 0 while holding, eased 0 → 1 while travelling.
-    const ease = (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
-    let first = true; let u = 0; let opacity = 1;
-    if (v0 < K.h1) { u = 0; }
-    else if (v0 < K.t12) { u = ease((v0 - K.h1) / (K.t12 - K.h1)); }
-    else if (v0 < K.h2) { u = 1; }
-    else if (v0 < K.t23) { first = false; u = ease((v0 - K.h2) / (K.t23 - K.h2)); }
-    else { first = false; u = 1; opacity = v0 > K.h3 ? Math.max(0, 1 - (v0 - K.h3) / 0.06) : 1; }
+    // Segment progress: 0 while holding, eased 0 → 1 while travelling (ease-in-out quad,
+    // computed inline — no nested function inside the worklet).
+    let first = true; let raw = 0; let opacity = 1;
+    if (v0 < K.h1) { raw = 0; }
+    else if (v0 < K.t12) { raw = (v0 - K.h1) / (K.t12 - K.h1); }
+    else if (v0 < K.h2) { raw = 1; }
+    else if (v0 < K.t23) { first = false; raw = (v0 - K.h2) / (K.t23 - K.h2); }
+    else { first = false; raw = 1; opacity = v0 > K.h3 ? Math.max(0, 1 - (v0 - K.h3) / 0.06) : 1; }
+    let u = raw < 0.5 ? 2 * raw * raw : 1 - ((-2 * raw + 2) * (-2 * raw + 2)) / 2;
     if (v0 > 1 - 0.06) { first = true; u = 0; opacity = (v0 - (1 - 0.06)) / 0.06; } // back in on card 1
     const p0 = first ? C1 : C2; const p1 = first ? A1 : B1; const p2 = first ? A2 : B2; const p3 = first ? C2 : C3;
     const q = 1 - u;
