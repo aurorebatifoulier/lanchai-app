@@ -19,10 +19,14 @@ export const BAG_COPY = {
     conflict: 'Not available on these dates — ',
     conflictLink: 'change them',
     unpriced: "No price yet — this item can't be booked.",
+    past: 'These dates have passed — ',
+    pastLink: 'change them',
   },
 
   addMore: 'Add more items',
   updateError: 'Couldn’t update your bag — try again.',
+  // Checkout: lines that can't be booked now stay in the bag.
+  notIncluded: (n: number) => `${n} ${n === 1 ? 'item isn’t' : 'items aren’t'} included (no valid dates or not bookable) — ${n === 1 ? 'it stays' : 'they stay'} in your bag.`,
 
   total: 'Your total',
   rental: (n: number) => `Rental · ${n} ${n === 1 ? 'item' : 'items'}`,

@@ -39,6 +39,7 @@ import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src
 import { useDiscountChoice } from '@/lib/discountChoice';
 import { atVteSlot, vteHHMM, vteDayToken, vteDayStart } from '@/lib/vteTime';
 import VteTimeNote from '@/components/VteTimeNote';
+import { useCheckoutRequestId } from '@/hooks/useCheckoutRequestId';
 
 // "Your booking" (validated mockup) — ONE screen: dates & times, quantity, total (coupon,
 // VAT only when on, to pay at pick-up, the renter's real deposit, points), deposit
@@ -157,6 +158,10 @@ export default function BookingNewScreen() {
     })),
     items: promoItems,
   });
+  // One idempotency key per checkout attempt (same order → same key across retries).
+  const requestId = useCheckoutRequestId(
+    `${product?.id}|${pickupAt?.getTime()}|${returnAt?.getTime()}|${quantity}|${discountChoice.couponId ?? ''}|${discountChoice.promoCode ?? ''}`,
+  );
   const discount = discountChoice.discountTotal;
   const toPay = subtotal - discount;
   const vat = vatPercent != null ? (() => { const v = splitHtVat(toPay, vatPercent); return { ht: v.ht, amount: v.vat, pct: vatPercent }; })() : null;
@@ -191,6 +196,7 @@ export default function BookingNewScreen() {
         promoCode: discountChoice.promoCode,
         idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes,
+        requestId,
       });
       sendNotif(currentUser.uid, {
         type: 'rental', icon: 'clock', iconColor: '#F4B400',

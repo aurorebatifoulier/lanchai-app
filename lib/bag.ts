@@ -117,6 +117,11 @@ export async function updateBagItemQuantity(
 
 // Wipes the entire bag — called after successful checkout.
 // Throws on Firestore error — caller must handle.
+/** Removes ONLY the given bag lines (the ones just booked) — never the whole bag. */
+export async function removeBagItems(uid: string, itemIds: string[]): Promise<void> {
+  await Promise.all(itemIds.map(id => removeFromBag(uid, id)));
+}
+
 export async function clearBag(uid: string): Promise<void> {
   const snap = await getDocs(bagCol(uid));
   await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));

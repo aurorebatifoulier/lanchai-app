@@ -444,22 +444,35 @@ export async function createBooking(input: {
   notes?: string;
   /** "I'll show my ID at the shop" (no ID document on file yet). */
   idCheckAtCounter?: boolean;
+  /** Idempotency key of this checkout attempt (hooks/useCheckoutRequestId). */
+  requestId?: string;
 }): Promise<{ orderId: string; reservationIds: string[] }> {
-  const call = httpsCallable<unknown, { orderId: string; reservationIds: string[] }>(functions, 'createReservations');
+  const call = httpsCallable<unknown, { orderId: string; reservationIds: string[] }>(functions, 'createReservations', { timeout: 60_000 });
+  const payload = {
+    items: input.items.map(i => ({
+      productId: i.productId,
+      pickupAtMs: i.pickupAt.getTime(),
+      returnAtMs: i.returnAt.getTime(),
+      quantity: i.quantity,
+    })),
+    couponId: input.couponId ?? null,
+    promoCode: input.promoCode ?? null,
+    notes: input.notes ?? '',
+    idCheckAtCounter: input.idCheckAtCounter === true,
+    requestId: input.requestId ?? null,
+  };
+  // A transport error (timeout / connection lost) may hide a booking the server already
+  // made: with a requestId, ONE automatic retry is safe — the server returns that order.
+  const transient = (err: any) => !err?.details?.code
+    && ['functions/deadline-exceeded', 'functions/unavailable', 'functions/internal'].includes(String(err?.code));
   try {
-    const res = await call({
-      items: input.items.map(i => ({
-        productId: i.productId,
-        pickupAtMs: i.pickupAt.getTime(),
-        returnAtMs: i.returnAt.getTime(),
-        quantity: i.quantity,
-      })),
-      couponId: input.couponId ?? null,
-      promoCode: input.promoCode ?? null,
-      notes: input.notes ?? '',
-      idCheckAtCounter: input.idCheckAtCounter === true,
-    });
-    return res.data;
+    try {
+      return (await call(payload)).data;
+    } catch (first: any) {
+      if (!input.requestId || !transient(first)) throw first;
+      await new Promise(r => setTimeout(r, 1500));
+      return (await call(payload)).data;
+    }
   } catch (err: any) {
     const code = (err?.details?.code ?? 'internal') as BookingErrorCode;
     // Promo: the server's own line ("This code has expired", "Minimum 300,000 LAK"…).

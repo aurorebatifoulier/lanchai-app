@@ -26,7 +26,7 @@ import {
 } from '@/lib/firestore';
 import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
 import { useDiscountChoice } from '@/lib/discountChoice';
-import { clearBag, listenBagItems, BagItem } from '@/lib/bag';
+import { removeBagItems, listenBagItems, BagItem } from '@/lib/bag';
 import { sendNotif } from '@/lib/notifications';
 import { Product } from '@/lib/mockData';
 import { getEffectiveRate, billableDaysFromDates, fmtReservationLabel } from '@/utils/pricing';
@@ -39,6 +39,9 @@ import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import { plural } from '@/lib/navigation';
 import VteTimeNote from '@/components/VteTimeNote';
+import { BAG_COPY } from '@/constants/bagCopy';
+import { PICKUP_DELAY_MS } from '@/utils/availability';
+import { useCheckoutRequestId } from '@/hooks/useCheckoutRequestId';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -130,6 +133,7 @@ export default function BagSummaryScreen() {
       const pickupDate = raw.pickupAt.toDate();
       const returnDate = raw.returnAt.toDate();
       if (returnDate.getTime() <= pickupDate.getTime()) return [];
+      if (pickupDate.getTime() < Date.now() + PICKUP_DELAY_MS) return []; // dates passed — stays in the bag
       if (getProductAccessState(product, profile?.loyaltyTier ?? null).locked) return []; // now restricted — never create a reservation for this item
       const days = billableDaysFromDates(pickupDate, returnDate);
       const rateUsd = getEffectiveRate(product, days);
@@ -156,6 +160,11 @@ export default function BagSummaryScreen() {
     });
   }, [rawItems, productMap, exchangeRate, profile, loyaltyConfig]);
 
+  // Bag lines that can't be booked now (no / past dates, unpriced, locked…): they are NOT
+  // booked and STAY in the bag — said on screen, never silently dropped.
+  const productsKnown = rawItems.every(r => r.productId in productMap);
+  const excludedCount = exchangeRate != null && productsKnown ? rawItems.length - items.length : 0;
+
   const totalRental  = items.reduce((sum, i) => sum + i.subtotal, 0);
   const totalDeposit = items.reduce((sum, i) => sum + i.deposit, 0);
   // ONE discount per booking (lib/discountChoice.ts): loyalty coupons, wallet codes that
@@ -175,6 +184,8 @@ export default function BagSummaryScreen() {
     })),
     items: promoItems,
   });
+  // One idempotency key per checkout attempt (same order → same key across retries).
+  const requestId = useCheckoutRequestId(`${items.map(i => `${i.bagItemId}:${i.pickupAt}:${i.returnAt}:${i.quantity}`).join('|')}|${discountChoice.couponId ?? ''}|${discountChoice.promoCode ?? ''}`);
   const discountAmount = discountChoice.discountTotal;
   const finalTotal = totalRental - discountAmount;
   const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
@@ -227,10 +238,11 @@ export default function BagSummaryScreen() {
         promoCode: discountChoice.promoCode,
         idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes,
+        requestId,
       });
 
-      // Clear the bag — fire and forget
-      clearBag(currentUser.uid).catch(() => {});
+      // Remove ONLY the booked lines — anything not included stays in the bag.
+      removeBagItems(currentUser.uid, items.map(i => i.bagItemId)).catch(() => {});
 
       // Consolidated notification for the whole order
       sendNotif(currentUser.uid, {
@@ -313,6 +325,9 @@ export default function BagSummaryScreen() {
         {/* One product card per item: dates · times, quantity, line amount */}
         <View style={{ gap: 10 }}>
           <VteTimeNote style={{ marginBottom: 8 }} />
+          {excludedCount > 0 && (
+            <Text style={[UI.small, s.notIncluded]}>{BAG_COPY.notIncluded(excludedCount)}</Text>
+          )}
           {items.map(item => (
             <BookingProductCard
               key={item.bagItemId}
@@ -360,6 +375,7 @@ export default function BagSummaryScreen() {
 }
 
 const s = StyleSheet.create({
+  notIncluded: { color: SHADES.amberDeep, marginBottom: 10 },
   root: { flex: 1, backgroundColor: COLORS.porcelain },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 10,

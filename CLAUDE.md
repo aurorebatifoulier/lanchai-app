@@ -1419,6 +1419,16 @@ a snapshot indefinitely).
     in the tabs layout provider, rendered INLINE under each tab's header (never an overlay
     on the app header).
 
+- **Booking idempotency + bag safety (2026-11-03).** Every Confirm sends a `requestId`
+  (`hooks/useCheckoutRequestId`: stable while the order is unchanged, new when it changes).
+  `createReservations` records `bookingRequests/{uid}_{requestId}` (server-only, no client
+  rule) IN the transaction and returns the existing order on a repeat (`replayed: true`);
+  `createBooking` retries ONCE automatically on a transport error (timeout / unavailable).
+  Bag checkout books only valid lines (dated, future ≥ 2h, priced, not locked) and removes
+  ONLY those (`removeBagItems`) — the rest stays in the bag with "n items aren't included…";
+  the bag flags past dates ("These dates have passed — change them") and never counts them
+  as ready.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

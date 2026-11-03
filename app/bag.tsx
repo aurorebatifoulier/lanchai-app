@@ -29,7 +29,7 @@ import {
 } from '@/lib/bag';
 import { getRenterProduct, getUserProfile, type UserProfile } from '@/lib/firestore';
 import type { Product } from '@/lib/mockData';
-import { getAvailableStock, effectiveStock } from '@/utils/availability';
+import { getAvailableStock, effectiveStock, PICKUP_DELAY_MS } from '@/utils/availability';
 import { getEffectiveRate, billableDaysFromDates, depositForLine } from '@/utils/pricing';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
@@ -118,7 +118,9 @@ export default function BagScreen() {
     items.forEach(item => {
       if (fetchedProductIds.current.has(item.productId)) return;
       fetchedProductIds.current.add(item.productId);
-      getRenterProduct(item.productId).then(p => setProductMap(prev => ({ ...prev, [item.productId]: p })));
+      getRenterProduct(item.productId)
+        .then(p => setProductMap(prev => ({ ...prev, [item.productId]: p })))
+        .catch(() => { fetchedProductIds.current.delete(item.productId); }); // retried on the next change
     });
   }, [items]);
 
@@ -149,6 +151,10 @@ export default function BagScreen() {
     return rate == null ? null : toLak(rate, exchangeRate) * days * item.quantity;
   }, [productMap, exchangeRate]);
 
+  // Pick-up too soon or already past (dates set days ago): can't be booked as is.
+  const pastOf = useCallback((item: BagItem) =>
+    !!item.pickupAt && item.pickupAt.toMillis() < Date.now() + PICKUP_DELAY_MS, []);
+
   const conflictOf = useCallback((item: BagItem) => {
     if (!item.pickupAt || !item.returnAt) return false;
     const avail = stockMap[item.id];
@@ -159,10 +165,10 @@ export default function BagScreen() {
   const readyItems = useMemo(() => items.filter(item => {
     const product = productMap[item.productId];
     if (!product || !item.pickupAt || !item.returnAt || stockMap[item.id] === undefined) return false;
-    if (conflictOf(item)) return false;
+    if (pastOf(item) || conflictOf(item)) return false;
     if (getProductAccessState(product, profile?.loyaltyTier ?? null).locked) return false;
     return rentalOf(item) != null;
-  }), [items, productMap, stockMap, conflictOf, profile, rentalOf]);
+  }), [items, productMap, stockMap, pastOf, conflictOf, profile, rentalOf]);
 
   const totalRental = readyItems.reduce((sum, item) => sum + (rentalOf(item) ?? 0), 0);
   const totalDeposit = exchangeRate == null ? 0 : readyItems.reduce((sum, item) => {
@@ -305,6 +311,7 @@ export default function BagScreen() {
               product={productMap[item.productId]}
               avail={stockMap[item.id]}
               conflict={conflictOf(item)}
+              past={pastOf(item)}
               rental={rentalOf(item)}
               userTier={profile?.loyaltyTier ?? null}
               removing={removingId === item.id}
@@ -377,13 +384,15 @@ export default function BagScreen() {
 // ── Item card ─────────────────────────────────────────────────────────────────
 
 function ItemCard({
-  item, product, avail, conflict, rental, userTier, removing, error,
+  item, product, avail, conflict, past, rental, userTier, removing, error,
   onOpen, onEditDates, onAskRemove, onCancelRemove, onRemove, onQuantity,
 }: {
   item: BagItem;
   product: Product | null | undefined;
   avail: number | undefined;
   conflict: boolean;
+  /** Pick-up already past / too soon — change the dates. */
+  past: boolean;
   rental: number | null;
   userTier: UserProfile['loyaltyTier'] | null;
   removing: boolean;
@@ -407,6 +416,7 @@ function ItemCard({
   // ONE honest line, most important first.
   let signal: React.ReactNode = null;
   if (access?.locked) signal = access.message;
+  else if (past) signal = <>{b.signal.past}<Text style={s.signalLink} onPress={onEditDates}>{b.signal.pastLink}</Text></>;
   else if (conflict) signal = <>{b.signal.conflict}<Text style={s.signalLink} onPress={onEditDates}>{b.signal.conflictLink}</Text></>;
   else if (hasDates && product && rental == null) signal = b.signal.unpriced;
   else if (hasDates && avail === 1) signal = b.signal.lastOne;

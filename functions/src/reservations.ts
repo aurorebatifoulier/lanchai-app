@@ -53,7 +53,7 @@ function fail(code: BookingErrorCode, message: string, extra: Record<string, unk
 
 interface ItemInput { productId: string; pickupAtMs: number; returnAtMs: number; quantity: number }
 
-function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; promoCode: string | null; notes: string; idCheckAtCounter: boolean } {
+function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; promoCode: string | null; notes: string; idCheckAtCounter: boolean; requestId: string | null } {
   const d = (data ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(d.items) ? d.items : [];
   if (raw.length === 0 || raw.length > MAX_ITEMS) fail('invalid-request', 'Choose between 1 and 10 items.');
@@ -75,7 +75,10 @@ function parseInput(data: unknown): { items: ItemInput[]; couponId: string | nul
   if (promoCode && !PROMO_CODE_RE.test(promoCode)) fail('promo-invalid', promoErrorText('not-found'), { promoError: 'not-found' });
   // ONE discount per booking: a loyalty coupon OR a promo code.
   if (promoCode && couponId) fail('one-discount', 'Only one discount can be used per booking.');
-  return { items, couponId, promoCode, notes, idCheckAtCounter: d.idCheckAtCounter === true };
+  // Idempotency key of ONE checkout attempt (the app keeps it across retries of the same
+  // order): a repeat returns the order already created instead of booking it twice.
+  const requestId = typeof d.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(d.requestId) ? d.requestId : null;
+  return { items, couponId, promoCode, notes, idCheckAtCounter: d.idCheckAtCounter === true, requestId };
 }
 
 function randomOrderCode(length = 4): string {
@@ -87,9 +90,21 @@ function randomOrderCode(length = 4): string {
 export const createReservations = onCall({ region: REGION }, async request => {
   const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in to book.');
-  const { items, couponId, promoCode, notes, idCheckAtCounter } = parseInput(request.data);
+  const { items, couponId, promoCode, notes, idCheckAtCounter, requestId } = parseInput(request.data);
   const db = admin.firestore();
   const now = Date.now();
+
+  // ── Idempotency: same checkout attempt already booked → return that order ────────
+  // (slow network: the server committed but the app saw an error and the renter retried).
+  // bookingRequests/{uid}_{requestId} is server-only (no client rule → denied).
+  const requestRef = requestId ? db.collection('bookingRequests').doc(`${uid}_${requestId}`) : null;
+  if (requestRef) {
+    const done = await requestRef.get();
+    if (done.exists) {
+      logger.info('[createReservations] replay', { uid, orderId: done.get('orderId') });
+      return { orderId: String(done.get('orderId')), reservationIds: (done.get('reservationIds') as string[]) ?? [], replayed: true };
+    }
+  }
 
   // ── Account checks ──────────────────────────────────────────────────────────
   const [userSnap, adminSnap, holdSnap, pricingSnap, loyaltySnap, shopSnap, identitySnap] = await Promise.all([
@@ -145,12 +160,17 @@ export const createReservations = onCall({ region: REGION }, async request => {
     // All reads first.
     const lockRefs = productIds.map(id => db.collection('productLocks').doc(id));
     const productRefs = productIds.map(id => db.collection('products').doc(id));
-    const [lockSnaps, productSnaps, freshUser, freshHold] = await Promise.all([
+    const [lockSnaps, productSnaps, freshUser, freshHold, requestSnap] = await Promise.all([
       Promise.all(lockRefs.map(r => tx.get(r))),
       Promise.all(productRefs.map(r => tx.get(r))),
       tx.get(db.collection('users').doc(uid)),
       tx.get(db.collection('bookingHolds').doc(uid)),
+      requestRef ? tx.get(requestRef) : Promise.resolve(null),
     ]);
+    // Two concurrent calls with the same key: the second one sees the first's record here.
+    if (requestSnap?.exists) {
+      return { orderId: String(requestSnap.get('orderId')), reservationIds: (requestSnap.get('reservationIds') as string[]) ?? [], replayed: true };
+    }
     if (freshHold.exists && !isAdmin) fail('account-on-hold', 'New bookings are paused for this account.');
     // Occupancy read straight from reservations (not the async mirror) — the product
     // lock read+write above serializes concurrent bookings of the same product.
@@ -309,6 +329,9 @@ export const createReservations = onCall({ region: REGION }, async request => {
       version: ((lockSnaps[i].get('version') as number | undefined) ?? 0) + 1,
     }, { merge: true }));
 
+    if (requestRef) {
+      tx.set(requestRef, { uid, orderId, reservationIds, createdAt: FieldValue.serverTimestamp() });
+    }
     logger.info('[createReservations] created', { uid, orderId, lines: lines.length, coupon: !!couponId, promo: promo?.code ?? null });
     return { orderId, reservationIds };
   });
