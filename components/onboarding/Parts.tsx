@@ -153,7 +153,7 @@ export function HighlightTitle({ text, dark }: { text: string; dark?: boolean })
  * "lift" when the travelling hexagon passes (`lift` = hexagon progress, `liftAt` = where).
  */
 export function PhotoCard({
-  source, width, rotate = 0, delay = 0, dark, label, style, active, from = 'left',
+  source, width, rotate = 0, delay = 0, dark, label, badge, style, active, from = 'left',
   scrollX, page, pageW, lift, liftAt,
 }: {
   source: ImageSourcePropType;
@@ -162,6 +162,8 @@ export function PhotoCard({
   delay?: number;
   dark?: boolean;
   label?: string;
+  /** Step number in an amber circle pinned on the top-left corner. */
+  badge?: number;
   style?: StyleProp<ViewStyle>;
   active: boolean;
   from?: 'left' | 'right';
@@ -211,7 +213,10 @@ export function PhotoCard({
       <View style={s.photo}>
         <Image source={source} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
       </View>
-      {!!label && <Text style={[s.cardLabel, dark && s.cardLabelDark]} numberOfLines={2}>{label}</Text>}
+      {!!label && <Text style={[s.cardLabel, badge != null && s.cardLabelStep, dark && s.cardLabelDark]} numberOfLines={1}>{label}</Text>}
+      {badge != null && (
+        <View style={s.badge}><Text style={s.badgeText}>{badge}</Text></View>
+      )}
     </Animated.View>
   );
 }
@@ -360,7 +365,13 @@ const s = StyleSheet.create({
   cardDark: { backgroundColor: SHADES.carbon },
   photo: { width: '100%', aspectRatio: 4 / 5, borderRadius: 12, overflow: 'hidden', backgroundColor: SHADES.carbonLight },
   cardLabel: { ...TYPE.secondary, fontWeight: '700', color: SHADES.carbon, marginTop: 6, marginBottom: 2 },
+  cardLabelStep: { ...TYPE.body, fontSize: 15, fontWeight: '700', textAlign: 'center', marginTop: 7, marginBottom: 3 },
   cardLabelDark: { color: SHADES.white },
+  badge: {
+    position: 'absolute', left: -9, top: -9, width: 26, height: 26, borderRadius: 13,
+    backgroundColor: SHADES.amber, alignItems: 'center', justifyContent: 'center',
+  },
+  badgeText: { fontSize: 14, fontWeight: '800', color: SHADES.carbon },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
   chipText: { ...TYPE.body, fontWeight: '600' },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },

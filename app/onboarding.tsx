@@ -135,7 +135,9 @@ export default function OnboardingScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: SHADES.cream },
   dark: { backgroundColor: SHADES.carbon },
-  page: { flex: 1, paddingHorizontal: 20, backgroundColor: SHADES.cream },
+  // Each page CLIPS its own content: entering / parallax-offset cards never show on a
+  // neighbouring slide, and no edge of the next page shows at rest.
+  page: { flex: 1, paddingHorizontal: 20, backgroundColor: SHADES.cream, overflow: 'hidden' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 36 },
   wordmark: { fontSize: 17, fontWeight: '800', letterSpacing: 3, color: SHADES.carbon },
   wordmarkDark: { color: SHADES.white },

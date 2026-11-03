@@ -1348,6 +1348,11 @@ a snapshot indefinitely).
     slots 2 / 3 / 1 (crop 4:5, ~1080 px JPEG 0.7, Storage `onboarding/s{n}p{m}/…`), title,
     sub-line, sticker texts. Bundled Unsplash placeholders `assets/images/onboarding/`
     (CREDITS.md).
+    Each page clips its content (`overflow: 'hidden'`) — entering / parallax-offset cards
+    never show on a neighbouring slide. Slide 2 = three ~32%-of-screen cards in a zigzag
+    across the full width (−5° / 0° / +5°), amber numbered circles (`PhotoCard badge`),
+    labels "Book / Pick up / Bring back", trajectory at 45% with bigger dots + 18 px
+    hexagon, "Vientiane shop" under Pick up.
     Layout: header → flexible visual (≤ 55% of the screen, measured PER PAGE, centred) →
     title + sub-line anchored above the bottom bar. Highlight = ONE band per line the
     phrase occupies (`onTextLayout` + hidden single-line measurements, no per-word marks).
