@@ -1368,7 +1368,10 @@ a snapshot indefinitely).
     `ENTRY_MS` after a slide becomes active (`useEntryGate` for slide 2) and are never
     shown on an inactive slide. Drawing order = `LAYER` (`Parts.tsx`): cards
     (elevation 3, focused 8) < hexagon 12 < stickers / sparkles 20 — Android orders by
-    elevation, so stickers always carry it; the spotlight only reorders cards. Slide 2 = step-by-step story: three LARGE cards (~29% of the screen width, gap ~2.5%):
+    elevation, so stickers always carry it; the spotlight only reorders cards. Slide 2 = step-by-step story: three LARGE cards (≤ 29% of the screen width, gap ~2.5%,
+    narrower if the worst case — focused 1.06 × ±7° tilt + the numbered circle — would
+    come closer than 16 px to a screen edge), the group centred between the header and the
+    title (`shiftY`, title unchanged):
     Book −7° / Pick up +2° (30% of a card lower) / Bring back +7°; NO trajectory or
     hexagon; spotlight loop 6 s whose cross-fades always sum to 1 (`FOCUS` — exactly one
     card fully lit: 1.06 in front, others 0.96 at 55%); captions at ONE centred spot under

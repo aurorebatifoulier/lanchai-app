@@ -11,7 +11,7 @@ import { ONBOARDING_COPY as c } from '@/constants/onboardingCopy';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { HighlightTitle, HexDots } from '@/components/onboarding/Parts';
-import { Slide1Art, Slide2Art, Slide3Art, artGroupBottom } from '@/components/onboarding/SlideArt';
+import { Slide1Art, Slide2Art, Slide3Art, artGroupBottom, slide2GroupTop } from '@/components/onboarding/SlideArt';
 import { setOnboardingComplete } from '@/lib/onboarding';
 import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingContent';
 
@@ -101,7 +101,7 @@ export default function OnboardingScreen() {
   const layoutFor = (i: number) => {
     const tH = textH[i]; const bH = barH[i];
     let artH = baseArtH;
-    if (tH == null || bH == null) return { artH, titleTop: H * TITLE_TOP, ready: false };
+    if (tH == null || bH == null) return { artH, titleTop: H * TITLE_TOP, shiftY: 0, ready: false };
     const barTop = H - barBottom - bH;
     let groupBottom = visualTop + artGroupBottom(i, artW, artH, width);
     for (let k = 0; k < 4; k++) {
@@ -112,7 +112,15 @@ export default function OnboardingScreen() {
     }
     const free = barTop - groupBottom - tH;
     const gap = Math.min(Math.max(MIN_GAP_TITLE, free / 2), Math.max(MIN_GAP_TITLE, free - MIN_GAP_BAR));
-    return { artH, titleTop: groupBottom + gap, ready: true };
+    const titleTop = groupBottom + gap;
+    // Slide 2: the group (cards + caption) is then centred between the header and that
+    // title — equal gaps above and below; the title doesn't move.
+    let shiftY = 0;
+    if (i === 1) {
+      const top = visualTop + slide2GroupTop(artW, artH, width);
+      shiftY = Math.max(0, (titleTop + headerBottom - top - groupBottom) / 2);
+    }
+    return { artH, titleTop, shiftY, ready: true };
   };
   const measure = (set: typeof setTextH, i: number) => (e: LayoutChangeEvent) => {
     const v = e.nativeEvent.layout.height;
@@ -152,9 +160,9 @@ export default function OnboardingScreen() {
                 )}
               </View>
 
-              <View style={[s.visual, { top: visualTop, height: L.artH }]}>
+              <View style={[s.visual, { top: visualTop, height: L.artH, opacity: i === 1 && !L.ready ? 0 : 1 }]}>
                 {i === 0 && <Slide1Art {...artProps} priceLak={priceLak} />}
-                {i === 1 && <Slide2Art {...artProps} />}
+                {i === 1 && <Slide2Art {...artProps} shiftY={L.shiftY} />}
                 {i === 2 && <Slide3Art {...artProps} />}
               </View>
 

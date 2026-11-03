@@ -141,9 +141,15 @@ const CAPTION = [
   { inputs: [0, B2 + 0.01, B2 + 0.05, 1 - 0.05, 1 - 0.01, 1], outputs: [0, 0, 1, 1, 0, 0] },
 ];
 
-/** Slide 2 geometry: the biggest card width (≤ 29% of the screen) whose group fits h. */
-function slide2Layout(h: number, pageW: number) {
-  const LABEL_H = 30; const BADGE = 10; const DROP = 0.3; const FOCUSED = 1.06;
+/** Slide 2 geometry. Cards ≤ 29% of the screen width, smaller when the WORST CASE doesn't
+ *  fit: the spotlight scale (1.06), the ±7° tilt and the numbered circle overflowing the
+ *  top-left corner must stay ≥ 16 px from the screen edges (the art box starts SIDE = 20
+ *  px in, so ≥ −4 px inside it); and the group must fit the height. Returns the card
+ *  x-positions too. */
+const S2 = { LABEL_H: 30, BADGE: 10, DROP: 0.3, FOCUSED: 1.06, EDGE: 16 - 20, BADGE_R: 13, BADGE_OFF: 9 };
+function slide2Layout(h: number, pageW: number, w: number) {
+  const { LABEL_H, BADGE, DROP, FOCUSED, EDGE, BADGE_R, BADGE_OFF } = S2;
+  const gap = pageW * 0.025;
   const geo = (cwx: number) => {
     const chx = cwx * 1.32 + LABEL_H;
     const side = rotatedHalf(cwx, chx, 7).hh * FOCUSED;       // Book / Bring back half-height
@@ -153,26 +159,44 @@ function slide2Layout(h: number, pageW: number) {
     const captionTop = pickTop + chx / 2 + mid + CLEAR;
     return { chx, topSide, pickTop, captionTop, bottom: captionTop + CHIP_H + CHIP_MOTION };
   };
+  // Horizontal worst case (relative to a card's centre).
+  const extents = (cwx: number) => {
+    const chx = cwx * 1.32 + LABEL_H;
+    const r = (-7 * Math.PI) / 180;
+    // Badge centre: (BADGE_R − BADGE_OFF) from the card's top-left corner.
+    const px = BADGE_R - BADGE_OFF - cwx / 2; const py = BADGE_R - BADGE_OFF - chx / 2;
+    const badgeLeft = -(px * Math.cos(r) - py * Math.sin(r)) * FOCUSED + BADGE_R * FOCUSED;
+    const halfW = rotatedHalf(cwx, chx, 7).hw * FOCUSED;
+    return { left: Math.max(halfW, badgeLeft), right: halfW };
+  };
+  const span = (cwx: number) => { const e = extents(cwx); return 2 * (cwx + gap) + e.left + e.right; };
+  // Biggest width that fits both the screen (≥ 16 px margins) and the height.
+  let byWidth = pageW * 0.29;
+  for (let k = 0; k < 40 && span(byWidth) > w - 2 * EDGE; k++) byWidth -= 1;
   const g100 = geo(100).bottom; const g200 = geo(200).bottom;
   const slope = (g200 - g100) / 100; const base = g100 - slope * 100;
-  const cw = Math.max(70, Math.min(pageW * 0.29, (h - base) / slope));
+  const cw = Math.max(70, Math.min(byWidth, (h - base) / slope));
   const G = geo(cw);
   const dy = Math.max(0, (h - G.bottom) / 2);
-  return { cw, G, dy };
+  const e = extents(cw);
+  const leftEdge = EDGE + ((w - 2 * EDGE) - span(cw)) / 2;   // centred within the margins
+  const c1 = leftEdge + e.left;                               // centre of card 1
+  const xs = [c1, c1 + cw + gap, c1 + 2 * (cw + gap)].map(c => c - cw / 2);
+  return { cw, G, dy, xs };
 }
 
-export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
+export function Slide2Art({ slide, active, w, h, scrollX, page, pageW, shiftY = 0 }: ArtProps & { shiftY?: number }) {
   const { running, reduce } = useRunning(active);
   const gate = useEntryGate(active);
-  const { cw, G, dy } = slide2Layout(h, pageW);
-  const gap = pageW * 0.025;
-  const x0 = (w - (3 * cw + 2 * gap)) / 2; // may reach slightly into the side padding
+  const { cw, G, dy, xs } = slide2Layout(h, pageW, w);
+  // shiftY: the screen centres the group between the header and the title.
+  const y0 = dy + shiftY;
   const cards = [
-    { x: x0, y: G.topSide + dy, rot: -7 },
-    { x: x0 + cw + gap, y: G.pickTop + dy, rot: 2 },
-    { x: x0 + 2 * (cw + gap), y: G.topSide + dy, rot: 7 },
+    { x: xs[0], y: G.topSide + y0, rot: -7 },
+    { x: xs[1], y: G.pickTop + y0, rot: 2 },
+    { x: xs[2], y: G.topSide + y0, rot: 7 },
   ];
-  const captionTop = G.captionTop + dy;
+  const captionTop = G.captionTop + y0;
 
   const t = useSharedValue(0);
   useEffect(() => {
@@ -228,9 +252,14 @@ function slide3Layout(w: number, h: number) {
  */
 export function artGroupBottom(i: number, w: number, h: number, pageW: number): number {
   if (i === 0) { const L = slide1Layout(w, h, true); return L.bottom + L.dy; }
-  if (i === 1) { const { G, dy } = slide2Layout(h, pageW); return G.bottom + dy; }
+  if (i === 1) { const { G, dy } = slide2Layout(h, pageW, w); return G.bottom + dy; }
   const L = slide3Layout(w, h);
   return L.top + L.ch + OVER;
+}
+
+/** Top of slide 2's group (badges included) inside its area — for centring it. */
+export function slide2GroupTop(w: number, h: number, pageW: number): number {
+  return slide2Layout(h, pageW, w).dy;
 }
 
 export function Slide3Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
