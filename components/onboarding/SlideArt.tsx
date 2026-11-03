@@ -13,17 +13,15 @@ import {
   PhotoCard, Sticker, Chip, Heartbeat, Sparkle, hexPoints, chipTextStyle, useRunning,
 } from '@/components/onboarding/Parts';
 
-// The animated middle of each onboarding slide, laid out on the art box (w × h measured
-// by the screen — at most ~55% of the height, sitting just above the title). Each slide
-// computes its group's real bounding box (cards + stickers) from the card width, picks the
-// biggest card width that fits the height (within the width rule), and places the group
-// at the BOTTOM of the box with a small gap — so the lowest sticker sits ~24–28 px above
-// the title, and any leftover height goes above.
+// The animated middle of each onboarding slide, laid out on the visual area (w × h, ~16%
+// → 58% of the screen, set by the screen). Each slide computes its group's real bounding
+// box (cards + stickers) from the card width, picks the biggest card width that fits the
+// height (within its width rule) and CENTRES the group vertically and horizontally.
 
-/** Bottom gap inside the art box (+ the screen's 12 px padding ≈ 24–28 px to the title). */
-const BOTTOM_GAP = 14;
-/** Top of a group of height `g` sitting on the bottom of an `h` box. */
-const groupTop = (h: number, g: number) => Math.max(0, h - g - BOTTOM_GAP);
+/** Breathing room kept above and below the group inside the visual area. */
+const BOTTOM_GAP = 8;
+/** Top of a group of height `g` centred in an `h` box. */
+const groupTop = (h: number, g: number) => Math.max(0, (h - g) / 2);
 
 interface ArtProps {
   slide: OnboardingSlide;
@@ -39,7 +37,7 @@ export function Slide1Art({ slide, active, w, h, scrollX, page, pageW, priceLak 
   // Group: heart above (16) + cards (ch, left card 0.08·cw lower) + gap 10 + amber chip 42.
   const HEART = 16; const CHIP = 52;
   const k = 1.32 + 0.08; // card height + left-card offset, per unit of width
-  const cw = Math.max(80, Math.min(w * 0.44, (h - BOTTOM_GAP - HEART - CHIP) / k));
+  const cw = Math.max(80, Math.min(w * 0.44, (h - 2 * BOTTOM_GAP - HEART - CHIP) / k));
   const ch = cw * 1.32;
   const g = HEART + cw * k + CHIP;
   const top = groupTop(h, g) + HEART; // top of the right card
@@ -89,7 +87,7 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
   const LABEL_H = 30; const BADGE = 9; const CHIP = 52; const DROP = 0.25; const GAP = 10;
   const chOf = (cw: number) => cw * 1.32 + LABEL_H;
   const byWidth = (w - 2 * GAP) / 3;
-  const byHeight = ((h - BOTTOM_GAP - BADGE - CHIP) / (1 + DROP) - LABEL_H) / 1.32;
+  const byHeight = ((h - 2 * BOTTOM_GAP - BADGE - CHIP) / (1 + DROP) - LABEL_H) / 1.32;
   const cw = Math.max(70, Math.min(byWidth, byHeight));
   const ch = chOf(cw);
   const gap = Math.min(24, (w - 3 * cw) / 2);
@@ -159,7 +157,7 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
 export function Slide3Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
   // Group: card (ch) + the deposit chip overhanging its bottom by ~24.
   const OVER = 26;
-  const cw = Math.max(90, Math.min(w * 0.52, (h - BOTTOM_GAP - OVER) / 1.32));
+  const cw = Math.max(90, Math.min(w * 0.52, (h - 2 * BOTTOM_GAP - OVER) / 1.32));
   const ch = cw * 1.32;
   const left = (w - cw) / 2;
   const top = groupTop(h, ch + OVER);

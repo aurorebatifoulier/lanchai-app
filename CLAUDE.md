@@ -1352,13 +1352,15 @@ a snapshot indefinitely).
     never show on a neighbouring slide; the pager has no scroll indicators and
     `overScrollMode="never"`. Each art computes its group's bounding box (cards + stickers)
     from the card width, takes the biggest width that fits the height (within the width
-    rule) and sits on the BOTTOM of the visual box (`BOTTOM_GAP`) — ~24–28 px above the
-    title, leftover height above. Slide 2 = three cards (≈ (w − 2 gaps) / 3) in a zigzag
+    rule) and is CENTRED in the visual area. FIXED proportions (app/onboarding.tsx):
+    header (Home bee logo — `lanchai-mark-onb(-light).png`, cropped transparent copies of
+    lanchai-logo.png — + LANCHAI, Skip) · visual area 16% → 58% of the height · title at
+    62% · flexible space between the sub-line and the bottom bar; small screens move the
+    title up (text + bar measured) and shrink the visual area first. Slide 2 = three cards (≈ (w − 2 gaps) / 3) in a zigzag
     with small gaps (Pick up 25% lower, −5° / 0° / +5°, never covering a label), amber numbered circles (`PhotoCard badge`),
     labels "Book / Pick up / Bring back", trajectory at 45% with bigger dots + 18 px
     hexagon, "Vientiane shop" under Pick up.
-    Layout: header → flexible visual (≤ 55% of the screen, measured PER PAGE, centred) →
-    title + sub-line anchored above the bottom bar. Highlight = ONE band per line the
+    Highlight = ONE band per line the
     phrase occupies (`onTextLayout` + hidden single-line measurements, no per-word marks).
     Life (Reanimated, transforms / opacity only, running only while the slide is visible
     AND the app is in the foreground AND reduce motion is off — `useRunning`): sticker
