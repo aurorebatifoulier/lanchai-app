@@ -92,6 +92,10 @@ export const lateReturnAlerts = onSchedule(
       const returnAt: admin.firestore.Timestamp = data.returnAt;
       if (!returnAt || returnAt.toMillis() > now) continue;
 
+      // One failing reservation (bad data, a notification write error…) is logged and
+      // skipped — the others still get their alerts; its flags aren't set, so the next
+      // run retries it.
+      try {
       const reservationId = reservationDoc.id;
       const renterId: string = data.renterId;
       const productName: string = data.productName ?? 'your item';
@@ -202,12 +206,16 @@ export const lateReturnAlerts = onSchedule(
         await senders[highest]();
         for (const k of due) updates[k] = true;
       }
+      if (Object.keys(updates).length > 0) {
+        await reservationDoc.ref.update({ ...updates, updatedAt: FieldValue.serverTimestamp() });
+      }
+      // Only once its flags are saved — an email never goes out for a line whose
+      // alert state wasn't recorded (it would be re-sent next run).
       lateRows.push({
         id: reservationId, orderId: data.orderId ?? reservationId.replace(/_\d+$/, ''), renterId, penalty, highest,
       });
-
-      if (Object.keys(updates).length > 0) {
-        await reservationDoc.ref.update({ ...updates, updatedAt: FieldValue.serverTimestamp() });
+      } catch (err) {
+        logger.error('[lateReturnAlerts] reservation failed', { reservationId: reservationDoc.id, err: String(err) });
       }
     }
 
@@ -217,7 +225,11 @@ export const lateReturnAlerts = onSchedule(
       const lines = batch.lines.map(l => ({ ...l, snap: docsById.get(l.id)! }));
       // Past the grace period syncBookingHold always holds the renter (admins excepted) —
       // decided here so the line doesn't depend on that trigger having run yet.
-      await sendLateReturnEmail(batch.renterId, batch.stage, batch.orderId, lines, !adminUids.includes(batch.renterId));
+      try {
+        await sendLateReturnEmail(batch.renterId, batch.stage, batch.orderId, lines, !adminUids.includes(batch.renterId));
+      } catch (err) {
+        logger.error('[lateReturnAlerts] email failed', { orderId: batch.orderId, err: String(err) });
+      }
     }
   },
 );
@@ -359,7 +371,12 @@ export const releaseSettledStock = onSchedule(
         });
       }
 
-      await batch.commit();
+      // One failing product (e.g. deleted) never blocks the others; retried next run.
+      try {
+        await batch.commit();
+      } catch (err) {
+        logger.error('[releaseSettledStock] reservation failed', { reservationId: reservationDoc.id, err: String(err) });
+      }
     }
   },
 );
@@ -377,22 +394,27 @@ export const applyRentalCount = onDocumentUpdated(
 
     const productId: string = after.productId;
     const productRef = db.collection('products').doc(productId);
-    const productSnap = await productRef.get();
+    const resRef = event.data.after.ref;
 
-    if (productSnap.exists) {
-      // rentalsByMonth.{YYYY-MM} (Vientiane month of the return) feeds the Home
-      // "Most rented this month" podium; rentalCount stays the all-time total.
-      const returnedMs = after.returnedAt?.toMillis?.() ?? Date.now();
-      await productRef.update({
-        rentalCount:   FieldValue.increment(1),
-        bookingsCount: FieldValue.increment(1),
-        [`rentalsByMonth.${vteMonthKey(returnedMs)}`]: FieldValue.increment(1),
+    // ONE transaction: the counters and the rentalCountApplied marker change together,
+    // and the marker is re-read inside it — a retried trigger never counts twice.
+    await db.runTransaction(async tx => {
+      const [freshRes, productSnap] = await Promise.all([tx.get(resRef), tx.get(productRef)]);
+      if (freshRes.get('rentalCountApplied')) return;
+      if (productSnap.exists) {
+        // rentalsByMonth.{YYYY-MM} (Vientiane month of the return) feeds the Home
+        // "Most rented this month" podium; rentalCount stays the all-time total.
+        const returnedMs = after.returnedAt?.toMillis?.() ?? Date.now();
+        tx.update(productRef, {
+          rentalCount:   FieldValue.increment(1),
+          bookingsCount: FieldValue.increment(1),
+          [`rentalsByMonth.${vteMonthKey(returnedMs)}`]: FieldValue.increment(1),
+        });
+      }
+      tx.update(resRef, {
+        rentalCountApplied: true,
+        updatedAt: FieldValue.serverTimestamp(),
       });
-    }
-
-    await event.data.after.ref.update({
-      rentalCountApplied: true,
-      updatedAt: FieldValue.serverTimestamp(),
     });
   },
 );
@@ -479,13 +501,17 @@ async function sendFirstRentalIdAlerts(docs: admin.firestore.QueryDocumentSnapsh
     const first = group[0];
     const when = `${marker === 'idCheckAlertMorningAt' ? 'today' : 'tomorrow'} at ${vteTime(first.get('pickupAt').toMillis())}`;
     const counter = group.some(d => d.get('idCheckAtCounter') === true);
-    await sendAdminNotifs(adminUids, {
-      title: 'First rental — check ID',
-      body: `${first.get('renterName') ?? 'A renter'} picks up ${when}. ${counter ? 'They will show their ID at the shop — photograph it and check it.' : 'Check their ID against the uploaded photo.'}`,
-      icon: 'alert', iconColor: 'amber',
-      deepLink: `/admin/reservations/${first.id}`,
-    });
-    await Promise.all(group.map(d => d.ref.update({ [marker]: FieldValue.serverTimestamp() })));
+    try {
+      await sendAdminNotifs(adminUids, {
+        title: 'First rental — check ID',
+        body: `${first.get('renterName') ?? 'A renter'} picks up ${when}. ${counter ? 'They will show their ID at the shop — photograph it and check it.' : 'Check their ID against the uploaded photo.'}`,
+        icon: 'alert', iconColor: 'amber',
+        deepLink: `/admin/reservations/${first.id}`,
+      });
+      await Promise.all(group.map(d => d.ref.update({ [marker]: FieldValue.serverTimestamp() })));
+    } catch (err) {
+      logger.error('[missedPickupAlerts] ID alert failed', { orderId: first.get('orderId') ?? first.id, err: String(err) });
+    }
   }
 }
 
@@ -512,13 +538,18 @@ export const missedPickupAlerts = onSchedule(
     for (const [orderId, docs] of groups) {
       const first = docs[0];
       const names = docs.map(d => d.get('productName') ?? 'item').join(', ');
-      await sendAdminNotifs(adminUids, {
-        title: 'Not picked up',
-        body: `${first.get('renterName') ?? 'A renter'} didn't pick up ${names} (order ${orderId}). Mark it as a no-show or continue the pick-up if they come.`,
-        icon: 'alert', iconColor: 'amber',
-        deepLink: `/admin/reservations/${first.id}`,
-      });
-      await Promise.all(docs.map(d => d.ref.update({ missedPickupAlertAt: FieldValue.serverTimestamp() })));
+      // One failing order is logged and retried next run — never blocks the others.
+      try {
+        await sendAdminNotifs(adminUids, {
+          title: 'Not picked up',
+          body: `${first.get('renterName') ?? 'A renter'} didn't pick up ${names} (order ${orderId}). Mark it as a no-show or continue the pick-up if they come.`,
+          icon: 'alert', iconColor: 'amber',
+          deepLink: `/admin/reservations/${first.id}`,
+        });
+        await Promise.all(docs.map(d => d.ref.update({ missedPickupAlertAt: FieldValue.serverTimestamp() })));
+      } catch (err) {
+        logger.error('[missedPickupAlerts] order failed', { orderId, err: String(err) });
+      }
     }
   },
 );
@@ -599,19 +630,27 @@ export const applyLoyaltyPoints = onDocumentUpdated(
 
     const cfg = await getLoyaltyCfg();
 
+    // Idempotent: the reservation's loyaltyApplied is re-read INSIDE the transaction, so a
+    // retried / duplicated trigger event (at-least-once delivery) never credits twice.
+    const resRef = event.data.after.ref;
+    let credited = false;
     await db.runTransaction(async tx => {
-      const userSnap = await tx.get(userRef);
+      const [freshRes, userSnap] = await Promise.all([tx.get(resRef), tx.get(userRef)]);
+      credited = false;
+      if (freshRes.get('loyaltyApplied')) return;
+      credited = true;
       creditLoyaltyPoints(tx, userSnap, pointsEarned, cfg,
         { source: 'rental', reservationId: event.params.reservationId, productName: after.productName ?? '' },
         userSnap.data()?.firstRentalDate ? {} : { firstRentalDate: FieldValue.serverTimestamp() });
-      tx.update(event.data!.after.ref, {
+      tx.update(resRef, {
         loyaltyApplied: true,
         updatedAt: FieldValue.serverTimestamp(),
       });
     });
 
-    // First returned rental of this renter → referral reward, if they were invited.
-    if (!preSnap.data()?.firstRentalDate) {
+    // First returned rental of this renter → referral reward, if they were invited
+    // (itself once-only: referrals/{uid} pending → credited in a transaction).
+    if (credited && !preSnap.data()?.firstRentalDate) {
       await creditReferralIfAny(after.renterId, event.params.reservationId).catch(err =>
         logger.error('[referral] credit failed', { renterId: after.renterId, err: String(err) }));
     }

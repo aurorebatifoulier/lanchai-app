@@ -257,6 +257,16 @@ function tomorrowWindowVientiane(nowMs = Date.now()): { start: number; end: numb
   return { start, end: start + 24 * 60 * 60 * 1000 };
 }
 
+// Daily email jobs send in small parallel batches, each order on its own: one failure
+// is logged and never stops the rest (its claim marks it, so it isn't re-sent).
+const REMINDER_CONCURRENCY = 5;
+async function inBatches<T>(items: T[], label: string, fn: (item: T) => Promise<void>): Promise<void> {
+  for (let i = 0; i < items.length; i += REMINDER_CONCURRENCY) {
+    await Promise.all(items.slice(i, i + REMINDER_CONCURRENCY).map(item =>
+      fn(item).catch(err => logger.error(`[email] ${label} item failed`, { err: String(err) }))));
+  }
+}
+
 async function sendReminders(
   statuses: string[],
   timeField: 'pickupAt' | 'returnAt',
@@ -278,7 +288,7 @@ async function sendReminders(
     const key = `${d.get('renterId')}|${d.get('orderId') ?? d.id}`;
     groups.set(key, [...(groups.get(key) ?? []), d]);
   }
-  for (const docs of groups.values()) {
+  await inBatches([...groups.values()], tag, async docs => {
     const renterId: string = docs[0].get('renterId');
     await claimAndSend(docs.map(d => d.ref), field, async claimed => {
       const ids = new Set(claimed.map(r => r.id));
@@ -286,11 +296,18 @@ async function sendReminders(
       if (enrich) items = await enrich(items);
       return deliver(renterId, docs[0].get('renterName'), (name, shop, recipient) => build(name, items, shop, recipient), tag, { respectOptOut: true });
     });
-  }
+  });
+  logger.info(`[email] ${tag} done`, { orders: groups.size });
 }
 
+// The 18:00 job is THREE scheduled functions (pick-up 18:00, return 18:05, review
+// follow-up 18:10), each with its own 9-minute budget — none can time out the others.
+// "Tomorrow" stays the same Vientiane day at 18:05; the review window (48–72h) moves
+// with the run time every day alike, so no reservation is skipped or seen twice.
+const DAILY_JOB = { timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_API_KEY], timeoutSeconds: 540 };
+
 export const emailDailyReminders = onSchedule(
-  { schedule: '0 18 * * *', timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_API_KEY] },
+  { ...DAILY_JOB, schedule: '0 18 * * *' },
   async () => {
     try {
       const rates = await getRates();
@@ -299,11 +316,23 @@ export const emailDailyReminders = onSchedule(
     } catch (err) {
       logger.error('[email] pickup reminders failed', { err: String(err) });
     }
+  },
+);
+
+export const emailReturnReminders = onSchedule(
+  { ...DAILY_JOB, schedule: '5 18 * * *' },
+  async () => {
     try {
       await sendReminders(['active'], 'returnAt', 'emailReturnReminder', returnReminderEmail, 'return-reminder', withIncluded);
     } catch (err) {
       logger.error('[email] return reminders failed', { err: String(err) });
     }
+  },
+);
+
+export const emailReviewFollowUps = onSchedule(
+  { ...DAILY_JOB, schedule: '10 18 * * *' },
+  async () => {
     try {
       await sendReviewFollowUps();
     } catch (err) {
@@ -326,16 +355,17 @@ async function sendReviewFollowUps(): Promise<void> {
     return age >= 2 * DAY && age < 3 * DAY && !d.get('emailReviewFollowUp')?.status && !!d.get('productId');
   });
   const rewardPoints = due.length ? await getReviewRewardPoints() : 0;
-  for (const d of due) {
+  await inBatches(due, 'review-follow-up', async d => {
     const r = asRes(d);
     const renterId: string = d.get('renterId');
-    if (await hasReviewed(r.productId, renterId)) continue;
+    if (await hasReviewed(r.productId, renterId)) return;
     await claimAndSend([d.ref], 'emailReviewFollowUp', () =>
       deliver(renterId, d.get('renterName'), (name, shop, recipient) => reviewFollowUpEmail(name, r, shop, {
         firstName: recipient.firstName,
         reviewRewardPoints: recipient.loyaltyExcluded || r.reviewRewardApplied ? null : rewardPoints,
       }), 'review-follow-up', { respectOptOut: true }));
-  }
+  });
+  logger.info('[email] review-follow-up done', { due: due.length });
 }
 
 // ── 7. Late returns — called from lateReturnAlerts, ONE email per order and run ──

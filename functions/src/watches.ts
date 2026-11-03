@@ -58,6 +58,8 @@ export const availabilityWatchJob = onSchedule(
 
     let notified = 0;
     for (const [productId, ws] of byProduct) {
+      // One failing product is logged and retried next run — never blocks the others.
+      try {
       const p = (await db().collection('products').doc(productId).get()).data();
       if (!p || p.status === 'archived' || p.status === 'draft') {
         await Promise.all(ws.map(w => w.ref.delete()));
@@ -92,6 +94,9 @@ export const availabilityWatchJob = onSchedule(
         }), 'availability-notify', { respectOptOut: true });
         await w.ref.delete();
         notified++;
+      }
+      } catch (err) {
+        logger.error('[availabilityWatchJob] product failed', { productId, err: String(err) });
       }
     }
     logger.info('[availabilityWatchJob] done', { watches: watches.length, notified });

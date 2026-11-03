@@ -362,7 +362,10 @@ a snapshot indefinitely).
     too) → one email per order. `admin_release` cancellations send nothing. Receipt
     fires when `returnFinalizedAt` is first set on a `returned` reservation, figures via
     the shared `deriveReceiptData` (now in `functions/src/shared/receiptData.ts`,
-    re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane,
+    re-exported by `utils/receiptData.ts`). Reminders: daily 18:00 Asia/Vientiane (3 scheduled functions —
+    `emailDailyReminders` pick-up 18:00, `emailReturnReminders` 18:05,
+    `emailReviewFollowUps` 18:10, 540 s each, orders sent 5 at a time, one failure never
+    stops the rest; Brevo fetch aborted after 15 s per attempt),
     skipped when `users/{uid}.emailRemindersOptOut` (Personal info toggle). Dates in
     emails are the stored `pickupLabel`/`returnLabel` — functions run in UTC.
 - **Account → Notifications / Receipts & reports.** `app/profile/notifications.tsx` is the ONE
@@ -441,7 +444,10 @@ a snapshot indefinitely).
   "Mark as picked up") adds `earlyHandoverFields(pickupAt)` → `earlyHandover: true` +
   `earlyHandoverPlannedAt` (the planned pick-up) — internal, never shown to renters.
 - **Loyalty points — server-side only, one shared rule.** Points change ONLY in Cloud
-  Functions via `creditLoyaltyPoints()` (`functions/src/index.ts`), which uses the pure
+  Functions (every credit re-reads its marker — `loyaltyApplied` / `reviewRewardApplied`
+  / `rentalCountApplied` — INSIDE its transaction, so a retried trigger never credits
+  twice; scheduled jobs wrap each item in try/catch + `logger.error`) via
+  `creditLoyaltyPoints()` (`functions/src/index.ts`), which uses the pure
   `applyLoyaltyPointsChange()` (`functions/src/shared/loyalty.ts`) for balance, tier and
   one-time tier coupons, and writes a `users/{uid}/loyaltyHistory` entry (owner-read,
   never client-writable). Sources: `applyLoyaltyPoints` (rental, `loyaltyPointsFor`) and

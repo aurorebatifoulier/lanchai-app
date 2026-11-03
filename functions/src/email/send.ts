@@ -25,6 +25,7 @@ export interface OutgoingEmail {
   attachments?: { name: string; content: string }[];
 }
 
+const BREVO_TIMEOUT_MS = 15_000; // per attempt
 const MAX_ATTEMPTS = 3;           // 1 try + 2 retries, for 429 / 5xx / network errors only
 const AUTH_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -69,6 +70,9 @@ export async function sendEmail(email: OutgoingEmail, mode?: EmailMode): Promise
     try {
       const res = await fetch(BREVO_ENDPOINT, {
         method: 'POST',
+        // A hung connection never stalls a whole job: aborted → treated as a network
+        // error (retried like one).
+        signal: AbortSignal.timeout(BREVO_TIMEOUT_MS),
         headers: { 'api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({
           sender:      EMAIL_SENDER,
