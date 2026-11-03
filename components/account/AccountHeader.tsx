@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Animated, Easing, ActivityIndicator,
   type LayoutChangeEvent,
@@ -15,6 +15,8 @@ import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { vteMinutesOfDay } from '@/functions/src/shared/dates';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { buildFlightPath, type Pt } from '@/components/account/flightPath';
+import Reanimated, { useAnimatedProps } from 'react-native-reanimated';
+import { useTrailMotion } from '@/hooks/useTrailMotion';
 
 // My Account header (validated mockup): white band, avatar with a thin amber ring (photo
 // button kept), greeting by Vientiane time + first name, tier chip + status chip, and a
@@ -25,7 +27,8 @@ import { buildFlightPath, type Pt } from '@/components/account/flightPath';
 // hidden (never overlap the greeting, name or chips). Brand shades only. Motion is
 // skipped with "reduce motion".
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+// Reanimated (UI thread): the trail's dash offsets never cost a JS frame.
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 // Decor box (top-right of the header): bubble + hexagon positions are in these coordinates.
 const DECOR_W = 250;
 const DECOR_RIGHT = -6;
@@ -98,24 +101,12 @@ class DecorBoundary extends React.Component<{ children: React.ReactNode }, { fai
  */
 function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: number; headerHeight: number; lines: Box[] | null; chips: Box | null }) {
   const reduce = useReduceMotion();
-  // Dash offset as a 0→1 fraction (path length depends on the measured layout).
-  const draw = useRef(new Animated.Value(1)).current;
-  // Very slow dash drift toward the hexagon (one dash period every 2.4s).
-  const drift = useRef(new Animated.Value(0)).current;
   const floats = useMemo(() => BUBBLES.map(() => new Animated.Value(0)), []);
   const ready = !!lines && headerWidth > 0 && headerHeight > 0;
-
-  // Draw-on-mount once the layout is measured (from the left edge to the hexagon).
-  useEffect(() => {
-    if (!ready) return;
-    if (reduce) { draw.setValue(0); drift.setValue(0); return; }
-    draw.setValue(1);
-    drift.setValue(0);
-    const flow = Animated.loop(Animated.timing(drift, { toValue: 1, duration: 2400, easing: Easing.linear, useNativeDriver: false }));
-    const anim = Animated.timing(draw, { toValue: 0, duration: 1800, easing: Easing.out(Easing.cubic), useNativeDriver: false });
-    anim.start(({ finished }) => { if (finished) flow.start(); });
-    return () => { anim.stop(); flow.stop(); };
-  }, [ready, reduce, draw, drift]);
+  // Draw-on-mount once the layout is measured (from the left edge to the hexagon), then a
+  // very slow dash drift toward the hexagon (one dash period every 2.4s) — UI thread,
+  // paused off-focus / in the background (useTrailMotion).
+  const { draw, drift } = useTrailMotion(ready, reduce, 1800);
 
   useEffect(() => {
     if (reduce) return;
@@ -156,6 +147,9 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
     width: headerWidth, height: headerHeight,
     bike: centre('sports'), speaker: centre('fun'), hexagon: hex, speakerLoopRadius: SPEAKER_LOOP_R,
   }) : null;
+  const flightLength = flight?.length ?? 0;
+  const revealProps = useAnimatedProps(() => ({ strokeDashoffset: draw.value * flightLength }));
+  const driftProps = useAnimatedProps(() => ({ strokeDashoffset: -drift.value * DASH_PERIOD }));
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -172,14 +166,14 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
                   <AnimatedPath
                     d={flight.d} stroke="#fff" strokeWidth={8} fill="none"
                     strokeDasharray={[flight.length, flight.length]}
-                    strokeDashoffset={draw.interpolate({ inputRange: [0, 1], outputRange: [0, flight.length] })}
+                    animatedProps={revealProps}
                   />
                 </Mask>
               </Defs>
               <AnimatedPath
                 d={flight.d} stroke="url(#fade)" strokeWidth={2} strokeDasharray={DASH} strokeLinecap="round" fill="none" mask="url(#reveal)"
                 // Decreasing offset → dashes move along the path, toward the hexagon.
-                strokeDashoffset={drift.interpolate({ inputRange: [0, 1], outputRange: [0, -DASH_PERIOD] })}
+                animatedProps={driftProps}
               />
             </>
           )}

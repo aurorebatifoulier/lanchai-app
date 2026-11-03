@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, type LayoutChangeEvent } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import Reanimated, { useAnimatedProps } from 'react-native-reanimated';
 import Svg, { Defs, Mask, Path } from 'react-native-svg';
 import { SHADES } from '@/constants/brandShades';
 import { UI, SectionTitle, type AnyIcon } from '@/components/account/ui';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { HOME_COPY } from '@/constants/homeCopy';
 import { DASH, DASH_PERIOD, PATH_OPACITY, useReduceMotion } from '@/components/account/AccountHeader';
+import { useTrailMotion } from '@/hooks/useTrailMotion';
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 
 // "Rent. Return. Repeat." — first-time renters only (replaces "How LANCHAI works" and the
 // trust blocks). Three steps with icon circles in palette shades, linked by the same
@@ -39,25 +41,18 @@ export default function RentReturnRepeat() {
   const reduce = useReduceMotion();
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [rowYs, setRowYs] = useState<(number | null)[]>(HOME_COPY.steps.map(() => null));
-  const draw = useRef(new Animated.Value(1)).current;
-  const drift = useRef(new Animated.Value(0)).current;
   const ready = !!size && rowYs.every(y => y != null);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (reduce) { draw.setValue(0); drift.setValue(0); return; }
-    draw.setValue(1);
-    const flow = Animated.loop(Animated.timing(drift, { toValue: 1, duration: 2400, easing: Easing.linear, useNativeDriver: false }));
-    const anim = Animated.timing(draw, { toValue: 0, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false });
-    anim.start(({ finished }) => { if (finished) flow.start(); });
-    return () => { anim.stop(); flow.stop(); };
-  }, [ready, reduce, draw, drift]);
+  // UI thread; the endless drift pauses off-focus / in the background (useTrailMotion).
+  const { draw, drift } = useTrailMotion(ready, reduce, 1400);
 
   const onRow = (i: number) => (e: LayoutChangeEvent) => {
     const y = e.nativeEvent.layout.y + CIRCLE / 2;
     setRowYs(prev => (prev[i] === y ? prev : prev.map((v, j) => (j === i ? y : v))));
   };
   const trail = ready ? trailPath(rowYs as number[], PAD + CIRCLE / 2) : null;
+  const trailLength = trail?.length ?? 0;
+  const revealProps = useAnimatedProps(() => ({ strokeDashoffset: draw.value * trailLength }));
+  const driftProps = useAnimatedProps(() => ({ strokeDashoffset: -drift.value * DASH_PERIOD }));
 
   return (
     <View>
@@ -76,14 +71,14 @@ export default function RentReturnRepeat() {
                 <AnimatedPath
                   d={trail.d} stroke="#fff" strokeWidth={10} fill="none"
                   strokeDasharray={[trail.length, trail.length]}
-                  strokeDashoffset={draw.interpolate({ inputRange: [0, 1], outputRange: [0, trail.length] })}
+                  animatedProps={revealProps}
                 />
               </Mask>
             </Defs>
             <AnimatedPath
               d={trail.d} stroke={SHADES.amber} strokeOpacity={PATH_OPACITY * 2} strokeWidth={2.5}
               strokeDasharray={DASH} strokeLinecap="round" fill="none" mask="url(#stepsReveal)"
-              strokeDashoffset={drift.interpolate({ inputRange: [0, 1], outputRange: [0, -DASH_PERIOD] })}
+              animatedProps={driftProps}
             />
           </Svg>
         )}
