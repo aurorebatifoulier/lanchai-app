@@ -71,7 +71,11 @@ export default function OnboardingScreen() {
         ref={scrollRef}
         horizontal
         pagingEnabled
+        // No scroll indicator / Android edge effect — that thin grey line on the right.
         showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        overScrollMode="never"
+        bounces={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
@@ -142,7 +146,9 @@ const s = StyleSheet.create({
   wordmark: { fontSize: 17, fontWeight: '800', letterSpacing: 3, color: SHADES.carbon },
   wordmarkDark: { color: SHADES.white },
   skip: { ...TYPE.body, fontWeight: '600', color: SHADES.carbonMuted },
-  middle: { flex: 1, justifyContent: 'center', paddingVertical: 12 },
+  // Leftover space goes ABOVE the visual (under the header), never between it and the
+  // title: the visual hugs the title with a ~24–32 px gap.
+  middle: { flex: 1, justifyContent: 'flex-end', paddingTop: 8, paddingBottom: 12 },
   art: { flex: 1, width: '100%' },
   text: { marginBottom: 22 },
   sub: { ...TYPE.body, fontSize: 15, lineHeight: 22, color: SHADES.carbonMuted, marginTop: 10 },

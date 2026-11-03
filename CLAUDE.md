@@ -1349,8 +1349,12 @@ a snapshot indefinitely).
     sub-line, sticker texts. Bundled Unsplash placeholders `assets/images/onboarding/`
     (CREDITS.md).
     Each page clips its content (`overflow: 'hidden'`) — entering / parallax-offset cards
-    never show on a neighbouring slide. Slide 2 = three ~32%-of-screen cards in a zigzag
-    across the full width (−5° / 0° / +5°), amber numbered circles (`PhotoCard badge`),
+    never show on a neighbouring slide; the pager has no scroll indicators and
+    `overScrollMode="never"`. Each art computes its group's bounding box (cards + stickers)
+    from the card width, takes the biggest width that fits the height (within the width
+    rule) and sits on the BOTTOM of the visual box (`BOTTOM_GAP`) — ~24–28 px above the
+    title, leftover height above. Slide 2 = three cards (≈ (w − 2 gaps) / 3) in a zigzag
+    with small gaps (Pick up 25% lower, −5° / 0° / +5°, never covering a label), amber numbered circles (`PhotoCard badge`),
     labels "Book / Pick up / Bring back", trajectory at 45% with bigger dots + 18 px
     hexagon, "Vientiane shop" under Pick up.
     Layout: header → flexible visual (≤ 55% of the screen, measured PER PAGE, centred) →
