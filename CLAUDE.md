@@ -1031,8 +1031,8 @@ a snapshot indefinitely).
     same grey as "LAK / day" on every card.
   - **Quick add:** `QuickAddProvider` (root layout, `useQuickAdd().openQuickAdd`) owns one
     sheet + toast. "+" (`QuickAddButton`: amber = free today, outline = not → Pick dates
-    pre-filled with the next free day; none when tier-locked) on Explore, Liked, category
-    pages and the Home rail cards. Shortcuts: this weekend / tomorrow (first slot, 1 day) /
+    pre-filled with the next free day; none when tier-locked) on Explore, Liked and the
+    Home rail cards. Shortcuts: this weekend / tomorrow (first slot, 1 day) /
     pick dates (DateRangeCalendar, first slot, return at the same time), then Pick-up |
     Return time cells (`<TimesRow>` from `BookingBlocks`, `SlotSheet`, booking slot rules,
     `useLinkedReturnTime`) and `<QuantityRow>` (max = units free on those exact times).
