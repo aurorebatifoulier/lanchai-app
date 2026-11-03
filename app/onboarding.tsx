@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -11,7 +11,7 @@ import { ONBOARDING_COPY as c } from '@/constants/onboardingCopy';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { HighlightTitle, HexDots } from '@/components/onboarding/Parts';
-import { Slide1Art, Slide2Art, Slide3Art } from '@/components/onboarding/SlideArt';
+import { Slide1Art, Slide2Art, Slide3Art, artGroupBottom } from '@/components/onboarding/SlideArt';
 import { setOnboardingComplete } from '@/lib/onboarding';
 import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingContent';
 
@@ -19,12 +19,12 @@ import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingCon
 // FIXED proportions, identical on the 3 slides (validated schema):
 //   • header (bee logo + LANCHAI, Skip on 1–2) at the top;
 //   • visual area from ~16% to ~58% of the screen height, its card group centred;
-//   • title + sub-line anchored at ~62%;
-//   • the flexible empty space between the sub-line and the bottom bar (pagination +
-//     next / Start exploring + Sign in), above the bottom safe area.
-// Small screens: the title moves UP (fixed reserves, same for every slide — never below
-// ~62%), and the visual area shrinks first. Nothing in the layout depends on a measurement
-// that changes while a slide loads (highlight, stickers, count-up are all absolute). Cream slides 1–2 (dark status bar), carbon slide 3 (light).
+//   • title + sub-line placed per slide so the gaps visual → title and sub-line → bottom
+//     bar are EQUAL (~66–67% on slides 1–2; slide 3 from its own, taller bar);
+//   • bottom bar (pagination + next / Start exploring + Sign in) above the safe area.
+// Small screens: ≥ 32 px visual → title and ≥ 24 px sub-line → bar, the visual area
+// shrinks first. The text is measured once (hidden until then) — nothing that loads, pops
+// or counts can move it (highlight, stickers, count-up are all absolute). Cream slides 1–2 (dark status bar), carbon slide 3 (light).
 // Loops pause off-screen / in background; reduce motion = static.
 
 const VISUAL_TOP = 0.16;
@@ -32,6 +32,9 @@ const VISUAL_BOTTOM = 0.58;
 const TITLE_TOP = 0.62;
 /** Minimum gap between the visual group and the title. */
 const TITLE_GAP = 40;
+/** Small screens: minimum gaps visual → title and sub-line → bottom bar. */
+const MIN_GAP_TITLE = 32;
+const MIN_GAP_BAR = 24;
 /** Fixed reserves (px) for the tallest title block and the tallest bottom bar. */
 const TEXT_RESERVE = 3 * 32 + 10 + 2 * 22;
 const BAR_RESERVE = 20 + 16 + 46 + 14 + 18;
@@ -53,6 +56,9 @@ export default function OnboardingScreen() {
   const scrollX = useSharedValue(0);
   const [index, setIndex] = useState(0);
   const [H, setH] = useState(win.height);
+  // Measured once per page (static content): the text block and the bottom bar.
+  const [textH, setTextH] = useState<Record<number, number>>({});
+  const [barH, setBarH] = useState<Record<number, number>>({});
   const last = slides.length - 1;
 
   const applyBar = useCallback((i: number) => setStatusBarStyle(i === last ? 'light' : 'dark', true), [last]);
@@ -78,17 +84,40 @@ export default function OnboardingScreen() {
   };
   const headerBottom = screen.top + 8 + 36;
   const barBottom = screen.bottom + 14;
-  // ONE title position for all three slides, computed from FIXED reserves (never from a
-  // measurement — nothing that loads, pops or counts can move it): at 62%, or higher on a
-  // small screen so the tallest title block (3-line title + 2-line sub-line) and the
-  // tallest bottom bar (slide 3) still fit.
-  const titleTop = Math.min(H * TITLE_TOP, H - barBottom - BAR_RESERVE - 20 - TEXT_RESERVE);
-  // Visual area 16% → 58%, shrinking first on small screens (keeps a gap to the title).
+  // Visual area (unchanged): 16% → ~58%, from fixed reserves so it never moves.
+  const refTitle = Math.min(H * TITLE_TOP, H - barBottom - BAR_RESERVE - 20 - TEXT_RESERVE);
   const visualTop = Math.max(H * VISUAL_TOP, headerBottom + 8);
-  // ≥ 40 px between the lowest card / sticker and the title (the groups never overflow the
-  // visual area — the cards shrink instead; the title doesn't move).
-  const visualBottom = Math.min(H * VISUAL_BOTTOM, titleTop - TITLE_GAP);
-  const art = { w: width - 2 * SIDE, h: Math.max(120, visualBottom - visualTop) };
+  const visualBottom = Math.min(H * VISUAL_BOTTOM, refTitle - TITLE_GAP);
+  const artW = width - 2 * SIDE;
+  const baseArtH = Math.max(120, visualBottom - visualTop);
+
+  /**
+   * Text position PER SLIDE (each has its own bar): the space between the lowest point of
+   * the visual group (card or sticker) and the top of the bottom bar, minus the text block,
+   * is split into two EQUAL gaps (visual → title, sub-line → bar). Small screens: at least
+   * 32 px / 24 px — the visual area shrinks first. Text block and bar are measured ONCE
+   * (static content); the text stays invisible until then, so it never jumps.
+   */
+  const layoutFor = (i: number) => {
+    const tH = textH[i]; const bH = barH[i];
+    let artH = baseArtH;
+    if (tH == null || bH == null) return { artH, titleTop: H * TITLE_TOP, ready: false };
+    const barTop = H - barBottom - bH;
+    let groupBottom = visualTop + artGroupBottom(i, artW, artH, width);
+    for (let k = 0; k < 4; k++) {
+      const deficit = groupBottom + MIN_GAP_TITLE + tH + MIN_GAP_BAR - barTop;
+      if (deficit <= 0.5 || artH <= 120) break;
+      artH = Math.max(120, artH - deficit);
+      groupBottom = visualTop + artGroupBottom(i, artW, artH, width);
+    }
+    const free = barTop - groupBottom - tH;
+    const gap = Math.min(Math.max(MIN_GAP_TITLE, free / 2), Math.max(MIN_GAP_TITLE, free - MIN_GAP_BAR));
+    return { artH, titleTop: groupBottom + gap, ready: true };
+  };
+  const measure = (set: typeof setTextH, i: number) => (e: LayoutChangeEvent) => {
+    const v = e.nativeEvent.layout.height;
+    set(prev => (prev[i] != null && Math.abs(prev[i] - v) < 1 ? prev : { ...prev, [i]: v }));
+  };
 
   return (
     <View style={[s.root, index === last && s.dark]} onLayout={e => setH(e.nativeEvent.layout.height)}>
@@ -107,7 +136,8 @@ export default function OnboardingScreen() {
         {slides.map((slide, i) => {
           const dark = i === last;
           const active = i === index;
-          const artProps = { slide, active, w: art.w, h: art.h, scrollX, page: i, pageW: width };
+          const L = layoutFor(i);
+          const artProps = { slide, active, w: artW, h: L.artH, scrollX, page: i, pageW: width };
           return (
             <View key={i} style={[s.page, dark && s.dark, { width, height: H }]}>
               <View style={[s.top, { top: screen.top + 8 }]}>
@@ -122,18 +152,18 @@ export default function OnboardingScreen() {
                 )}
               </View>
 
-              <View style={[s.visual, { top: visualTop, height: art.h }]}>
+              <View style={[s.visual, { top: visualTop, height: L.artH }]}>
                 {i === 0 && <Slide1Art {...artProps} priceLak={priceLak} />}
                 {i === 1 && <Slide2Art {...artProps} />}
                 {i === 2 && <Slide3Art {...artProps} />}
               </View>
 
-              <View style={[s.text, { top: titleTop }]}>
+              <View style={[s.text, { top: L.titleTop, opacity: L.ready ? 1 : 0 }]} onLayout={measure(setTextH, i)}>
                 <HighlightTitle text={slide.title} dark={dark} />
                 <Text style={[s.sub, dark && s.subDark]}>{slide.sub}</Text>
               </View>
 
-              <View style={[s.bar, { bottom: barBottom }]}>
+              <View style={[s.bar, { bottom: barBottom }]} onLayout={measure(setBarH, i)}>
                 {dark ? (
                   <>
                     <View style={s.dotsCenter}><HexDots count={slides.length} index={index} dark /></View>

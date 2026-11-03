@@ -1355,10 +1355,11 @@ a snapshot indefinitely).
     rule) and is CENTRED in the visual area. FIXED proportions (app/onboarding.tsx):
     header (Home bee logo — `lanchai-mark-onb(-light).png`, cropped transparent copies of
     lanchai-logo.png — + LANCHAI, Skip) · visual area 16% → 58% of the height · title at
-    62% · flexible space between the sub-line and the bottom bar; small screens move the
-    title up from FIXED reserves (`TEXT_RESERVE` / `BAR_RESERVE` — never a measurement, so
-    the title is at the same place on every slide and never jumps) and shrink the visual
-    area first. Worklets: no nested functions (Reanimated turns them into objects — inline
+    ~58% (from fixed reserves, never moves) · text placed PER SLIDE so the gaps visual
+    group bottom (`artGroupBottom`) → title and sub-line → that slide's bottom bar are
+    EQUAL (~66–67% on slides 1–2); text block + bar measured ONCE, text hidden until then
+    (no jump); slide 1 always reserves the price chip. Small screens: ≥ 32 / 24 px, the
+    visual area shrinks first. Worklets: no nested functions (Reanimated turns them into objects — inline
     the maths); easings only inside `withTiming`. Slide 1 chips are placed from the ROTATED bounding
     boxes (`rotatedHalf`): price under the speaker card (right-aligned), amber chip under
     the tent card (left-aligned, lower) — ≥ 10 px clear. Every chip is text 13, padding 7 × 12; slide 1's amber

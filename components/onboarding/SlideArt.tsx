@@ -141,9 +141,8 @@ const CAPTION = [
   { inputs: [0, B2 + 0.01, B2 + 0.05, 1 - 0.05, 1 - 0.01, 1], outputs: [0, 0, 1, 1, 0, 0] },
 ];
 
-export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
-  const { running, reduce } = useRunning(active);
-  const gate = useEntryGate(active);
+/** Slide 2 geometry: the biggest card width (≤ 29% of the screen) whose group fits h. */
+function slide2Layout(h: number, pageW: number) {
   const LABEL_H = 30; const BADGE = 10; const DROP = 0.3; const FOCUSED = 1.06;
   const geo = (cwx: number) => {
     const chx = cwx * 1.32 + LABEL_H;
@@ -159,6 +158,13 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
   const cw = Math.max(70, Math.min(pageW * 0.29, (h - base) / slope));
   const G = geo(cw);
   const dy = Math.max(0, (h - G.bottom) / 2);
+  return { cw, G, dy };
+}
+
+export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
+  const { running, reduce } = useRunning(active);
+  const gate = useEntryGate(active);
+  const { cw, G, dy } = slide2Layout(h, pageW);
   const gap = pageW * 0.025;
   const x0 = (w - (3 * cw + 2 * gap)) / 2; // may reach slightly into the side padding
   const cards = [
@@ -207,13 +213,29 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
   );
 }
 
-export function Slide3Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
-  // Group: card (ch) + the deposit chip overhanging its bottom by ~24.
-  const OVER = 26;
+/** Slide 3 geometry: card + the deposit chip overhanging its bottom (OVER), centred. */
+const OVER = 26;
+function slide3Layout(w: number, h: number) {
   const cw = Math.max(90, Math.min(w * 0.52, (h - 2 * BOTTOM_GAP - OVER) / 1.32));
   const ch = cw * 1.32;
+  return { cw, ch, top: groupTop(h, ch + OVER) };
+}
+
+/**
+ * Lowest point of slide `i`'s visual group inside its h-high area (card or sticker,
+ * animation room included) — the screen spaces the text from it. Slide 1 always reserves
+ * the price chip (it arrives asynchronously) so the title never jumps.
+ */
+export function artGroupBottom(i: number, w: number, h: number, pageW: number): number {
+  if (i === 0) { const L = slide1Layout(w, h, true); return L.bottom + L.dy; }
+  if (i === 1) { const { G, dy } = slide2Layout(h, pageW); return G.bottom + dy; }
+  const L = slide3Layout(w, h);
+  return L.top + L.ch + OVER;
+}
+
+export function Slide3Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
+  const { cw, ch, top } = slide3Layout(w, h);
   const left = (w - cw) / 2;
-  const top = groupTop(h, ch + OVER);
   return (
     <View style={{ width: w, height: h }}>
       <PhotoCard source={slide.photos[0]} width={cw} rotate={-2} active={active} from="right" scrollX={scrollX} page={page} pageW={pageW}
