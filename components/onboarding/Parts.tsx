@@ -154,7 +154,7 @@ export function HighlightTitle({ text, dark }: { text: string; dark?: boolean })
  */
 export function PhotoCard({
   source, width, rotate = 0, delay = 0, dark, label, badge, style, active, from = 'left',
-  scrollX, page, pageW, lift, liftAt,
+  scrollX, page, pageW, lift, liftAt, spot,
 }: {
   source: ImageSourcePropType;
   width: number;
@@ -172,6 +172,9 @@ export function PhotoCard({
   pageW?: number;
   lift?: SharedValue<number>;
   liftAt?: number;
+  /** Spotlight: focus 0..1 = interpolate(spot.t, inputs, outputs). Focused = scale 1.07,
+   *  in front; others 0.96 and ~55% opacity. */
+  spot?: { t: SharedValue<number>; inputs: number[]; outputs: number[] };
 }) {
   const { running, reduce } = useRunning(active);
   const y = useSharedValue(0);
@@ -197,13 +200,25 @@ export function PhotoCard({
     if (lift && liftAt != null) {
       lifted = -7 * interpolate(Math.abs(lift.value - liftAt), [0, 0.12], [1, 0], Extrapolation.CLAMP);
     }
+    let scale = 1;
+    let dim = 1;
+    let front = 0;
+    if (spot) {
+      const f = interpolate(spot.t.value, spot.inputs, spot.outputs, Extrapolation.CLAMP);
+      scale = 0.96 + 0.11 * f;
+      dim = 0.55 + 0.45 * f;
+      front = f > 0.5 ? 1 : 0;
+    }
     return {
       // Always visible (the next slide shows while swiping); only the slide-in moves.
-      opacity: interpolate(e, [0, 1], [0.6, 1], Extrapolation.CLAMP),
+      opacity: interpolate(e, [0, 1], [0.6, 1], Extrapolation.CLAMP) * dim,
+      zIndex: front ? 10 : 1,
+      elevation: front ? 8 : 3,
       transform: [
         { translateX: (1 - e) * dir * 70 + parallax },
         { translateY: y.value + lifted },
         { rotate: `${rotate + (1 - e) * dir * 8}deg` },
+        { scale },
       ],
     };
   });
@@ -256,6 +271,23 @@ export function Sticker({ active, delay, hold = 3000, wait = 1400, style, childr
     transform: [{ translateY: bob.value }, { scale: sc.value }],
   }));
   return <Animated.View style={[{ position: 'absolute' }, style, anim]}>{children}</Animated.View>;
+}
+
+/**
+ * Sticker tied to a spotlight step: pops in (0 → 1.1 → 1) while its card is focused and
+ * pops out after — focus = interpolate(t, inputs, outputs), on the UI thread.
+ */
+export function SpotSticker({ t, inputs, outputs, style, children }: {
+  t: SharedValue<number>; inputs: number[]; outputs: number[]; style?: StyleProp<ViewStyle>; children: React.ReactNode;
+}) {
+  const anim = useAnimatedStyle(() => {
+    const f = interpolate(t.value, inputs, outputs, Extrapolation.CLAMP);
+    return {
+      opacity: f > 0.02 ? 1 : 0,
+      transform: [{ scale: interpolate(f, [0, 0.7, 1], [0, 1.1, 1], Extrapolation.CLAMP) }],
+    };
+  });
+  return <Animated.View style={[{ position: 'absolute', zIndex: 20 }, style, anim]} pointerEvents="none">{children}</Animated.View>;
 }
 
 /** Soft heartbeat every few seconds. */

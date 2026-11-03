@@ -1356,10 +1356,13 @@ a snapshot indefinitely).
     header (Home bee logo — `lanchai-mark-onb(-light).png`, cropped transparent copies of
     lanchai-logo.png — + LANCHAI, Skip) · visual area 16% → 58% of the height · title at
     62% · flexible space between the sub-line and the bottom bar; small screens move the
-    title up (text + bar measured) and shrink the visual area first. Slide 2 = three cards (≈ (w − 2 gaps) / 3) in a zigzag
-    with small gaps (Pick up 25% lower, −5° / 0° / +5°, never covering a label), amber numbered circles (`PhotoCard badge`),
-    labels "Book / Pick up / Bring back", trajectory at 45% with bigger dots + 18 px
-    hexagon, "Vientiane shop" under Pick up.
+    title up (text + bar measured) and shrink the visual area first. Slide 2 = step-by-step story: strong zigzag (Book −7° top-left, Pick up +2° with
+    its top at 38% of the visual area, Bring back +7° top-right, ~31% width, numbered
+    circles), spotlight loop 6 s (`FOCUS` keyframes on one shared `t`: the hexagon stops on
+    each card in turn; focused card 1.07 + in front, others 0.96 at 55%; `PhotoCard spot`,
+    `SpotSticker`), one sticker per step ("Dates picked" / "QR scanned · Vientiane shop" /
+    "+10 pts", texts in config), trajectory behind the cards at 55%. Reduce motion: no
+    loop, cards normal, only the QR sticker.
     Highlight = ONE band per line the
     phrase occupies (`onTextLayout` + hidden single-line measurements, no per-word marks).
     Life (Reanimated, transforms / opacity only, running only while the slide is visible

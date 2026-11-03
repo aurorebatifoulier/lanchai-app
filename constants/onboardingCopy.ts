@@ -27,7 +27,10 @@ export const ONBOARDING_DEFAULT_TEXTS: OnboardingDefaults[] = [
   {
     title: 'Use it. [Bring it back.] Repeat.',
     sub: 'Pick it up at our shop in Vientiane.',
-    stickers: { step1: 'Book', step2: 'Pick up', step3: 'Bring back', place: 'Vientiane shop' },
+    stickers: {
+      step1: 'Book', step2: 'Pick up', step3: 'Bring back',
+      booked: 'Dates picked', place: 'QR scanned · Vientiane shop', points: '+10 pts',
+    },
   },
   {
     title: 'Spend less on stuff. [More on weekends.]',
@@ -39,7 +42,10 @@ export const ONBOARDING_DEFAULT_TEXTS: OnboardingDefaults[] = [
 /** Admin labels for the sticker fields of each slide. */
 export const ONBOARDING_STICKER_LABELS: Record<string, string>[] = [
   { chip: 'Light-amber chip' },
-  { step1: 'Card 1 label (number shown in the circle)', step2: 'Card 2 label (carbon)', step3: 'Card 3 label', place: 'Place chip' },
+  {
+    step1: 'Card 1 label (number shown in the circle)', step2: 'Card 2 label (carbon)', step3: 'Card 3 label',
+    booked: 'Step 1 sticker (carbon)', place: 'Step 2 sticker (light amber)', points: 'Step 3 sticker (yellow)',
+  },
   { checked: 'Yellow chip', clean: 'Dark chip', deposit: 'Light-amber chip' },
 ];
 
