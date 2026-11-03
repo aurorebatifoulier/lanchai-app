@@ -30,6 +30,8 @@ import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingCon
 const VISUAL_TOP = 0.16;
 const VISUAL_BOTTOM = 0.58;
 const TITLE_TOP = 0.62;
+/** Minimum gap between the visual group and the title. */
+const TITLE_GAP = 40;
 /** Fixed reserves (px) for the tallest title block and the tallest bottom bar. */
 const TEXT_RESERVE = 3 * 32 + 10 + 2 * 22;
 const BAR_RESERVE = 20 + 16 + 46 + 14 + 18;
@@ -83,7 +85,9 @@ export default function OnboardingScreen() {
   const titleTop = Math.min(H * TITLE_TOP, H - barBottom - BAR_RESERVE - 20 - TEXT_RESERVE);
   // Visual area 16% → 58%, shrinking first on small screens (keeps a gap to the title).
   const visualTop = Math.max(H * VISUAL_TOP, headerBottom + 8);
-  const visualBottom = Math.min(H * VISUAL_BOTTOM, titleTop - H * 0.03);
+  // ≥ 40 px between the lowest card / sticker and the title (the groups never overflow the
+  // visual area — the cards shrink instead; the title doesn't move).
+  const visualBottom = Math.min(H * VISUAL_BOTTOM, titleTop - TITLE_GAP);
   const art = { w: width - 2 * SIDE, h: Math.max(120, visualBottom - visualTop) };
 
   return (

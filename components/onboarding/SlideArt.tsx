@@ -10,7 +10,7 @@ import { ONBOARDING_COPY as c } from '@/constants/onboardingCopy';
 import CountUpText from '@/components/CountUpText';
 import type { OnboardingSlide } from '@/lib/onboardingContent';
 import {
-  PhotoCard, Sticker, SpotSticker, Chip, Heartbeat, Sparkle, hexPoints, chipTextStyle, useRunning, LAYER,
+  PhotoCard, Sticker, SpotSticker, Chip, Heartbeat, Sparkle, hexPoints, chipTextStyle, useRunning, useEntryGate, LAYER,
 } from '@/components/onboarding/Parts';
 
 // The animated middle of each onboarding slide, laid out on the visual area (w × h, ~16%
@@ -33,14 +33,54 @@ interface ArtProps {
   pageW: number;
 }
 
+/** Half-extents of a cw × ch frame rotated by `deg` (its rotated bounding box). */
+function rotatedHalf(cw: number, ch: number, deg: number) {
+  const r = (Math.abs(deg) * Math.PI) / 180;
+  return { hw: (cw * Math.cos(r) + ch * Math.sin(r)) / 2, hh: (cw * Math.sin(r) + ch * Math.cos(r)) / 2 };
+}
+
+const CHIP_H = 40;   // a chip's height
+const CLEAR = 10;    // clearance under a rotated frame
+
+/**
+ * Slide 1 layout from the ROTATED bounding boxes (unchanged card positions): price chip
+ * under the speaker card, right-aligned with it; "Used twice a year?" under the tent card,
+ * left-aligned with it and a bit lower (staggered, never on one line). Both ≥ 10 px below
+ * the frames. The card width is the biggest that fits the whole group in the visual area.
+ */
+function slide1Layout(w: number, h: number) {
+  const HEART = 22;
+  const geo = (cw: number) => {
+    const ch = cw * 1.32;
+    const tent = rotatedHalf(cw, ch, 8);
+    const spk = rotatedHalf(cw, ch, 6);
+    const top = HEART;                                  // right card top, group-relative
+    const tentLeft = w * 0.5 - cw * 1.02; const tentTop = top + cw * 0.08;
+    const spkLeft = w * 0.5 + cw * 0.02;
+    const tentCx = tentLeft + cw / 2; const tentCy = tentTop + ch / 2;
+    const spkCx = spkLeft + cw / 2; const spkCy = top + ch / 2;
+    const priceTop = spkCy + spk.hh + CLEAR;
+    const amberTop = Math.max(tentCy + tent.hh + CLEAR, priceTop + CHIP_H * 0.6);
+    return {
+      ch, tentLeft, tentTop, spkLeft, top,
+      priceTop, priceRight: w - (spkCx + spk.hw),
+      amberTop, amberLeft: Math.max(0, tentCx - tent.hw),
+      bottom: amberTop + CHIP_H,
+    };
+  };
+  // Group height is linear in cw: solve for the biggest cw that fits (within 44% of w).
+  const g100 = geo(100).bottom; const g200 = geo(200).bottom;
+  const slope = (g200 - g100) / 100; const base = g100 - slope * 100;
+  const cw = Math.max(70, Math.min(w * 0.44, (h - base) / slope));
+  const L = geo(cw);
+  const dy = Math.max(0, (h - L.bottom) / 2); // centred (the heart sits above the cards, so their float has room)
+  return { cw, ...L, dy };
+}
+
 export function Slide1Art({ slide, active, w, h, scrollX, page, pageW, priceLak }: ArtProps & { priceLak: number | null }) {
-  // Group: heart above (16) + cards (ch, left card 0.08·cw lower) + gap 10 + amber chip 42.
-  const HEART = 16; const CHIP = 52;
-  const k = 1.32 + 0.08; // card height + left-card offset, per unit of width
-  const cw = Math.max(80, Math.min(w * 0.44, (h - 2 * BOTTOM_GAP - HEART - CHIP) / k));
-  const ch = cw * 1.32;
-  const g = HEART + cw * k + CHIP;
-  const top = groupTop(h, g) + HEART; // top of the right card
+  const L = slide1Layout(w, h);
+  const { cw } = L;
+  const top = L.top + L.dy;
   const par = { scrollX, page, pageW };
   // Count-up restarts each time the slide becomes active (new id = new count).
   const [run, setRun] = useState(0);
@@ -48,16 +88,16 @@ export function Slide1Art({ slide, active, w, h, scrollX, page, pageW, priceLak 
   return (
     <View style={{ width: w, height: h }}>
       <PhotoCard source={slide.photos[0]} width={cw} rotate={-8} active={active} from="left" {...par}
-        style={{ left: w * 0.5 - cw * 1.02, top: top + cw * 0.08 }} />
+        style={{ left: L.tentLeft, top: L.tentTop + L.dy }} />
       <PhotoCard source={slide.photos[1]} width={cw} rotate={6} delay={600} active={active} from="right" {...par}
-        style={{ left: w * 0.5 + cw * 0.02, top }} />
-      <Sticker active={active} delay={300} hold={3400} wait={1600} style={{ left: Math.max(0, w * 0.5 - cw * 1.12), top: top - HEART - 6 }}>
+        style={{ left: L.spkLeft, top }} />
+      <Sticker active={active} delay={0} hold={3400} wait={1600} style={{ left: Math.max(0, w * 0.5 - cw * 1.12), top: top - 22 }}>
         <Heartbeat active={active}>
           <View style={s.heart}><MaterialCommunityIcons name="heart" size={22} color={SHADES.amber} /></View>
         </Heartbeat>
       </Sticker>
       {priceLak != null && (
-        <Sticker active={active} delay={700} hold={3000} wait={1200} style={{ right: 0, top: top + ch * 0.74 }}>
+        <Sticker active={active} delay={400} hold={3000} wait={1200} style={{ right: L.priceRight, top: L.priceTop + L.dy }}>
           <Chip tone="carbon" text={
             <CountUpText
               id={`onb-price-${run}`}
@@ -68,7 +108,7 @@ export function Slide1Art({ slide, active, w, h, scrollX, page, pageW, priceLak 
           } />
         </Sticker>
       )}
-      <Sticker active={active} delay={1300} hold={2600} wait={1800} style={{ left: w * 0.08, top: top + cw * 0.08 + ch + 10 }}>
+      <Sticker active={active} delay={1000} hold={2600} wait={1800} style={{ left: L.amberLeft, top: L.amberTop + L.dy }}>
         <Chip tone="light" text={slide.stickers.chip} />
       </Sticker>
     </View>
@@ -97,11 +137,19 @@ const FOCUS = [
 
 export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
   const { running, reduce } = useRunning(active);
+  const gate = useEntryGate(active);
   const LABEL_H = 30; const BADGE = 10; const PICK_TOP = 0.38;
-  // ~31% of the width, smaller only if the lower card wouldn't fit the height.
-  const byHeight = (h * (1 - PICK_TOP) - 2 * BOTTOM_GAP - LABEL_H) / 1.32;
-  const cw = Math.max(70, Math.min(w * 0.31, byHeight));
+  // Lowest point of the Pick up card (rotated 2°, focused scale 1.07) + the ONE sticker
+  // spot under it must fit the visual area: the biggest cw (≤ 31% of w) that does.
+  const pickBottom = (cwx: number) => {
+    const chx = cwx * 1.32 + LABEL_H;
+    return h * PICK_TOP + chx / 2 + rotatedHalf(cwx, chx, 2).hh * 1.07;
+  };
+  const room = (cwx: number) => pickBottom(cwx) + CLEAR + CHIP_H;
+  const slope = (room(200) - room(100)) / 100; const base = room(100) - slope * 100;
+  const cw = Math.max(70, Math.min(w * 0.31, (h - base) / slope));
   const ch = cw * 1.32 + LABEL_H;
+  const spotTop = pickBottom(cw) + CLEAR;
   const card1 = { x: w * 0.02, y: BADGE + 2 };
   const card2 = { x: (w - cw) / 2, y: h * PICK_TOP };
   const card3 = { x: w * 0.98 - cw, y: BADGE + 8 };
@@ -168,17 +216,19 @@ export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProp
           <Svg width={20} height={20} viewBox="0 0 20 20"><Polygon points={hexPoints(10, 10, 9.5)} fill={SHADES.amber} /></Svg>
         </Animated.View>
       )}
+      {/* ONE sticker spot, centred under Pick up; one sticker at a time, in sync with the
+          spotlight (1 → 2 → 3), only after the cards' entry. Reduce motion: the QR one. */}
       {reduce ? (
-        <View style={[s.stickerRow, { top: Math.max(0, card2.y - 46) }]} pointerEvents="none">{qrChip}</View>
+        active ? <View style={[s.stickerRow, { top: spotTop }]} pointerEvents="none">{qrChip}</View> : null
       ) : (
         <>
-          <SpotSticker t={t} {...FOCUS[0]} style={{ left: card1.x + 4, top: card1.y + ch + 6 }}>
+          <SpotSticker t={t} gate={gate} {...FOCUS[0]} style={[s.stickerRow, { top: spotTop }]}>
             <Chip tone="carbon" text={slide.stickers.booked} icon={<MaterialCommunityIcons name="calendar-check" size={15} color={SHADES.amber} />} />
           </SpotSticker>
-          <SpotSticker t={t} {...FOCUS[1]} style={[s.stickerRow, { top: Math.max(0, card2.y - 46) }]}>
+          <SpotSticker t={t} gate={gate} {...FOCUS[1]} style={[s.stickerRow, { top: spotTop }]}>
             {qrChip}
           </SpotSticker>
-          <SpotSticker t={t} {...FOCUS[2]} style={{ right: w * 0.02 + 4, top: card3.y + ch + 6 }}>
+          <SpotSticker t={t} gate={gate} {...FOCUS[2]} style={[s.stickerRow, { top: spotTop }]}>
             <Chip tone="amber" text={slide.stickers.points} icon={<MaterialCommunityIcons name="star" size={14} color={SHADES.carbon} />} />
           </SpotSticker>
         </>

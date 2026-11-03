@@ -25,6 +25,9 @@ const RM = ReduceMotion.System;
  * the spotlight only reorders cards between themselves) < travelling hexagon 12 <
  * stickers / sparkles 20. Stickers are ALWAYS above every card.
  */
+/** Stickers wait this long after a slide becomes active: the cards' slide-in is over. */
+export const ENTRY_MS = 950;
+
 export const LAYER = {
   card: { zIndex: 1, elevation: 3 },
   cardFront: { zIndex: 5, elevation: 8 },
@@ -259,18 +262,17 @@ export function Sticker({ active, delay, hold = 3000, wait = 1400, style, childr
   active: boolean; delay: number; hold?: number; wait?: number; style?: StyleProp<ViewStyle>; children: React.ReactNode;
 }) {
   const { running, reduce } = useRunning(active);
-  const sc = useSharedValue(reduce ? 1 : 0);
+  const sc = useSharedValue(0);
   const bob = useSharedValue(0);
   useEffect(() => {
-    if (reduce) { cancelAnimation(sc); cancelAnimation(bob); sc.value = 1; bob.value = 0; return; }
-    if (!running) {
-      cancelAnimation(sc); cancelAnimation(bob);
-      if (!active) sc.value = 0;      // replays when the slide comes back
-      bob.value = 0;
-      return;
-    }
+    cancelAnimation(sc); cancelAnimation(bob);
+    bob.value = 0;
+    // Reduce motion: static — but only on the active slide.
+    if (reduce) { sc.value = active ? 1 : 0; return; }
+    if (!running) { if (!active) sc.value = 0; return; } // app in background: keep as is
+    // Hidden on arrival; first pop only once the cards have finished sliding in.
     sc.value = 0;
-    sc.value = withDelay(delay, withRepeat(withSequence(
+    sc.value = withDelay(ENTRY_MS + delay, withRepeat(withSequence(
       withTiming(1.1, { duration: 220, easing: Easing.out(Easing.cubic), reduceMotion: RM }),
       withSpring(1, { ...MOTION.spring.press, reduceMotion: RM }),
       withDelay(hold, withTiming(0, { duration: 200, easing: Easing.in(Easing.cubic), reduceMotion: RM })),
@@ -289,17 +291,30 @@ export function Sticker({ active, delay, hold = 3000, wait = 1400, style, childr
  * Sticker tied to a spotlight step: pops in (0 → 1.1 → 1) while its card is focused and
  * pops out after — focus = interpolate(t, inputs, outputs), on the UI thread.
  */
-export function SpotSticker({ t, inputs, outputs, style, children }: {
-  t: SharedValue<number>; inputs: number[]; outputs: number[]; style?: StyleProp<ViewStyle>; children: React.ReactNode;
+export function SpotSticker({ t, gate, inputs, outputs, style, children }: {
+  t: SharedValue<number>; gate: SharedValue<number>; inputs: number[]; outputs: number[]; style?: StyleProp<ViewStyle>; children: React.ReactNode;
 }) {
   const anim = useAnimatedStyle(() => {
-    const f = interpolate(t.value, inputs, outputs, Extrapolation.CLAMP);
+    const f = interpolate(t.value, inputs, outputs, Extrapolation.CLAMP) * gate.value;
     return {
       opacity: f > 0.02 ? 1 : 0,
       transform: [{ scale: interpolate(f, [0, 0.7, 1], [0, 1.1, 1], Extrapolation.CLAMP) }],
     };
   });
   return <Animated.View style={[{ position: 'absolute' }, LAYER.sticker, style, anim]} pointerEvents="none">{children}</Animated.View>;
+}
+
+/** 0 on arrival, → 1 once the cards have finished sliding in (ENTRY_MS); 0 when inactive. */
+export function useEntryGate(active: boolean): SharedValue<number> {
+  const { running } = useRunning(active);
+  const gate = useSharedValue(0);
+  useEffect(() => {
+    cancelAnimation(gate);
+    if (!running) { if (!active) gate.value = 0; return; }
+    gate.value = 0;
+    gate.value = withDelay(ENTRY_MS, withTiming(1, { duration: 1, reduceMotion: RM }));
+  }, [running, active, gate]);
+  return gate;
 }
 
 /** Soft heartbeat every few seconds. */
@@ -325,14 +340,14 @@ export function Sparkle({ active, delay, size = 16, style }: { active: boolean; 
   const { running, reduce } = useRunning(active);
   const t = useSharedValue(reduce ? 1 : 0);
   useEffect(() => {
-    if (reduce) { t.value = 1; return; }
+    if (reduce) { t.value = active ? 1 : 0; return; }
     if (!running) { cancelAnimation(t); t.value = 0; return; }
-    t.value = withDelay(delay, withRepeat(withSequence(
+    t.value = withDelay(ENTRY_MS + delay, withRepeat(withSequence(
       withTiming(1, { duration: 520, easing: Easing.out(Easing.quad), reduceMotion: RM }),
       withTiming(0, { duration: 620, easing: Easing.in(Easing.quad), reduceMotion: RM }),
       withDelay(900 + (delay % 700), withTiming(0, { duration: 1, reduceMotion: RM })),
     ), -1, false));
-  }, [running, reduce, delay, t]);
+  }, [running, reduce, active, delay, t]);
   const anim = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ scale: 0.4 + 0.6 * t.value }, { rotate: `${t.value * 25}deg` }] }));
   return (
     <Animated.View style={[{ position: 'absolute' }, LAYER.sticker, style, anim]} pointerEvents="none">
