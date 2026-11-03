@@ -46,11 +46,6 @@ export function convertLakTo(
 // email) — re-exported here so app imports stay unchanged.
 export { splitHtVat } from '@/functions/src/shared/receiptData';
 
-/** Price format for product cards and price chips: "126,000 LAK" (never the kip sign). */
-export function formatKip(value: number): string {
-  return `${value.toLocaleString('en-US')} LAK`;
-}
-
 /** Price filter range: "0 – 100,000 LAK". */
 export function formatLakRange(min: number, max: number): string {
   return `${min.toLocaleString('en-US')} – ${max.toLocaleString('en-US')} LAK`;

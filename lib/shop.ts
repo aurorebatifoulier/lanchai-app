@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db } from './firebase';
 import { auth } from './auth';
@@ -42,16 +42,6 @@ export const SHOP_FALLBACK: ShopInfo = {
   closeTime:           DEFAULT_CLOSE_TIME,
   lastPickupOffsetMin: DEFAULT_LAST_PICKUP_OFFSET_MIN,
 };
-
-export async function getShopInfo(): Promise<ShopInfo> {
-  try {
-    const snap = await getDoc(doc(db, 'config', 'shop'));
-    if (!snap.exists()) return SHOP_FALLBACK;
-    return { ...SHOP_FALLBACK, ...(snap.data() as Partial<ShopInfo>) };
-  } catch {
-    return SHOP_FALLBACK;
-  }
-}
 
 /** Admin-only (enforced by firestore.rules on config/*). Merges, so untouched fields survive. */
 export async function saveShopInfo(patch: Partial<ShopInfo>): Promise<void> {

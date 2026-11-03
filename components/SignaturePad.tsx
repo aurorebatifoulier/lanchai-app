@@ -100,9 +100,6 @@ export default function SignaturePad({ height = 200, onChange }: {
   );
 }
 
-/** Imperative clear: remount the pad with a new `key`. */
-export const clearKey = (k: number) => k + 1;
-
 const s = StyleSheet.create({
   pad: {
     width: '100%', backgroundColor: SHADES.white, borderRadius: 16,

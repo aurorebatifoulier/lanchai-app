@@ -87,7 +87,7 @@ export async function removeFavorite(userId: string, productId: string): Promise
 }
 
 // ── Product stock condition ──────────────────────────────────────────────────
-// inRepairUnits/lostUnits (see lib/mockData.ts's Product / lib/types.ts's ProductDoc)
+// inRepairUnits/lostUnits (see lib/mockData.ts's Product)
 // are the counts utils/availability.ts's effectiveStock() subtracts from stockLeft —
 // the required source of truth for bookable stock everywhere. Every change to either
 // count goes through here so it's always paired with an append-only audit doc at
@@ -348,7 +348,7 @@ export interface RentalDoc {
   // alone, since any single one can legitimately never apply to a given reservation.
   // This is what the releaseSettledStock Cloud Function (functions/src/index.ts)
   // watches, alongside the 12h HANDOFF_BUFFER_MS since returnAt, before it decrements
-  // the product's pendingSettlementUnits (see lib/types.ts). Never set client-side to
+  // the product's pendingSettlementUnits (see lib/mockData.ts's Product). Never set client-side to
   // anything other than serverTimestamp() — see CLAUDE.md's Timestamp.now() gotcha.
   returnFinalizedAt?: Timestamp;
   depositReturnedBy?: string;         // free-text staff name, set when depositReturned is confirmed
@@ -838,14 +838,6 @@ export async function getReview(productId: string, reservationId: string): Promi
   const snap = await getDoc(doc(db, 'reviews', productId, 'reviews', reservationId));
   if (!snap.exists()) return null;
   return snap.data() as ReviewDoc;
-}
-
-// Returns reviews sorted newest-first. Throws on Firestore error — callers must handle.
-export async function getProductReviews(productId: string): Promise<ReviewDoc[]> {
-  const snap = await getDocs(
-    query(collection(db, 'reviews', productId, 'reviews'), orderBy('createdAt', 'desc')),
-  );
-  return snap.docs.map(d => d.data() as ReviewDoc);
 }
 
 /** Latest reviews of a product, one page at a time (single orderBy — no index). */

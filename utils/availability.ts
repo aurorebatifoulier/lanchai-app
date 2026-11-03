@@ -111,20 +111,6 @@ export function computeMonthAvailability(
   return result;
 }
 
-// Convenience one-shot wrapper (fetch + computeMonthAvailability) for a single month
-// lookup. DateRangeCalendar itself calls fetchOccupancy once and computeMonthAvailability
-// per month-navigation directly, to avoid re-fetching on every prev/next tap — use this
-// wrapper only for a one-off month check that doesn't need that caching.
-export async function getMonthAvailability(
-  productId: string,
-  year: number,
-  month: number,
-  totalStock: number,
-): Promise<Record<string, number>> {
-  const occupancy = await fetchOccupancy(productId);
-  return computeMonthAvailability(occupancy, year, month, totalStock);
-}
-
 // ── Grid cards: one query for the whole catalogue ────────────────────────────
 
 // Every non-terminal occupancy record for ALL products, grouped by productId — ONE

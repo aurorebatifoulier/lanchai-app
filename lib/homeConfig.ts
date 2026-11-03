@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { clearHomeCache } from './homeCache';
@@ -23,17 +22,6 @@ export async function getHomeConfig(): Promise<HomeConfig> {
   } catch {
     return sanitize(undefined);
   }
-}
-
-/** Read on mount and whenever `refreshKey` changes (e.g. on Home focus). */
-export function useHomeConfig(refreshKey?: unknown): HomeConfig {
-  const [cfg, setCfg] = useState<HomeConfig>(sanitize(undefined));
-  useEffect(() => {
-    let alive = true;
-    getHomeConfig().then(c => { if (alive) setCfg(c); });
-    return () => { alive = false; };
-  }, [refreshKey]);
-  return cfg;
 }
 
 /** Admin-only (config/* write rule). Merges. */

@@ -133,8 +133,6 @@ export function QuantityRow({ quantity, available, onChange }: { quantity: numbe
 
 // ── Your total ───────────────────────────────────────────────────────────────
 
-export interface CouponOption { id: string; label: string; savings: number }
-
 export function TotalCard({
   lines, discountRows, promoField, vat, toPay, deposit, depositDetail, pointsSubtotals,
 }: {

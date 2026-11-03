@@ -471,12 +471,11 @@ a snapshot indefinitely).
 - **Product stock condition — no per-unit identity, counts only.** Products have no
   concept of individual tracked units anywhere in this codebase — a "5 chairs"
   product is one Firestore document with `stockLeft: 5`, a plain integer. So
-  `inRepairUnits`/`lostUnits` (`lib/mockData.ts`'s `Product`, `lib/types.ts`'s
-  `ProductDoc`) are aggregate counts, not references to specific units — there is
+  `inRepairUnits`/`lostUnits` (`lib/mockData.ts`'s `Product`) are aggregate counts, not references to specific units — there is
   deliberately **no** single `status: 'available'|'in_repair'|'lost'|'removed'` enum
   on products (that shape was considered and rejected: it would take an entire
   multi-unit product off the market for one broken unit, and would also collide with
-  the pre-existing `ProductDoc.status: 'draft'|'published'|'archived'` listing-
+  the pre-existing `Product.status: 'draft'|'published'|'archived'` listing-
   lifecycle field). "Removed from catalogue" maps onto that existing `archived`
   value instead of a new one.
   - **`effectiveStock()`** (`utils/availability.ts`) is the required source of truth
@@ -612,7 +611,7 @@ a snapshot indefinitely).
   `vatDisplayPercent()` (`functions/src/shared/receiptData.ts`) — `useVatPercent()` /
   `getVatPercent()` (app, `lib/exchangeRate.ts`) and `getVatPercent()` (emails,
   `functions/src/email/context.ts`) both go through it and return **null = show no VAT
-  anywhere** (booking summary/checkout/confirmation, `BillingSummary`, `PriceLak`,
+  anywhere** (booking summary/checkout/confirmation, `PriceLak`,
   product "Prices include VAT", receipt screen/PDF/email via `buildReceiptSummary`,
   confirmation email, BtoB "VAT-ready" wording). Every VAT line must be gated on that
   null. When ON, everything below applies.
@@ -785,7 +784,6 @@ a snapshot indefinitely).
   Promo "Residents pay a X% lower deposit": X = `residentDepositSavingPercent()`
   (`shared/residency.ts`, tourist − resident from config/loyalty); `useResidentPromo()`
   hides it for residents, business/BtoB, pending requests, or no difference.
-  `<ResidentPromoHint>` under the deposit in booking summary + bag checkout,
   `<ResidentPromoCard>` on Account (dismissal per user in AsyncStorage — no Firestore
   field). Welcome email `welcomeEmail` via the `sendWelcomeEmail` callable: the app calls
   it when it sees the email verified (`(tabs)/_layout.tsx`, once per device), the server
@@ -865,8 +863,8 @@ a snapshot indefinitely).
   claim, notifications inbox (stored `iconColor` mapped to palette circles: amber/coral →
   amber, green/blue/carbon → grey), Liked, admin Inbox tab. Shared rating chips (good /
   fair / damaged) and overdue chips unchanged. Batch 5 — booking flow (`booking/new`, `summary`,
-  `confirmation`, Bag, bag checkout, `DateRangePicker` / `DateRangeCalendar` colours only,
-  `BillingSummary`): palette cards, neutral duration info, one-line errors,
+  `confirmation`, Bag, bag checkout, `DateRangePicker` / `DateRangeCalendar` colours
+  only): palette cards, neutral duration info, one-line errors,
   `BookingHoldNotice` = white card + amber pause icon + WhatsApp row. `WhatsAppButton` has
   no green anywhere (button variant = white, carbon outline; row variant on the booking
   confirmation, hold notice, overdue rental). Small stock dots / chips keep green / red.
@@ -1039,7 +1037,7 @@ a snapshot indefinitely).
   → loyalty nudge; no data → skipped. `<AskCard>` at the end and in empty states → the
   request flow.
   - **Cards:** `ProductGridCard` = Home/My Account style, price "126,000 LAK / day"
-    (`formatKip` now prints "… LAK" — never "₭"), ONE signal line from
+    (prices always "… LAK" — never "₭"), ONE signal line from
     `lib/productSignal.ts` — NEVER availability on a card (no Unavailable / Back on /
     Fully booked: that's the product page AvailabilityCard + the quick-add sheet; the "+"
     colour is the only hint on cards). Positive signals first: only 1 left this weekend

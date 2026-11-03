@@ -14,7 +14,6 @@
 // surface it, or a "0"/"free" amount, in any renter-facing text.
 
 export const DEFAULT_LATE_GRACE_HOURS = 2;
-export const NON_RETURN_AFTER_HOURS = 72;
 export const PENALTY_ROUNDING_LAK = 1000;
 
 export const LATE_TIERS: ReadonlyArray<{ maxHours: number; days: number }> = [

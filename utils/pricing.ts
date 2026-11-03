@@ -1,14 +1,5 @@
 import { billableDaysFromMs } from '@/functions/src/shared/pricing';
 import { vteReservationLabel } from '@/functions/src/shared/dates';
-export function calculateTotalPrice(
-  pricePerDay: number,
-  startDate: Date,
-  endDate: Date,
-  quantity: number
-): number {
-  const days = calculateDays(startDate, endDate);
-  return pricePerDay * days * quantity;
-}
 
 export function calculateDays(startDate: Date, endDate: Date): number {
   const msPerDay = 1000 * 60 * 60 * 24;

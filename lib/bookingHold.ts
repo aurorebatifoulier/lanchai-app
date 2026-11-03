@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -19,11 +19,6 @@ export class BookingHoldError extends Error {
     super('New bookings are paused for this account.');
     this.name = 'BookingHoldError';
   }
-}
-
-export async function getBookingHold(uid: string): Promise<BookingHold | null> {
-  const snap = await getDoc(doc(db, 'bookingHolds', uid));
-  return snap.exists() ? (snap.data() as BookingHold) : null;
 }
 
 /** Live hold for the signed-in renter. Always null for admins (they're never blocked). */
