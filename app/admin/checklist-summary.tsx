@@ -32,6 +32,7 @@ import { AgreementSection, initialAgreementState, type AgreementState } from '@/
 import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
 import { PaymentMethodChips } from '@/components/admin/PaymentMethodChips';
 import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
+import { plural } from '@/lib/navigation';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -355,8 +356,8 @@ export default function ChecklistSummaryScreen() {
           <Feather name="check-circle" size={48} color={COLORS.success} />
           <Text style={styles.stateTitle}>
             {type === 'handover'
-              ? `${reservations.length} items validated — pickup confirmed`
-              : `${reservations.length} items validated — return confirmed`}
+              ? `${plural(reservations.length, 'item')} validated — pickup confirmed`
+              : `${plural(reservations.length, 'item')} validated — return confirmed`}
           </Text>
           <TouchableOpacity
             style={[styles.submitBtn, { paddingHorizontal: 28, alignSelf: 'center' }]}

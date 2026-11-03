@@ -29,6 +29,7 @@ import {
   compareByDateField,
 } from '@/lib/dateFilterConfig';
 import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
+import { plural } from '@/lib/navigation';
 
 const DATE_FIELD_OPTIONS: DateFieldOption[] = [
   { id: 'pickupAt',   label: 'Pickup date' },
@@ -362,7 +363,7 @@ export default function AdminReservationsScreen() {
                     >
                       <View style={s.rowMain}>
                         <Text style={s.rowName} numberOfLines={1}>
-                          Order · {entry.rows.length} items
+                          Order · {plural(entry.rows.length, 'item')}
                         </Text>
                         <Text style={s.rowPickup} numberOfLines={1}>
                           Renter: {entry.renterName}
@@ -404,7 +405,7 @@ export default function AdminReservationsScreen() {
                       confirmingOrderId === entry.orderId ? (
                         <View style={s.bulkConfirmRow}>
                           <Text style={s.bulkConfirmText}>
-                            Confirm payment for all {entry.rows.length} items?
+                            Confirm payment for all {plural(entry.rows.length, 'item')}?
                           </Text>
                           <View style={s.bulkConfirmBtnRow}>
                             <TouchableOpacity

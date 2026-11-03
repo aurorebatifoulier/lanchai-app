@@ -26,6 +26,7 @@ import {
 } from '@/lib/firestore';
 import { STATUS_CONFIG } from '@/app/admin/reservations';
 import { StatusBar } from 'expo-status-bar';
+import { plural } from '@/lib/navigation';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -249,7 +250,7 @@ export default function AdminScanScreen() {
           <View style={s.resultCard}>
             <View style={s.resultHeader}>
               <View style={s.resultHeaderLeft}>
-                <Text style={s.resultTitle}>Order · {orderItems.length} items</Text>
+                <Text style={s.resultTitle}>Order · {plural(orderItems.length, 'item')}</Text>
                 {orderItems[0]?.renterName ? (
                   <Text style={s.resultRenter}>{orderItems[0].renterName}</Text>
                 ) : null}

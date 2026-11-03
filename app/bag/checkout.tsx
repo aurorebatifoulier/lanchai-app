@@ -37,6 +37,7 @@ import { getProductAccessState } from '@/utils/productAccess';
 import { needsBtobDocument } from '@/utils/btob';
 import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
+import { plural } from '@/lib/navigation';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -238,7 +239,7 @@ export default function BagSummaryScreen() {
         title:     'Reservation request sent',
         body:      items.length === 1
           ? `Your booking for ${items[0].productName} is pending confirmation.`
-          : `${items.length} items reserved. We'll confirm your order shortly.`,
+          : `${plural(items.length, 'item')} reserved. We'll confirm your order shortly.`,
         deepLink: '/(tabs)/reservations',
       });
 

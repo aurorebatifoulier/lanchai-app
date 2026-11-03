@@ -3,13 +3,12 @@ import { Filters, SortOption, PRICE_CONFIG } from '@/lib/filterConfig';
 import { toLak } from './currency';
 
 export interface ProductFilterContext {
-  // 'all' or omitted = no category restriction (the caller may have already
-  // scoped the list server-side, e.g. app/category/[id].tsx's getProductsByCategory).
+  // 'all' or omitted = no category restriction.
   category?: string;
   searchQuery?: string;
   exchangeRate?: number | null;
   // For matching a search query against a category's display name, not just the
-  // product name. Omit when the caller has no search UI (e.g. the category screen).
+  // product name. Omit when the caller has no search UI.
   categories?: readonly { id: string; name: string }[];
 }
 
@@ -71,14 +70,3 @@ export function sortProducts(products: Product[], sort: SortOption): Product[] {
   return list;
 }
 
-// "Best rated" has no equivalent in the shared SortOption enum — Explore's own
-// FilterSheet doesn't expose a rating-based sort option, and adding one to
-// SortOption/SORT_LABELS would make it appear as a new, unrequested chip there (since
-// FilterSheet renders one chip per SORT_LABELS entry). Kept as its own small helper
-// instead, used only by screens (like the category screen) that need it directly —
-// zero behavior change to Explore.
-export function sortProductsByRating(products: Product[]): Product[] {
-  const list = [...products];
-  list.sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0));
-  return list;
-}

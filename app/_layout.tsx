@@ -170,7 +170,8 @@ function RootLayoutNav() {
       <Stack.Screen name="btob-pending" options={{ animation: 'fade' }} />
       <Stack.Screen name="btob-rejected" options={{ animation: 'fade' }} />
       <Stack.Screen name="product/[id]" options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="category/[id]" options={{ animation: 'slide_from_right' }} />
+      {/* Redirect only → Explore with the category (old links). */}
+      <Stack.Screen name="category/[id]" options={{ animation: 'none' }} />
       <Stack.Screen name="collection/[id]" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="reviews/[productId]" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="booking/new" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />

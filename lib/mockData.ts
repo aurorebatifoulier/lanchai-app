@@ -80,11 +80,3 @@ export const CATEGORIES = [
   { id: 'home',    name: 'Home',    icon: 'home',      iconSet: 'Feather' as const },
 ];
 
-export const CATEGORY_DETAILS: Record<string, { label: string; description: string }> = {
-  'fun':     { label: 'Fun',     description: 'Books (kids & novels) and board games' },
-  'tools':   { label: 'Tools',   description: 'DIY, hardware & garden equipment' },
-  'outdoor': { label: 'Outdoor', description: 'Camping, hiking, tents & outdoor gear' },
-  'sports':  { label: 'Sports',  description: 'Archery, pétanque, golf & sports equipment' },
-  'kids':    { label: 'Kids',    description: 'Strollers, baby beds, playards & kids gear' },
-  'home':    { label: 'Home',    description: 'Kitchen, appliances, cleaning & bedding' },
-};

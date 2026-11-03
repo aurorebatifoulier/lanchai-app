@@ -23,7 +23,7 @@ import { db, functions } from './firebase';
 import { auth } from './auth';
 import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
-import { Product, ProductCategory } from './mockData';
+import { Product } from './mockData';
 import { isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
 import { returnStockMoves, type ReturnStockInput } from '@/functions/src/shared/returnStock';
 import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
@@ -38,15 +38,6 @@ export function isRenterVisible(p: { status?: string }): boolean {
 // Renter-facing product list (Home, Explore/search, Liked, account counts).
 export async function getProducts(): Promise<Product[]> {
   const snap = await getDocs(collection(db, 'products'));
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() } as Product))
-    .filter(isRenterVisible);
-}
-
-// Throws on Firestore error — callers must handle.
-export async function getProductsByCategory(category: ProductCategory): Promise<Product[]> {
-  const q = query(collection(db, 'products'), where('category', '==', category));
-  const snap = await getDocs(q);
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() } as Product))
     .filter(isRenterVisible);

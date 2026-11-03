@@ -467,7 +467,7 @@ a snapshot indefinitely).
     for bookable stock everywhere — `Math.max(0, stockLeft - inRepairUnits - lostUnits
     - pendingSettlementUnits)`. Never read `product.stockLeft` directly for an
     availability check or "X available" copy; every renter-facing call site
-    (`app/bag.tsx`, `app/booking/new.tsx`, `app/category/[id].tsx`,
+    (`app/bag.tsx`, `app/booking/new.tsx`, Explore,
     `<DateRangeCalendar>`/`<DateRangePicker>`'s `totalStock` prop) already goes
     through it. See "Return closeout" below for `pendingSettlementUnits`.
   - Every change to `inRepairUnits`/`lostUnits` goes through
@@ -813,7 +813,7 @@ a snapshot indefinitely).
   retailPrice (USD→LAK) once per product, "+" if some have none, hidden if none; no
   picked-up rental → "Your first rental is waiting." card. `AccountStickers.tsx`: one per
   category with a returned rental (catalogue order) + one locked next category; hidden
-  with no returned rental. Tap: locked → `/category/{id}`; unlocked → bottom sheet
+  with no returned rental. Tap: locked → Explore with that category (`openCategory`); unlocked → bottom sheet
   (sticker, name, "Unlocked with {product}, {date}" = first returned rental of that
   category, `stickerUnlocks` from `computeAccountStats`, amber "Browse {category}"). `<LoyaltyCard>` is the LIGHT card everywhere (My Account +
   Loyalty screen). `<ResidentPromoCard>` restyled (white, light amber home circle).
@@ -853,8 +853,7 @@ a snapshot indefinitely).
   `BookingHoldNotice` = white card + amber pause icon + WhatsApp row. `WhatsAppButton` has
   no green anywhere (button variant = white, carbon outline; row variant on the booking
   confirmation, hold notice, overdue rental). Small stock dots / chips keep green / red.
-  Main app screens (category) are
-  NOT on this design yet (Explore, product and the Reservations tab are) — Home is (see "Home" below).
+  Every main app screen is on this design (the category page is gone — see "Categories") — Home is (see "Home" below).
   Scrolling: the header scrolls inside an `Animated.ScrollView`; a fixed white
   status-bar background (insets.top) sits above it, and `AccountCompactBar` (32px avatar,
   first name, tier chip) fades/slides in below the safe area once the header is scrolled
@@ -939,7 +938,7 @@ a snapshot indefinitely).
     fun = speaker, sports = bike — + palette shades). Every category has a UNIQUE combination:
     Fun mid-amber/carbon · Tools carbon/amber · Outdoor light-amber/dark-amber · Sports
     dark-amber/light-amber · Kids carbon-soft/soft-amber · Home grey/carbon — all filled
-    circles, no rings (`dark` flag → light text on the category page header; the only ring
+    circles, no rings (`dark` flag kept for dark backgrounds; the only ring
     is Explore's selection state: amber + 2px carbon ring) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
   - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
@@ -1043,6 +1042,22 @@ a snapshot indefinitely).
     scrolls from anywhere, the handle closes on tap / drag down, "Add to bag" sits in a
     fixed footer above the system bar. `addToBag(uid, product, { pickupAt, returnAt },
     quantity)` (dates optional, quantity default 1). Checkout still runs every check.
+
+- **Categories = Explore (2026-11-03).** There is no category page: every entry point
+  (Home bubbles, product category chip, My Account stickers, Home slides, search
+  suggestions, deep links) calls `openCategory(router, id)` (`lib/navigation.ts`) → the
+  Explore tab with `?category={id}&t={token}`; Explore re-applies it on focus whenever the
+  token changes (category selected, search / quick chips / period / filter sheet cleared,
+  list back to the top). Tabs use `backBehavior="history"` (Android back → the previous
+  tab, e.g. Home). A selected category replaces the rotating line by its own line +
+  "· n items" (`EXPLORE_COPY.categoryLines`); an EMPTY category shows its title
+  (`categoryEmptyTitles`), "We're adding {category} gear soon…", carbon "Notify me when
+  items arrive" → `categoryWatches/{uid}_{category}` (`lib/categoryWatch.ts`, real accounts
+  only) and "Ask for an item". `onCategoryArrival` (`functions/src/watches.ts`, products
+  trigger) notifies watchers when a product BECOMES renter-visible in that category —
+  in-app (→ `/explore?category=`) + `categoryArrivalEmail` (respects reminders) — then
+  deletes the watch. `app/category/[id].tsx` is only a `<Redirect>` for old links
+  (`openAppRoute` maps legacy `/category/x` routes too). Counts use `plural()`.
 
 - **Product detail (validated mockup, 2026-10-27).** `app/product/[id].tsx` assembles
   `components/product/*` — copy in `constants/productCopy.ts`. Gallery on carbonLight
