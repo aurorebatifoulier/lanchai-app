@@ -20,6 +20,18 @@ import { MOTION, useReducedMotion } from '@/constants/motion';
 
 const RM = ReduceMotion.System;
 
+/**
+ * Drawing order (Android needs elevation, not just zIndex): cards 3 (focused card 8 —
+ * the spotlight only reorders cards between themselves) < travelling hexagon 12 <
+ * stickers / sparkles 20. Stickers are ALWAYS above every card.
+ */
+export const LAYER = {
+  card: { zIndex: 1, elevation: 3 },
+  cardFront: { zIndex: 5, elevation: 8 },
+  hex: { zIndex: 10, elevation: 12 },
+  sticker: { zIndex: 20, elevation: 20 },
+} as const;
+
 /** True while the app is in the foreground. */
 export function useAppActive(): boolean {
   const [on, setOn] = useState(AppState.currentState === 'active');
@@ -212,8 +224,8 @@ export function PhotoCard({
     return {
       // Always visible (the next slide shows while swiping); only the slide-in moves.
       opacity: interpolate(e, [0, 1], [0.6, 1], Extrapolation.CLAMP) * dim,
-      zIndex: front ? 10 : 1,
-      elevation: front ? 8 : 3,
+      zIndex: front ? LAYER.cardFront.zIndex : LAYER.card.zIndex,
+      elevation: front ? LAYER.cardFront.elevation : LAYER.card.elevation,
       transform: [
         { translateX: (1 - e) * dir * 70 + parallax },
         { translateY: y.value + lifted },
@@ -270,7 +282,7 @@ export function Sticker({ active, delay, hold = 3000, wait = 1400, style, childr
     opacity: sc.value > 0.02 ? 1 : 0,
     transform: [{ translateY: bob.value }, { scale: sc.value }],
   }));
-  return <Animated.View style={[{ position: 'absolute' }, style, anim]}>{children}</Animated.View>;
+  return <Animated.View style={[{ position: 'absolute' }, LAYER.sticker, style, anim]}>{children}</Animated.View>;
 }
 
 /**
@@ -287,7 +299,7 @@ export function SpotSticker({ t, inputs, outputs, style, children }: {
       transform: [{ scale: interpolate(f, [0, 0.7, 1], [0, 1.1, 1], Extrapolation.CLAMP) }],
     };
   });
-  return <Animated.View style={[{ position: 'absolute', zIndex: 20 }, style, anim]} pointerEvents="none">{children}</Animated.View>;
+  return <Animated.View style={[{ position: 'absolute' }, LAYER.sticker, style, anim]} pointerEvents="none">{children}</Animated.View>;
 }
 
 /** Soft heartbeat every few seconds. */
@@ -323,7 +335,7 @@ export function Sparkle({ active, delay, size = 16, style }: { active: boolean; 
   }, [running, reduce, delay, t]);
   const anim = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ scale: 0.4 + 0.6 * t.value }, { rotate: `${t.value * 25}deg` }] }));
   return (
-    <Animated.View style={[{ position: 'absolute' }, style, anim]} pointerEvents="none">
+    <Animated.View style={[{ position: 'absolute' }, LAYER.sticker, style, anim]} pointerEvents="none">
       <MaterialCommunityIcons name="star-four-points" size={size} color={SHADES.amber} />
     </Animated.View>
   );

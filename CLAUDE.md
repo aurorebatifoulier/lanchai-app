@@ -1359,7 +1359,9 @@ a snapshot indefinitely).
     title up from FIXED reserves (`TEXT_RESERVE` / `BAR_RESERVE` — never a measurement, so
     the title is at the same place on every slide and never jumps) and shrink the visual
     area first. Worklets: no nested functions (Reanimated turns them into objects — inline
-    the maths); easings only inside `withTiming`. Slide 2 = step-by-step story: strong zigzag (Book −7° top-left, Pick up +2° with
+    the maths); easings only inside `withTiming`. Drawing order = `LAYER` (`Parts.tsx`): cards
+    (elevation 3, focused 8) < hexagon 12 < stickers / sparkles 20 — Android orders by
+    elevation, so stickers always carry it; the spotlight only reorders cards. Slide 2 = step-by-step story: strong zigzag (Book −7° top-left, Pick up +2° with
     its top at 38% of the visual area, Bring back +7° top-right, ~31% width, numbered
     circles), spotlight loop 6 s (`FOCUS` keyframes on one shared `t`: the hexagon stops on
     each card in turn; focused card 1.07 + in front, others 0.96 at 55%; `PhotoCard spot`,

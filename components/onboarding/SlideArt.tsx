@@ -10,7 +10,7 @@ import { ONBOARDING_COPY as c } from '@/constants/onboardingCopy';
 import CountUpText from '@/components/CountUpText';
 import type { OnboardingSlide } from '@/lib/onboardingContent';
 import {
-  PhotoCard, Sticker, SpotSticker, Chip, Heartbeat, Sparkle, hexPoints, chipTextStyle, useRunning,
+  PhotoCard, Sticker, SpotSticker, Chip, Heartbeat, Sparkle, hexPoints, chipTextStyle, useRunning, LAYER,
 } from '@/components/onboarding/Parts';
 
 // The animated middle of each onboarding slide, laid out on the visual area (w × h, ~16%
@@ -220,8 +220,8 @@ const s = StyleSheet.create({
     width: 46, height: 46, borderRadius: 23, backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
     shadowColor: SHADES.carbon, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
-  hex: { position: 'absolute', left: 0, top: 0, zIndex: 15 },
-  stickerRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 20 },
+  hex: { position: 'absolute', left: 0, top: 0, ...LAYER.hex },
+  stickerRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', ...LAYER.sticker },
   // Softer shadow on the step cards.
   soft: { shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
 });
