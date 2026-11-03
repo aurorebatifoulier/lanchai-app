@@ -12,6 +12,7 @@ import type { ProductSignal } from '@/lib/productSignal';
 import type { Product } from '@/lib/mockData';
 import type { ReviewDoc } from '@/lib/firestore';
 import Stars from '@/components/Stars';
+import { openCategory } from '@/lib/navigation';
 
 // Product page sections (validated mockup) — My Account / Home language. Copy in
 // constants/productCopy.ts. The page (app/product/[id].tsx) computes the figures.
@@ -34,7 +35,7 @@ export function ProductIntro({ product, categoryName, badges, signal }: {
   return (
     <View>
       <View style={s.chipRow}>
-        <PressScale style={s.catChip} onPress={() => router.push(`/category/${product.category}`)}>
+        <PressScale style={s.catChip} onPress={() => openCategory(router, product.category)}>
           <CategoryBadge cat={product.category} size={24} />
           <Text style={s.catText}>{categoryName}</Text>
           <Feather name="chevron-right" size={14} color={SHADES.carbonMuted} />

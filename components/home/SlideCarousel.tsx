@@ -7,6 +7,7 @@ import { HOME_COPY } from '@/constants/homeCopy';
 import InsetCarousel from '@/components/home/InsetCarousel';
 import { slideTarget, type HomeSlide } from '@/lib/homeSlides';
 import PressScale from '@/components/PressScale';
+import { openCategory } from '@/lib/navigation';
 
 // Admin-managed Home slides (hero carousel / mid-page banner): photo full-bleed in the
 // rounded 16px-margin card, a subtle dark overlay ONLY when there's text, amber button
@@ -27,7 +28,10 @@ export default function SlideCarousel({
       intervalMs={intervalMs}
       slides={slides.map(slide => {
         const target = slideTarget(slide.link);
-        const go = () => { if (target) router.push(target as never); };
+        const go = () => {
+          if (slide.link.kind === 'category') openCategory(router, slide.link.id); // → Explore with that category
+          else if (target) router.push(target as never);
+        };
         const hasText = !!(slide.title || slide.subtitle);
         return (
           <Pressable key={slide.id} style={s.slide} onPress={go} disabled={!target}>

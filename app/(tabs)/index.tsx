@@ -67,6 +67,7 @@ import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
 import { AccountBanners } from '@/components/auth/AccountBanners';
+import { openCategory, openAppRoute } from '@/lib/navigation';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -332,7 +333,7 @@ export default function HomeScreen() {
   );
 
   const categoryItem = (cat: (typeof HOME_CATEGORIES)[number]) => (
-    <TouchableOpacity key={cat.id} style={[styles.catItem, { width: catItemW }]} onPress={() => router.push(`/category/${cat.id}`)} activeOpacity={0.75}>
+    <TouchableOpacity key={cat.id} style={[styles.catItem, { width: catItemW }]} onPress={() => openCategory(router, cat.id)} activeOpacity={0.75}>
       <CategoryBadge cat={cat.id} size={catCircle} />
       <Text style={styles.catLabel} numberOfLines={1}>{cat.name}</Text>
     </TouchableOpacity>
@@ -594,7 +595,7 @@ function HeroCarousel() {
           <View style={styles.slideContent}>
             <Text style={styles.slideTitle}>{slide.title}</Text>
             <Text style={styles.slideSub}>{slide.subtitle}</Text>
-            <PressScale style={styles.slideCta} onPress={() => router.push(slide.route as never)} activeOpacity={0.85}>
+            <PressScale style={styles.slideCta} onPress={() => openAppRoute(router, slide.route)} activeOpacity={0.85}>
               <Text style={styles.slideCtaText}>{slide.cta}</Text>
             </PressScale>
           </View>

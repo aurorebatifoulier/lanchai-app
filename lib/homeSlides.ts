@@ -84,7 +84,7 @@ export async function getPublishedSlides(): Promise<HomeSlide[]> {
 /** Where a slide's button / tap goes (expo-router push target), or null. */
 export function slideTarget(link: SlideLink): string | { pathname: string; params: Record<string, string> } | null {
   switch (link.kind) {
-    case 'category': return `/category/${link.id}`;
+    case 'category': return { pathname: '/explore', params: { category: link.id } };
     case 'collection': return `/collection/${link.id}`;
     case 'product': return `/product/${link.id}`;
     case 'explore': {

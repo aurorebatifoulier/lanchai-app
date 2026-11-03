@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Animated,
+  type FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -43,6 +44,7 @@ import {
 } from '@/utils/availability';
 import { EXPLORE_COPY } from '@/constants/exploreCopy';
 import RotatingLine from '@/components/explore/RotatingLine';
+import { plural } from '@/lib/navigation';
 import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
 import { MOTION, useReducedMotion } from '@/constants/motion';
 import { weekendWindow, whyBuyCatalogueRanked } from '@/lib/homeData';
@@ -109,7 +111,11 @@ export default function ExploreScreen() {
   // maxPrice (LAK / day, optional): starts with the price filter set — Home "Under X LAK a day".
   // from / to (ms, optional): a period from the bag's "Add more items" — only products
   // free for that whole window (removable "Free …" chip); "+" pre-fills it.
-  const { q: initialQuery, maxPrice, from, to } = useLocalSearchParams<{ q?: string; maxPrice?: string; from?: string; to?: string }>();
+  // category + t (lib/navigation openCategory): every category entry point of the app lands
+  // here with that category preselected — re-applied whenever `t` changes (Explore is a tab,
+  // already mounted).
+  const { q: initialQuery, maxPrice, from, to, category: categoryParam, t: categoryToken } =
+    useLocalSearchParams<{ q?: string; maxPrice?: string; from?: string; to?: string; category?: string; t?: string }>();
 
   // Data
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -147,6 +153,7 @@ export default function ExploreScreen() {
 
   // Sticky search + categories (overlay copy once the inline block reaches the top).
   const scrollY = useRef(new Animated.Value(0)).current;
+  const listRef = useRef<FlatList<Row>>(null);
   const [pinY, setPinY] = useState<number | null>(null);
   const [pinned, setPinned] = useState(false);
   const pinAt = pinY != null ? pinY - STICKY_PAD : Number.MAX_SAFE_INTEGER;
@@ -171,6 +178,23 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (initialQuery) setSearchQuery(initialQuery as string);
   }, [initialQuery]);
+
+  // Category entry point: select it, clear every other filter, back to the top.
+  const appliedToken = useRef<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    const id = categoryParam ? String(categoryParam) : null;
+    const token = `${id}:${categoryToken ?? ''}`;
+    if (!id || appliedToken.current === token) return;
+    appliedToken.current = token;
+    if (!EXPLORE_CATEGORIES.some(c => c.id === id)) return;
+    setActiveCategory(id);
+    setFilters(DEFAULT_FILTERS);
+    setPendingFilters(DEFAULT_FILTERS);
+    setSearchQuery('');
+    setQuick(NO_QUICK);
+    setPeriod(null);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [categoryParam, categoryToken]));
 
   // "See all" from Home "Under X LAK a day": start with the max-price filter (removable chip).
   useEffect(() => {
@@ -478,13 +502,27 @@ export default function ExploreScreen() {
     </>
   );
 
+  // Items in the selected category (catalogue only, whatever the other filters).
+  const categoryCount = useMemo(
+    () => (activeCategory === 'all' ? allProducts.length : allProducts.filter(p => p.category === activeCategory).length),
+    [allProducts, activeCategory],
+  );
+
   const header = (
     <View>
       <View style={styles.headerBand}>
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{EXPLORE_COPY.title}</Text>
-            <RotatingLine lines={EXPLORE_COPY.oneLiners} style={styles.oneLiner} />
+            {activeCategory !== 'all' && EXPLORE_COPY.categoryLines[activeCategory] ? (
+              // The category's own line + how many items it has.
+              <Text style={styles.oneLiner} numberOfLines={2}>
+                {EXPLORE_COPY.categoryLines[activeCategory]}
+                <Text style={styles.categoryCount}>{` · ${plural(categoryCount, 'item')}`}</Text>
+              </Text>
+            ) : (
+              <RotatingLine lines={EXPLORE_COPY.oneLiners} style={styles.oneLiner} />
+            )}
           </View>
         </View>
         <View onLayout={e => setPinY(e.nativeEvent.layout.y)}>{searchAndCategories}</View>
@@ -551,6 +589,7 @@ export default function ExploreScreen() {
           </View>
         ) : (
           <Animated.FlatList
+            ref={listRef}
             style={styles.grid}
             data={loading ? [] : rows}
             renderItem={renderRow}
@@ -575,7 +614,12 @@ export default function ExploreScreen() {
                   {[0, 1, 2, 3].map(i => <View key={i} style={[styles.skeletonCard, { height: cardLayout.card }]} />)}
                 </View>
               ) : search.active && allProducts.length > 0 ? (
-                <SearchEmptyState query={search.query} collections={search.collections} onRequestItem={openRequest} />
+                <SearchEmptyState
+                  query={search.query}
+                  collections={search.collections}
+                  onRequestItem={openRequest}
+                  onCategory={id => { setSearchQuery(''); setActiveCategory(id); listRef.current?.scrollToOffset({ offset: 0, animated: false }); }}
+                />
               ) : (
                 <SmartEmptyState
                   catalogueEmpty={allProducts.length === 0}
@@ -692,7 +736,9 @@ export default function ExploreScreen() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** No search result: suggestions — categories and published "Got plans?" collections. */
-function SearchEmptyState({ query, collections, onRequestItem }: { query: string; collections: CollectionDoc[]; onRequestItem: () => void }) {
+function SearchEmptyState({ query, collections, onRequestItem, onCategory }: {
+  query: string; collections: CollectionDoc[]; onRequestItem: () => void; onCategory: (id: string) => void;
+}) {
   const router = useRouter();
   return (
     <View style={styles.searchEmpty}>
@@ -701,7 +747,7 @@ function SearchEmptyState({ query, collections, onRequestItem }: { query: string
       <Text style={styles.suggestLabel}>{SEARCH_COPY.categoriesLabel}</Text>
       <View style={styles.suggestRow}>
         {CATEGORIES.filter(c => c.id !== 'all').map(c => (
-          <PressScale key={c.id} style={styles.suggestCat} onPress={() => router.push(`/category/${c.id}`)}>
+          <PressScale key={c.id} style={styles.suggestCat} onPress={() => onCategory(c.id)}>
             <CategoryBadge cat={c.id} size={SIZES.categoryCircle} />
             <Text style={styles.suggestCatText} numberOfLines={1}>{c.name}</Text>
           </PressScale>
@@ -780,6 +826,7 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
   oneLiner: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
+  categoryCount: { fontWeight: '700', color: SHADES.carbon },
   quickRow: { gap: 8, paddingVertical: 14 },
   quickChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, height: SIZES.tab, paddingHorizontal: SIZES.chipPadX, borderRadius: 11,

@@ -7,6 +7,7 @@ import { ACCOUNT_COPY } from '@/constants/accountCopy';
 import { CATEGORIES } from '@/lib/mockData';
 import type { StickerUnlock } from '@/lib/accountStats';
 import PressScale from '@/components/PressScale';
+import { openCategory } from '@/lib/navigation';
 
 // "Your stickers" (validated mockup): one round sticker per category with a RETURNED
 // rental, slightly rotated, in its category's shades, then ONE locked sticker
@@ -32,7 +33,7 @@ export function AccountStickers({ stickers, next, unlocks }: { stickers: string[
   const nextName = next ? categoryName(next) : null;
   const openIndex = open ? stickers.indexOf(open) : -1;
   const unlock = open ? unlocks[open] : undefined;
-  const browse = (cat: string) => { setOpen(null); router.push(`/category/${cat}`); };
+  const browse = (cat: string) => { setOpen(null); openCategory(router, cat); };
 
   return (
     <View>
@@ -45,7 +46,7 @@ export function AccountStickers({ stickers, next, unlocks }: { stickers: string[
           </TouchableOpacity>
         ))}
         {next && nextName && (
-          <TouchableOpacity style={s.item} onPress={() => router.push(`/category/${next}`)} activeOpacity={0.75}>
+          <TouchableOpacity style={s.item} onPress={() => openCategory(router, next)} activeOpacity={0.75}>
             <View style={[s.sticker, s.locked]}><Text style={s.q}>?</Text></View>
             <Text style={[s.label, s.lockedLabel]}>{ACCOUNT_COPY.stickerLocked(nextName)}</Text>
           </TouchableOpacity>

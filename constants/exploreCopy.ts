@@ -7,6 +7,30 @@ export const EXPLORE_COPY = {
     'Your closet called. It says thanks.',
   ],
   searchPlaceholder: 'Tent, drill, party…',
+  // A selected category replaces the rotating line: its own line + "· {n} items".
+  categoryLines: {
+    outdoor: 'Sleep under the stars. Not under a mortgage.',
+    tools: 'Fix it. Return it. Keep your weekend.',
+    fun: 'Party tonight. Storage-free tomorrow.',
+    kids: 'They grow fast. Your closet doesn’t have to.',
+    sports: 'Ride, play, return. No garage required.',
+    home: 'Feel at home. Without the boxes.',
+  } as Record<string, string>,
+  // Empty category (no product at all in it).
+  categoryEmptyTitles: {
+    outdoor: 'The tents are still in their bags.',
+    tools: 'The drills are still charging.',
+    fun: 'The speakers are still warming up.',
+    kids: 'The little ones’ gear is on its way.',
+    sports: 'The bikes are still in the shed.',
+    home: 'The cosy stuff is still unpacking.',
+  } as Record<string, string>,
+  categoryEmptySub: (name: string) => `We’re adding ${name} gear soon. Want to be the first to know?`,
+  categoryNotify: 'Notify me when items arrive',
+  categoryNotifying: 'We’ll let you know',
+  categoryNotifyCancel: 'Cancel',
+  categoryNotifyError: 'Couldn’t save — try again.',
+  askItem: 'Ask for an item',
   allCategory: 'All',
 
   chips: {

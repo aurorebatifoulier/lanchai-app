@@ -30,7 +30,7 @@ export const HERO_BUILT_IN: HeroSlide[] = [
     title: 'Planning a weekend\noutdoors?',
     subtitle: 'Rent camping gear instead of buying it.',
     cta: 'Explore camping',
-    route: '/category/outdoor',
+    route: '/category/outdoor', // opened with openAppRoute → Explore + Outdoor
   },
   {
     image: null, // → assets/images/hero-creator.jpg   (camera / content creation setup)
@@ -46,7 +46,7 @@ export const HERO_BUILT_IN: HeroSlide[] = [
     title: 'Working on a\nDIY project?',
     subtitle: 'Rent tools and get the job done.',
     cta: 'Explore tools',
-    route: '/category/tools',
+    route: '/category/tools', // opened with openAppRoute → Explore + Tools
   },
 ];
 

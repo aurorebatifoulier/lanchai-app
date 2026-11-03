@@ -43,6 +43,9 @@ export default function TabLayout() {
           its data for the new account. Screens stacked above (product…) stay as they are. */}
       <Tabs
         key={`${user?.uid ?? 'none'}:${hasAccount ? 'account' : 'guest'}`}
+        // Android back returns to the previously visited tab (e.g. Home after a category
+        // bubble opened Explore), then exits from the first tab as before.
+        backBehavior="history"
         screenOptions={{
           headerShown: false,
           tabBarStyle: [styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }],

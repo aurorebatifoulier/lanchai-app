@@ -121,7 +121,7 @@ export default function AdminBroadcastScreen() {
       return;
     }
     if (deepLink.trim() && !isAppLink(deepLink.trim())) {
-      setSendErr('This link doesn’t open a screen in the app — e.g. /product/abc123, /category/outdoor, /collection/xyz, /explore.');
+      setSendErr('This link doesn’t open a screen in the app — e.g. /product/abc123, /explore?category=outdoor, /collection/xyz, /explore.');
       return;
     }
     setSendErr('');
@@ -233,7 +233,7 @@ export default function AdminBroadcastScreen() {
           style={s.input}
           value={deepLink}
           onChangeText={t => { setDeepLink(t); setSent(false); }}
-          placeholder="e.g. /category/outdoor or /product/abc123"
+          placeholder="e.g. /explore?category=outdoor or /product/abc123"
           placeholderTextColor={COLORS.fg3}
           autoCapitalize="none"
           autoCorrect={false}
