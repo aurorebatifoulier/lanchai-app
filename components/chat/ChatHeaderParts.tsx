@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
+import { COLORS } from '@/constants/Colors';
 import { CHAT_COPY } from '@/constants/chatCopy';
 import { categoryStyle } from '@/constants/categoryStyle';
 import PressScale from '@/components/PressScale';
@@ -65,6 +66,15 @@ export function ReplyLine() {
 
 export const ReadMark = () => <Text style={s.read}>{CHAT_COPY.read}</Text>;
 
+/** Under a renter message not yet confirmed by the server: "Sending…" or "Not sent · Retry". */
+export const PendingMark = ({ failed, onRetry }: { failed: boolean; onRetry: () => void }) => (
+  failed ? (
+    <Text style={[s.read, s.notSent]} onPress={onRetry} suppressHighlighting accessibilityRole="button">
+      {CHAT_COPY.notSent}<Text style={s.retry}>{CHAT_COPY.retry}</Text>
+    </Text>
+  ) : <Text style={s.read}>{CHAT_COPY.sendingMark}</Text>
+);
+
 const s = StyleSheet.create({
   mark: { backgroundColor: SHADES.cream, borderWidth: 0.5, borderColor: SHADES.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   card: {
@@ -82,4 +92,6 @@ const s = StyleSheet.create({
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: SHADES.amber },
   reply: { flex: 1, fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
   read: { fontSize: 11.5, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'right', marginTop: -2, marginBottom: 4 },
+  notSent: { color: COLORS.danger, paddingVertical: 4 },
+  retry: { fontWeight: '700', color: SHADES.amberText },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -13,7 +13,7 @@ import { useShopInfo, buildMapsUrl } from '@/lib/shop';
 import { addBookingToCalendar } from '@/lib/bookingCalendar';
 import { displayOrderId } from '@/utils/rentalDocs';
 import { getReview, type RentalDoc } from '@/lib/firestore';
-import { initConversation, sendMessage } from '@/lib/chat';
+import { initConversation, newClientMessageId, sendMessage } from '@/lib/chat';
 import { auth } from '@/lib/auth';
 import { vteDay, vteTime } from '@/functions/src/shared/dates';
 import {
@@ -229,6 +229,7 @@ export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenO
   const [sent, setSent] = useState(onMyWaySent.has(key));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(false);
+  const onMyWayId = useRef(newClientMessageId());
   const chatAbout = { pathname: '/chat', params: { rentalId: items[0].id } };
 
   const onMyWay = async () => {
@@ -239,9 +240,12 @@ export function ActiveCard({ entry, onOpenOrder }: { entry: RentalEntry; onOpenO
     const name = items.length === 1 ? r.productName : items.map(i => i.productName).join(', ');
     try {
       await initConversation(user.uid, user.displayName || user.email || 'Renter').catch(() => {});
+      // Same client id on every retry of this card → never sent twice.
       await sendMessage(user.uid, c.onMyWayMessage(name), null, null, {
         about: { kind: 'rental', id: r.id, name: r.productName },
         onMyWay: true,
+        clientId: onMyWayId.current,
+        renterName: user.displayName || user.email || 'Renter',
       });
       onMyWaySent.add(key);
       setSent(true);

@@ -2,7 +2,6 @@ import {
   collection,
   doc,
   getDoc,
-  setDoc,
   addDoc,
   updateDoc,
   onSnapshot,
@@ -11,6 +10,7 @@ import {
   where,
   serverTimestamp,
   increment,
+  runTransaction,
   Timestamp,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -60,66 +60,100 @@ const BUSINESS_ID  = 'lanchai-business';
 // ── Conversation init ─────────────────────────────────────────────────────────
 
 /**
- * Creates the conversation doc and inserts the business welcome message
- * the first time a renter opens the chat. No-op if the conversation exists.
+ * Creates the conversation doc and the business welcome message the first time a renter
+ * opens the chat — ONE transaction (both or nothing). No-op when it exists. Needs a
+ * connection; sendMessage also creates the conversation if it's still missing.
  */
 export async function initConversation(uid: string, renterName: string): Promise<void> {
   const convRef = doc(db, 'conversations', uid);
-  const snap = await getDoc(convRef);
-  if (snap.exists()) return;
-
-  await setDoc(convRef, {
-    renterId:         uid,
-    renterName,
-    lastMessage:      WELCOME_TEXT,
-    lastMessageAt:    serverTimestamp(),
-    lastSenderType:   'business',
-    unreadByBusiness: 0,
-    unreadByRenter:   1,
-    createdAt:        serverTimestamp(),
-  });
-
-  await addDoc(collection(db, 'conversations', uid, 'messages'), {
-    senderId:   BUSINESS_ID,
-    senderType: 'business',
-    text:       WELCOME_TEXT,
-    imageUrl:   null,
-    videoUrl:   null,
-    createdAt:  serverTimestamp(),
-    read:       false,
+  await runTransaction(db, async tx => {
+    const conv = await tx.get(convRef);
+    if (conv.exists()) return;
+    tx.set(convRef, {
+      renterId:         uid,
+      renterName,
+      lastMessage:      WELCOME_TEXT,
+      lastMessageAt:    serverTimestamp(),
+      lastSenderType:   'business',
+      unreadByBusiness: 0,
+      unreadByRenter:   1,
+      createdAt:        serverTimestamp(),
+    });
+    tx.set(doc(db, 'conversations', uid, 'messages', 'welcome'), {
+      senderId:   BUSINESS_ID,
+      senderType: 'business',
+      text:       WELCOME_TEXT,
+      imageUrl:   null,
+      videoUrl:   null,
+      createdAt:  serverTimestamp(),
+      read:       false,
+    });
   });
 }
 
 // ── Send message ──────────────────────────────────────────────────────────────
 
+/** A client-chosen message id: retrying with the same id never creates a duplicate. */
+export function newClientMessageId(): string {
+  return `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Sends one renter message RELIABLY, in ONE transaction:
+ *   • creates the conversation if it's missing (so staff always see the thread in the
+ *     admin inbox — it lists conversations), else bumps its counters;
+ *   • writes the message under `extra.clientId` — a retry with the same id finds it and
+ *     does nothing (no duplicates).
+ * Offline it fails (transactions need the server) → the chat shows "Not sent · Retry".
+ */
 export async function sendMessage(
   uid: string,
   text: string | null,
   imageUrl: string | null,
   videoUrl: string | null = null,
-  extra: MessageExtra = {},
+  extra: MessageExtra & { clientId?: string; renterName?: string } = {},
 ): Promise<void> {
   const preview = text ?? (imageUrl ? '📷 Photo' : videoUrl ? '🎥 Video' : '');
+  const clientId = extra.clientId ?? newClientMessageId();
+  const convRef = doc(db, 'conversations', uid);
+  const msgRef = doc(db, 'conversations', uid, 'messages', clientId);
 
-  await addDoc(collection(db, 'conversations', uid, 'messages'), {
-    senderId:   uid,
-    senderType: 'renter',
-    text,
-    imageUrl,
-    videoUrl,
-    ...(extra.videoThumbUrl ? { videoThumbUrl: extra.videoThumbUrl } : {}),
-    ...(extra.about ? { about: extra.about } : {}),
-    // Read by onChatMessage (functions/src/chat.ts) → admin notification.
-    ...(extra.onMyWay ? { onMyWay: true } : {}),
-    createdAt:  serverTimestamp(),
-    read:       false,
-  });
-
-  await updateDoc(doc(db, 'conversations', uid), {
-    lastMessage:      preview,
-    lastMessageAt:    serverTimestamp(),
-    lastSenderType:   'renter',
-    unreadByBusiness: increment(1),
+  await runTransaction(db, async tx => {
+    const [conv, existing] = await Promise.all([tx.get(convRef), tx.get(msgRef)]);
+    if (existing.exists()) return; // already delivered by an earlier attempt
+    if (!conv.exists()) {
+      tx.set(convRef, {
+        renterId:         uid,
+        renterName:       extra.renterName || 'Renter',
+        lastMessage:      preview,
+        lastMessageAt:    serverTimestamp(),
+        lastSenderType:   'renter',
+        unreadByBusiness: 1,
+        unreadByRenter:   0,
+        createdAt:        serverTimestamp(),
+      });
+    } else {
+      tx.update(convRef, {
+        lastMessage:      preview,
+        lastMessageAt:    serverTimestamp(),
+        lastSenderType:   'renter',
+        // Exactly +1 (the rule requires it) — read in this same transaction.
+        unreadByBusiness: (Number(conv.get('unreadByBusiness')) || 0) + 1,
+      });
+    }
+    tx.set(msgRef, {
+      senderId:   uid,
+      senderType: 'renter',
+      text,
+      imageUrl,
+      videoUrl,
+      ...(extra.videoThumbUrl ? { videoThumbUrl: extra.videoThumbUrl } : {}),
+      ...(extra.about ? { about: extra.about } : {}),
+      // Read by onChatMessage (functions/src/chat.ts) → admin notification.
+      ...(extra.onMyWay ? { onMyWay: true } : {}),
+      createdAt:  serverTimestamp(),
+      read:       false,
+    });
   });
 }
 

@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   KeyboardAvoidingView,
+  AppState,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -14,7 +15,7 @@ import BackButton from '@/components/BackButton';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { ChatThread } from '@/components/chat/ChatThread';
-import { ChatMark, ContextCard, QuickQuestions, ReplyLine, ReadMark } from '@/components/chat/ChatHeaderParts';
+import { ChatMark, ContextCard, QuickQuestions, ReplyLine, ReadMark, PendingMark } from '@/components/chat/ChatHeaderParts';
 import { CHAT_COPY } from '@/constants/chatCopy';
 import { getProduct, getReservationById } from '@/lib/firestore';
 import { ChatInputBar } from '@/components/chat/ChatInputBar';
@@ -23,8 +24,10 @@ import { MediaViewer } from '@/components/MediaViewer';
 import {
   ChatMessage,
   type ChatAbout,
+  type MessageExtra,
   initConversation,
   markConversationReadByRenter,
+  newClientMessageId,
   sendMessage,
   subscribeToMessages,
   uploadChatImage,
@@ -38,8 +41,10 @@ export default function ChatScreen() {
   const insets  = useSafeAreaInsets();
   const screen = useScreenInsets();
   const { user } = useAuth();
-  const RENTER_ID   = user!.uid;
-  const RENTER_NAME = user!.displayName || user!.email || 'Renter';
+  // The route is account-gated (app/_layout.tsx); '' only for the instant a sign-out
+  // unmounts this screen — every write below checks it.
+  const RENTER_ID   = user?.uid ?? '';
+  const RENTER_NAME = user?.displayName || user?.email || 'Renter';
   const { keyboardShown } = useChatKeyboard();
 
   const [messages,  setMessages]  = useState<ChatMessage[]>([]);
@@ -71,7 +76,6 @@ export default function ChatScreen() {
     }
   }, [productId, rentalId, ask]);
   useFocusEffect(loadContext);
-  const [sending,   setSending]   = useState(false);
   const [uploading, setUploading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,53 +90,97 @@ export default function ChatScreen() {
     return () => { if (errorTimerRef.current) clearTimeout(errorTimerRef.current); };
   }, []);
 
-  // Init conversation (creates doc + welcome message on first visit)
-  useEffect(() => {
-    initConversation(RENTER_ID, RENTER_NAME).catch(() => {
-      // Conversation may already exist or network error — subscription handles display
-    });
-  }, []);
+  // Init conversation (creates doc + welcome message on first visit, one transaction).
+  // Retried on every focus while it hasn't succeeded; sendMessage also creates the
+  // conversation itself if it's still missing, so a first message never gets lost.
+  const convReady = useRef(false);
+  const ensureConversation = useCallback(() => {
+    if (convReady.current || !RENTER_ID) return;
+    initConversation(RENTER_ID, RENTER_NAME)
+      .then(() => { convReady.current = true; })
+      .catch(() => {});
+  }, [RENTER_ID, RENTER_NAME]);
+  useFocusEffect(ensureConversation);
 
   // Opening the chat clears the renter's own unread badge.
   useEffect(() => {
-    markConversationReadByRenter(RENTER_ID).catch(() => {});
-  }, []);
+    if (RENTER_ID) markConversationReadByRenter(RENTER_ID).catch(() => {});
+  }, [RENTER_ID]);
 
   // Real-time message subscription
   useEffect(() => {
+    if (!RENTER_ID) return;
     const unsub = subscribeToMessages(
       RENTER_ID,
       setMessages,
       err => console.warn('Chat subscription error:', err),
     );
     return unsub;
-  }, []);
+  }, [RENTER_ID]);
 
-  // ── Sending ─────────────────────────────────────────────────────────────────
+  // ── Sending (queue + retry) ─────────────────────────────────────────────────
+  // Every message gets a client id BEFORE it's sent and shows at once in the thread
+  // ("Sending…"). sendMessage writes it under that id in one transaction (conversation
+  // created if missing), so a retry can never duplicate it. A failure keeps it in the
+  // thread as "Not sent · Retry" (tap) — also retried automatically when the app comes
+  // back to the foreground. Pending lines live in this screen only (not persisted).
+  type Pending = {
+    clientId: string; text: string | null; imageUrl: string | null; videoUrl: string | null;
+    extra: MessageExtra; status: 'sending' | 'failed';
+  };
+  const [pending, setPending] = useState<Pending[]>([]);
+  const pendingRef = useRef<Pending[]>([]);
+  pendingRef.current = pending;
 
-  const sendText = useCallback(async (raw: string, fromInput: boolean) => {
+  const deliver = useCallback(async (p: Pending) => {
+    if (!RENTER_ID) return;
+    setPending(list => list.map(x => (x.clientId === p.clientId ? { ...x, status: 'sending' } : x)));
+    try {
+      await sendMessage(RENTER_ID, p.text, p.imageUrl, p.videoUrl, { ...p.extra, clientId: p.clientId, renterName: RENTER_NAME });
+      convReady.current = true;
+      setPending(list => list.filter(x => x.clientId !== p.clientId));
+    } catch {
+      setPending(list => list.map(x => (x.clientId === p.clientId ? { ...x, status: 'failed' } : x)));
+    }
+  }, [RENTER_ID, RENTER_NAME]);
+
+  const enqueue = useCallback((msg: Omit<Pending, 'clientId' | 'status'>) => {
+    const p: Pending = { ...msg, clientId: newClientMessageId(), status: 'sending' };
+    setPending(list => [...list, p]);
+    return deliver(p);
+  }, [deliver]);
+
+  const retry = useCallback((clientId: string) => {
+    const p = pendingRef.current.find(x => x.clientId === clientId);
+    if (p && p.status === 'failed') deliver(p);
+  }, [deliver]);
+
+  // Back in the foreground → retry every failed message (in order).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+      ensureConversation();
+      pendingRef.current.filter(p => p.status === 'failed').forEach(p => { deliver(p); });
+    });
+    return () => sub.remove();
+  }, [deliver, ensureConversation]);
+
+  const sendText = useCallback((raw: string, fromInput: boolean) => {
     const text = raw.trim();
-    if (!text || sending || uploading) return;
-    setSending(true);
+    if (!text || !RENTER_ID) return;
     if (fromInput) setInputText('');
     setSentThisSession(true);
     const about = context && !aboutSent.current
       ? { kind: context.kind, id: context.id, name: context.name }
       : null;
-    try {
-      await sendMessage(RENTER_ID, text, null, null, about ? { about } : {});
-      if (about) aboutSent.current = true;
-    } catch {
-      showError('Could not send your message. Please try again.');
-      if (fromInput) setInputText(text);
-    } finally {
-      setSending(false);
-    }
-  }, [sending, uploading, context, RENTER_ID, showError]);
+    // The context goes with the first message only — also on its retries.
+    if (about) aboutSent.current = true;
+    enqueue({ text, imageUrl: null, videoUrl: null, extra: about ? { about } : {} });
+  }, [context, RENTER_ID, enqueue]);
   const handleSend = useCallback(() => sendText(inputText, true), [sendText, inputText]);
 
   const handlePickImage = useCallback(async () => {
-    if (sending || uploading) return;
+    if (uploading) return;
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -150,19 +198,20 @@ export default function ChatScreen() {
     setUploading(true);
     try {
       const url = await uploadChatImage(RENTER_ID, result.assets[0].uri);
-      await sendMessage(RENTER_ID, null, url);
+      // Uploaded → the message itself goes through the queue (Retry keeps the same file).
+      enqueue({ text: null, imageUrl: url, videoUrl: null, extra: {} });
     } catch {
       showError('Could not upload the photo. Please try again.');
     } finally {
       setUploading(false);
     }
-  }, [sending, uploading, showError]);
+  }, [uploading, showError, RENTER_ID, enqueue]);
 
   const uploadAndSendVideo = useCallback(async (localUri: string) => {
     setUploading(true);
     try {
       const { url, thumbUrl } = await uploadChatVideo(RENTER_ID, localUri);
-      await sendMessage(RENTER_ID, null, null, url, { videoThumbUrl: thumbUrl });
+      enqueue({ text: null, imageUrl: null, videoUrl: url, extra: { videoThumbUrl: thumbUrl } });
     } catch (err: any) {
       console.error('[handleRecordVideo/handlePickVideo] video upload failed:', err);
       showError(
@@ -173,10 +222,10 @@ export default function ChatScreen() {
     } finally {
       setUploading(false);
     }
-  }, [showError]);
+  }, [showError, RENTER_ID, enqueue]);
 
   const handleRecordVideo = useCallback(async () => {
-    if (sending || uploading) return;
+    if (uploading) return;
 
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -192,10 +241,10 @@ export default function ChatScreen() {
 
     if (result.canceled || result.assets.length === 0) return;
     await uploadAndSendVideo(result.assets[0].uri);
-  }, [sending, uploading, showError, uploadAndSendVideo]);
+  }, [uploading, showError, uploadAndSendVideo]);
 
   const handlePickVideo = useCallback(async () => {
-    if (sending || uploading) return;
+    if (uploading) return;
 
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -209,9 +258,24 @@ export default function ChatScreen() {
 
     if (result.canceled || result.assets.length === 0) return;
     await uploadAndSendVideo(result.assets[0].uri);
-  }, [sending, uploading, showError, uploadAndSendVideo]);
+  }, [uploading, showError, uploadAndSendVideo]);
 
   // ── Day-separated render list ──────────────────────────────────────────────
+
+  // Server messages + the ones still pending (deduped as soon as the snapshot has them).
+  const shown = useMemo(() => {
+    if (pending.length === 0) return messages;
+    const ids = new Set(messages.map(m => m.id));
+    const extra: ChatMessage[] = pending
+      .filter(p => !ids.has(p.clientId))
+      .map(p => ({
+        id: p.clientId, senderId: RENTER_ID, senderType: 'renter', text: p.text,
+        imageUrl: p.imageUrl, videoUrl: p.videoUrl, videoThumbUrl: p.extra.videoThumbUrl,
+        about: p.extra.about, createdAt: null, read: false,
+      }));
+    return extra.length ? [...messages, ...extra] : messages;
+  }, [messages, pending, RENTER_ID]);
+  const pendingStatus = useMemo(() => new Map(pending.map(p => [p.clientId, p.status])), [pending]);
 
   const hasRenterMessage = messages.some(m => m.senderType === 'renter');
   // Quick questions: an empty conversation, or any chat opened with a context card —
@@ -287,12 +351,16 @@ export default function ChatScreen() {
         keyboardVerticalOffset={insets.top}
       >
         <ChatThread
-          messages={messages}
+          messages={shown}
           viewerRole="renter"
           otherPartyInitial="L"
           hideAvatar
           onMediaPress={handleMediaPress}
-          afterMessage={m => (m.id === lastReadRenterId ? <ReadMark /> : null)}
+          afterMessage={m => {
+            const st = pendingStatus.get(m.id);
+            if (st && !m.createdAt) return <PendingMark failed={st === 'failed'} onRetry={() => retry(m.id)} />;
+            return m.id === lastReadRenterId ? <ReadMark /> : null;
+          }}
           footer={showQuick ? <QuickQuestions questions={quickQuestions} onAsk={q => sendText(q, false)} /> : null}
         />
 
@@ -312,7 +380,7 @@ export default function ChatScreen() {
           onPickImage={handlePickImage}
           onRecordVideo={handleRecordVideo}
           onPickVideo={handlePickVideo}
-          sending={sending}
+          sending={false}
           uploading={uploading}
           // The input bar is the fixed bottom bar: it sits above the system bar itself
           // (the screen root has no bottom inset here).

@@ -1233,6 +1233,15 @@ a snapshot indefinitely).
     conversation or whenever a context card is shown, hidden once the renter sends a
     message in this session; "Read" under the last renter message. The context card is
     PINNED under the header (params re-read on every focus).
+  - **Reliable send (2026-11):** `sendMessage` (`lib/chat.ts`) is ONE client transaction
+    with a client-chosen id (`newClientMessageId()`, `extra.clientId`): it creates the
+    conversation if missing (so the admin inbox always lists the thread) or bumps
+    `unreadByBusiness` by exactly 1, and does nothing if that message id already exists —
+    retries never duplicate. `initConversation` = one transaction (conversation + welcome
+    message id `welcome`), retried on focus. The renter chat shows pending lines at once
+    ("Sending…" → "Not sent · Retry", auto-retried on app foreground; in memory only);
+    "I'm on my way" keeps one id per card. Offline = "Not sent" (transactions need the
+    server).
   - **Both chats use `components/chat/ChatThread.tsx`** — an INVERTED FlatList (newest
     message first = at the bottom; the day-separated list reversed), so a thread always
     opens on the latest message without scroll-to-end timing. All messages are loaded
