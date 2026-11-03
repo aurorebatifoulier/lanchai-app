@@ -1,5 +1,6 @@
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { vteDayRange, vteDayToken, addDays } from '@/lib/vteTime';
 
 // Stock/occupancy constants and pure rules live in functions/src/shared/availability.ts
 // — shared with the createReservations callable (server-side check in the booking
@@ -102,9 +103,9 @@ export function computeMonthAvailability(
   const result: Record<string, number> = {};
 
   for (let date = 1; date <= daysInMonth; date++) {
-    const dayStart = new Date(year, month, date, 0, 0, 0, 0);
-    const dayEnd   = new Date(year, month, date + 1, 0, 0, 0, 0);
-    result[localDateKey(year, month, date)] = computeAvailableUnits(occupancy, dayStart, dayEnd, totalStock);
+    // The VIENTIANE day (lib/vteTime), whatever the phone's timezone.
+    const { start, end } = vteDayRange(new Date(year, month, date));
+    result[localDateKey(year, month, date)] = computeAvailableUnits(occupancy, start, end, totalStock);
   }
 
   return result;
@@ -168,11 +169,13 @@ export function nextAvailableDay(
   totalStock: number,
   now: Date = new Date(),
 ): Date | 'none' | null {
+  // Vientiane days; returns a DAY TOKEN (lib/vteTime) for display / calendar pre-fill.
+  const today = vteDayToken(now);
   for (let d = 0; d <= NEXT_FREE_DAY_SEARCH_DAYS; d++) {
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
-    const dayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d + 1);
-    if (computeAvailableUnits(occupancy, dayStart, dayEnd, totalStock) > 0) {
-      return d === 0 ? null : dayStart;
+    const day = addDays(today, d);
+    const { start, end } = vteDayRange(day);
+    if (computeAvailableUnits(occupancy, start, end, totalStock) > 0) {
+      return d === 0 ? null : day;
     }
   }
   return 'none';

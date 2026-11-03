@@ -13,9 +13,10 @@ import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
-import { pad, getAvailableTimeSlots } from '@/utils/timeSlots';
+import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import DateRangeCalendar from '@/components/DateRangeCalendar';
 import PressScale from '@/components/PressScale';
+import { atVteSlot, vteDayToken, vteHHMM } from '@/lib/vteTime';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -24,12 +25,8 @@ const MONTHS = [
 
 type Page = 'main' | 'dates' | 'pickup-time' | 'return-time';
 
-function buildDateTime(date: Date, timeStr: string): Date {
-  const dt = new Date(date);
-  const [h, m] = timeStr.split(':').map(Number);
-  dt.setHours(h, m, 0, 0);
-  return dt;
-}
+// Vientiane time whatever the phone's timezone (lib/vteTime): day token + "HH:MM".
+const buildDateTime = (date: Date, timeStr: string): Date => atVteSlot(date, timeStr);
 
 function fmtFieldDate(d: Date): string {
   const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -68,15 +65,11 @@ export default function DateRangePicker({
   // Re-initialise from props each time the picker opens
   useEffect(() => {
     if (!visible) { setPage('main'); return; }
-    setStartDate(initialPickupAt
-      ? new Date(initialPickupAt.getFullYear(), initialPickupAt.getMonth(), initialPickupAt.getDate())
-      : null);
-    setEndDate(initialReturnAt
-      ? new Date(initialReturnAt.getFullYear(), initialReturnAt.getMonth(), initialReturnAt.getDate())
-      : null);
+    setStartDate(initialPickupAt ? vteDayToken(initialPickupAt) : null);
+    setEndDate(initialReturnAt ? vteDayToken(initialReturnAt) : null);
     resetTimes(
-      initialPickupAt ? `${pad(initialPickupAt.getHours())}:${pad(initialPickupAt.getMinutes())}` : null,
-      initialReturnAt ? `${pad(initialReturnAt.getHours())}:${pad(initialReturnAt.getMinutes())}` : null,
+      initialPickupAt ? vteHHMM(initialPickupAt) : null,
+      initialReturnAt ? vteHHMM(initialReturnAt) : null,
     );
     setPage('main');
   }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps

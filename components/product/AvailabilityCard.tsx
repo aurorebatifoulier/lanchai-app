@@ -12,6 +12,7 @@ import { useMyWatches, watchProduct, unwatchProduct } from '@/lib/availabilityWa
 import { useRequireAccount } from '@/components/auth/GuestGate';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import type { Product } from '@/lib/mockData';
+import { vteToday, addDays, vteDayRange } from '@/lib/vteTime';
 import {
   fetchOccupancy, computeAvailableUnits, effectiveStock, gridAvailability, type OccupancyRecord,
 } from '@/utils/availability';
@@ -56,11 +57,12 @@ export default function AvailabilityCard({ product, onPickRange }: {
   }, [product.id]);
 
   const days = useMemo(() => {
-    const now = new Date();
+    // Vientiane days (day tokens for display; their real [start, end) for the check).
+    const today = vteToday();
     return Array.from({ length: DAYS }, (_, i) => {
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i + 1);
-      const free = product.available !== false && occ != null && computeAvailableUnits(occ, start, end, stock) > 0;
+      const start = addDays(today, i);
+      const range = vteDayRange(start);
+      const free = product.available !== false && occ != null && computeAvailableUnits(occ, range.start, range.end, stock) > 0;
       return { start, free };
     });
   }, [occ, stock, product.available]);

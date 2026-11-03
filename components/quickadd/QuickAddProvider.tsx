@@ -27,6 +27,8 @@ import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { getEffectiveRate, billableDaysFromDates, depositForLine } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
 import { useRequireAccount } from '@/components/auth/GuestGate';
+import { atVteSlot, vteDayToken, vteHHMM, vteToday, addDays, sameDayToken } from '@/lib/vteTime';
+import VteTimeNote from '@/components/VteTimeNote';
 
 // Quick add (validated mockup): one provider (root layout) owns the bottom sheet and the
 // "Added to your bag" toast for every product card ("+" on Explore, category pages,
@@ -50,18 +52,14 @@ export const useQuickAdd = () => useContext(Ctx);
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const pad = (n: number) => String(n).padStart(2, '0');
-const fmtDayShort = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()}`;
-const fmtWhen = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const hhmm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const dayOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-const atSlot = (day: Date, slot: string) => {
-  const d = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-  const [h, m] = slot.split(':').map(Number);
-  d.setHours(h, m, 0, 0);
-  return d;
-};
+// Vientiane time whatever the phone's timezone (lib/vteTime). Calendar days are DAY
+// TOKENS; pickupAt / returnAt are real instants.
+const fmtDayShort = (at: Date) => { const d = vteDayToken(at); return `${DOW[d.getDay()]} ${d.getDate()}`; };
+const fmtWhen = (at: Date) => { const d = vteDayToken(at); return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${vteHHMM(at)}`; };
+const hhmm = (at: Date) => vteHHMM(at);
+const dayOf = (at: Date) => vteDayToken(at);
+/** Day token × "HH:MM" Vientiane → instant. */
+const atSlot = (day: Date, slot: string) => atVteSlot(day, slot);
 
 export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -157,12 +155,12 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
   const windows = useMemo(() => {
     const available = (d: Date) => getAvailableTimeSlots(d, slots);
     const wk = weekendWindow(new Date(), available);
-    const t = new Date(); t.setDate(t.getDate() + 1);
+    const t = addDays(vteToday(), 1);
     const tSlot = available(t)[0];
-    const tomorrow = tSlot ? { pickupAt: atSlot(t, tSlot), returnAt: atSlot(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1), tSlot) } : null;
+    const tomorrow = tSlot ? { pickupAt: atSlot(t, tSlot), returnAt: atSlot(addDays(t, 1), tSlot) } : null;
     let pick: QWindow | null = null;
     if (range.start && range.end && presetWindow
-      && sameDay(range.start, presetWindow.pickupAt) && sameDay(range.end, presetWindow.returnAt)) {
+      && sameDayToken(range.start, dayOf(presetWindow.pickupAt)) && sameDayToken(range.end, dayOf(presetWindow.returnAt))) {
       pick = presetWindow; // the bag's exact times, while the renter keeps those days
     } else if (range.start && range.end) {
       const pSlot = available(range.start)[0];
@@ -187,7 +185,7 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
     if (presetRange) return; // dates already chosen (product page calendar / bag period)
     if (startOnPick) {
       const next = nextAvailableDay(occ, stock);
-      if (next instanceof Date) setRange({ start: next, end: new Date(next.getFullYear(), next.getMonth(), next.getDate() + 1) });
+      if (next instanceof Date) setRange({ start: next, end: addDays(next, 1) });
       return;
     }
     if (!free(windows.weekend)) setChoice(free(windows.tomorrow) ? 'tomorrow' : 'pick');
@@ -202,8 +200,8 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
 
   const sel = useMemo<QWindow | null>(() => {
     if (!base || !pickupTime || !returnTime) return null;
-    const pickupAt = atSlot(base.pickupAt, pickupTime);
-    const returnAt = atSlot(base.returnAt, returnTime);
+    const pickupAt = atSlot(dayOf(base.pickupAt), pickupTime);
+    const returnAt = atSlot(dayOf(base.returnAt), returnTime);
     return returnAt > pickupAt ? { pickupAt, returnAt } : null;
   }, [base, pickupTime, returnTime]);
   const badOrder = !!base && !!pickupTime && !!returnTime && sel == null;
@@ -316,6 +314,7 @@ function QuickAddSheet({ product, startOnPick, presetRange, presetWindow, onClos
                 />
               </View>
             )}
+            {base && <VteTimeNote style={{ marginTop: 6 }} />}
             {badOrder && <Text style={[UI.errorText, { marginTop: 8 }]}>{q.returnBeforePickup}</Text>}
 
             {occ == null ? (

@@ -16,6 +16,7 @@ import { useShopInfo, buildMapsUrl, buildWhatsappUrl } from '@/lib/shop';
 import { addBookingToCalendar } from '@/lib/bookingCalendar';
 import { displayOrderId } from '@/utils/rentalDocs';
 import { orderDiscountOf } from '@/functions/src/shared/promo';
+import VteTimeNote from '@/components/VteTimeNote';
 
 // Booking confirmation (validated mockup) — shared by the single booking and the bag
 // checkout. Check + "It's booked!" + order number; carbon card with the QR (order QR for
@@ -93,6 +94,7 @@ export default function BookingConfirmationScreen() {
           {!!orderLabel && <Text style={s.order}>{c.order(orderLabel)}</Text>}
         </View>
 
+        <VteTimeNote style={{ justifyContent: 'center', marginBottom: 8 }} />
         {/* 2 · Carbon card: QR + pick-up / return */}
         <View style={s.carbon}>
           <QRThumb value={qrValue} size={82} onPress={() => setLightbox({ value: qrValue, label: single ? first.productName : c.order(orderLabel) })} />

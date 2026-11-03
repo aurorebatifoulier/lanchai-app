@@ -37,6 +37,8 @@ import { getProductAccessState } from '@/utils/productAccess';
 import { needsBtobDocument } from '@/utils/btob';
 import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
 import { useDiscountChoice } from '@/lib/discountChoice';
+import { atVteSlot, vteHHMM, vteDayToken, vteDayStart } from '@/lib/vteTime';
+import VteTimeNote from '@/components/VteTimeNote';
 
 // "Your booking" (validated mockup) — ONE screen: dates & times, quantity, total (coupon,
 // VAT only when on, to pay at pick-up, the renter's real deposit, points), deposit
@@ -46,15 +48,10 @@ import { useDiscountChoice } from '@/lib/discountChoice';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Days are DAY TOKENS, times are Vientiane time whatever the phone's timezone (lib/vteTime).
 const fmtDay = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
-const atTime = (date: Date, hhmm: string) => {
-  const d = new Date(date);
-  const [h, m] = hhmm.split(':').map(Number);
-  d.setHours(h, m, 0, 0);
-  return d;
-};
-const pad = (n: number) => String(n).padStart(2, '0');
-const hhmmOf = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const atTime = (date: Date, hhmm: string) => atVteSlot(date, hhmm);
+const hhmmOf = (d: Date) => vteHHMM(d);
 
 export default function BookingNewScreen() {
   // pickupAt / returnAt (ms, optional): pre-filled dates (Home "Free this weekend").
@@ -105,8 +102,8 @@ export default function BookingNewScreen() {
     const p = new Date(Number(prefillPickup));
     const r = new Date(Number(prefillReturn));
     if (!Number.isFinite(p.getTime()) || !Number.isFinite(r.getTime()) || r <= p) return;
-    const pDay = new Date(p.getFullYear(), p.getMonth(), p.getDate());
-    const rDay = new Date(r.getFullYear(), r.getMonth(), r.getDate());
+    const pDay = vteDayToken(p);
+    const rDay = vteDayToken(r);
     if (!getAvailableTimeSlots(pDay, timeSlots).includes(hhmmOf(p)) || !timeSlots.includes(hhmmOf(r))) return;
     setStartDate(pDay);
     setEndDate(rDay);
@@ -116,7 +113,7 @@ export default function BookingNewScreen() {
   // Units free on the chosen dates (same check as before; the server re-checks).
   useEffect(() => {
     if (!product || !startDate || !endDate) return;
-    getAvailableStock(product.id, startDate, endDate, effectiveStock(product)).then(n => {
+    getAvailableStock(product.id, vteDayStart(startDate), vteDayStart(endDate), effectiveStock(product)).then(n => {
       setAvailableStock(n);
       setQuantity(q => Math.max(1, Math.min(q, n)));
     }).catch(() => {});
@@ -279,6 +276,7 @@ export default function BookingNewScreen() {
           hint={tierHint}
           error={whenError}
         />
+        <VteTimeNote style={{ marginTop: 6 }} />
 
         <QuantityRow quantity={quantity} available={availableStock} onChange={q => setQuantity(Math.max(1, Math.min(q, availableStock)))} />
 

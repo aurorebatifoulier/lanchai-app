@@ -226,6 +226,16 @@ a snapshot indefinitely).
   `utils/timeSlots.ts`'s `getAvailableTimeSlots` (today's first slot = now + this delay,
   rounded up to 30 min). Not consumed by `computeAvailableUnits`. Change it there only —
   never hardcode the delay in copy or slot logic.
+- **Booking times are ALWAYS Vientiane time (Asia/Vientiane, UTC+7)**, whatever the phone's
+  timezone — `lib/vteTime.ts`. Calendars work on DAY TOKENS (local-midnight Dates whose Y/M/D
+  are the Vientiane day); every conversion goes through `atVteSlot(day, "HH:MM")`,
+  `vteDayToken(instant)`, `vteHHMM`, `vteToday`, `vteDayRange` — never `setHours` /
+  `getHours` / local "today" in booking code (booking screen, `DateRangePicker`, quick add,
+  `weekendWindow`, `getAvailableTimeSlots`, `computeMonthAvailability`, `nextAvailableDay`,
+  AvailabilityCard, bag / Explore / receipt formatting). The server already validates in
+  Vientiane minutes; labels, emails and .ics are Vientiane / UTC instants.
+  `<VteTimeNote>` ("Times are Vientiane time") shows next to times only when the phone isn't
+  on UTC+7 (booking, quick add, bag, checkout, confirmation, My rentals).
 - **Return time follows pickup time** in both booking flows via
   `hooks/useLinkedReturnTime.ts`, until the renter picks a return time by hand.
 - **Late-return penalty — progressive, single shared calculation.** Rule (FAQ / Terms §9

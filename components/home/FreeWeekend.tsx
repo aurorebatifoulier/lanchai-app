@@ -10,10 +10,11 @@ import type { Product } from '@/lib/mockData';
 import type { WeekendWindow } from '@/lib/homeData';
 import { toLak } from '@/utils/currency';
 import PressScale from '@/components/PressScale';
+import { vteDayToken } from '@/lib/vteTime';
 
 const THUMB = 104;
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const fmt = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()}`;
+const fmt = (at: Date) => { const d = vteDayToken(at); return `${DOW[d.getDay()]} ${d.getDate()}`; }; // Vientiane day
 
 // Home "Free this weekend" (validated mockup): products free for the whole weekend
 // window, small square thumbnails (amber dot), tap → booking with the dates pre-filled.

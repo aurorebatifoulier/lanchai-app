@@ -38,6 +38,7 @@ import { needsBtobDocument } from '@/utils/btob';
 import { useMyIdentity } from '@/lib/identity';
 import { IdRequirementStep } from '@/components/IdRequirementStep';
 import { plural } from '@/lib/navigation';
+import VteTimeNote from '@/components/VteTimeNote';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -311,6 +312,7 @@ export default function BagSummaryScreen() {
 
         {/* One product card per item: dates · times, quantity, line amount */}
         <View style={{ gap: 10 }}>
+          <VteTimeNote style={{ marginBottom: 8 }} />
           {items.map(item => (
             <BookingProductCard
               key={item.bagItemId}

@@ -1,4 +1,5 @@
 import { billableDaysFromMs } from '@/functions/src/shared/pricing';
+import { vteReservationLabel } from '@/functions/src/shared/dates';
 export function calculateTotalPrice(
   pricePerDay: number,
   startDate: Date,
@@ -25,12 +26,9 @@ export function billableDaysFromDates(pickupAt: Date, returnAt: Date): number {
   return billableDaysFromMs(pickupAt.getTime(), returnAt.getTime());
 }
 
-// Formats a Date as "Mon, 7 Jul · 09:00" — matches the pickupLabel/returnLabel format used in reservations.
-const _DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const _MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// Formats a Date as "Mon, 7 Jul · 09:00" — the pickupLabel/returnLabel format used in reservations.
 
+/** Vientiane time whatever the phone's timezone — the same label the server stores. */
 export function fmtReservationLabel(d: Date): string {
-  const h = d.getHours().toString().padStart(2, '0');
-  const m = d.getMinutes().toString().padStart(2, '0');
-  return `${_DOW[d.getDay()]}, ${d.getDate()} ${_MON[d.getMonth()]} · ${h}:${m}`;
+  return vteReservationLabel(d.getTime());
 }

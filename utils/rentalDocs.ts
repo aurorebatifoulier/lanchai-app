@@ -1,5 +1,6 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { RentalDoc } from '@/lib/firestore';
+import { vteDayToken } from '@/lib/vteTime';
 
 // Renter "documents" helpers (Documents / All rentals / receipt screens). Pure — the
 // data comes from ONE equality query (getMyReservations: renterId ==), filtered,
@@ -36,18 +37,23 @@ export function inPeriod(r: RentalDoc, period: RentalPeriod, now = new Date()): 
   return d >= from;
 }
 
+// Vientiane calendar days (day tokens, lib/vteTime), whatever the phone's timezone.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY = (d: Date) => d.getDate();
-const MON = (d: Date) => d.toLocaleDateString('en-GB', { month: 'short' });
+const MON = (d: Date) => MONTHS[d.getMonth()];
 
 /** "31 Aug 2026" */
-export const fmtDay = (ts?: Timestamp | null) =>
-  ts ? ts.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+export const fmtDay = (ts?: Timestamp | null) => {
+  if (!ts) return '';
+  const d = vteDayToken(ts.toMillis());
+  return `${d.getDate()} ${MON(d)} ${d.getFullYear()}`;
+};
 
 /** "30–31 Aug 2026", "28 Aug – 2 Sep 2026", "30 Dec 2026 – 2 Jan 2027". */
 export function fmtRange(start?: Timestamp | null, end?: Timestamp | null): string {
   if (!start || !end) return fmtDay(start ?? end);
-  const a = start.toDate();
-  const b = end.toDate();
+  const a = vteDayToken(start.toMillis());
+  const b = vteDayToken(end.toMillis());
   if (a.getFullYear() !== b.getFullYear()) return `${fmtDay(start)} – ${fmtDay(end)}`;
   if (a.getMonth() !== b.getMonth()) return `${DAY(a)} ${MON(a)} – ${DAY(b)} ${MON(b)} ${b.getFullYear()}`;
   return DAY(a) === DAY(b) ? fmtDay(end) : `${DAY(a)}–${DAY(b)} ${MON(b)} ${b.getFullYear()}`;

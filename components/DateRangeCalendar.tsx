@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
+import { vteToday } from '@/lib/vteTime';
 import {
   fetchOccupancy,
   computeMonthAvailability,
@@ -49,7 +50,8 @@ export default function DateRangeCalendar({
   minDate,
   timeSlots,
 }: DateRangeCalendarProps) {
-  const today = useMemo(() => startOfDay(minDate ?? new Date()), [minDate]);
+  // Today = the VIENTIANE day (a day token), whatever the phone's timezone.
+  const today = useMemo(() => startOfDay(minDate ?? vteToday()), [minDate]);
 
   const [calYear,  setCalYear]  = useState(() => (startDate ?? today).getFullYear());
   const [calMonth, setCalMonth] = useState(() => (startDate ?? today).getMonth());

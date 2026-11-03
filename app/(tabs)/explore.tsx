@@ -69,6 +69,7 @@ import { getReviewQuotes, type ReviewQuote } from '@/lib/reviewQuotes';
 import { useResidentPromo } from '@/lib/residency';
 import { useMyLoyalty, useAveragePointsPerRental, loyaltyCardSubline } from '@/lib/loyaltyUi';
 import { AccountBanners } from '@/components/auth/AccountBanners';
+import { vteDayToken } from '@/lib/vteTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const H_PAD = 16;
@@ -89,7 +90,7 @@ type QuickKey = 'weekend' | 'under' | 'newItems' | 'popular';
 const NO_QUICK: Record<QuickKey, boolean> = { weekend: false, under: false, newItems: false, popular: false };
 const P_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const P_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const fmtPeriodDay = (d: Date) => `${P_DOW[d.getDay()]} ${d.getDate()} ${P_MON[d.getMonth()]}`;
+const fmtPeriodDay = (at: Date) => { const d = vteDayToken(at); return `${P_DOW[d.getDay()]} ${d.getDate()} ${P_MON[d.getMonth()]}`; }; // Vientiane day
 const fmtPeriod = (a: Date, b: Date) => `${fmtPeriodDay(a)} – ${fmtPeriodDay(b)}`;
 // Sticky search + categories: overlay vertical padding (like the Home sticky search).
 const STICKY_PAD = 8;

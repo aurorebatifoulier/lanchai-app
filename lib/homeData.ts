@@ -5,6 +5,7 @@ import { getProductAccessState } from '@/utils/productAccess';
 import { getMinPrice } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
 import { vteMonthKey } from '@/functions/src/shared/dates';
+import { atVteSlot, vteDayToken } from '@/lib/vteTime';
 
 // Pure data picks for the Home sections (validated mockup) — no Firestore access here.
 
@@ -158,18 +159,14 @@ export function pickSections<T>(sections: SectionSpec<T>[], idOf: (item: T) => s
 
 export interface WeekendWindow {
   /** Pick-up = first open slot that day; return = Sunday at the same time (2-day-style
-   *  24h blocks, like useLinkedReturnTime). Device-local dates, like the booking flow. */
+   *  24h blocks, like useLinkedReturnTime). Vientiane time, like the booking flow. */
   pickupAt: Date;
   returnAt: Date;
   slot: string;
 }
 
-const atSlot = (day: Date, slot: string) => {
-  const d = new Date(day);
-  const [h, m] = slot.split(':').map(Number);
-  d.setHours(h, m, 0, 0);
-  return d;
-};
+/** Day token × "HH:MM" Vientiane → instant (lib/vteTime). */
+const atSlot = (day: Date, slot: string) => atVteSlot(day, slot);
 
 /**
  * Mon–Thu → the coming Fri–Sun; Fri–Sat → today to Sunday; Sunday → next Fri–Sun. If no
@@ -177,7 +174,7 @@ const atSlot = (day: Date, slot: string) => {
  * `availableSlots(day)` = getAvailableTimeSlots(day, shop slots) (2h lead time today).
  */
 export function weekendWindow(now: Date, availableSlots: (day: Date) => string[]): WeekendWindow | null {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = vteDayToken(now); // the Vientiane day, whatever the phone's timezone
   const dow = today.getDay();
   let offset = dow >= 1 && dow <= 4 ? 5 - dow : dow === 0 ? 5 : 0;
   for (let guard = 0; guard < 10; guard++) {

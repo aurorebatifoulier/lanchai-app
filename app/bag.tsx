@@ -35,6 +35,8 @@ import { useExchangeRate } from '@/lib/exchangeRate';
 import { toLak } from '@/utils/currency';
 import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
+import { vteDayToken, vteHHMM } from '@/lib/vteTime';
+import VteTimeNote from '@/components/VteTimeNote';
 
 // Bag (validated mockup) — My Account / booking visual language. Header + "{n} items"
 // chip; "Same dates for everything" toggle; one white card per item (thumbnail → product,
@@ -47,8 +49,8 @@ import { getProductAccessState } from '@/utils/productAccess';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const pad = (v: number) => String(v).padStart(2, '0');
-const fmtWhen = (d: Date) => `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// Vientiane time whatever the phone's timezone (lib/vteTime).
+const fmtWhen = (at: Date) => { const d = vteDayToken(at); return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} · ${vteHHMM(at)}`; };
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
 // Compared to the minute: two items booked for the same slot always match, even when
 // one write carried seconds / milliseconds.
@@ -291,6 +293,7 @@ export default function BagScreen() {
         showsVerticalScrollIndicator={false}
       >
 
+        <VteTimeNote style={{ marginBottom: 8 }} />
         {items.map(item => (
           <Animated.View
             key={item.id}
