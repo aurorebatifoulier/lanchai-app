@@ -1361,19 +1361,18 @@ a snapshot indefinitely).
     area first. Worklets: no nested functions (Reanimated turns them into objects — inline
     the maths); easings only inside `withTiming`. Slide 1 chips are placed from the ROTATED bounding
     boxes (`rotatedHalf`): price under the speaker card (right-aligned), amber chip under
-    the tent card (left-aligned, lower) — ≥ 10 px clear. Slide 2 step stickers share ONE
-    centred spot under Pick up, one at a time with the spotlight. The visual area ends
+    the tent card (left-aligned, lower) — ≥ 10 px clear. Every chip is text 13, padding 7 × 12; slide 1's amber
+    chip sits fully below the price chip (8 px + bob / pop room). The visual area ends
     `TITLE_GAP` (40 px) above the title; groups shrink to fit. Stickers / sparkles wait
     `ENTRY_MS` after a slide becomes active (`useEntryGate` for slide 2) and are never
     shown on an inactive slide. Drawing order = `LAYER` (`Parts.tsx`): cards
     (elevation 3, focused 8) < hexagon 12 < stickers / sparkles 20 — Android orders by
-    elevation, so stickers always carry it; the spotlight only reorders cards. Slide 2 = step-by-step story: strong zigzag (Book −7° top-left, Pick up +2° with
-    its top at 38% of the visual area, Bring back +7° top-right, ~31% width, numbered
-    circles), spotlight loop 6 s (`FOCUS` keyframes on one shared `t`: the hexagon stops on
-    each card in turn; focused card 1.07 + in front, others 0.96 at 55%; `PhotoCard spot`,
-    `SpotSticker`), one sticker per step ("Dates picked" / "QR scanned · Vientiane shop" /
-    "Points earned", texts in config), trajectory behind the cards at 55%. Reduce motion: no
-    loop, cards normal, only the QR sticker.
+    elevation, so stickers always carry it; the spotlight only reorders cards. Slide 2 = step-by-step story: three LARGE cards (~29% of the screen width, gap ~2.5%):
+    Book −7° / Pick up +2° (30% of a card lower) / Bring back +7°; NO trajectory or
+    hexagon; spotlight loop 6 s whose cross-fades always sum to 1 (`FOCUS` — exactly one
+    card fully lit: 1.06 in front, others 0.96 at 55%); captions at ONE centred spot under
+    Pick up (`CAPTION` windows — one at a time). Reduce motion: no loop, only the QR
+    caption.
     Highlight = ONE band per line the
     phrase occupies (`onTextLayout` + hidden single-line measurements, no per-word marks).
     Life (Reanimated, transforms / opacity only, running only while the slide is visible

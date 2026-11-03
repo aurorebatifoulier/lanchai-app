@@ -220,7 +220,7 @@ export function PhotoCard({
     let front = 0;
     if (spot) {
       const f = interpolate(spot.t.value, spot.inputs, spot.outputs, Extrapolation.CLAMP);
-      scale = 0.96 + 0.11 * f;
+      scale = 0.96 + 0.10 * f; // focused 1.06
       dim = 0.55 + 0.45 * f;
       front = f > 0.5 ? 1 : 0;
     }
@@ -372,7 +372,7 @@ export const CHIP = {
   light: { bg: SHADES.amberLight, fg: SHADES.amberDeep },
   dark: { bg: SHADES.carbonSoft, fg: SHADES.white },
 } as const;
-export const chipTextStyle = (tone: keyof typeof CHIP) => [{ ...TYPE.body, fontWeight: '600' as const }, { color: CHIP[tone].fg }];
+export const chipTextStyle = (tone: keyof typeof CHIP) => [{ ...TYPE.secondary, fontWeight: '600' as const }, { color: CHIP[tone].fg }];
 
 // ── Hexagon pagination ───────────────────────────────────────────────────────
 
@@ -431,7 +431,8 @@ const s = StyleSheet.create({
     backgroundColor: SHADES.amber, alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { fontSize: 14, fontWeight: '800', color: SHADES.carbon },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
-  chipText: { ...TYPE.body, fontWeight: '600' },
+  // Every onboarding chip: text 13, padding 7 × 12 (height ≈ 32 — CHIP_H in SlideArt).
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7 },
+  chipText: { ...TYPE.secondary, fontWeight: '600' },
   dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

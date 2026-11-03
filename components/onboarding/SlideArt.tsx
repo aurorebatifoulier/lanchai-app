@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import Svg, { Defs, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
-import Animated, {
-  useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing, ReduceMotion, cancelAnimation, type SharedValue,
+import {
+  useSharedValue, withRepeat, withTiming, Easing, ReduceMotion, cancelAnimation, type SharedValue,
 } from 'react-native-reanimated';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
@@ -10,7 +9,7 @@ import { ONBOARDING_COPY as c } from '@/constants/onboardingCopy';
 import CountUpText from '@/components/CountUpText';
 import type { OnboardingSlide } from '@/lib/onboardingContent';
 import {
-  PhotoCard, Sticker, SpotSticker, Chip, Heartbeat, Sparkle, hexPoints, chipTextStyle, useRunning, useEntryGate, LAYER,
+  PhotoCard, Sticker, SpotSticker, Chip, Heartbeat, Sparkle, chipTextStyle, useRunning, useEntryGate, LAYER,
 } from '@/components/onboarding/Parts';
 
 // The animated middle of each onboarding slide, laid out on the visual area (w × h, ~16%
@@ -39,7 +38,9 @@ function rotatedHalf(cw: number, ch: number, deg: number) {
   return { hw: (cw * Math.cos(r) + ch * Math.sin(r)) / 2, hh: (cw * Math.sin(r) + ch * Math.cos(r)) / 2 };
 }
 
-const CHIP_H = 40;   // a chip's height
+const CHIP_H = 32;   // a chip's height (text 13, padding 7 × 12)
+/** Extra room so two stacked chips never touch while animating: bob 3 px + pop 1.1× (~2 px each side). */
+const CHIP_MOTION = 3 + 4;
 const CLEAR = 10;    // clearance under a rotated frame
 
 /**
@@ -48,7 +49,7 @@ const CLEAR = 10;    // clearance under a rotated frame
  * left-aligned with it and a bit lower (staggered, never on one line). Both ≥ 10 px below
  * the frames. The card width is the biggest that fits the whole group in the visual area.
  */
-function slide1Layout(w: number, h: number) {
+function slide1Layout(w: number, h: number, hasPrice: boolean) {
   const HEART = 22;
   const geo = (cw: number) => {
     const ch = cw * 1.32;
@@ -60,7 +61,8 @@ function slide1Layout(w: number, h: number) {
     const tentCx = tentLeft + cw / 2; const tentCy = tentTop + ch / 2;
     const spkCx = spkLeft + cw / 2; const spkCy = top + ch / 2;
     const priceTop = spkCy + spk.hh + CLEAR;
-    const amberTop = Math.max(tentCy + tent.hh + CLEAR, priceTop + CHIP_H * 0.6);
+    // Fully BELOW the price chip (8 px + animation room), never on the same line.
+    const amberTop = Math.max(tentCy + tent.hh + CLEAR, hasPrice ? priceTop + CHIP_H + 8 + CHIP_MOTION : 0);
     return {
       ch, tentLeft, tentTop, spkLeft, top,
       priceTop, priceRight: w - (spkCx + spk.hw),
@@ -78,7 +80,7 @@ function slide1Layout(w: number, h: number) {
 }
 
 export function Slide1Art({ slide, active, w, h, scrollX, page, pageW, priceLak }: ArtProps & { priceLak: number | null }) {
-  const L = slide1Layout(w, h);
+  const L = slide1Layout(w, h, priceLak != null);
   const { cw } = L;
   const top = L.top + L.dy;
   const par = { scrollX, page, pageW };
@@ -116,122 +118,90 @@ export function Slide1Art({ slide, active, w, h, scrollX, page, pageW, priceLak 
 }
 
 /**
- * Slide 2 — step-by-step story (validated mockup). Strong zigzag: Book top-left (−7°),
- * Pick up much lower (top at ~38% of the visual area, +2°), Bring back top-right (+7°);
- * cards ~31% of the width, numbered amber circles. Spotlight loop (6 s): the hexagon
- * travels along the dotted trajectory and STOPS on each card in turn (1 → 2 → 3, then
- * restarts); the focused card scales to 1.07 and comes to the front, the others 0.96 at
- * ~55% opacity (~300 ms transitions); one sticker per step pops in while its card is
- * focused. Trajectory behind the cards, 55% max, 3 px dots. Reduce motion: no loop, all
- * cards normal, only the "QR scanned · Vientiane shop" sticker.
+ * Slide 2 — step-by-step story (validated mockup): three LARGE cards (~29% of the screen
+ * width each) close together (gap ~2.5%), Book top-left (−7°), Pick up in the centre a
+ * little lower (+30% of a card height, +2°), Bring back top-right (+7°). No trajectory, no
+ * hexagon: a spotlight loop (6 s) tells the story — exactly ONE card fully opaque at any
+ * time (cross-fades sum to 1): focused 1.06 in front, others 0.96 at ~55%. One caption
+ * chip (slide 1 chip size) at ONE centred spot under Pick up, one at a time, after the
+ * cards' entry. Reduce motion: no loop, cards normal, only the QR caption.
  */
 const CYCLE_MS = 6000;
-// Timeline on t ∈ [0, 1): hold on card 1 → travel → hold on 2 → travel → hold on 3 → reset.
-const K = { h1: 0.2, t12: 0.32, h2: 0.52, t23: 0.64, h3: 0.84 };
-const R = 0.05; // ~300 ms ramps
+const B1 = 1 / 3; const B2 = 2 / 3; const XR = 0.025; // ~150 ms either side of a hand-over
+// Card focus: cross-fades that always sum to 1 (one card fully lit at any time).
 const FOCUS = [
-  { inputs: [0, K.h1, K.h1 + R, 1 - R, 1], outputs: [1, 1, 0, 0, 1] },
-  { inputs: [0, K.t12 - R, K.t12, K.h2, K.h2 + R, 1], outputs: [0, 0, 1, 1, 0, 0] },
-  { inputs: [0, K.t23 - R, K.t23, K.h3, K.h3 + R, 1], outputs: [0, 0, 1, 1, 0, 0] },
+  { inputs: [0, B1 - XR, B1 + XR, 1 - XR, 1], outputs: [1, 1, 0, 0, 1] },
+  { inputs: [0, B1 - XR, B1 + XR, B2 - XR, B2 + XR, 1], outputs: [0, 0, 1, 1, 0, 0] },
+  { inputs: [0, B2 - XR, B2 + XR, 1 - XR, 1], outputs: [0, 0, 1, 1, 0] },
+];
+// Captions: one pops out (~240 ms) before the next pops in — never two at once.
+const CAPTION = [
+  { inputs: [0, 0.03, 0.07, B1 - 0.05, B1 - 0.01, 1], outputs: [0, 0, 1, 1, 0, 0] },
+  { inputs: [0, B1 + 0.01, B1 + 0.05, B2 - 0.05, B2 - 0.01, 1], outputs: [0, 0, 1, 1, 0, 0] },
+  { inputs: [0, B2 + 0.01, B2 + 0.05, 1 - 0.05, 1 - 0.01, 1], outputs: [0, 0, 1, 1, 0, 0] },
 ];
 
 export function Slide2Art({ slide, active, w, h, scrollX, page, pageW }: ArtProps) {
   const { running, reduce } = useRunning(active);
   const gate = useEntryGate(active);
-  const LABEL_H = 30; const BADGE = 10; const PICK_TOP = 0.38;
-  // Lowest point of the Pick up card (rotated 2°, focused scale 1.07) + the ONE sticker
-  // spot under it must fit the visual area: the biggest cw (≤ 31% of w) that does.
-  const pickBottom = (cwx: number) => {
+  const LABEL_H = 30; const BADGE = 10; const DROP = 0.3; const FOCUSED = 1.06;
+  const geo = (cwx: number) => {
     const chx = cwx * 1.32 + LABEL_H;
-    return h * PICK_TOP + chx / 2 + rotatedHalf(cwx, chx, 2).hh * 1.07;
+    const side = rotatedHalf(cwx, chx, 7).hh * FOCUSED;       // Book / Bring back half-height
+    const mid = rotatedHalf(cwx, chx, 2).hh * FOCUSED;        // Pick up half-height
+    const topSide = BADGE + Math.max(0, side - chx / 2);      // room for badge + tilt
+    const pickTop = topSide + chx * DROP;
+    const captionTop = pickTop + chx / 2 + mid + CLEAR;
+    return { chx, topSide, pickTop, captionTop, bottom: captionTop + CHIP_H + CHIP_MOTION };
   };
-  const room = (cwx: number) => pickBottom(cwx) + CLEAR + CHIP_H;
-  const slope = (room(200) - room(100)) / 100; const base = room(100) - slope * 100;
-  const cw = Math.max(70, Math.min(w * 0.31, (h - base) / slope));
-  const ch = cw * 1.32 + LABEL_H;
-  const spotTop = pickBottom(cw) + CLEAR;
-  const card1 = { x: w * 0.02, y: BADGE + 2 };
-  const card2 = { x: (w - cw) / 2, y: h * PICK_TOP };
-  const card3 = { x: w * 0.98 - cw, y: BADGE + 8 };
-  const C1 = { x: card1.x + cw * 0.5, y: card1.y + ch * 0.72 };
-  const C2 = { x: card2.x + cw * 0.45, y: card2.y + ch * 0.78 };
-  const C3 = { x: card3.x + cw * 0.5, y: card3.y + ch * 0.45 };
-  const A1 = { x: C1.x + cw * 0.05, y: C1.y + ch * 0.45 };
-  const A2 = { x: C2.x - cw * 0.55, y: C2.y + ch * 0.05 };
-  const B1 = { x: C2.x + cw * 0.55, y: C2.y - ch * 0.05 };
-  const B2 = { x: C3.x - cw * 0.15, y: C3.y + ch * 0.45 };
-  const d = `M ${C1.x},${C1.y} C ${A1.x},${A1.y} ${A2.x},${A2.y} ${C2.x},${C2.y} C ${B1.x},${B1.y} ${B2.x},${B2.y} ${C3.x},${C3.y}`;
+  const g100 = geo(100).bottom; const g200 = geo(200).bottom;
+  const slope = (g200 - g100) / 100; const base = g100 - slope * 100;
+  const cw = Math.max(70, Math.min(pageW * 0.29, (h - base) / slope));
+  const G = geo(cw);
+  const dy = Math.max(0, (h - G.bottom) / 2);
+  const gap = pageW * 0.025;
+  const x0 = (w - (3 * cw + 2 * gap)) / 2; // may reach slightly into the side padding
+  const cards = [
+    { x: x0, y: G.topSide + dy, rot: -7 },
+    { x: x0 + cw + gap, y: G.pickTop + dy, rot: 2 },
+    { x: x0 + 2 * (cw + gap), y: G.topSide + dy, rot: 7 },
+  ];
+  const captionTop = G.captionTop + dy;
 
-  const t = useSharedValue(0.1);
+  const t = useSharedValue(0);
   useEffect(() => {
-    if (!running) { cancelAnimation(t); t.value = 0.1; return; }
+    if (!running) { cancelAnimation(t); t.value = 0; return; }
     t.value = 0;
     t.value = withRepeat(withTiming(1, { duration: CYCLE_MS, easing: Easing.linear, reduceMotion: ReduceMotion.System }), -1, false);
   }, [running, t]);
-  const hexStyle = useAnimatedStyle(() => {
-    const v0 = t.value;
-    // Segment progress: 0 while holding, eased 0 → 1 while travelling (ease-in-out quad,
-    // computed inline — no nested function inside the worklet).
-    let first = true; let raw = 0; let opacity = 1;
-    if (v0 < K.h1) { raw = 0; }
-    else if (v0 < K.t12) { raw = (v0 - K.h1) / (K.t12 - K.h1); }
-    else if (v0 < K.h2) { raw = 1; }
-    else if (v0 < K.t23) { first = false; raw = (v0 - K.h2) / (K.t23 - K.h2); }
-    else { first = false; raw = 1; opacity = v0 > K.h3 ? Math.max(0, 1 - (v0 - K.h3) / 0.06) : 1; }
-    let u = raw < 0.5 ? 2 * raw * raw : 1 - ((-2 * raw + 2) * (-2 * raw + 2)) / 2;
-    if (v0 > 1 - 0.06) { first = true; u = 0; opacity = (v0 - (1 - 0.06)) / 0.06; } // back in on card 1
-    const p0 = first ? C1 : C2; const p1 = first ? A1 : B1; const p2 = first ? A2 : B2; const p3 = first ? C2 : C3;
-    const q = 1 - u;
-    const x = q * q * q * p0.x + 3 * q * q * u * p1.x + 3 * q * u * u * p2.x + u * u * u * p3.x;
-    const y = q * q * q * p0.y + 3 * q * q * u * p1.y + 3 * q * u * u * p2.y + u * u * u * p3.y;
-    return { opacity, transform: [{ translateX: x - 10 }, { translateY: y - 10 }] };
-  });
   const par = { scrollX, page, pageW };
   const spot = (i: number) => (reduce ? undefined : { t, ...FOCUS[i] });
   const label = (x: string) => x.replace(/^\d+\s*·\s*/, ''); // old "1 · Book" texts
   const qrChip = (
-    <Chip tone="light" text={slide.stickers.place} icon={<MaterialCommunityIcons name="qrcode-scan" size={15} color={SHADES.amberDeep} />} />
+    <Chip tone="light" text={slide.stickers.place} icon={<MaterialCommunityIcons name="qrcode-scan" size={14} color={SHADES.amberDeep} />} />
   );
+  const captions = [
+    <Chip key="1" tone="carbon" text={slide.stickers.booked} icon={<MaterialCommunityIcons name="calendar-check" size={14} color={SHADES.amber} />} />,
+    <React.Fragment key="2">{qrChip}</React.Fragment>,
+    <Chip key="3" tone="amber" text={slide.stickers.points} icon={<MaterialCommunityIcons name="star" size={14} color={SHADES.carbon} />} />,
+  ];
 
   return (
     <View style={{ width: w, height: h }}>
-      {/* Trajectory BEHIND the cards. */}
-      <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <LinearGradient id="onbFade" gradientUnits="userSpaceOnUse" x1={C1.x} y1={0} x2={C1.x + w * 0.3} y2={0}>
-            <Stop offset={0} stopColor={SHADES.amber} stopOpacity={0.12} />
-            <Stop offset={1} stopColor={SHADES.amber} stopOpacity={0.55} />
-          </LinearGradient>
-        </Defs>
-        <Path d={d} stroke="url(#onbFade)" strokeWidth={3} strokeDasharray={[0.1, 8]} strokeLinecap="round" fill="none" />
-      </Svg>
-      <PhotoCard source={slide.photos[0]} width={cw} rotate={-7} badge={1} label={label(slide.stickers.step1)} active={active} from="left" spot={spot(0)} {...par}
-        style={[s.soft, { left: card1.x, top: card1.y }]} />
-      <PhotoCard source={slide.photos[2]} width={cw} rotate={7} delay={800} badge={3} label={label(slide.stickers.step3)} active={active} from="right" spot={spot(2)} {...par}
-        style={[s.soft, { left: card3.x, top: card3.y }]} />
-      <PhotoCard source={slide.photos[1]} width={cw} rotate={2} delay={400} dark badge={2} label={label(slide.stickers.step2)} active={active} from="left" spot={spot(1)} {...par}
-        style={[s.soft, { left: card2.x, top: card2.y }]} />
-      {!reduce && (
-        <Animated.View style={[s.hex, hexStyle]} pointerEvents="none">
-          <Svg width={20} height={20} viewBox="0 0 20 20"><Polygon points={hexPoints(10, 10, 9.5)} fill={SHADES.amber} /></Svg>
-        </Animated.View>
-      )}
-      {/* ONE sticker spot, centred under Pick up; one sticker at a time, in sync with the
-          spotlight (1 → 2 → 3), only after the cards' entry. Reduce motion: the QR one. */}
+      <PhotoCard source={slide.photos[0]} width={cw} rotate={cards[0].rot} badge={1} label={label(slide.stickers.step1)} active={active} from="left" spot={spot(0)} {...par}
+        style={[s.soft, { left: cards[0].x, top: cards[0].y }]} />
+      <PhotoCard source={slide.photos[2]} width={cw} rotate={cards[2].rot} delay={800} badge={3} label={label(slide.stickers.step3)} active={active} from="right" spot={spot(2)} {...par}
+        style={[s.soft, { left: cards[2].x, top: cards[2].y }]} />
+      <PhotoCard source={slide.photos[1]} width={cw} rotate={cards[1].rot} delay={400} dark badge={2} label={label(slide.stickers.step2)} active={active} from="left" spot={spot(1)} {...par}
+        style={[s.soft, { left: cards[1].x, top: cards[1].y }]} />
       {reduce ? (
-        active ? <View style={[s.stickerRow, { top: spotTop }]} pointerEvents="none">{qrChip}</View> : null
+        active ? <View style={[s.stickerRow, { top: captionTop }]} pointerEvents="none">{qrChip}</View> : null
       ) : (
-        <>
-          <SpotSticker t={t} gate={gate} {...FOCUS[0]} style={[s.stickerRow, { top: spotTop }]}>
-            <Chip tone="carbon" text={slide.stickers.booked} icon={<MaterialCommunityIcons name="calendar-check" size={15} color={SHADES.amber} />} />
+        captions.map((chip, i) => (
+          <SpotSticker key={i} t={t} gate={gate} {...CAPTION[i]} style={[s.stickerRow, { top: captionTop }]}>
+            {chip}
           </SpotSticker>
-          <SpotSticker t={t} gate={gate} {...FOCUS[1]} style={[s.stickerRow, { top: spotTop }]}>
-            {qrChip}
-          </SpotSticker>
-          <SpotSticker t={t} gate={gate} {...FOCUS[2]} style={[s.stickerRow, { top: spotTop }]}>
-            <Chip tone="amber" text={slide.stickers.points} icon={<MaterialCommunityIcons name="star" size={14} color={SHADES.carbon} />} />
-          </SpotSticker>
-        </>
+        ))
       )}
     </View>
   );
@@ -270,7 +240,6 @@ const s = StyleSheet.create({
     width: 46, height: 46, borderRadius: 23, backgroundColor: SHADES.white, alignItems: 'center', justifyContent: 'center',
     shadowColor: SHADES.carbon, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
-  hex: { position: 'absolute', left: 0, top: 0, ...LAYER.hex },
   stickerRow: { position: 'absolute', left: 0, right: 0, alignItems: 'center', ...LAYER.sticker },
   // Softer shadow on the step cards.
   soft: { shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
