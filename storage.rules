@@ -32,7 +32,7 @@ rules_version = '2';
 // size / contentType condition can never allow one. Each path therefore states its
 // delete rule separately: admin-managed media (products, home slides) and the owner's
 // own profile photo can be deleted; evidence (chat, claims, checklist photos, business
-// documents) stays undeletable from the client on purpose — server code (Admin SDK,
+// documents) and ID documents (retention rules, server-side only) stay undeletable from the client on purpose — server code (Admin SDK,
 // e.g. account deletion) is not subject to these rules.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -42,6 +42,18 @@ service firebase.storage {
     function isAdmin() {
       return request.auth != null &&
         firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    // A REAL account (email / Google), not a guest's anonymous session — mirrors
+    // firestore.rules isAccount(). Every renter upload requires it.
+    function isAccount() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // The renter uploading into their own folder, with a real account.
+    function isAccountOwner(uid) {
+      return isAccount() && request.auth.uid == uid;
     }
 
     // ── Product images ────────────────────────────────────────────────────
@@ -65,12 +77,13 @@ service firebase.storage {
     //   uploadChatImage(conversationId, ...) where conversationId == renterId,
     //   so the admin's own UID != uid in the path — hence the isAdmin() branch.
     match /chat-images/{uid}/{fileName} {
-      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create, update: if request.auth != null
-                           && (request.auth.uid == uid || isAdmin())
-                           && request.resource.size < 10 * 1024 * 1024
-                           && request.resource.contentType.matches('image/.*');
-      allow delete:         if false;  // evidence — see DELETES above
+      allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
+      // Create once (no overwrite of a sent file — evidence).
+      allow create: if (isAccountOwner(uid) || isAdmin())
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if false;  // evidence — see DELETES above
     }
 
     // ── Chat videos ───────────────────────────────────────────────────────
@@ -80,12 +93,13 @@ service firebase.storage {
     // videos over 50MB before starting the upload; recorded videos are capped at
     // the source (60s max, medium quality) and stay well under this ceiling.
     match /chat-videos/{uid}/{fileName} {
-      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create, update: if request.auth != null
-                           && (request.auth.uid == uid || isAdmin())
-                           && request.resource.size < 60 * 1024 * 1024
-                           && request.resource.contentType.matches('video/.*');
-      allow delete:         if false;  // evidence — see DELETES above
+      allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
+      // Create once (no overwrite of a sent file — evidence).
+      allow create: if (isAccountOwner(uid) || isAdmin())
+                    && request.resource.size < 60 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*');
+      allow update: if false;
+      allow delete: if false;  // evidence — see DELETES above
     }
 
     // ── Rental checklist photos ───────────────────────────────────────────────
@@ -131,11 +145,12 @@ service firebase.storage {
     //   branch is needed.
     match /claim-photos/{uid}/{fileName} {
       allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create, update: if request.auth != null
-                           && request.auth.uid == uid
-                           && request.resource.size < 10 * 1024 * 1024
-                           && request.resource.contentType.matches('image/.*');
-      allow delete:         if false;  // claim evidence
+      // Create once (no overwrite — evidence).
+      allow create: if isAccountOwner(uid)
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if false;  // claim evidence
     }
 
     // ── Claim videos ──────────────────────────────────────────────────────────
@@ -147,11 +162,12 @@ service firebase.storage {
     // exactly (a deliberately independent limit from chat-videos' 60MB).
     match /claim-videos/{uid}/{fileName} {
       allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create, update: if request.auth != null
-                           && request.auth.uid == uid
-                           && request.resource.size < 50 * 1024 * 1024
-                           && request.resource.contentType.matches('video/.*');
-      allow delete:         if false;  // claim evidence
+      // Create once (no overwrite — evidence).
+      allow create: if isAccountOwner(uid)
+                    && request.resource.size < 50 * 1024 * 1024
+                    && request.resource.contentType.matches('video/.*');
+      allow update: if false;
+      allow delete: if false;  // claim evidence
     }
 
     // ── Profile photos ────────────────────────────────────────────────────────
@@ -161,8 +177,7 @@ service firebase.storage {
     // Write: the user whose UID matches the path segment only.
     match /profile-photos/{uid}/{fileName} {
       allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create, update: if request.auth != null
-                           && request.auth.uid == uid
+      allow create, update: if isAccountOwner(uid)
                            && request.resource.size < 5 * 1024 * 1024
                            && request.resource.contentType.matches('image/.*');
       allow delete:         if request.auth != null && (request.auth.uid == uid || isAdmin());
@@ -173,29 +188,33 @@ service firebase.storage {
     //
     // Read: the owning user, OR any admin (admins must review the document to
     //   approve/reject the application).
-    // Write: the user whose UID matches the path segment only, at signup.
+    // Write: the user whose UID matches the path segment only. Create once — a new
+    //   document is a NEW file (Date.now() name); the one an admin reviewed is never
+    //   overwritten.
     match /businessDocs/{uid}/{fileName} {
-      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create, update: if request.auth != null
-                           && request.auth.uid == uid
-                           && request.resource.size < 10 * 1024 * 1024
-                           && request.resource.contentType.matches('image/.*');
-      allow delete:         if false;  // review evidence
+      allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if isAccountOwner(uid)
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if false;  // review evidence
     }
 
     // ── Identity / residency documents (very sensitive) ───────────────────────
     // Path: idDocs/{uid}/{fileName} — the renter's ID document photos (and, later,
-    // residency documents). Read/delete: the owner or an admin only (never public;
-    // the app never stores download URLs — paths only). Create: the owner, or an admin
-    // photographing the ID at the counter. Images only, < 10 MB. No overwrite.
+    // residency documents). Read: the owner or an admin only (never public; the app
+    // never stores download URLs — paths only). Create: the owner (real account), or an
+    // admin photographing the ID at the counter. Images only, < 10 MB. No overwrite.
+    // Delete: NEVER from the client — the retention rules (functions/src/shared/
+    // retention.ts) decide when a document may go; deleteMyIdentityDocument /
+    // withdrawResidency / documentRetentionDaily delete through the Admin SDK.
     match /idDocs/{uid}/{fileName} {
       allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create: if request.auth != null
-                    && (request.auth.uid == uid || isAdmin())
+      allow create: if (isAccountOwner(uid) || isAdmin())
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
       allow update: if false;
-      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow delete: if false;
     }
 
     // ── Home slides (hero carousel + mid-page banner) ─────────────────────

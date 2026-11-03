@@ -695,8 +695,9 @@ a snapshot indefinitely).
   admin read) `{status: none|on_file|rejected, docType, files (Storage PATHS, never
   URLs), source: renter|counter, version (+1 per new document — the first-pick-up check
   is tied to it), supersededFiles (kept for the retention job)}`; `users.idOnFile` /
-  `idDocVersion` server-only. Storage `idDocs/{uid}/` — owner/admin read+delete,
-  owner/admin create, images < 10 MB, no overwrite. Booking: `createReservations` refuses
+  `idDocVersion` server-only. Storage `idDocs/{uid}/` — owner/admin read, owner
+  (real account)/admin create, images < 10 MB, no overwrite, NEVER deleted from the client
+  (retention rules decide — server-side deletes only). Booking: `createReservations` refuses
   without an ID on file unless `idCheckAtCounter` ("I'll show my ID at the shop"), and
   always after a rejection (`id-required` / `id-rejected`); admins exempt; each line
   stores `idCheckAtCounter`. App: `lib/identity.ts`, `<IdUploadPanel>`,
@@ -1473,6 +1474,12 @@ callable's `details.code` to friendly messages. Renter cancellation rule now pin
 - `requests`: field allow-list + size limits (text ≤ 1000, contact ≤ 200 or null).
 - Storage: chat, claim, profile and checklist files are SDK-readable only by their
   owner/admin (checklist: admin only). Stored download URLs keep working.
+- **Rules holes closed (2026-11):** `users/{uid}` delete = never from the client
+  (`deleteMyAccount` only — delete + re-create would reset server fields). Storage: every
+  renter upload needs a real account (`isAccount()`/`isAccountOwner()` in `storage.rules`,
+  no guest uploads); chat / claim / business-document files are CREATE-ONCE (update
+  false — evidence never overwritten; new files always get a new `Date.now()` name);
+  `idDocs` delete false.
 
 **Closed (2026-10-29): client-side amounts.** Audit of `createReservations`: the
 client sends only product, dates, quantity, `couponId` OR `promoCode`, `notes` (≤ 500)

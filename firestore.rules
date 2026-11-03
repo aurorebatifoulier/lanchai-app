@@ -258,7 +258,10 @@ service cloud.firestore {
         )
       );
 
-      allow delete: if isAccountOwner(userId);
+      // Never from the client: deleting then re-creating the profile would reset the
+      // server-only fields (loyalty, coupons, customerType…). Account deletion goes
+      // through the deleteMyAccount callable (Admin SDK).
+      allow delete: if false;
 
       match /favorites/{productId} {
         allow read:  if isOwner(userId);
