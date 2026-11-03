@@ -1329,3 +1329,25 @@ export function availabilityEmail(shop: EmailShop, ctx: {
     shop,
   );
 }
+
+// ── Category watch: first item published in a category the renter asked about ─────
+export function categoryArrivalEmail(shop: EmailShop, ctx: {
+  firstName: string; categoryName: string; categoryId: string; productName: string; image: string | null;
+}): Rendered {
+  return build(
+    `New in ${ctx.categoryName}: ${ctx.productName}`,
+    `You asked us to tell you — ${ctx.categoryName} gear has arrived`,
+    `New in ${ctx.categoryName}`,
+    [
+      {
+        type: 'hero',
+        pill: 'Just arrived',
+        ...(ctx.image ? { image: { url: ctx.image, alt: ctx.productName, size: 120 } } : {}),
+        title: `New in ${ctx.categoryName}`,
+        sub: `Hi ${ctx.firstName} — you asked us to tell you. ${ctx.productName} just arrived in ${ctx.categoryName}.`,
+        primary: { label: `Browse ${ctx.categoryName}`, url: appLink(`category/${ctx.categoryId}`) },
+      },
+    ],
+    shop,
+  );
+}

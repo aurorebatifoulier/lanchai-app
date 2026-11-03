@@ -45,6 +45,7 @@ import {
 import { EXPLORE_COPY } from '@/constants/exploreCopy';
 import RotatingLine from '@/components/explore/RotatingLine';
 import { plural } from '@/lib/navigation';
+import { useMyCategoryWatches, watchCategory, unwatchCategory } from '@/lib/categoryWatch';
 import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
 import { MOTION, useReducedMotion } from '@/constants/motion';
 import { weekendWindow, whyBuyCatalogueRanked } from '@/lib/homeData';
@@ -620,6 +621,8 @@ export default function ExploreScreen() {
                   onRequestItem={openRequest}
                   onCategory={id => { setSearchQuery(''); setActiveCategory(id); listRef.current?.scrollToOffset({ offset: 0, animated: false }); }}
                 />
+              ) : activeCategory !== 'all' && categoryCount === 0 && allProducts.length > 0 ? (
+                <CategoryEmptyState category={activeCategory} onRequestItem={openRequest} />
               ) : (
                 <SmartEmptyState
                   catalogueEmpty={allProducts.length === 0}
@@ -774,6 +777,50 @@ function SearchEmptyState({ query, collections, onRequestItem, onCategory }: {
   );
 }
 
+/**
+ * A category with NO product yet: its own title, "We're adding {category} gear soon…",
+ * carbon "Notify me when items arrive" (category watch — guests sign in first) and an
+ * outline "Ask for an item" (the request flow).
+ */
+function CategoryEmptyState({ category, onRequestItem }: { category: string; onRequestItem: () => void }) {
+  const watched = useMyCategoryWatches().has(category);
+  const requireAccount = useRequireAccount();
+  const [error, setError] = useState(false);
+  const name = CATEGORIES.find(c => c.id === category)?.name ?? category;
+  const toggle = () => requireAccount({
+    action: 'notify', itemName: `${name} gear`,
+    run: () => {
+      setError(false);
+      (watched ? unwatchCategory(category) : watchCategory(category)).catch(() => setError(true));
+    },
+  });
+  return (
+    <View style={styles.empty}>
+      <CategoryBadge cat={category} size={64} />
+      <Text style={[styles.emptyTitle, { marginTop: 16 }]}>{EXPLORE_COPY.categoryEmptyTitles[category] ?? EXPLORE_COPY.categoryEmptySub(name)}</Text>
+      <Text style={styles.emptySub}>{EXPLORE_COPY.categoryEmptySub(name)}</Text>
+      {watched ? (
+        <View style={styles.catWatchOn}>
+          <MaterialCommunityIcons name="bell-check-outline" size={18} color={SHADES.amberDeep} />
+          <Text style={styles.catWatchOnText}>{EXPLORE_COPY.categoryNotifying}</Text>
+          <TouchableOpacity onPress={toggle} hitSlop={10} style={{ marginLeft: 'auto' }}>
+            <Text style={styles.catWatchCancel}>{EXPLORE_COPY.categoryNotifyCancel}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <PressScale style={[UI.btnPrimary, styles.catBtn, { backgroundColor: SHADES.carbon }]} onPress={toggle}>
+          <Feather name="bell" size={16} color={SHADES.amber} />
+          <Text style={[UI.btnPrimaryText, { color: SHADES.white }]}>{EXPLORE_COPY.categoryNotify}</Text>
+        </PressScale>
+      )}
+      {error && <Text style={[UI.errorText, { marginTop: 8 }]}>{EXPLORE_COPY.categoryNotifyError}</Text>}
+      <PressScale style={[UI.btnSecondary, styles.catBtn]} onPress={onRequestItem}>
+        <Text style={UI.btnSecondaryText}>{EXPLORE_COPY.askItem}</Text>
+      </PressScale>
+    </View>
+  );
+}
+
 function SmartEmptyState({
   catalogueEmpty,
   onClearFilters,
@@ -827,6 +874,13 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
   oneLiner: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   categoryCount: { fontWeight: '700', color: SHADES.carbon },
+  catBtn: { alignSelf: 'stretch', marginTop: 12 },
+  catWatchOn: {
+    alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12,
+    height: SIZES.btn, borderRadius: 14, paddingHorizontal: 16, backgroundColor: SHADES.amberLight,
+  },
+  catWatchOnText: { ...TYPE.button, color: SHADES.amberDeep },
+  catWatchCancel: { ...TYPE.buttonCard, color: SHADES.amberDeep },
   quickRow: { gap: 8, paddingVertical: 14 },
   quickChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, height: SIZES.tab, paddingHorizontal: SIZES.chipPadX, borderRadius: 11,

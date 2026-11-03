@@ -448,6 +448,20 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
 
+    // ── categoryWatches/{uid}_{category} — "Notify me when items arrive" ──
+    // Written by the renter (real account) from Explore's empty category; read / deleted
+    // by its owner. onCategoryArrival (Cloud Functions) notifies + deletes it.
+    match /categoryWatches/{watchId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAccount()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.category is string
+                    && request.resource.data.category.size() <= 30
+                    && watchId == request.auth.uid + '_' + request.resource.data.category
+                    && request.resource.data.keys().hasOnly(['uid', 'category', 'createdAt']);
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
     // ── recentViews/{uid} — "Recently viewed" (max 10 entries) ──────────────
     match /recentViews/{uid} {
       allow read:  if isOwner(uid);

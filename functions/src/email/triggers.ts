@@ -18,7 +18,7 @@ import {
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
   idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
-  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail,
+  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 
@@ -382,7 +382,7 @@ export async function sendAccountEmail(
   }
 }
 
-export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail };
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail };
 
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
