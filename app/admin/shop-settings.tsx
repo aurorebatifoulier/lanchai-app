@@ -31,6 +31,7 @@ import { DEFAULT_LATE_GRACE_HOURS } from '@/functions/src/shared/latePenalty';
 import { parseHHMM, buildTimeSlots } from '@/utils/timeSlots';
 import { getGraceHours, saveGraceHours } from '@/lib/latePolicy';
 import EmailSettingsSection from '@/components/EmailSettingsSection';
+import DiagnosticsSection from '@/components/admin/DiagnosticsSection';
 import { getFeatureFlags, saveFeatureFlag, FEATURE_DEFAULTS, type FeatureFlags } from '@/lib/features';
 import { getRetentionConfig, saveRetentionConfig, RETENTION_DEFAULTS } from '@/lib/residency';
 
@@ -524,6 +525,8 @@ export default function AdminShopSettingsScreen() {
             <RetentionSection />
 
             <EmailSettingsSection />
+
+            <DiagnosticsSection />
           </>
         )}
       </ScrollView>

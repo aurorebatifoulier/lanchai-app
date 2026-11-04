@@ -76,6 +76,14 @@
           "savePhotosPermission": "LANCHAI needs permission to save photos and videos to your device.",
           "granularPermissions": []
         }
+      ],
+      [
+        "@sentry/react-native",
+        {
+          "organization": "lanchai",
+          "project": "lanchai-app",
+          "url": "https://de.sentry.io/"
+        }
       ]
     ],
     "experiments": {

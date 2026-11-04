@@ -1482,6 +1482,18 @@ a snapshot indefinitely).
   `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
   Never add a READ_MEDIA permission without a Play declaration.
 
+- **Sentry (2026-11-04, EU region `de.sentry.io`, org `lanchai`, project `lanchai-app`).**
+  `lib/sentry.ts` is imported FIRST by `app/_layout.tsx` (root wrapped with `Sentry.wrap`);
+  DSN = `EXPO_PUBLIC_SENTRY_DSN` (EAS env), environment = `EXPO_PUBLIC_APP_ENV`; off in Expo
+  Go / dev. **Privacy:** user = Firebase uid ONLY (`setSentryUser`, from AuthContext);
+  `sendDefaultPii: false`, no screenshots / view hierarchy, console breadcrumbs dropped,
+  everything else through `utils/scrub.ts` (emails / phones / URL queries masked, name /
+  email / phone / address / text… fields redacted — tested in `tests/unit/scrub.test.ts`).
+  Never `setUser` with an email or name, never attach chat text or ID data. Source maps:
+  uploaded by the Expo plugin on EAS builds with the `SENTRY_AUTH_TOKEN` EAS secret
+  (`metro.config.js` = `getSentryExpoConfig`). Admin → Shop settings → Diagnostics: "Send
+  test error" / "Test crash". Cloud Functions use Google Error Reporting (no Sentry there).
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

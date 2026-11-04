@@ -1,3 +1,5 @@
+// FIRST: crash / error reporting (lib/sentry.ts — uid only, no personal data).
+import { Sentry } from '@/lib/sentry';
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments, usePathname, useGlobalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -194,7 +196,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <AuthProvider>
@@ -214,3 +216,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
 });
+
+// Unhandled render errors / crashes are reported by Sentry (no-op when disabled).
+export default Sentry.wrap(RootLayout);

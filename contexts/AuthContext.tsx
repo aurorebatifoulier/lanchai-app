@@ -10,6 +10,7 @@ import {
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
+import { setSentryUser } from '@/lib/sentry';
 
 type AccountType = 'btoc' | 'btob';
 type BtobStatus = 'pending_approval' | 'approved' | 'rejected';
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     return onIdTokenChanged(auth, u => {
       setUid(u?.uid ?? null);
+      setSentryUser(u?.uid ?? null);
       setAnon(!!u?.isAnonymous);
       if (!u) {
         // Signed out → the guest session follows within a moment. `loading` stays as it
