@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:unit": "node --import tsx --test \"tests/unit/**/*.test.ts\"",
-    "test": "npm run test:unit"
+    "test": "npm run test:unit",
+    "test:rules": "rm -rf tests/.coverage && node --import tsx --test --test-concurrency=1 \"tests/rules/**/*.test.ts\" && tsx tests/rules/coverage.ts",
+    "test:emu:rules": "firebase emulators:exec --config firebase.test.json --only firestore,storage --project demo-lanchai \"npm run test:rules\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

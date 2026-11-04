@@ -48,3 +48,4 @@ app-example
 
 # Firebase Hosting deploy cache
 .firebase/
+tests/.coverage/
