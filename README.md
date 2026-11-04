@@ -25,6 +25,32 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Tests
+
+One command runs everything (also run by GitHub Actions on every push to `master`):
+
+```bash
+npm test
+```
+
+- **Unit tests** (`tests/unit/`, no emulator): pricing tiers, deposit per unit, coupons,
+  promo codes, loyalty points, late fees, Vientiane time / slots, receipts, search, plurals.
+  Run alone: `npm run test:unit` (search only: `npm run test:search`).
+- **Security rules** (`tests/rules/`, Firestore + Storage emulators): every rule block is
+  tested with at least one allowed and one refused operation, as a guest, renter A,
+  renter B, a business account and an admin. Run alone: `npm run test:emu:rules`.
+  The run ends with a coverage check that fails if a rule block has no allow or no deny
+  test.
+- **Cloud Functions** (`functions/test/`, same emulators): callables refuse
+  unauthenticated / guest / non-admin calls, booking prices are recomputed server-side,
+  one discount per booking, stock race, idempotency, promo limits, invites, points
+  credited once. Run alone: `npm run test:emu:functions`.
+
+The emulators need **Java 21** (`brew install openjdk@21`, then `java -version`). They use
+the demo project `demo-lanchai` — nothing touches the real Firebase project, no
+credentials are needed. Config: `firebase.test.json` (the deploy config `firebase.json` is
+unchanged; rules are still pasted in the console by hand).
+
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:

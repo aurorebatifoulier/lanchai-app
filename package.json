@@ -3,12 +3,14 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "test:search": "npx -y tsx scripts/test-search.ts",
+    "test:search": "node --import tsx --test tests/unit/search.test.ts",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:unit": "node --import tsx --test \"tests/unit/**/*.test.ts\"",
+    "test": "npm run test:unit"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -49,9 +51,12 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "firebase-tools": "^15.24.0",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.2"
   },
   "private": true

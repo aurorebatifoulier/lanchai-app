@@ -11,10 +11,7 @@ export function openCategory(router: Router, id: string): void {
   router.navigate({ pathname: '/(tabs)/explore', params: { category: id, t: String(Date.now()) } } as never);
 }
 
-/** "1 item" / "3 items". */
-export function plural(n: number, word: string): string {
-  return `${n} ${n === 1 ? word : `${word}s`}`;
-}
+export { plural } from '@/utils/plural';
 
 /** Opens an app route; a legacy `/category/{id}` link goes to Explore with that category. */
 export function openAppRoute(router: Router, route: string): void {

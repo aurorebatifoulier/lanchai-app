@@ -1,7 +1,7 @@
-// Dry tests for lib/search.ts (no Firestore): `npm run test:search`.
+// Dry tests for lib/search.ts (no Firestore): `npm run test:search` (also part of `npm run test:unit`).
 import assert from 'node:assert/strict';
-import { buildSearchIndex, searchProducts, isBestMatch, withinDistance, stem, normalize, suggestKeywords } from '../lib/search';
-import { DEFAULT_SEARCH_GROUPS } from '../lib/searchVocabulary';
+import { buildSearchIndex, searchProducts, isBestMatch, withinDistance, stem, normalize, suggestKeywords } from '../../lib/search';
+import { DEFAULT_SEARCH_GROUPS } from '../../lib/searchVocabulary';
 
 const products = [
   { id: 'tent', name: 'Camping tent', category: 'outdoor', shortDesc: '4-person tent for river weekends', rentalCount: 9 },
