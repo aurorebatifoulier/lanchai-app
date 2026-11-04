@@ -83,6 +83,15 @@ describe('broadcasts, adminTasks, savedReplies', () => {
   });
 });
 
+describe('jobHealth (scheduled jobs)', () => {
+  test('admin reads; nobody writes (no faking a healthy job)', async () => {
+    const J = 'fs:jobHealth/{jobName}';
+    await ok(J, getDocs(collection(db('admin'), 'jobHealth')));
+    await no(J, getDoc(doc(db('A'), 'jobHealth/lateReturnAlerts')));
+    await no(J, setDoc(doc(db('admin'), 'jobHealth/lateReturnAlerts'), { lastOkAt: 1 }));
+  });
+});
+
 describe('reviews', () => {
   const RP = 'fs:reviews/{productId}';
   const RV = 'fs:reviews/{productId}/reviews/{reservationId}';

@@ -89,6 +89,7 @@ const SEED: Record<string, Record<string, unknown>> = {
   [`categoryWatches/${UID.A}_fun`]: { uid: UID.A, category: 'fun' },
   [`recentViews/${UID.A}`]: { items: [], updatedAt: T0 },
   'savedReplies/s1': { text: 'Hello' },
+  'jobHealth/lateReturnAlerts': { lastOkAt: T0, durationMs: 1200 },
   [`promoGrants/SUMMER10_${UID.A}`]: { uid: UID.A, code: 'SUMMER10', used: false },
   'rentalAgreements/ag1': { renterId: UID.A, orderId: 'LNC-1' },
   'rentalAgreements/ag1/internal/audit': { staffName: 'Staff' },

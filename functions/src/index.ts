@@ -19,6 +19,7 @@ import { HANDOFF_BUFFER_MS } from './shared/availability';
 import { releaseStockMoves } from './shared/returnStock';
 import { sendLateReturnEmail } from './email/triggers';
 import { dueLateAlerts, planLateEmails, type LateAlertKey, type LateRow } from './lateAlerts';
+import { trackJob } from './jobHealth';
 
 // Transactional emails (Brevo) — see functions/src/email/.
 export * from './email/triggers';
@@ -75,7 +76,7 @@ async function getGraceHours(): Promise<number> {
 
 export const lateReturnAlerts = onSchedule(
   { schedule: 'every 15 minutes', region: 'asia-southeast1', secrets: [BREVO_API_KEY] },
-  async () => {
+  async () => trackJob('lateReturnAlerts', async () => {
     const now = Date.now();
     const snap = await db
       .collection('reservations')
@@ -234,7 +235,7 @@ export const lateReturnAlerts = onSchedule(
         logger.error('[lateReturnAlerts] email failed', { orderId: batch.orderId, err: String(err) });
       }
     }
-  },
+  }),
 );
 
 // Keeps bookingHolds/{renterId} in sync with that renter's reservations: the doc exists
@@ -311,7 +312,7 @@ export const syncBookingHold = onDocumentWritten(
 // decision not to reintroduce the removed deposit-urgency system.
 export const releaseSettledStock = onSchedule(
   { schedule: 'every 15 minutes', region: 'asia-southeast1' },
-  async () => {
+  async () => trackJob('releaseSettledStock', async () => {
     const now = Date.now();
     const snap = await db
       .collection('reservations')
@@ -381,7 +382,7 @@ export const releaseSettledStock = onSchedule(
         logger.error('[releaseSettledStock] reservation failed', { reservationId: reservationDoc.id, err: String(err) });
       }
     }
-  },
+  }),
 );
 
 export const applyRentalCount = onDocumentUpdated(
@@ -520,7 +521,7 @@ async function sendFirstRentalIdAlerts(docs: admin.firestore.QueryDocumentSnapsh
 
 export const missedPickupAlerts = onSchedule(
   { schedule: 'every 60 minutes', region: 'asia-southeast1' },
-  async () => {
+  async () => trackJob('missedPickupAlerts', async () => {
     const now = Date.now();
     const snap = await db.collection('reservations')
       .where('status', 'in', ['pending_payment', 'confirmed'])
@@ -554,7 +555,7 @@ export const missedPickupAlerts = onSchedule(
         logger.error('[missedPickupAlerts] order failed', { orderId, err: String(err) });
       }
     }
-  },
+  }),
 );
 
 // Server-side credit of loyalty points — the ONLY way points ever change. Shared by
@@ -769,7 +770,7 @@ type Tier = LoyaltyTierKey;
 // Self-idempotent: once flipped, a doc no longer matches the query, so no flag needed.
 export const expireEarlyAccess = onSchedule(
   { schedule: 'every 15 minutes', region: 'asia-southeast1' },
-  async () => {
+  async () => trackJob('expireEarlyAccess', async () => {
     // Equality-only query + in-memory date filter, on purpose: combining
     // accessMode == … with earlyAccessUntil <= … needs a composite index this project
     // doesn't have (the query failed with FAILED_PRECONDITION on every run). Only a
@@ -787,7 +788,7 @@ export const expireEarlyAccess = onSchedule(
       accessMode: 'public',
       updatedAt:  FieldValue.serverTimestamp(),
     })));
-  },
+  }),
 );
 
 // Notifies eligible members when a product is created or updated into 'earlyAccess' or

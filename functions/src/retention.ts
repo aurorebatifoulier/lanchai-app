@@ -8,6 +8,7 @@ import {
   sanitizeRetention, deletionBlockers, rentalInProgress, identityPurgeDueMs, DAY_MS,
   type RetentionConfig, type RetentionReservation, type DeletionBlocker,
 } from './shared/retention';
+import { trackJob } from './jobHealth';
 
 // Retention of identity + residency documents — rules in functions/src/shared/retention.ts.
 // Every deletion (and every blocked attempt) is logged in docDeletionLog (admin read,
@@ -93,7 +94,7 @@ export async function deleteProofFilesIfAllowed(uid: string, reason: DeletionRea
 // no composite index. Also refreshes identityChecks.purgeDueAt (shown in ID & residency).
 export const documentRetentionDaily = onSchedule(
   { schedule: '0 4 * * *', timeZone: 'Asia/Vientiane', region: REGION },
-  async () => {
+  async () => trackJob('documentRetentionDaily', async () => {
     const now = Date.now();
     const cfg = await getRetentionConfig();
     const proofMs = cfg.proofRetentionDays * DAY_MS;
@@ -168,7 +169,7 @@ export const documentRetentionDaily = onSchedule(
         logger.error('[retention] failed for a renter', { uid, err: String(err) });
       }
     }
-  },
+  }),
 );
 
 // ── deleteMyIdentityDocument() — renter asks to delete their ID (ID & residency) ──────────

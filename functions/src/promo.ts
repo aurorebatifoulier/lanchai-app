@@ -16,6 +16,7 @@ import {
   REFERRAL_WELCOME_CODE, type PromoCode, type PromoError, type PromoLine, type PromoGrantInfo, type GrantSource,
   type PromoType,
 } from './shared/promo';
+import { trackJob } from './jobHealth';
 
 // Promo codes + personal wallet — see functions/src/shared/promo.ts. Renters never read
 // promoCodes (firestore.rules); promoGrants/{CODE}_{uid} (the wallet) is server-written,
@@ -332,7 +333,7 @@ export const restoreCancelledPromo = onDocumentUpdated(
 // ── Expiry reminder: 10:00 Vientiane, unused codes expiring within 3 days, once ──
 export const promoWalletDaily = onSchedule(
   { schedule: '0 10 * * *', timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_API_KEY] },
-  async () => {
+  async () => trackJob('promoWalletDaily', async () => {
     const now = Date.now();
     const horizon = now + EXPIRY_REMINDER_DAYS * DAY_MS;
     // Equality only (no composite index) — dates filtered in code.
@@ -358,7 +359,7 @@ export const promoWalletDaily = onSchedule(
       sent++;
     }
     logger.info('[promoWalletDaily] reminders', { sent });
-  },
+  }),
 );
 
 /** The system welcome code for invited friends (created on first use; % frozen per grant). */

@@ -22,6 +22,7 @@ import {
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 import { productThumb } from '../shared/productImage';
+import { trackJob } from '../jobHealth';
 
 // Transactional emails (Brevo). Every sender: claim → send → finish, so nothing is ever
 // sent twice. Handlers catch everything — email problems never crash or retry a trigger.
@@ -309,7 +310,7 @@ const DAILY_JOB = { timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_
 
 export const emailDailyReminders = onSchedule(
   { ...DAILY_JOB, schedule: '0 18 * * *' },
-  async () => {
+  async () => trackJob('emailDailyReminders', async () => {
     try {
       const rates = await getRates();
       await sendReminders(['pending_payment', 'confirmed'], 'pickupAt', 'emailPickupReminder',
@@ -317,29 +318,29 @@ export const emailDailyReminders = onSchedule(
     } catch (err) {
       logger.error('[email] pickup reminders failed', { err: String(err) });
     }
-  },
+  }),
 );
 
 export const emailReturnReminders = onSchedule(
   { ...DAILY_JOB, schedule: '5 18 * * *' },
-  async () => {
+  async () => trackJob('emailReturnReminders', async () => {
     try {
       await sendReminders(['active'], 'returnAt', 'emailReturnReminder', returnReminderEmail, 'return-reminder', withIncluded);
     } catch (err) {
       logger.error('[email] return reminders failed', { err: String(err) });
     }
-  },
+  }),
 );
 
 export const emailReviewFollowUps = onSchedule(
   { ...DAILY_JOB, schedule: '10 18 * * *' },
-  async () => {
+  async () => trackJob('emailReviewFollowUps', async () => {
     try {
       await sendReviewFollowUps();
     } catch (err) {
       logger.error('[email] review follow-ups failed', { err: String(err) });
     }
-  },
+  }),
 );
 
 // ── Review follow-up: ONE gentle email ~2 days after return, if not reviewed yet ──

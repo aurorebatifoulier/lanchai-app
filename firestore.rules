@@ -483,6 +483,14 @@ service cloud.firestore {
                    && request.resource.data.items.size() <= 10;
     }
 
+    // ── jobHealth/{jobName} — last run / OK / error of each scheduled job ────
+    // Written ONLY by Cloud Functions (functions/src/jobHealth.ts trackJob); shown to
+    // staff in Admin → Shop settings → Diagnostics.
+    match /jobHealth/{jobName} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     // ── savedReplies/{id} — admin chat quick replies ─────────────────────────
     match /savedReplies/{replyId} {
       allow read, write: if isAdmin();

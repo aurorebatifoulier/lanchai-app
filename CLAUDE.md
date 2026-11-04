@@ -1493,6 +1493,13 @@ a snapshot indefinitely).
   uploaded by the Expo plugin on EAS builds with the `SENTRY_AUTH_TOKEN` EAS secret
   (`metro.config.js` = `getSentryExpoConfig`). Admin → Shop settings → Diagnostics: "Send
   test error" / "Test crash". Cloud Functions use Google Error Reporting (no Sentry there).
+- **Scheduled-job health (2026-11-04).** Every `onSchedule` handler is wrapped in
+  `trackJob(name, …)` (`functions/src/jobHealth.ts`) → `jobHealth/{name}` {lastRunAt,
+  lastOkAt, lastErrorAt, lastError, durationMs} (admin read, server write — rule +
+  rules test). The list + periods live in `functions/src/shared/jobs.ts`
+  (`SCHEDULED_JOBS`, `jobState`: ok / error / late = no success for 2 periods / never);
+  `tests/unit/jobs.test.ts` FAILS if a new scheduled function isn't wrapped or listed.
+  Shown in Admin → Shop settings → Diagnostics.
 
 ## Security follow-ups
 

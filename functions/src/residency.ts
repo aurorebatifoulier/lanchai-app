@@ -14,6 +14,7 @@ import {
   RESIDENCY_MAX_PAGES, LEGACY_RESIDENT_GRACE_DAYS,
   type ResidencyPath, type ResidencyProofType,
 } from './shared/residency';
+import { trackJob } from './jobHealth';
 
 // Residency verification — see functions/src/shared/residency.ts. Never logs paths or
 // document content. Proof files are Storage PATHS under idDocs/{uid}/ (validated by
@@ -262,7 +263,7 @@ export const adminLegacyResident = onCall({ region: REGION }, async request => {
 // the "expired" email comes with the emails phase. Retention purge joins this job later.
 export const residencyDaily = onSchedule(
   { schedule: '0 3 * * *', timeZone: 'Asia/Vientiane', region: REGION, secrets: [BREVO_API_KEY] },
-  async () => {
+  async () => trackJob('residencyDaily', async () => {
     const now = Date.now();
     const snap = await db().collection('users').where('customerType', '==', 'resident').get();
     for (const u of snap.docs) {
@@ -279,5 +280,5 @@ export const residencyDaily = onSchedule(
       await sendAccountEmail(u.id, (shop, r) => residencyExpiredEmail(shop, { firstName: r.firstName }), 'residency-expired');
       logger.info('[residency] expired', { uid: u.id });
     }
-  },
+  }),
 );

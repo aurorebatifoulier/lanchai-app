@@ -8,6 +8,7 @@ import { sendAccountEmail, availabilityEmail, categoryArrivalEmail } from './ema
 import { computeAvailableUnits, effectiveStock, OCCUPYING_STATUSES, PICKUP_DELAY_MS, type OccupancyRecord } from './shared/availability';
 import { vteDay, vteIsoDay } from './shared/dates';
 import { productThumb } from './shared/productImage';
+import { trackJob } from './jobHealth';
 
 // "Notify me" (Liked) — availabilityWatches/{uid}_{productId} (renter-written). Hourly:
 // for each WATCHED product (published, not manually unavailable), look for the first
@@ -44,7 +45,7 @@ export function firstFreeDay(occ: OccupancyRecord[], stock: number, openTime: st
 
 export const availabilityWatchJob = onSchedule(
   { schedule: 'every 60 minutes', region: REGION, secrets: [BREVO_API_KEY] },
-  async () => {
+  async () => trackJob('availabilityWatchJob', async () => {
     const watches = (await db().collection('availabilityWatches').get()).docs;
     if (watches.length === 0) return;
     const shop = (await db().collection('config').doc('shop').get()).data() ?? {};
@@ -101,7 +102,7 @@ export const availabilityWatchJob = onSchedule(
       }
     }
     logger.info('[availabilityWatchJob] done', { watches: watches.length, notified });
-  },
+  }),
 );
 
 // ── Category watch ("Notify me when items arrive", Explore empty category) ─────────

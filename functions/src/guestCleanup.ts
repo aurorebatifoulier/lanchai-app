@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import * as logger from 'firebase-functions/logger';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { trackJob } from './jobHealth';
 
 // Guests browse through an anonymous Firebase session (contexts/AuthContext.tsx). Those
 // that never sign up are deleted after 30 days without activity (Privacy policy §2:
@@ -29,7 +30,7 @@ export function lastActivityMs(u: admin.auth.UserRecord): number {
 
 export const guestCleanupDaily = onSchedule(
   { schedule: '30 4 * * *', timeZone: 'Asia/Vientiane', region: REGION, timeoutSeconds: 540 },
-  async () => {
+  async () => trackJob('guestCleanupDaily', async () => {
     const cutoff = Date.now() - GUEST_INACTIVE_DAYS * DAY_MS;
     let pageToken: string | undefined;
     let scanned = 0;
@@ -53,5 +54,5 @@ export const guestCleanupDaily = onSchedule(
       if (res.failureCount > 0) logger.warn('[guestCleanup] some deletions failed', { failures: res.failureCount });
     } while (pageToken);
     logger.info('[guestCleanup] done', { scanned, deleted });
-  },
+  }),
 );
