@@ -9,13 +9,14 @@ import type { ClaimStatus } from '@/lib/claims';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { countNewItemRequests } from '@/lib/itemRequests';
 
 interface HubCard {
   icon: keyof typeof Feather.glyphMap;
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/onboarding' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies' | '/admin/product-thumbs';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/onboarding' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies' | '/admin/product-thumbs' | '/admin/requests';
 }
 
 const CARDS: HubCard[] = [
@@ -39,6 +40,13 @@ const CARDS: HubCard[] = [
     title: 'Reservations',
     sub: 'View and manage bookings',
     route: '/admin/reservations',
+  },
+  {
+    icon: 'inbox',
+    iconBg: COLORS.warmBeige,
+    title: 'Item requests',
+    sub: '"Ask for an item" from renters',
+    route: '/admin/requests',
   },
   {
     icon: 'search',
@@ -153,6 +161,7 @@ export default function AdminHomeScreen() {
   const [overdueCount, setOverdueCount] = useState(0);
   const [pendingBtobCount, setPendingBtobCount] = useState(0);
   const [openClaimsCount, setOpenClaimsCount] = useState(0);
+  const [newRequestsCount, setNewRequestsCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -178,6 +187,8 @@ export default function AdminHomeScreen() {
       getDocs(query(collection(db, 'claims'), where('status', 'in', ['open', 'in_review'] as ClaimStatus[])))
         .then(snap => setOpenClaimsCount(snap.size))
         .catch(() => {});
+
+      countNewItemRequests().then(setNewRequestsCount).catch(() => {});
     }, []),
   );
 
@@ -217,6 +228,11 @@ export default function AdminHomeScreen() {
             {card.route === '/admin/verifications' && pendingBtobCount > 0 && (
               <View style={s.overdueBadge}>
                 <Text style={s.overdueBadgeText}>{pendingBtobCount > 9 ? '9+' : pendingBtobCount}</Text>
+              </View>
+            )}
+            {card.route === '/admin/requests' && newRequestsCount > 0 && (
+              <View style={s.overdueBadge}>
+                <Text style={s.overdueBadgeText}>{newRequestsCount > 9 ? '9+' : newRequestsCount}</Text>
               </View>
             )}
             {card.route === '/admin/claims' && openClaimsCount > 0 && (

@@ -124,8 +124,8 @@ a snapshot indefinitely).
   everywhere, including inside `writeBatch`es on plain top-level fields — this
   codebase's own `submitChecklistBatch`, `cancelReservations`, and the
   `extraBatchWork` pattern (`app/admin/reservations/[id].tsx`'s `runAction`) all
-  already do this without issue. `Timestamp.now()` has exactly two, unrelated,
-  non-batched call sites in the whole codebase (`addFavorite`, `submitRequest`) —
+  already do this without issue. `Timestamp.now()` has exactly one, unrelated,
+  non-batched call site in the whole codebase (`addFavorite`) —
   there is no precedent for it inside a batch. The only place `serverTimestamp()`
   is actually unsafe is as a sentinel value **inside an array element** (a Firestore
   SDK limitation, not a batching one) — e.g. a coupon pushed into an array field
@@ -1446,6 +1446,21 @@ a snapshot indefinitely).
     in the tabs layout provider, rendered INLINE under each tab's header (never an overlay
     on the app header).
 
+- **Item requests — "Ask for an item" (2026-11-04).** `requests/{id}` {text, contact,
+  category | null, renterId, renterName, status new|ordered|declined|added, createdAt
+  (server time), statusAt/By, productId/productName (added), renterNotified.{status}}.
+  Renter: Explore request sheet (`submitItemRequest`, `lib/itemRequests.ts`; optional
+  category chips prefilled with the browsed category; visible error, never a silent
+  "sent"). Rule: create as yourself, status 'new', `createdAt == request.time`; read /
+  update admin only. Admin → Item requests (`app/admin/requests.tsx`, chips by status,
+  newest first, dashboard badge = new): Ordered / Added… (product picker) / Decline
+  (ConfirmBox), "Message the renter". Functions `functions/src/itemRequests.ts`:
+  `onItemRequestCreated` → in-app alert to every admin (→ /admin/requests);
+  `onItemRequestUpdated` → ONE in-app message to the renter per status (transaction claim
+  on `renterNotified.{status}`; copy `itemRequestRenterMessage` in
+  `shared/itemRequests.ts`), "added" → /product/{id} + `itemAddedEmail` (respects
+  reminders opt-out, test mode). Legacy requests (no renterId) are shown as "Unknown
+  renter" and never notified.
 - **Booking idempotency + bag safety (2026-11-03).** Every Confirm sends a `requestId`
   (`hooks/useCheckoutRequestId`: stable while the order is unchanged, new when it changes).
   `createReservations` records `bookingRequests/{uid}_{requestId}` (server-only, no client

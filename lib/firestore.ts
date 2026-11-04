@@ -806,16 +806,6 @@ export async function saveUserProfile(uid: string, data: Partial<UserProfile>): 
   await setDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() }, { merge: true });
 }
 
-export async function submitRequest(text: string, contact: string): Promise<void> {
-  try {
-    await addDoc(collection(db, 'requests'), {
-      text,
-      contact: contact || null,
-      createdAt: Timestamp.now(),
-    });
-  } catch {}
-}
-
 // ── Reviews ───────────────────────────────────────────────────────────────────
 
 export interface ReviewDoc {

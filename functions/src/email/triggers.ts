@@ -18,7 +18,7 @@ import {
   receiptEmail, reviewFollowUpEmail, btobApprovedEmail, btobRejectedEmail, lateReturnEmail, noShowEmail,
   passwordResetEmail, emailVerificationEmail,
   idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail,
-  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail,
+  welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail, itemAddedEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
 import { productThumb } from '../shared/productImage';
@@ -413,7 +413,7 @@ export async function sendAccountEmail(
   }
 }
 
-export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail };
+export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyRejectedEmail, residencyExpiredEmail, welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail, itemAddedEmail };
 
 // ── Test path: every template with sample data, to the test inbox ───────────────
 // (config/emailSettings.redirectAllTo, or DEFAULT_TEST_REDIRECT when empty) — never
@@ -519,6 +519,7 @@ export const sendTestEmails = onCall(
       ['promo-granted-admin',              promoGrantedEmail(shop, { firstName: name, code: 'THANKYOU15', valueText: '15% off', conditions: 'Any rental', expiresLabel: 'Sat 28 Nov', source: 'admin' })],
       ['promo-granted-referral',           promoGrantedEmail(shop, { firstName: name, code: 'REFERRALWELCOME', valueText: '10% off', conditions: 'First rental', expiresLabel: 'Sun 29 Nov', source: 'referral' })],
       ['availability-notify',              availabilityEmail(shop, { firstName: name, productName: 'Bosch tool set', productId: 'sample', fromLabel: 'Sun 1 Nov', image: null })],
+      ['item-request-added',               itemAddedEmail(shop, { firstName: name, productName: 'Stand-up paddle board', productId: 'sample', image: null, requestText: 'A paddle board' })],
       ['promo-expiring',                   promoExpiringEmail(shop, { firstName: name, code: 'THANKYOU15', valueText: '15% off', conditions: 'Any rental', expiresLabel: 'Sat 28 Nov' })],
       ['rental-agreement',                 rentalAgreementEmail(shop, {
         firstName: name, orderLabel: base.orderId ?? 'LNC-261020-TEST', paper: false, firstReservationId: base.id,

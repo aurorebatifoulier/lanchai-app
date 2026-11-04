@@ -59,6 +59,9 @@ export * from './watches';
 // Anonymous guest accounts inactive for 30 days (+ their recentViews) — daily.
 export * from './guestCleanup';
 
+// "Ask for an item" requests: admin alert + renter messages on status changes.
+export * from './itemRequests';
+
 admin.initializeApp();
 const db = admin.firestore();
 

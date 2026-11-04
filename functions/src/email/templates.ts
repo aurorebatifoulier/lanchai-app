@@ -1330,6 +1330,28 @@ export function availabilityEmail(shop: EmailShop, ctx: {
   );
 }
 
+// ── Item request: the item a renter asked for is now in the catalogue ─────────────
+export function itemAddedEmail(shop: EmailShop, ctx: {
+  firstName: string; productName: string; productId: string; image: string | null; requestText: string;
+}): Rendered {
+  return build(
+    `Good news, we added it: ${ctx.productName}`,
+    `${ctx.productName} is now in the catalogue`,
+    'Good news, we added it!',
+    [
+      {
+        type: 'hero',
+        pill: 'You asked, we got it',
+        ...(ctx.image ? { image: { url: ctx.image, alt: ctx.productName, size: 120 } } : {}),
+        title: 'Good news, we added it!',
+        sub: `Hi ${ctx.firstName} — thanks for the idea. ${ctx.productName} is now in the catalogue.`,
+        primary: { label: 'See the item', url: appLink(`product/${ctx.productId}`) },
+      },
+    ],
+    shop,
+  );
+}
+
 // ── Category watch: first item published in a category the renter asked about ─────
 export function categoryArrivalEmail(shop: EmailShop, ctx: {
   firstName: string; categoryName: string; categoryId: string; productName: string; image: string | null;

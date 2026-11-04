@@ -26,7 +26,6 @@ import {
   getFavorites,
   addFavorite,
   removeFavorite,
-  submitRequest,
 } from '@/lib/firestore';
 import { CATEGORIES, type Product } from '@/lib/mockData';
 import { SHADES } from '@/constants/brandShades';
@@ -59,6 +58,7 @@ import { SEARCH_COPY } from '@/constants/searchCopy';
 import { cached, HOME_TTL } from '@/lib/homeCache';
 import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
 import { CategoryBadge, UI } from '@/components/account/ui';
+import { submitItemRequest, ITEM_REQUEST_CATEGORIES } from '@/lib/itemRequests';
 import { TYPE, SIZES } from '@/constants/typography';
 import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
@@ -142,6 +142,8 @@ export default function ExploreScreen() {
   const [requestContact, setRequestContact] = useState('');
   const [requestSent,    setRequestSent]    = useState(false);
   const [requestBusy,    setRequestBusy]    = useState(false);
+  const [requestCategory, setRequestCategory] = useState<string | null>(null);
+  const [requestError,   setRequestError]   = useState(false);
   // All products' occupancy in ONE query (fetchAllOccupancy) — null until loaded or if
   // it failed, in which case cards show no booking badge (never a false "Back on").
   const [occupancy,      setOccupancy]      = useState<Map<string, OccupancyRecord[]> | null>(null);
@@ -260,20 +262,28 @@ export default function ExploreScreen() {
         setRequestContact('');
         setRequestSent(false);
         setRequestBusy(false);
+        setRequestError(false);
+        // Prefilled with the category being browsed (optional, the renter can change it).
+        setRequestCategory(activeCategory !== 'all' ? activeCategory : null);
         setRequestVisible(true);
       },
     });
-  }, [searchQuery, requireAccount]);
+  }, [searchQuery, requireAccount, activeCategory]);
 
   const closeRequest = useCallback(() => setRequestVisible(false), []);
 
   const handleSubmitRequest = useCallback(async () => {
     if (!requestText.trim() || requestBusy) return;
     setRequestBusy(true);
-    await submitRequest(requestText.trim(), requestContact.trim());
-    setRequestSent(true);
+    setRequestError(false);
+    try {
+      await submitItemRequest({ text: requestText, contact: requestContact, category: requestCategory });
+      setRequestSent(true);
+    } catch {
+      setRequestError(true);
+    }
     setRequestBusy(false);
-  }, [requestText, requestContact, requestBusy]);
+  }, [requestText, requestContact, requestCategory, requestBusy]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
@@ -701,6 +711,19 @@ export default function ExploreScreen() {
                   textAlignVertical="top"
                 />
 
+                <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Category (optional)</Text>
+                <View style={styles.requestCats}>
+                  {ITEM_REQUEST_CATEGORIES.map(id => {
+                    const on = requestCategory === id;
+                    const label = EXPLORE_CATEGORIES.find(c => c.id === id)?.name ?? id;
+                    return (
+                      <TouchableOpacity key={id} style={[UI.choice, on && UI.choiceOn]} onPress={() => setRequestCategory(on ? null : id)} activeOpacity={0.8}>
+                        <Text style={[UI.choiceText, on && UI.choiceTextOn]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
                 <Text style={[styles.sectionLabel, { marginTop: 16 }]}>Contact (optional)</Text>
                 <TextInput
                   style={[styles.requestInput, styles.requestInputSingle]}
@@ -712,6 +735,7 @@ export default function ExploreScreen() {
                   autoCapitalize="none"
                 />
 
+                {requestError && <Text style={[UI.errorText, { marginTop: 12 }]}>Couldn’t send your request. Please try again.</Text>}
                 <View style={[styles.sheetActions, { marginTop: 20 }]}>
                   <TouchableOpacity style={styles.resetBtn} onPress={closeRequest}>
                     <Text style={styles.resetText}>Cancel</Text>
@@ -1137,6 +1161,7 @@ const styles = StyleSheet.create({
   sheetBody: {
     paddingBottom: 8,
   },
+  requestCats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',

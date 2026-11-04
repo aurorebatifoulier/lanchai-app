@@ -291,15 +291,25 @@ service cloud.firestore {
     // App usage: addDoc('requests', { text, contact, createdAt }) — create.
     // No userId field is stored, so any authenticated user may create;
     // only admins may read, update, or delete submissions.
+    // "Ask for an item" (Explore) → Admin → Item requests. The renter creates it as
+    // themselves, status 'new', server time; staff handle status / product (admin only);
+    // the onItemRequestUpdated trigger tells the renter (renterNotified, server-written).
     match /requests/{requestId} {
       allow create:               if isAccount() &&
-                                     request.resource.data.keys().hasOnly(['text', 'contact', 'createdAt']) &&
+                                     request.resource.data.keys().hasOnly(['text', 'contact', 'category', 'renterId', 'renterName', 'status', 'createdAt']) &&
                                      request.resource.data.text is string &&
                                      request.resource.data.text.size() > 0 &&
                                      request.resource.data.text.size() <= 1000 &&
                                      (request.resource.data.contact == null ||
                                       (request.resource.data.contact is string &&
-                                       request.resource.data.contact.size() <= 200));
+                                       request.resource.data.contact.size() <= 200)) &&
+                                     (request.resource.data.category == null ||
+                                      request.resource.data.category in ['fun', 'tools', 'outdoor', 'sports', 'kids', 'home']) &&
+                                     request.resource.data.renterId == request.auth.uid &&
+                                     request.resource.data.renterName is string &&
+                                     request.resource.data.renterName.size() <= 120 &&
+                                     request.resource.data.status == 'new' &&
+                                     request.resource.data.createdAt == request.time;
       allow read, update, delete: if isAdmin();
     }
 
