@@ -49,3 +49,6 @@ app-example
 # Firebase Hosting deploy cache
 .firebase/
 tests/.coverage/
+firestore-debug.log
+storage-debug.log
+firebase-debug.log

@@ -28,6 +28,10 @@ rules_version = '2';
 // already shown in the app keep working: they use download URLs with an access token,
 // which aren't subject to these rules. Product photos stay public (deliberate).
 //
+// OVERWRITES: uploading to a path that already holds a file is evaluated as `create`
+// (not `update`) — so "create once" paths must check `resource == null` explicitly.
+// (Found by tests/rules/storage.test.ts, 2026-11-04.)
+//
 // DELETES: on a delete, request.resource is null, so a combined `write` rule with a
 // size / contentType condition can never allow one. Each path therefore states its
 // delete rule separately: admin-managed media (products, home slides) and the owner's
@@ -79,7 +83,8 @@ service firebase.storage {
     match /chat-images/{uid}/{fileName} {
       allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
       // Create once (no overwrite of a sent file — evidence).
-      allow create: if (isAccountOwner(uid) || isAdmin())
+      allow create: if resource == null
+                    && (isAccountOwner(uid) || isAdmin())
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
       allow update: if false;
@@ -95,7 +100,8 @@ service firebase.storage {
     match /chat-videos/{uid}/{fileName} {
       allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
       // Create once (no overwrite of a sent file — evidence).
-      allow create: if (isAccountOwner(uid) || isAdmin())
+      allow create: if resource == null
+                    && (isAccountOwner(uid) || isAdmin())
                     && request.resource.size < 60 * 1024 * 1024
                     && request.resource.contentType.matches('video/.*');
       allow update: if false;
@@ -111,10 +117,14 @@ service firebase.storage {
     // Write: admin only — condition photos are captured by staff, never by renters.
     match /reservations/{reservationId}/{checklistType}/{fileName} {
       allow read:  if isAdmin();
-      allow create, update: if isAdmin()
-                           && request.resource.size < 10 * 1024 * 1024
-                           && request.resource.contentType.matches('image/.*');
-      allow delete:         if false;  // condition evidence
+      // Create once — a condition photo is evidence: never replaced (each photo gets a
+      // new Date.now() name).
+      allow create: if resource == null
+                    && isAdmin()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update: if false;
+      allow delete: if false;  // condition evidence
     }
 
     // ── Rental agreements ─────────────────────────────────────────────────────
@@ -128,7 +138,8 @@ service firebase.storage {
       allow read:   if isAdmin()
                     || (request.auth != null
                         && firestore.get(/databases/(default)/documents/rentalAgreements/$(agreementId)).data.renterId == request.auth.uid);
-      allow create: if isAdmin()
+      allow create: if resource == null
+                    && isAdmin()
                     && request.resource.size < 15 * 1024 * 1024
                     && (request.resource.contentType == 'application/pdf'
                         || request.resource.contentType.matches('image/.*'));
@@ -146,7 +157,8 @@ service firebase.storage {
     match /claim-photos/{uid}/{fileName} {
       allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       // Create once (no overwrite — evidence).
-      allow create: if isAccountOwner(uid)
+      allow create: if resource == null
+                    && isAccountOwner(uid)
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
       allow update: if false;
@@ -163,7 +175,8 @@ service firebase.storage {
     match /claim-videos/{uid}/{fileName} {
       allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
       // Create once (no overwrite — evidence).
-      allow create: if isAccountOwner(uid)
+      allow create: if resource == null
+                    && isAccountOwner(uid)
                     && request.resource.size < 50 * 1024 * 1024
                     && request.resource.contentType.matches('video/.*');
       allow update: if false;
@@ -193,7 +206,8 @@ service firebase.storage {
     //   overwritten.
     match /businessDocs/{uid}/{fileName} {
       allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create: if isAccountOwner(uid)
+      allow create: if resource == null
+                    && isAccountOwner(uid)
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
       allow update: if false;
@@ -210,7 +224,8 @@ service firebase.storage {
     // withdrawResidency / documentRetentionDaily delete through the Admin SDK.
     match /idDocs/{uid}/{fileName} {
       allow read:   if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create: if (isAccountOwner(uid) || isAdmin())
+      allow create: if resource == null
+                    && (isAccountOwner(uid) || isAdmin())
                     && request.resource.size < 10 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
       allow update: if false;

@@ -1512,6 +1512,10 @@ callable's `details.code` to friendly messages. Renter cancellation rule now pin
   no guest uploads); chat / claim / business-document files are CREATE-ONCE (update
   false — evidence never overwritten; new files always get a new `Date.now()` name);
   `idDocs` delete false.
+  **Overwrites:** in Storage rules, uploading onto an EXISTING file is evaluated as
+  `create`, not `update` — every create-once path checks `resource == null` (chat,
+  claims, business docs, ID docs, checklist photos, rental agreements). Proven by
+  `tests/rules/storage.test.ts`.
 
 **Closed (2026-10-29): client-side amounts.** Audit of `createReservations`: the
 client sends only product, dates, quantity, `couponId` OR `promoCode`, `notes` (≤ 500)
