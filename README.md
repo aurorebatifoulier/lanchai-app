@@ -46,6 +46,10 @@ npm test
   one discount per booking, stock race, idempotency, promo limits, invites, points
   credited once. Run alone: `npm run test:emu:functions`.
 
+**CI:** `.github/workflows/ci.yml` runs install → `tsc` → ESLint → functions build →
+all tests on every push to `master` (and on pull requests). See the result in the repo's
+**Actions** tab, or the ✓ / ✗ next to each commit. No secrets are needed.
+
 The emulators need **Java 21** (`brew install openjdk@21`, then `java -version`). They use
 the demo project `demo-lanchai` — nothing touches the real Firebase project, no
 credentials are needed. Config: `firebase.test.json` (the deploy config `firebase.json` is
