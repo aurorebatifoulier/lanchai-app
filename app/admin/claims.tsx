@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { useScreenInsets } from '@/components/account/ui';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

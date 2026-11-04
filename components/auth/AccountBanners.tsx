@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { AppState, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { AppState, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text } from '@/components/AppText';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';

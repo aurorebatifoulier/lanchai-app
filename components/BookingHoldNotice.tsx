@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Text } from '@/components/AppText';
 import { UI, IconCircle } from '@/components/account/ui';
 import WhatsAppButton from '@/components/WhatsAppButton';
 import type { BookingHold } from '@/lib/bookingHold';

@@ -1,7 +1,14 @@
 import React, { forwardRef, useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, TouchableOpacity, Modal, Pressable, FlatList, type TextInputProps,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  FlatList,
+  type TextInputProps,
 } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';

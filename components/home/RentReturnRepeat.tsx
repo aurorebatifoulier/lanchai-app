@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { View, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import { Text } from '@/components/AppText';
 import Reanimated, { useAnimatedProps } from 'react-native-reanimated';
 import Svg, { Defs, Mask, Path } from 'react-native-svg';
 import { SHADES } from '@/constants/brandShades';

@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Feather } from '@expo/vector-icons';
 import { Image, type ImageLoadEventData } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';

@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  AppState, View, Text, StyleSheet, type ImageSourcePropType, type ViewStyle, type StyleProp,
+  AppState,
+  View,
+  StyleSheet,
+  type ImageSourcePropType,
+  type ViewStyle,
+  type StyleProp,
   type TextLayoutLine,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Image } from 'expo-image';
 import Svg, { Polygon } from 'react-native-svg';
 import Animated, {

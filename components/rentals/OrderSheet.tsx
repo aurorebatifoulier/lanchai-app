@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/AppText';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';

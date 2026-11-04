@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '@/components/AppText';
 import { COLORS } from '@/constants/Colors';
 import { lakToUsd, lakToThb } from '@/utils/currency';
 

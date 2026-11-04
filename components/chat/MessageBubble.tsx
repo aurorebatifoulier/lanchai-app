@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { Timestamp } from 'firebase/firestore';

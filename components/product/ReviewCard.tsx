@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SHADES } from '@/constants/brandShades';
 import { PRODUCT_COPY } from '@/constants/productCopy';
 import { formatReviewerName } from '@/utils/reviewerName';

@@ -36,5 +36,5 @@ export const SIZES = {
   categoryCircle: 48,
 } as const;
 
-/** System font size is respected but capped (lib/fontScaleCap.ts). */
+/** System font size is respected but capped: components/AppText.tsx (maxFontSizeMultiplier). */
 export const MAX_FONT_SCALE = 1.3;

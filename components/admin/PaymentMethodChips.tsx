@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SHADES } from '@/constants/brandShades';
 import { RENTAL_PAYMENT_METHODS, type RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, Modal, Pressable, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Modal, Pressable, StyleSheet, TouchableOpacity } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { TYPE, SIZES } from '@/constants/typography';

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, type TextProps } from 'react-native';
+import { type TextProps } from 'react-native';
+import { Text } from '@/components/AppText';
 import { MOTION, useReducedMotion } from '@/constants/motion';
 
 // Counts a number up from 0 on its FIRST display in this app session (~500ms, ease-out),

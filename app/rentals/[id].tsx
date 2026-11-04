@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   Linking,
   ActivityIndicator,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { discountOf } from '@/functions/src/shared/promo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

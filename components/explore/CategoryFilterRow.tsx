@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SHADES } from '@/constants/brandShades';
 import { TYPE, SIZES } from '@/constants/typography';
 import { CategoryBadge } from '@/components/account/ui';

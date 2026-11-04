@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import { ConfirmBox } from '@/components/ConfirmBox';

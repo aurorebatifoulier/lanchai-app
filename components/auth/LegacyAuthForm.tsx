@@ -2,8 +2,6 @@ import React, { useState, useCallback, useRef } from 'react';
 import { SHADES } from '@/constants/brandShades';
 import {
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
@@ -12,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';

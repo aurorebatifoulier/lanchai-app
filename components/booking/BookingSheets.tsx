@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Modal, Pressable, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Modal, Pressable, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { useScreenInsets } from '@/components/account/ui';

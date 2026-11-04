@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import { View, TouchableOpacity, Modal, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
+import { Text } from '@/components/AppText';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { doc, updateDoc } from 'firebase/firestore';

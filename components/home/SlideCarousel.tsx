@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SHADES } from '@/constants/brandShades';

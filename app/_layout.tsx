@@ -1,5 +1,3 @@
-// FIRST: caps the system font size on every Text / TextInput (constants/typography.ts).
-import '@/lib/fontScaleCap';
 import { useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments, usePathname, useGlobalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

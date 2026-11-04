@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   Modal,
   Platform,
   Dimensions,
-  TextInput,
   KeyboardAvoidingView,
   Animated,
   type FlatList,
 } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';

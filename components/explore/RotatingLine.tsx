@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { type StyleProp, type TextStyle } from 'react-native';
 import Animated, { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { MOTION, useReducedMotion } from '@/constants/motion';
+import { MAX_FONT_SCALE } from '@/constants/typography';
 
 const EVERY_MS = 4000;
 
@@ -16,6 +17,7 @@ export default function RotatingLine({ lines, style }: { lines: readonly string[
   }, [reduce, lines.length]);
   return (
     <Animated.Text
+      maxFontSizeMultiplier={MAX_FONT_SCALE}
       key={i}
       entering={FadeIn.duration(MOTION.duration.slow).reduceMotion(ReduceMotion.System)}
       exiting={FadeOut.duration(MOTION.duration.fast).reduceMotion(ReduceMotion.System)}

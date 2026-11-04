@@ -6,6 +6,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { COLORS } from '@/constants/Colors';
 import { MOTION, useReducedMotion } from '@/constants/motion';
+import { MAX_FONT_SCALE } from '@/constants/typography';
 
 // Home header bag: when the item count goes UP (an item was added), the icon bounces and
 // the badge pops with the new number sliding in. Nothing on the first load (`count` null
@@ -41,6 +42,7 @@ export default function BagButton({ count, onPress, circle, size = 40 }: { count
       {n > 0 && (
         <Animated.View style={[s.badge, circle && s.badgeCircle, badgeStyle]}>
           <Animated.Text
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
             key={n}
             entering={reduce || prev.current == null ? undefined : FadeInDown.duration(MOTION.duration.base).reduceMotion(ReduceMotion.System)}
             style={s.badgeText}

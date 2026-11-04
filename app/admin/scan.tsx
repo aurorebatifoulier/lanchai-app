@@ -4,7 +4,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   Linking,
@@ -12,6 +11,7 @@ import {
   useWindowDimensions,
   ScrollView,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';

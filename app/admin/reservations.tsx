@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { useScreenInsets } from '@/components/account/ui';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

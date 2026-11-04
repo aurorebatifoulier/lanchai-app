@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { SHADES } from '@/constants/brandShades';
 import { PROMO_COPY } from '@/constants/promoCopy';
 import { UI, SectionTitle, StatusChip } from '@/components/account/ui';

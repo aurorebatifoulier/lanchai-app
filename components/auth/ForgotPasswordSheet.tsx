@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SHADES } from '@/constants/brandShades';
 import { TYPE } from '@/constants/typography';
 import { AUTH_COPY } from '@/constants/authCopy';

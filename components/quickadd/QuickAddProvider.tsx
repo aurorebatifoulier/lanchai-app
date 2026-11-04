@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, PanResponder } from 'react-native';
+import { View, Modal, Pressable, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, PanResponder } from 'react-native';
+import { Text } from '@/components/AppText';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOutDown, ReduceMotion } from 'react-native-reanimated';

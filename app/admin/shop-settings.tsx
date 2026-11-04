@@ -2,15 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DEFAULT_AUTO_REPLY } from '@/functions/src/shared/shop';
 import {
   View,
-  Text,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   StyleSheet,
   ActivityIndicator,
   Switch,
   type KeyboardTypeOptions,
 } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

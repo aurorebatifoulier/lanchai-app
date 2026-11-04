@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   StyleSheet,
   useWindowDimensions,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Image, ImageLoadEventData } from 'expo-image';
 import Animated, {
   useSharedValue,

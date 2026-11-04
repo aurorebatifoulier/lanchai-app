@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Modal, Text } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Modal } from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
 import { Feather } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';

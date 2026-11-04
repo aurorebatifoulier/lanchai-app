@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
+import { View, StyleSheet, Switch, type StyleProp, type ViewStyle } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets, initialWindowMetrics } from 'react-native-safe-area-context';
 import { TYPE, SIZES } from '@/constants/typography';

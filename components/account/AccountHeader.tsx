@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Animated, Easing, ActivityIndicator,
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Easing,
+  ActivityIndicator,
   type LayoutChangeEvent,
 } from 'react-native';
+import { Text } from '@/components/AppText';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import Svg, { Circle, Defs, LinearGradient, Mask, Path, Polygon, Stop } from 'react-native-svg';

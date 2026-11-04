@@ -992,11 +992,11 @@ a snapshot indefinitely).
   `SIZES.categoryCircle` 48, label 12.
   The `UI` tokens (`components/account/ui.tsx`) and `ConfirmBox` are built on it; never
   hardcode a size above 24 or a button above 48 on a new screen — pick the level. System
-  font size is respected but CAPPED at `MAX_FONT_SCALE` (1.3) on every `<Text>` /
-  `<TextInput>` by `lib/fontScaleCap.ts` (imported FIRST in `app/_layout.tsx`: wraps the
-  `default` export of RN's Text / TextInput modules — React 19 ignores defaultProps on
-  function components; a dev warning says if the patch didn't apply). Animated.Text
-  created before it loads keeps the system scale.
+  font size is respected but CAPPED at `MAX_FONT_SCALE` (1.3): EVERY screen / component
+  imports `Text` / `TextInput` from `components/AppText.tsx` (RN's, with
+  `maxFontSizeMultiplier` defaulted — same names for value and type), NEVER from
+  'react-native'. `Animated.Text` sets `maxFontSizeMultiplier={MAX_FONT_SCALE}` itself.
+  (A global patch of RN's modules can't work in Expo Go — their exports are getters.)
 
 - **Motion system (2026-10-27).** `constants/motion.ts` is the ONE source: durations
   (fast 120 / base 220 / slow 450 / count 500 ms), easings, springs (`press`, `bounce`),
