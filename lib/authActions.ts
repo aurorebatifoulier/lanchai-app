@@ -18,6 +18,9 @@ export const EMAIL_RE = /\S+@\S+\.\S+/;
 export const PHONE_E164 = /^\+[1-9]\d{6,14}$/;
 
 export function authErrorMessage(err: unknown): string {
+  // Google-side failures already carry their message (lib/googleSignIn.ts).
+  const friendly = (err as { friendly?: unknown })?.friendly;
+  if (typeof friendly === 'string' && friendly) return friendly;
   const code = (err as { code?: string })?.code ?? '';
   const e = AUTH_COPY.errors;
   switch (code) {

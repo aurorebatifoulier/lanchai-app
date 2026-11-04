@@ -119,6 +119,8 @@ export const AUTH_COPY = {
     weakPassword: 'Use at least 8 characters.',
     otherProvider: 'This email is already used with another sign-in method. Sign in with your email and password.',
     network: 'No connection. Check your internet and try again.',
+    googleSetup: 'Google sign-in isn’t available right now. Please use your email.',
+    googlePlayServices: 'Google sign-in needs Google Play services on this phone. Please use your email.',
     generic: 'Something went wrong. Please try again.',
   },
 } as const;
