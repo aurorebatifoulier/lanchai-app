@@ -1471,6 +1471,17 @@ a snapshot indefinitely).
   the bag flags past dates ("These dates have passed — change them") and never counts them
   as ready.
 
+- **Builds (EAS, 2026-11-04).** `eas.json`: `development` (dev client APK), `preview`
+  (internal APK, sideload), `production` (AAB → Google Play **internal testing**, the beta
+  channel; `submit.production.android.track = internal`). Each profile maps to an EAS
+  environment (development / preview / production) holding the `EXPO_PUBLIC_*` variables —
+  `.env.local` is local only (gitignored, never uploaded). `EXPO_PUBLIC_APP_ENV` = development
+  | beta (set in `eas.json`; Sentry environment). versionCode = EAS remote auto-increment.
+  **Permissions:** CAMERA, RECORD_AUDIO (+ legacy storage ≤ Android 12). `READ_MEDIA_*` are
+  BLOCKED (Play photo / video policy): saving media uses
+  `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
+  Never add a READ_MEDIA permission without a Play declaration.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

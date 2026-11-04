@@ -144,7 +144,9 @@ export function MediaViewer({ media: mediaProp, openIndex, onClose }: MediaViewe
     setDownloading(true);
     setDownloadMsg(null);
     try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      // WRITE-ONLY: saving needs no photo-reading permission (Android 13+ asks nothing;
+      // app.json blocks READ_MEDIA_* — Google Play's photo / video permission policy).
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
         setDownloadMsg({ text: 'Photo/video access denied. Please allow it in your device settings.', kind: 'error' });
         return;
