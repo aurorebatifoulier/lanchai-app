@@ -40,6 +40,7 @@ import { useDiscountChoice } from '@/lib/discountChoice';
 import { atVteSlot, vteHHMM, vteDayToken, vteDayStart } from '@/lib/vteTime';
 import VteTimeNote from '@/components/VteTimeNote';
 import { useCheckoutRequestId } from '@/hooks/useCheckoutRequestId';
+import { productThumb } from '@/utils/productImage';
 
 // "Your booking" (validated mockup) — ONE screen: dates & times, quantity, total (coupon,
 // VAT only when on, to pay at pick-up, the renter's real deposit, points), deposit
@@ -269,7 +270,7 @@ export default function BookingNewScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <BookingProductCard name={product.name} image={product.images?.[0]} sub={fromLabel} />
+        <BookingProductCard name={product.name} image={productThumb(product) ?? undefined} sub={fromLabel} />
         {bookingHold && <BookingHoldNotice hold={bookingHold} style={{ marginTop: 16 }} />}
 
         <WhenCard

@@ -15,7 +15,7 @@ interface HubCard {
   iconBg: string;
   title: string;
   sub: string;
-  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/onboarding' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies';
+  route: '/admin/products' | '/admin/reservations' | '/admin/broadcast' | '/admin/reviews' | '/admin/calendar' | '/admin/exchange-rate' | '/admin/loyalty' | '/admin/verifications' | '/admin/claims' | '/admin/inventory' | '/admin/shop-settings' | '/admin/collections' | '/admin/home-slides' | '/admin/onboarding' | '/admin/search-vocabulary' | '/admin/promo-codes' | '/admin/saved-replies' | '/admin/product-thumbs';
 }
 
 const CARDS: HubCard[] = [
@@ -25,6 +25,13 @@ const CARDS: HubCard[] = [
     title: 'Products',
     sub: 'Manage your rental catalogue',
     route: '/admin/products',
+  },
+  {
+    icon: 'image',
+    iconBg: COLORS.warmBeige,
+    title: 'Product thumbnails',
+    sub: 'Check and generate the small photo copies',
+    route: '/admin/product-thumbs',
   },
   {
     icon: 'file-text',

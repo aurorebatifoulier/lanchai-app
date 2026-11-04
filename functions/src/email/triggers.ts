@@ -21,6 +21,7 @@ import {
   welcomeEmail, rentalAgreementEmail, promoGrantedEmail, promoExpiringEmail, availabilityEmail, categoryArrivalEmail,
   type ResData, type Rendered, type LateEmailStage, type LateLine,
 } from './templates';
+import { productThumb } from '../shared/productImage';
 
 // Transactional emails (Brevo). Every sender: claim → send → finish, so nothing is ever
 // sent twice. Handlers catch everything — email problems never crash or retry a trigger.
@@ -451,7 +452,7 @@ export const sendTestEmails = onCall(
     const returnedAtMs = base.returnAtMs + 12 * 60 * 1000;
     // A real catalogue photo for the review samples (public product image URL), if any.
     const sampleImage = (await db().collection('products').limit(10).get()).docs
-      .map(d => (d.get('images') as unknown[] | undefined)?.[0])
+      .map(d => productThumb(d.data()))
       .find((u): u is string => typeof u === 'string' && u.startsWith('https://')) ?? null;
     const closedClean: ResData = {
       ...base, productId: 'sample-tent', productImage: sampleImage, couponApplied: null, total: 300000, chargeCurrency: 'LAK', returnedAtMs,

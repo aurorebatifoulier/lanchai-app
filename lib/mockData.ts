@@ -52,7 +52,9 @@ export interface Product {
   tag?: string;
   tagStyle?: 'amber' | 'dark';
   imageUrl?: string;
-  images?: string[];          // carousel slides (4+ per product)
+  images?: string[];          // carousel slides (4+ per product) — full size, product page only
+  /** 600 px copies, same order as `images` — read through productThumb() (utils/productImage). */
+  thumbs?: string[];
   isPopular?: boolean;        // "Popular" badge
   isNewThisWeek?: boolean;    // "New this week" badge
   isMostRented?: boolean;     // "Most rented" badge

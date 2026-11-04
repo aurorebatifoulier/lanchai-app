@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import type { Product } from '@/lib/mockData';
+import { productThumb } from '@/utils/productImage';
 
 /**
  * Product photo (or its icon on light grey) — square with radius, or a circle. `fill`
@@ -11,7 +12,7 @@ import type { Product } from '@/lib/mockData';
  */
 export function ProductThumb({ product, size, radius, fill }: { product: Product; size: number; radius?: number; fill?: boolean }) {
   const r = radius ?? size / 2;
-  const uri = product.images?.[0];
+  const uri = productThumb(product);
   return (
     <View style={[s.box, fill ? { width: '100%', height: '100%', borderRadius: r } : { width: size, height: size, borderRadius: r }]}>
       {uri

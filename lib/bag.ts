@@ -11,6 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { productThumb } from '@/utils/productImage';
 
 // Shape of a document in users/{uid}/bag/{itemId}
 export interface BagItem {
@@ -34,14 +35,14 @@ function bagCol(uid: string) {
 // one write; availability / ID / holds are still checked at checkout as usual.
 export async function addToBag(
   uid: string,
-  product: { id: string; name: string; images?: string[] },
+  product: { id: string; name: string; images?: string[]; thumbs?: string[] },
   dates?: { pickupAt: Date; returnAt: Date },
   quantity = 1,
 ): Promise<string> {
   const ref = await addDoc(bagCol(uid), {
     productId:    product.id,
     productName:  product.name,
-    productImage: product.images?.[0] ?? null,
+    productImage: productThumb(product), // 600 px copy when the product has one
     pickupAt:     dates ? Timestamp.fromDate(dates.pickupAt) : null,
     returnAt:     dates ? Timestamp.fromDate(dates.returnAt) : null,
     quantity:     Math.max(1, Math.floor(quantity)),

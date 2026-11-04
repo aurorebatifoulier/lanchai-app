@@ -33,6 +33,7 @@ import {
   uploadChatImage,
   uploadChatVideo,
 } from '@/lib/chat';
+import { productThumb } from '@/utils/productImage';
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ export default function ChatScreen() {
     aboutSent.current = false;
     if (pid) {
       getProduct(pid)
-        .then(p => { if (p) setContext({ kind: 'product', id: p.id, name: p.name, image: p.images?.[0] ?? null, category: p.category ?? null }); })
+        .then(p => { if (p) setContext({ kind: 'product', id: p.id, name: p.name, image: productThumb(p), category: p.category ?? null }); })
         .catch(() => {});
     } else if (rid) {
       getReservationById(rid)

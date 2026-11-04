@@ -959,6 +959,16 @@ a snapshot indefinitely).
     circles, no rings (`dark` flag kept for dark backgrounds; the only ring
     is Explore's selection state: amber + 2px carbon ring) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
+  - **Product thumbnails (2026-11-04):** `products.thumbs` = 600 px JPEG 0.7 copies, SAME
+    ORDER as `images` (`products/{id}/{name}_thumb.jpg`), made on the admin's phone when a
+    product is saved (`lib/productThumbs.ts` `makeProductThumb`: new photo from the local
+    file, existing photo downloaded + resized). Every card / rail / Home thumb / bag /
+    booking card / chat context / My rentals / reservation `productImage` / emails reads
+    `productThumb(product, i)` (`functions/src/shared/productImage.ts`, re-exported by
+    `utils/productImage.ts`) — the thumbnail only when `thumbs` lines up with `images`,
+    else the full photo. Full size only in the product page gallery + lightbox. Backfill:
+    Admin → Product thumbnails (`app/admin/product-thumbs.tsx`: dry run, then one product
+    at a time, failures listed, re-runnable).
   - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
     `ProductGridCard` keeps "New" in amber-light. `<FavoriteHeart>` everywhere (cards +
     product detail): carbon outline, filled AMBER when liked — never red.

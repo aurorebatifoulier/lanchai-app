@@ -15,6 +15,7 @@ import { toLak } from '@/utils/currency';
 import { getProductAccessState } from '@/utils/productAccess';
 import PressScale from '@/components/PressScale';
 import QuickAddButton, { type QuickAddState } from '@/components/QuickAddButton';
+import { productThumb } from '@/utils/productImage';
 
 // Horizontal-rail product card on the My Account design (Home rails: New arrivals, Rent
 // again, Most rented). White card, thin border, radius 18. Shows the access / Premium /
@@ -43,7 +44,7 @@ function ProductRailCard({
     product.isPremium ? { label: 'Premium', icon: 'award', dark: false } :
     product.showInPopular ? { label: 'Popular', dark: true } :
     null;
-  const image = product.images?.[0];
+  const image = productThumb(product);
 
   return (
     <PressScale style={[UI.card, s.card]} onPress={onPress} activeOpacity={0.85}>

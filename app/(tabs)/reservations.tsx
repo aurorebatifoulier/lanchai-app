@@ -26,6 +26,7 @@ import { OrderSheet } from '@/components/rentals/OrderSheet';
 import { GuestRentals } from '@/components/auth/GuestAccount';
 import { AccountBanners } from '@/components/auth/AccountBanners';
 import VteTimeNote from '@/components/VteTimeNote';
+import { productThumb } from '@/utils/productImage';
 
 // "My rentals" tab (validated mockup, 2026-11-02) — Upcoming (carbon "Next pick-up" card
 // + countdown cards), Active (due-back countdown, Extend, calm late card with "I'm on my
@@ -39,8 +40,9 @@ const extraLooks = new Map<string, ProductLook>();
 async function productLooks(rentals: RentalDoc[]): Promise<Map<string, ProductLook>> {
   const looks = new Map<string, ProductLook>();
   const products = await cached('products', HOME_TTL.products, getProducts).catch(() => []);
-  const imagesOf = (p: { images?: string[]; imageUrl?: string } | null) =>
-    [...(p?.images ?? []).slice(0, 2), p?.imageUrl].filter((u): u is string => typeof u === 'string' && u.length > 0);
+  // Thumbnails (600 px) of the first two photos, then the legacy imageUrl.
+  const imagesOf = (p: { images?: string[]; thumbs?: string[]; imageUrl?: string } | null) =>
+    [productThumb(p, 0), productThumb(p, 1), p?.imageUrl].filter((u): u is string => typeof u === 'string' && u.length > 0);
   for (const p of products) looks.set(p.id, { images: imagesOf(p), category: p.category ?? null });
   const missing = [...new Set(rentals.map(r => r.productId))].filter(id => id && !looks.has(id));
   await Promise.all(missing.map(async id => {

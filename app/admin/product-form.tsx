@@ -47,6 +47,8 @@ import KeywordsInput, { cleanKeyword } from '@/components/admin/KeywordsInput';
 import { suggestKeywords } from '@/lib/search';
 import { useSearchGroups } from '@/lib/searchConfig';
 import { clearHomeCache } from '@/lib/homeCache';
+import { makeProductThumb } from '@/lib/productThumbs';
+import { thumbsAligned } from '@/utils/productImage';
 
 type ProductAccessMode = 'public' | 'earlyAccess' | 'exclusive';
 
@@ -92,6 +94,8 @@ type UploadItem = {
   status: 'pending' | 'uploading' | 'done' | 'error';
   progress: number;
   url?: string;
+  /** 600 px copy (lib/productThumbs.ts) — made at save when missing. */
+  thumbUrl?: string;
   errorMsg?: string;
 };
 
@@ -256,12 +260,15 @@ export default function AdminProductFormScreen() {
           setDetailsOpen(true);
         }
         const existingImages: string[] = Array.isArray(d.images) ? d.images : [];
-        setUploadItems(existingImages.map(url => ({
+        // Thumbnails only when they line up with the photos — otherwise rebuilt at save.
+        const existingThumbs: string[] | null = thumbsAligned(d) ? d.thumbs : null;
+        setUploadItems(existingImages.map((url, i) => ({
           key: url,
           uri: url,
           status: 'done',
           progress: 100,
           url,
+          thumbUrl: existingThumbs?.[i],
         })));
       })
       .catch(() => {})
@@ -422,17 +429,23 @@ export default function AdminProductFormScreen() {
       });
     }
 
-    // Upload all pending items; preserve order and existing done URLs
-    async function uploadAll(productId: string): Promise<string[]> {
-      const urls: string[] = [];
+    // Upload all pending items; preserve order and existing done URLs. Every photo also
+    // gets its 600 px thumbnail (new photo: from the local file; existing photo without
+    // one: downloaded and resized) — `thumbs` stays in the SAME order as `images`.
+    async function uploadAll(productId: string): Promise<{ images: string[]; thumbs: string[] }> {
+      const images: string[] = [];
+      const thumbs: string[] = [];
       for (const item of uploadItems) {
-        if (item.status === 'done' && item.url) {
-          urls.push(item.url);
-        } else if (item.status === 'pending') {
-          urls.push(await uploadOne(item, productId));
-        }
+        let url: string | undefined;
+        if (item.status === 'done' && item.url) url = item.url;
+        else if (item.status === 'pending' || item.status === 'error') url = await uploadOne(item, productId);
+        if (!url) continue;
+        const thumb = item.thumbUrl ?? await makeProductThumb(productId, url, item.uri);
+        setUploadItems(prev => prev.map(i => i.key === item.key ? { ...i, url, status: 'done', thumbUrl: thumb } : i));
+        images.push(url);
+        thumbs.push(thumb);
       }
-      return urls;
+      return { images, thumbs };
     }
 
     // Defense-in-depth against the "first Storage write of the session" race: Storage's
@@ -497,8 +510,8 @@ export default function AdminProductFormScreen() {
       clearHomeCache('products');
 
       if (isEdit && id) {
-        const imageUrls = await withRetry(() => uploadAll(id));
-        await updateDoc(doc(db, 'products', id), { ...basePayload, images: imageUrls });
+        const photos = await withRetry(() => uploadAll(id));
+        await updateDoc(doc(db, 'products', id), { ...basePayload, ...photos });
       } else {
         // Generate the doc ID client-side (no network call — same mechanism addDoc uses
         // internally) so images can upload to their final products/{id}/... path BEFORE
@@ -510,8 +523,8 @@ export default function AdminProductFormScreen() {
         basePayload.reviewCount   = 0;
         basePayload.rentalCount   = 0;
         basePayload.bookingsCount = 0;
-        const imageUrls = await withRetry(() => uploadAll(newRef.id));
-        await setDoc(newRef, { ...basePayload, images: imageUrls });
+        const photos = await withRetry(() => uploadAll(newRef.id));
+        await setDoc(newRef, { ...basePayload, ...photos });
       }
 
       setSaveMsg({ ok: true, text: 'Product saved.' });

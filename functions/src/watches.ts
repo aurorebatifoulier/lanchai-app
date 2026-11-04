@@ -7,6 +7,7 @@ import { BREVO_API_KEY } from './email/config';
 import { sendAccountEmail, availabilityEmail, categoryArrivalEmail } from './email/triggers';
 import { computeAvailableUnits, effectiveStock, OCCUPYING_STATUSES, PICKUP_DELAY_MS, type OccupancyRecord } from './shared/availability';
 import { vteDay, vteIsoDay } from './shared/dates';
+import { productThumb } from './shared/productImage';
 
 // "Notify me" (Liked) — availabilityWatches/{uid}_{productId} (renter-written). Hourly:
 // for each WATCHED product (published, not manually unavailable), look for the first
@@ -80,7 +81,7 @@ export const availabilityWatchJob = onSchedule(
       if (from == null) continue;
       const name = String(p.name ?? 'Your item');
       const fromLabel = vteDay(from);
-      const image = Array.isArray(p.images) && typeof p.images[0] === 'string' ? p.images[0] : null;
+      const image = productThumb(p);
       for (const w of ws) {
         const uid = String(w.get('uid'));
         await db().collection('notifications').doc(uid).collection('items').add({
@@ -128,7 +129,7 @@ export const onCategoryArrival = onDocumentWritten(
     if (watches.length === 0) return;
     const categoryName = CATEGORY_NAMES[category] ?? category;
     const productName = String(after!.name ?? 'A new item');
-    const image = Array.isArray(after!.images) && typeof after!.images[0] === 'string' ? after!.images[0] : null;
+    const image = productThumb(after);
     let notified = 0;
     for (const w of watches) {
       const uid = String(w.get('uid'));

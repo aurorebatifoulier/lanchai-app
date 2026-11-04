@@ -14,6 +14,7 @@ import { vteReservationLabel, vteMinutesOfDay, vteDateStamp } from './shared/dat
 import { identityBookingDecision, idCheckNeeded, type IdentityRecord } from './shared/identity';
 import { evaluatePromo, normalizePromoCode, promoErrorText, PROMO_CODE_RE } from './shared/promo';
 import { readPromo, promoLine } from './promo';
+import { productThumb } from './shared/productImage';
 
 // ── createReservations ─────────────────────────────────────────────────────────
 // The ONLY way a renter creates reservations (firestore.rules: reservations create is
@@ -277,7 +278,8 @@ export const createReservations = onCall({ region: REGION }, async request => {
       tx.set(db.collection('reservations').doc(id), {
         productId:    l.it.productId,
         productName:  l.p.name ?? '',
-        productImage: Array.isArray(l.p.images) && typeof l.p.images[0] === 'string' ? l.p.images[0] : null,
+        // The 600 px copy (cards, emails, agreement) — the full-size photo when none yet.
+        productImage: productThumb(l.p),
         renterId:     uid,
         renterName:   profile.displayName || request.auth?.token.name || request.auth?.token.email || null,
         pickupAt:     admin.firestore.Timestamp.fromMillis(l.it.pickupAtMs),

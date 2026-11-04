@@ -37,6 +37,7 @@ import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
 import { getProductAccessState } from '@/utils/productAccess';
 import { vteDayToken, vteHHMM } from '@/lib/vteTime';
 import VteTimeNote from '@/components/VteTimeNote';
+import { productThumb } from '@/utils/productImage';
 
 // Bag (validated mockup) — My Account / booking visual language. Header + "{n} items"
 // chip; "Same dates for everything" toggle; one white card per item (thumbnail → product,
@@ -413,6 +414,9 @@ function ItemCard({
   const access = product ? getProductAccessState(product, userTier ?? null) : null;
   const cat = product ? categoryStyle(product.category) : null;
 
+  // The product's current 600 px copy, else the photo stored when it was added.
+  const thumb = productThumb(product) ?? item.productImage;
+
   // ONE honest line, most important first.
   let signal: React.ReactNode = null;
   if (access?.locked) signal = access.message;
@@ -425,8 +429,8 @@ function ItemCard({
     <View style={[UI.card, s.card]}>
       <View style={s.top}>
         <PressScale onPress={onOpen} style={s.thumb} accessibilityLabel={item.productName}>
-          {item.productImage
-            ? <Image source={{ uri: item.productImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+          {thumb
+            ? <Image source={{ uri: thumb }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
             : <MaterialCommunityIcons name={cat?.icon ?? 'package-variant-closed'} size={26} color={SHADES.carbonMuted} />}
         </PressScale>
         <View style={{ flex: 1 }}>

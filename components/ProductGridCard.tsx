@@ -16,6 +16,7 @@ import PressScale from '@/components/PressScale';
 import QuickAddButton, { type QuickAddState } from '@/components/QuickAddButton';
 import { SEARCH_COPY } from '@/constants/searchCopy';
 import SignalLine from '@/components/SignalLine';
+import { productThumb } from '@/utils/productImage';
 
 // Shared 2-column grid product card — Explore and Liked (category pages use their own).
 // My Account / Home language (validated mockup): white, radius 18, thin border, heart in a
@@ -87,7 +88,7 @@ function ProductGridCard({
   onQuickAdd?: () => void;
 }) {
   const layout = useProductCardLayout();
-  const imageUri = product.images?.[0] ?? null;
+  const imageUri = productThumb(product);
   const minPrice = getMinPrice(product);
   const accessState = getProductAccessState(product, userTier);
   const sectionBadge: { label: string; icon?: string; bg: string; text: string } | null =

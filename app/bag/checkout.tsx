@@ -42,6 +42,7 @@ import VteTimeNote from '@/components/VteTimeNote';
 import { BAG_COPY } from '@/constants/bagCopy';
 import { PICKUP_DELAY_MS } from '@/utils/availability';
 import { useCheckoutRequestId } from '@/hooks/useCheckoutRequestId';
+import { productThumb } from '@/utils/productImage';
 
 // ── CheckoutItem ──────────────────────────────────────────────────────────────
 // Derived locally from Firestore bag items + product data.
@@ -146,7 +147,7 @@ export default function BagSummaryScreen() {
         bagItemId:    raw.id,
         productId:    raw.productId,
         productName:  raw.productName,
-        productImage: raw.productImage, // URL direct from Firestore — no param encoding
+        productImage: productThumb(product) ?? raw.productImage, // current 600 px copy, else the stored one
         pickupAt:     pickupDate.getTime(),
         returnAt:     returnDate.getTime(),
         durationDays: days,
