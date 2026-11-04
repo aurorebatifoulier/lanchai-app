@@ -10,9 +10,11 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:unit": "node --import tsx --test \"tests/unit/**/*.test.ts\"",
-    "test": "npm run test:unit",
+    "test": "npm run test:unit && npm run test:emu",
     "test:rules": "rm -rf tests/.coverage && node --import tsx --test --test-concurrency=1 \"tests/rules/**/*.test.ts\" && tsx tests/rules/coverage.ts",
-    "test:emu:rules": "firebase emulators:exec --config firebase.test.json --only firestore,storage --project demo-lanchai \"npm run test:rules\""
+    "test:emu:rules": "firebase emulators:exec --config firebase.test.json --only firestore,storage --project demo-lanchai \"npm run test:rules\"",
+    "test:emu:functions": "firebase emulators:exec --config firebase.test.json --only firestore,storage,auth --project demo-lanchai \"npm --prefix functions test\"",
+    "test:emu": "firebase emulators:exec --config firebase.test.json --only firestore,storage,auth --project demo-lanchai \"npm run test:rules && npm --prefix functions test\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
