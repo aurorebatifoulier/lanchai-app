@@ -1473,7 +1473,14 @@ a snapshot indefinitely).
 
 - **Builds (EAS, 2026-11-04).** `eas.json`: `development` (dev client APK), `preview`
   (internal APK, sideload), `production` (AAB → Google Play **internal testing**, the beta
-  channel; `submit.production.android.track = internal`). Each profile maps to an EAS
+  channel; `submit.production.android.track = internal`) — iOS: the same profiles build
+  for devices (development / preview = ad hoc, production → TestFlight), bundle id
+  `com.lanchai.app`, iPhone only (`supportsTablet: false`), `usesNonExemptEncryption:
+  false`, light interface only (`userInterfaceStyle: light` — the splash has NO `dark`
+  block: it would force `UIUserInterfaceStyle = Automatic`). iOS permission strings
+  (NSCamera / NSPhotoLibrary / NSMicrophone…) are written by several plugins — keep the
+  texts IDENTICAL in expo-camera, expo-image-picker and expo-media-library (the last mod
+  wins; check with `npx expo config --type introspect`). Each profile maps to an EAS
   environment (development / preview / production) holding the `EXPO_PUBLIC_*` variables —
   `.env.local` is local only (gitignored, never uploaded). `EXPO_PUBLIC_APP_ENV` = development
   | beta (set in `eas.json`; Sentry environment). versionCode = EAS remote auto-increment.

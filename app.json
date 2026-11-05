@@ -7,11 +7,14 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "lanchaiapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.lanchai.app",
-      "supportsTablet": true
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.lanchai.app",
@@ -43,16 +46,16 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "LANCHAI uses the camera so staff can scan rental QR codes at pick-up.",
-          "microphonePermission": false,
+          "cameraPermission": "LANCHAI uses the camera so you can take photos and videos for the chat, a claim or your ID document, and so our staff can scan rental QR codes at pick-up.",
+          "microphonePermission": "LANCHAI uses the microphone to record sound with the videos you send in the chat or with a claim.",
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "LANCHAI needs access to your photos so you can send pictures and videos in the chat, with a claim or as your ID document.",
-          "cameraPermission": "LANCHAI uses the camera so you can take photos and videos for the chat, a claim or your ID document.",
+          "photosPermission": "LANCHAI needs access to your photos so you can choose pictures and videos to send in the chat, with a claim or as your ID document.",
+          "cameraPermission": "LANCHAI uses the camera so you can take photos and videos for the chat, a claim or your ID document, and so our staff can scan rental QR codes at pick-up.",
           "microphonePermission": "LANCHAI uses the microphone to record sound with the videos you send in the chat or with a claim."
         }
       ],
@@ -62,18 +65,15 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FAFAF7",
-          "dark": {
-            "backgroundColor": "#FAFAF7"
-          }
+          "backgroundColor": "#FAFAF7"
         }
       ],
       "expo-video",
       [
         "expo-media-library",
         {
-          "photosPermission": "LANCHAI needs access to your photos to save chat and claim media to your device.",
-          "savePhotosPermission": "LANCHAI needs permission to save photos and videos to your device.",
+          "photosPermission": "LANCHAI needs access to your photos so you can choose pictures and videos to send in the chat, with a claim or as your ID document.",
+          "savePhotosPermission": "LANCHAI needs permission to save photos and videos from the chat or a claim to your device.",
           "granularPermissions": []
         }
       ],
