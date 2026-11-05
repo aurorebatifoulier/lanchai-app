@@ -22,12 +22,26 @@ import { UI, StatusBlock, useScreenInsets } from '@/components/account/ui';
 import { auth } from '@/lib/auth';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { reauthAndRevokeApple, AppleCancelled } from '@/lib/appleSignIn';
+import { reauthWithGoogle, GoogleCancelled } from '@/lib/googleSignIn';
 import { getMyReservations, RentalDoc } from '@/lib/firestore';
 import PressScale from '@/components/PressScale';
 
 // Reservation statuses that make account deletion unsafe — explicit check, independent
 // of any date field, so it blocks regardless of a reservation's return date.
 const BLOCKING_STATUSES = ['active', 'confirmed', 'pending_payment'];
+
+// How the renter confirms: their password, or — for an Apple / Google account without
+// one — that provider's sheet again (an Apple deletion also revokes the Apple token,
+// App Store rule 5.1.1(v)).
+type Confirm = 'password' | 'apple.com' | 'google.com';
+function confirmMethod(): Confirm {
+  const ids = (auth.currentUser?.providerData ?? []).map(p => p.providerId);
+  if (ids.includes('password')) return 'password';
+  if (ids.includes('apple.com')) return 'apple.com';
+  if (ids.includes('google.com')) return 'google.com';
+  return 'password';
+}
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
@@ -69,16 +83,20 @@ export default function DeleteAccountScreen() {
       .finally(() => setChecking(false));
   }, [user]);
 
+  const method = confirmMethod();
+
   const handleDelete = useCallback(async () => {
     const cu = auth.currentUser;
-    if (!cu?.email || !password.trim() || deleting) return;
+    if (!cu || deleting) return;
+    if (method === 'password' && (!cu.email || !password.trim())) return;
     setDeleting(true);
     setError(null);
 
     try {
-      // Re-authenticate (confirms the password; the server also requires a recent login)
-      const credential = EmailAuthProvider.credential(cu.email, password);
-      await reauthenticateWithCredential(cu, credential);
+      // Re-authenticate (the server also requires a recent login)
+      if (method === 'apple.com') await reauthAndRevokeApple(cu);
+      else if (method === 'google.com') await reauthWithGoogle(cu);
+      else await reauthenticateWithCredential(cu, EmailAuthProvider.credential(cu.email!, password));
       await cu.getIdToken(true);
 
       // Server-side deletion (deleteMyAccount callable): refuses while a rental is
@@ -87,13 +105,14 @@ export default function DeleteAccountScreen() {
       await httpsCallable(functions, 'deleteMyAccount')();
       await auth.signOut().catch(() => {}); // → _layout redirects to /login
     } catch (err: any) {
+      if (err instanceof AppleCancelled || err instanceof GoogleCancelled) { setDeleting(false); return; }
       if (err?.details?.code === 'has-active-rentals') {
         setError('You still have an active or upcoming rental — return it or cancel it before deleting your account.');
         setDeleting(false);
         return;
       }
       if (err?.details?.code === 'requires-recent-login') {
-        setError('Please enter your password again and retry.');
+        setError(method === 'password' ? 'Please enter your password again and retry.' : 'Please confirm again and retry.');
         setDeleting(false);
         return;
       }
@@ -110,9 +129,9 @@ export default function DeleteAccountScreen() {
       setError(msg);
       setDeleting(false);
     }
-  }, [password, deleting]);
+  }, [password, deleting, method]);
 
-  const canSubmit = password.trim().length > 0 && !deleting;
+  const canSubmit = (method !== 'password' || password.trim().length > 0) && !deleting;
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (checking) {
@@ -176,24 +195,34 @@ export default function DeleteAccountScreen() {
             </StatusBlock>
 
             <View style={UI.divider} />
-            <Text style={UI.fieldLabel}>Confirm with your password</Text>
-            <View style={[UI.input, s.passwordRow]}>
-              <TextInput
-                style={s.passwordInput}
-                value={password}
-                onChangeText={v => { setPassword(v); setError(null); }}
-                placeholder="Your current password"
-                placeholderTextColor={SHADES.carbonFaint}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={handleDelete}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={10}>
-                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={SHADES.carbonMuted} />
-              </TouchableOpacity>
-            </View>
+            {method === 'password' ? (
+              <>
+                <Text style={UI.fieldLabel}>Confirm with your password</Text>
+                <View style={[UI.input, s.passwordRow]}>
+                  <TextInput
+                    style={s.passwordInput}
+                    value={password}
+                    onChangeText={v => { setPassword(v); setError(null); }}
+                    placeholder="Your current password"
+                    placeholderTextColor={SHADES.carbonFaint}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={handleDelete}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={10}>
+                    <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={SHADES.carbonMuted} />
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <Text style={UI.body}>
+                {method === 'apple.com'
+                  ? 'You’ll confirm with Apple, then your account is deleted and LANCHAI’s access to your Apple ID is removed.'
+                  : 'You’ll confirm with your Google account, then your account is deleted.'}
+              </Text>
+            )}
 
             {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
 

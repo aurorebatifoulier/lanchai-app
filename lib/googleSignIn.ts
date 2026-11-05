@@ -1,5 +1,5 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { GoogleAuthProvider, linkWithCredential, signInWithCredential, type User } from 'firebase/auth';
+import { GoogleAuthProvider, linkWithCredential, reauthenticateWithCredential, signInWithCredential, type User } from 'firebase/auth';
 import { auth } from './auth';
 import { AUTH_COPY } from '@/constants/authCopy';
 
@@ -76,4 +76,20 @@ export async function continueWithGoogle(): Promise<{ user: User; names: GoogleN
   }
   const { user } = await signInWithCredential(auth, credential);
   return { user, names };
+}
+
+/** Before deleting a Google account: re-authenticates with Google (the server needs a recent login). */
+export async function reauthWithGoogle(user: User): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { GoogleSignin, isSuccessResponse, statusCodes } = require('@react-native-google-signin/google-signin') as typeof import('@react-native-google-signin/google-signin');
+  GoogleSignin.configure({ webClientId: WEB_CLIENT_ID });
+  let res: Awaited<ReturnType<typeof GoogleSignin.signIn>>;
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    res = await GoogleSignin.signIn();
+  } catch (err) {
+    mapGoogleError(err, statusCodes);
+  }
+  if (!isSuccessResponse(res) || !res.data.idToken) throw new GoogleCancelled('cancelled');
+  await reauthenticateWithCredential(user, GoogleAuthProvider.credential(res.data.idToken));
 }

@@ -1381,8 +1381,20 @@ a snapshot indefinitely).
     a dev / EAS build — `googleSignInAvailable()` = not Expo Go AND
     `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` set; the module is required lazily. Links the guest
     session when the Google account is new, else `signInWithCredential`. No config plugin
-    in app.json (Android autolinks); iOS will need it with `iosUrlScheme`. Apple sign-in:
-    empty slot in `SocialButtons` (required on iOS later).
+    in app.json (Android autolinks); iOS will need it with `iosUrlScheme`.
+  - **Sign in with Apple** (`lib/appleSignIn.ts`, `expo-apple-authentication` + `expo-crypto`
+    nonce — raw to Firebase, SHA-256 to Apple): iOS BUILDS only (`appleSignInSupported()`:
+    iOS and not Expo Go — Expo Go's token has the wrong audience), App Store rule 4.8.
+    Apple's own button (WHITE_OUTLINE, radius 16, listed FIRST in `SocialButtons`); same
+    flow as Google in `login.tsx` (`social()`: link the guest, else sign in; new account →
+    step 2 with Apple's names — given only on the FIRST authorization). Entitlement via
+    the plugin + `ios.usesAppleSignIn`. "or with email" divider only when a social button
+    shows (`hasSocialButtons()`). Firebase Apple provider needs Team ID + Key ID + .p8 key.
+  - **Account deletion / security by provider:** `delete-account.tsx` confirms with the
+    password, or (no password provider) the Apple / Google sheet again
+    (`reauthAndRevokeApple` also REVOKES the Apple token — rule 5.1.1(v), a failed revoke
+    never blocks; `reauthWithGoogle`). `security.tsx` shows "No password to change" for
+    Apple / Google-only accounts.
   - **Onboarding "living cards"** (validated mockup 2026-11-03; `app/onboarding.tsx`, ONCE
     PER DEVICE — `lib/onboarding.ts` device flag set on finish / skip AND as soon as any
     account is seen on the device; never reset on sign-out, sign-in, account switch or

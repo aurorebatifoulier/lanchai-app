@@ -75,6 +75,10 @@ export default function ChangePasswordScreen() {
     resetTimerRef.current = setTimeout(() => setResetStatus(null), 4000);
   }
 
+  const providers = (auth.currentUser?.providerData ?? []).map(p => p.providerId);
+  const socialProvider = providers.includes('password') ? null
+    : providers.includes('apple.com') ? 'Apple' : providers.includes('google.com') ? 'Google' : null;
+
   const pwValidation  = validateNewPw(newPw);
   const confirmError  = confirm.length > 0 && confirm !== newPw ? "Passwords don't match." : null;
   const canSubmit     = !saving && currentPw.length > 0 && pwValidation.ok && newPw === confirm;
@@ -150,95 +154,107 @@ export default function ChangePasswordScreen() {
         contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}
         keyboardShouldPersistTaps="handled"
       >
-        <SectionTitle style={{ marginTop: 16 }}>Change password</SectionTitle>
-        <View style={[UI.card, UI.cardPadded]}>
-          {/* ── Current password ── */}
-          <PasswordField
-            label="Current password"
-            value={currentPw}
-            onChangeText={setCurrentPw}
-            placeholder="Your current password"
-            visible={showCurrent}
-            onToggle={() => setShowCurrent(v => !v)}
-            returnKeyType="next"
-          />
-
-          {/* ── New password ── */}
-          <View style={{ marginTop: 16 }}>
+        {socialProvider ? (
+          // Apple / Google account without a password: nothing to change here.
+          <View style={[UI.card, UI.cardPadded, { marginTop: 16 }]}>
+            <Text style={UI.title}>No password to change</Text>
+            <Text style={[UI.body, { marginTop: 6 }]}>
+              {`You sign in with ${socialProvider}, so your LANCHAI account has no password. Your ${socialProvider} account settings keep it secure.`}
+            </Text>
+          </View>
+        ) : (
+          <>
+          <SectionTitle style={{ marginTop: 16 }}>Change password</SectionTitle>
+          <View style={[UI.card, UI.cardPadded]}>
+            {/* ── Current password ── */}
             <PasswordField
-              label="New password"
-              value={newPw}
-              onChangeText={setNewPw}
-              placeholder="Min 8 characters"
-              visible={showNew}
-              onToggle={() => setShowNew(v => !v)}
+              label="Current password"
+              value={currentPw}
+              onChangeText={setCurrentPw}
+              placeholder="Your current password"
+              visible={showCurrent}
+              onToggle={() => setShowCurrent(v => !v)}
               returnKeyType="next"
             />
-          </View>
-          {pwValidation.error ? (
-            <Text style={[UI.errorText, s.fieldNote]}>{pwValidation.error}</Text>
-          ) : (
-            <Text style={[UI.small, s.fieldNote]}>At least 8 characters, with letters and numbers.</Text>
-          )}
 
-          {/* ── Confirm new password ── */}
-          <View style={{ marginTop: 16 }}>
-            <PasswordField
-              label="Confirm new password"
-              value={confirm}
-              onChangeText={setConfirm}
-              placeholder="Repeat password"
-              visible={showConf}
-              onToggle={() => setShowConf(v => !v)}
-              returnKeyType="done"
-              onSubmitEditing={handleUpdate}
-            />
-          </View>
-          {confirmError && <Text style={[UI.errorText, s.fieldNote]}>{confirmError}</Text>}
-
-          {/* ── Feedback: subtle line, no banner ── */}
-          {saveStatus === 'success' && <View style={s.feedback}><CheckLine text="Your password has been updated." /></View>}
-          {saveStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{feedbackMsg}</Text>}
-
-          {/* ── Update button ── */}
-          <PressScale
-            style={[UI.btnPrimary, { marginTop: 18 }, !canSubmit && UI.btnDisabled]}
-            onPress={handleUpdate}
-            disabled={!canSubmit}
-            activeOpacity={0.85}
-          >
-            {saving ? (
-              <>
-                <ActivityIndicator size="small" color={SHADES.carbon} />
-                <Text style={UI.btnPrimaryText}>Updating…</Text>
-              </>
+            {/* ── New password ── */}
+            <View style={{ marginTop: 16 }}>
+              <PasswordField
+                label="New password"
+                value={newPw}
+                onChangeText={setNewPw}
+                placeholder="Min 8 characters"
+                visible={showNew}
+                onToggle={() => setShowNew(v => !v)}
+                returnKeyType="next"
+              />
+            </View>
+            {pwValidation.error ? (
+              <Text style={[UI.errorText, s.fieldNote]}>{pwValidation.error}</Text>
             ) : (
-              <Text style={UI.btnPrimaryText}>Update password</Text>
+              <Text style={[UI.small, s.fieldNote]}>At least 8 characters, with letters and numbers.</Text>
             )}
-          </PressScale>
-        </View>
 
-        {/* ── Reset email ── */}
-        <SectionTitle>Forgot your password?</SectionTitle>
-        <View style={[UI.card, UI.cardPadded]}>
-          <PressScale
-            style={[UI.btnSecondary, resetting && UI.btnDisabled]}
-            onPress={handleResetEmail}
-            disabled={resetting}
-            activeOpacity={0.7}
-          >
-            {resetting
-              ? <ActivityIndicator size="small" color={SHADES.carbon} />
-              : (
+            {/* ── Confirm new password ── */}
+            <View style={{ marginTop: 16 }}>
+              <PasswordField
+                label="Confirm new password"
+                value={confirm}
+                onChangeText={setConfirm}
+                placeholder="Repeat password"
+                visible={showConf}
+                onToggle={() => setShowConf(v => !v)}
+                returnKeyType="done"
+                onSubmitEditing={handleUpdate}
+              />
+            </View>
+            {confirmError && <Text style={[UI.errorText, s.fieldNote]}>{confirmError}</Text>}
+
+            {/* ── Feedback: subtle line, no banner ── */}
+            {saveStatus === 'success' && <View style={s.feedback}><CheckLine text="Your password has been updated." /></View>}
+            {saveStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{feedbackMsg}</Text>}
+
+            {/* ── Update button ── */}
+            <PressScale
+              style={[UI.btnPrimary, { marginTop: 18 }, !canSubmit && UI.btnDisabled]}
+              onPress={handleUpdate}
+              disabled={!canSubmit}
+              activeOpacity={0.85}
+            >
+              {saving ? (
                 <>
-                  <Feather name="mail" size={15} color={SHADES.carbon} />
-                  <Text style={UI.btnSecondaryText}>Send me a reset email instead</Text>
+                  <ActivityIndicator size="small" color={SHADES.carbon} />
+                  <Text style={UI.btnPrimaryText}>Updating…</Text>
                 </>
+              ) : (
+                <Text style={UI.btnPrimaryText}>Update password</Text>
               )}
-          </PressScale>
-          {resetStatus === 'success' && <View style={s.feedback}><CheckLine text={resetMsg} /></View>}
-          {resetStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{resetMsg}</Text>}
-        </View>
+            </PressScale>
+          </View>
+
+          {/* ── Reset email ── */}
+          <SectionTitle>Forgot your password?</SectionTitle>
+          <View style={[UI.card, UI.cardPadded]}>
+            <PressScale
+              style={[UI.btnSecondary, resetting && UI.btnDisabled]}
+              onPress={handleResetEmail}
+              disabled={resetting}
+              activeOpacity={0.7}
+            >
+              {resetting
+                ? <ActivityIndicator size="small" color={SHADES.carbon} />
+                : (
+                  <>
+                    <Feather name="mail" size={15} color={SHADES.carbon} />
+                    <Text style={UI.btnSecondaryText}>Send me a reset email instead</Text>
+                  </>
+                )}
+            </PressScale>
+            {resetStatus === 'success' && <View style={s.feedback}><CheckLine text={resetMsg} /></View>}
+            {resetStatus === 'error' && <Text style={[UI.errorText, s.feedback]}>{resetMsg}</Text>}
+          </View>
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

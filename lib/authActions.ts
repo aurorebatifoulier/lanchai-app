@@ -32,6 +32,7 @@ export function authErrorMessage(err: unknown): string {
     case 'auth/credential-already-in-use': return e.emailInUse;
     case 'auth/account-exists-with-different-credential': return e.otherProvider;
     case 'auth/weak-password': return e.weakPassword;
+    case 'auth/operation-not-allowed': return e.socialUnavailable;
     case 'auth/network-request-failed': return e.network;
     default: return e.generic;
   }

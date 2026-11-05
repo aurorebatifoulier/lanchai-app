@@ -20,7 +20,7 @@ import { DEFAULT_COUNTRY, toE164, type CountryCode } from '@/constants/countryCo
 import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { AuthHeaderDecor } from '@/components/auth/AuthHeaderDecor';
-import { AuthInput, PasswordField, OrDivider, SocialButtons, TermsLine, PhoneField } from '@/components/auth/AuthFields';
+import { AuthInput, PasswordField, OrDivider, SocialButtons, TermsLine, PhoneField, hasSocialButtons } from '@/components/auth/AuthFields';
 import { ForgotPasswordSheet } from '@/components/auth/ForgotPasswordSheet';
 import LegacyAuthForm from '@/components/auth/LegacyAuthForm';
 import { useFeatureFlags } from '@/lib/features';
@@ -29,13 +29,14 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/auth';
 import { authFlow } from '@/lib/authFlow';
 import { continueWithGoogle, GoogleCancelled } from '@/lib/googleSignIn';
+import { continueWithApple, AppleCancelled } from '@/lib/appleSignIn';
 import {
   authErrorMessage, signInWithEmail, createEmailAccount, hasCompleteProfile, saveIndividualProfile,
   EMAIL_RE, PHONE_E164, MIN_PASSWORD,
 } from '@/lib/authActions';
 
 // Sign in + 2-step sign-up (validated mockups). Guests are an anonymous session: step 1
-// LINKS it to the new email account, step 2 saves name + phone (+ invite code). Google
+// LINKS it to the new email account, step 2 saves name + phone (+ invite code). Apple / Google
 // (dev / EAS build only) skips step 1. While a sign-up is in progress `authFlow.busy`
 // keeps the root layout from leaving this screen; it leaves by itself (back to where the
 // guest came from — the guest sheet's action then resumes — or Home).
@@ -69,7 +70,7 @@ export default function LoginScreen() {
   const [inviteOpen, setInviteOpen] = useState(params.invite === '1');
   const [invite, setInvite] = useState('');
   const [busy, setBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
+  const [socialBusy, setSocialBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotOpen, setForgotOpen] = useState(false);
   const passwordRef = useRef<TextInput>(null);
@@ -104,23 +105,26 @@ export default function LoginScreen() {
     }
   };
 
-  const google = async () => {
-    if (googleBusy) return;
-    setGoogleBusy(true); setError(null);
+  // Google and Apple: same flow — a new account goes to step 2 with the names prefilled.
+  const social = async (run: () => Promise<{ user: { uid: string }; names: { firstName: string; lastName: string } }>) => {
+    if (socialBusy) return;
+    setSocialBusy(true); setError(null);
     authFlow.busy = true;
     try {
-      const { user, names } = await continueWithGoogle();
+      const { user, names } = await run();
       if (await hasCompleteProfile(user.uid)) { leave(); return; }
       setFirstName(f => f || names.firstName);
       setLastName(l => l || names.lastName);
       go('signup2');
     } catch (err) {
       authFlow.busy = false;
-      if (!(err instanceof GoogleCancelled)) setError(authErrorMessage(err));
+      if (!(err instanceof GoogleCancelled) && !(err instanceof AppleCancelled)) setError(authErrorMessage(err));
     } finally {
-      setGoogleBusy(false);
+      setSocialBusy(false);
     }
   };
+  const google = () => social(continueWithGoogle);
+  const apple = () => social(continueWithApple);
 
   const passwordsOk = password.length >= MIN_PASSWORD && password === confirm;
   const step1Ok = EMAIL_RE.test(email.trim()) && passwordsOk;
@@ -192,8 +196,8 @@ export default function LoginScreen() {
             </View>
             <AuthHeaderDecor />
             <View style={s.form}>
-              <SocialButtons onGoogle={google} busy={googleBusy} />
-              <OrDivider label={si.orEmail} />
+              <SocialButtons onGoogle={google} onApple={apple} busy={socialBusy} />
+              {hasSocialButtons() && <OrDivider label={si.orEmail} />}
               <AuthInput value={email} onChangeText={setEmail} placeholder={si.email} keyboardType="email-address"
                 autoCapitalize="none" autoCorrect={false} autoComplete="email" returnKeyType="next"
                 onSubmitEditing={() => passwordRef.current?.focus()} />
@@ -240,8 +244,8 @@ export default function LoginScreen() {
               <View style={s.form}>
                 <Text style={s.title}>{su.step1Title}</Text>
                 <Text style={s.sub}>{su.step1Sub}</Text>
-                <SocialButtons onGoogle={google} busy={googleBusy} />
-                <OrDivider label={si.orEmail} />
+                <SocialButtons onGoogle={google} onApple={apple} busy={socialBusy} />
+                {hasSocialButtons() && <OrDivider label={si.orEmail} />}
                 <AuthInput value={email} onChangeText={setEmail} placeholder={si.email} keyboardType="email-address"
                   autoCapitalize="none" autoCorrect={false} autoComplete="email" returnKeyType="next"
                   onSubmitEditing={() => passwordRef.current?.focus()} />

@@ -97,7 +97,7 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
               <View style={s.handle} />
               <Text style={s.title}>{c.title}</Text>
               <Text style={s.lead}>{`${c.lead(sheet.action, sheet.itemName)} ${c.after(sheet.action)}`}</Text>
-              {/* Continue with Google + Apple come here (flagged — not in Expo Go). */}
+              {/* Apple / Google sign-in live on /login (both buttons go there) — the App Store rule only needs Apple wherever Google is offered. */}
               <PressScale style={[UI.btnPrimary, s.btn]} onPress={() => go('signup')}>
                 <Text style={UI.btnPrimaryText}>{c.signUpEmail}</Text>
               </PressScale>

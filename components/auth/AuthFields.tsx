@@ -17,11 +17,13 @@ import { AUTH_COPY } from '@/constants/authCopy';
 import { COUNTRY_CODES, type CountryCode } from '@/constants/countryCodes';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { googleSignInAvailable } from '@/lib/googleSignIn';
+import { appleSignInSupported } from '@/lib/appleSignIn';
 
 // Shared fields of the auth screens (validated mockups): white rounded inputs, password
 // with an eye toggle, phone with a country-code picker, "or with email" divider, social
-// buttons (Google behind its flag; Apple slot for iOS later), Terms / Privacy line.
+// buttons (Apple on iOS builds, Google behind its flag), Terms / Privacy line.
 
 export const AuthInput = forwardRef<TextInput, TextInputProps>(function AuthInput({ style, ...rest }, ref) {
   return <TextInput ref={ref} placeholderTextColor={SHADES.carbonFaint} style={[s.input, style]} {...rest} />;
@@ -62,16 +64,37 @@ export function OrDivider({ label }: { label: string }) {
   );
 }
 
-/** Continue with Google (only where it works — dev / EAS build) + the Apple slot. */
-export function SocialButtons({ onGoogle, busy }: { onGoogle: () => void; busy?: boolean }) {
-  if (!googleSignInAvailable()) return null;
+/** True when at least one social button shows (the "or with email" divider follows it). */
+export function hasSocialButtons(): boolean {
+  return googleSignInAvailable() || appleSignInSupported();
+}
+
+/**
+ * Sign in with Apple (iOS build only — App Store rule 4.8, Apple's own button, white with
+ * outline to match ours, listed first) + Continue with Google (dev / EAS build with the
+ * client id).
+ */
+export function SocialButtons({ onGoogle, onApple, busy }: { onGoogle: () => void; onApple: () => void; busy?: boolean }) {
+  if (!hasSocialButtons()) return null;
   return (
     <View style={{ gap: 10 }}>
-      <PressScale style={[s.social, busy && UI.btnDisabled]} onPress={onGoogle} disabled={busy}>
-        <MaterialCommunityIcons name="google" size={20} color={SHADES.carbon} />
-        <Text style={s.socialText}>{AUTH_COPY.signIn.google}</Text>
-      </PressScale>
-      {/* Apple sign-in slot — required on iOS later (App Store rule); not implemented yet. */}
+      {appleSignInSupported() && (
+        <View style={busy && UI.btnDisabled} pointerEvents={busy ? 'none' : 'auto'}>
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+            cornerRadius={16}
+            style={s.apple}
+            onPress={onApple}
+          />
+        </View>
+      )}
+      {googleSignInAvailable() && (
+        <PressScale style={[s.social, busy && UI.btnDisabled]} onPress={onGoogle} disabled={busy}>
+          <MaterialCommunityIcons name="google" size={20} color={SHADES.carbon} />
+          <Text style={s.socialText}>{AUTH_COPY.signIn.google}</Text>
+        </PressScale>
+      )}
     </View>
   );
 }
@@ -173,6 +196,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
   },
   socialText: { ...TYPE.button, color: SHADES.carbon },
+  apple: { height: SIZES.btn, width: '100%' },
   terms: { ...TYPE.small, fontWeight: '500', color: SHADES.carbonMuted, textAlign: 'center' },
   termsLink: { textDecorationLine: 'underline', color: SHADES.carbonMuted },
   phoneRow: { flexDirection: 'row', gap: 10 },
