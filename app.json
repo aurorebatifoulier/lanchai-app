@@ -81,7 +81,7 @@
         "@sentry/react-native",
         {
           "organization": "lanchai",
-          "project": "lanchai-app",
+          "project": "react-native",
           "url": "https://de.sentry.io/"
         }
       ]

@@ -1489,7 +1489,7 @@ a snapshot indefinitely).
   `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
   Never add a READ_MEDIA permission without a Play declaration.
 
-- **Sentry (2026-11-04, EU region `de.sentry.io`, org `lanchai`, project `lanchai-app`).**
+- **Sentry (2026-11-04, EU region `de.sentry.io`, org `lanchai`, project slug `react-native`).**
   `lib/sentry.ts` is imported FIRST by `app/_layout.tsx` (root wrapped with `Sentry.wrap`);
   DSN = `EXPO_PUBLIC_SENTRY_DSN` (EAS env), environment = `EXPO_PUBLIC_APP_ENV`; off in Expo
   Go / dev. **Privacy:** user = Firebase uid ONLY (`setSentryUser`, from AuthContext);
