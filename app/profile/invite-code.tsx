@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
+import KeyboardScreen from '@/components/KeyboardScreen';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { COLORS } from '@/constants/Colors';
@@ -40,7 +41,7 @@ export default function InviteCodeScreen() {
   };
 
   return (
-    <View style={[s.root, screen.root]}>
+    <KeyboardScreen style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -75,7 +76,7 @@ export default function InviteCodeScreen() {
           </View>
         )}
       </View>
-    </View>
+    </KeyboardScreen>
   );
 }
 

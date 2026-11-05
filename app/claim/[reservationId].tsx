@@ -11,10 +11,12 @@ import {
   Modal,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
+import CameraOffHint from '@/components/CameraOffHint';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { askCamera } from '@/lib/mediaPermissions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
@@ -79,8 +81,6 @@ export default function ClaimScreen() {
   }, [reservationId, user]);
 
   const handleAddPhotos = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { setError('Photo access denied. Please allow it in your device settings.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
@@ -92,7 +92,7 @@ export default function ClaimScreen() {
   }, []);
 
   const handleRecordVideo = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status } = await askCamera();
     if (status !== 'granted') { setError('Camera access denied. Please allow it in your device settings.'); return; }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['videos'],
@@ -105,8 +105,6 @@ export default function ClaimScreen() {
   }, []);
 
   const handlePickVideo = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { setError('Video access denied. Please allow it in your device settings.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'] });
     if (result.canceled || result.assets.length === 0) return;
     setMedia(prev => [...prev, { uri: result.assets[0].uri, type: 'video' as const }]);
@@ -342,6 +340,7 @@ export default function ClaimScreen() {
               <Feather name="film" size={18} color={COLORS.carbon} />
               <Text style={styles.actionOptionText}>Video library</Text>
             </TouchableOpacity>
+            <CameraOffHint />
           </View>
         </TouchableOpacity>
       </Modal>

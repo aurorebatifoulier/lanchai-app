@@ -9,6 +9,7 @@ import { Text } from '@/components/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { askCamera } from '@/lib/mediaPermissions';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
@@ -183,11 +184,6 @@ export default function ChatScreen() {
   const handlePickImage = useCallback(async () => {
     if (uploading) return;
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showError('Photo access denied. Please allow it in your device settings.');
-      return;
-    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -228,7 +224,7 @@ export default function ChatScreen() {
   const handleRecordVideo = useCallback(async () => {
     if (uploading) return;
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status } = await askCamera();
     if (status !== 'granted') {
       showError('Camera access denied. Please allow it in your device settings.');
       return;
@@ -247,11 +243,6 @@ export default function ChatScreen() {
   const handlePickVideo = useCallback(async () => {
     if (uploading) return;
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showError('Video access denied. Please allow it in your device settings.');
-      return;
-    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],

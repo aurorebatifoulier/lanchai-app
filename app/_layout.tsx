@@ -8,6 +8,7 @@ import { StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { QuickAddProvider } from '@/components/quickadd/QuickAddProvider';
+import KeyboardDoneBar from '@/components/KeyboardDoneBar';
 import { GuestGateProvider, useRequireAccount } from '@/components/auth/GuestGate';
 import { authFlow } from '@/lib/authFlow';
 import { getOnboardingComplete, setOnboardingComplete, onboardingDoneNow } from '@/lib/onboarding';
@@ -208,6 +209,8 @@ function RootLayout() {
           </QuickAddProvider>
         </GuestGateProvider>
       </AuthProvider>
+      {/* "Done" above iOS numeric keyboards (components/AppText.tsx DONE_BAR_ID). */}
+      <KeyboardDoneBar />
       <StatusBar style="dark" />
     </GestureHandlerRootView>
   );

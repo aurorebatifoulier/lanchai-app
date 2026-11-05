@@ -48,8 +48,6 @@ export default function AdminOnboardingScreen() {
     });
 
   const pick = async (i: number, j: number) => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 5], quality: 1 });
     if (res.canceled || !res.assets?.[0]) return;
     setBusy(`${i}-${j}`); setError(null);

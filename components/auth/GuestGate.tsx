@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { View, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, StyleSheet, Modal, Pressable, Platform } from 'react-native';
 import { Text } from '@/components/AppText';
 import { useRouter, usePathname } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -78,9 +78,18 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
     if (!keepPending) pending.current = null;
     setSheet(null);
   };
+  // iOS: navigate only once the sheet has finished closing (Modal onDismiss) — a push
+  // started while a modal is still animating out can be dropped. Android: right away.
+  const afterDismiss = useRef<(() => void) | null>(null);
   const go = (mode: 'signin' | 'signup') => {
+    const nav = () => router.push(mode === 'signup' ? ({ pathname: '/login', params: { mode: 'signup' } } as never) : '/login');
     close(true);
-    router.push(mode === 'signup' ? ({ pathname: '/login', params: { mode: 'signup' } } as never) : '/login');
+    if (Platform.OS === 'ios') afterDismiss.current = nav; else nav();
+  };
+  const onDismiss = () => {
+    const nav = afterDismiss.current;
+    afterDismiss.current = null;
+    nav?.();
   };
 
   const api = useMemo(() => ({ requireAccount }), [requireAccount]);
@@ -89,7 +98,7 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={api}>
       {children}
-      <Modal visible={!!sheet} transparent animationType="fade" onRequestClose={() => close()} statusBarTranslucent>
+      <Modal visible={!!sheet} transparent animationType="fade" onRequestClose={() => close()} onDismiss={onDismiss} statusBarTranslucent>
         <View style={s.root}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} />
           {sheet && (

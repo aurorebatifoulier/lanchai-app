@@ -3,6 +3,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import * as ImagePicker from 'expo-image-picker';
+import { askCamera } from '@/lib/mediaPermissions';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { db, storage, functions } from './firebase';
 import { auth } from './auth';
@@ -33,13 +34,12 @@ export function useMyIdentity(): { identity: IdentityRecord | null; loading: boo
 /** Camera or gallery → local image uri (null if cancelled or permission denied). */
 export async function pickIdPhoto(source: 'camera' | 'gallery'): Promise<string | null> {
   if (source === 'camera') {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status } = await askCamera();
     if (status !== 'granted') return null;
     const r = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 1 });
     return r.canceled ? null : r.assets?.[0]?.uri ?? null;
   }
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') return null;
+  // The system picker needs no photo-library permission (lib/mediaPermissions.ts).
   const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 1 });
   return r.canceled ? null : r.assets?.[0]?.uri ?? null;
 }

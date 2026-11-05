@@ -10,7 +10,7 @@ import {
   type TextInput,
 } from 'react-native';
 import { Text } from '@/components/AppText';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
@@ -180,6 +180,8 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* iOS swipe-back would skip step 2's own back arrow (which signs out) — off there. */}
+      <Stack.Screen options={{ gestureEnabled: view !== 'signup2' }} />
       <StatusBar style="dark" />
       <ScrollView
         contentContainerStyle={[s.content, { paddingTop: screen.top + 12, paddingBottom: screen.bottom + 24 }]}

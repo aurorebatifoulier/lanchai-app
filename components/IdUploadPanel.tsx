@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, Image, ActivityIndicator, StyleSheet, ScrollView } from 'react-native';
 import { Text } from '@/components/AppText';
+import CameraOffHint from '@/components/CameraOffHint';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI } from '@/components/account/ui';
@@ -82,6 +83,7 @@ export function IdUploadPanel({ onDone, submitLabel = 'Save my ID' }: { onDone: 
           </PressScale>
         </View>
       )}
+      <CameraOffHint />
 
       {error && <Text style={[UI.errorText, { marginTop: 10 }]}>{error}</Text>}
       <PressScale

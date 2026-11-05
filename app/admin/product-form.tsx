@@ -213,7 +213,6 @@ export default function AdminProductFormScreen() {
   const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
   const [archiveConfirm, setArchiveConfirm] = useState(false);
   const [uploadItems,    setUploadItems]    = useState<UploadItem[]>([]);
-  const [imgPermError,   setImgPermError]   = useState(false);
   const [cropQueue,      setCropQueue]      = useState<UploadItem[]>([]);
   const [cropQueueTotal, setCropQueueTotal] = useState(0);
   const [detailsOpen,    setDetailsOpen]    = useState(false);
@@ -316,9 +315,6 @@ export default function AdminProductFormScreen() {
 
   // ── Image management ───────────────────────────────────────────────────────
   const handleAddImages = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { setImgPermError(true); return; }
-    setImgPermError(false);
     const limit = Math.max(1, 10 - uploadItems.length);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -847,12 +843,6 @@ export default function AdminProductFormScreen() {
               {uploadItems.length === 0 ? 'Add photos' : 'Add more photos'}
             </Text>
           </TouchableOpacity>
-
-          {imgPermError && (
-            <Text style={f.imgPermError}>
-              Photo library access denied. Enable it in your device settings.
-            </Text>
-          )}
 
           {uploadItems.length > 0 && (
             <ScrollView
@@ -1757,10 +1747,6 @@ const f = StyleSheet.create({
   addPhotoBtnDisabled: { opacity: 0.4 },
   addPhotoBtnText: { fontSize: 14, fontWeight: '600', color: COLORS.carbon },
   addPhotoBtnTextDisabled: { color: COLORS.fg3 },
-  imgPermError: {
-    fontSize: 12, fontWeight: '500', color: COLORS.danger,
-    marginTop: 6, lineHeight: 16,
-  },
   thumbsRow: { paddingTop: 12, paddingBottom: 4, gap: 10 },
   thumbCell: { width: 88, alignItems: 'center', gap: 6 },
   thumbFrame: {

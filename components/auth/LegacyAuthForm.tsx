@@ -161,8 +161,6 @@ export default function LegacyAuthForm({ initialPath = 'btob', initialMode = 'si
   };
 
   const handlePickDocument = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1,

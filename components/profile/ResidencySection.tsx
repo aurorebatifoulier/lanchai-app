@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
 import { Text } from '@/components/AppText';
+import CameraOffHint from '@/components/CameraOffHint';
 import { Feather } from '@expo/vector-icons';
 import { SHADES } from '@/constants/brandShades';
 import { UI, SectionTitle, StatusBlock, StatusChip, CheckLine } from '@/components/account/ui';
@@ -199,6 +200,7 @@ export function ResidencySection() {
                             ))}
                           </View>
                         )}
+                        <CameraOffHint />
                       </>
                     )}
 

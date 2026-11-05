@@ -94,8 +94,6 @@ export default function HomeSlideFormScreen() {
   }, [id]);
 
   const pickPhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== 'granted') { setError('Allow photo access to add a picture.'); return; }
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,

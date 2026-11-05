@@ -1501,6 +1501,25 @@ a snapshot indefinitely).
   `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
   Never add a READ_MEDIA permission without a Play declaration.
 
+- **iOS conventions (2026-11-05).**
+  - **Photos / camera:** NEVER request photo-library permission before
+    `launchImageLibraryAsync` (the system picker needs none on iOS 11+ / Android 13+;
+    asking showed a needless "all photos" prompt and a refusal blocked a working picker).
+    Camera = `askCamera()` (`lib/mediaPermissions.ts`); `<CameraOffHint>` ("Camera access is
+    off · Open settings", inline — never a second modal) in the ID, residency and claim
+    pickers.
+  - **Keyboard:** form screens use `<KeyboardScreen>` (`components/KeyboardScreen.tsx`,
+    'padding' on iOS, plain View on Android) or the same KeyboardAvoidingView pattern.
+    iOS numeric keyboards have no return key → `components/AppText.tsx` gives every
+    `number-pad` / `phone-pad` / `decimal-pad` / `numeric` field the shared "Done" bar
+    (`DONE_BAR_ID`, `<KeyboardDoneBar>` mounted once in `app/_layout.tsx`).
+  - **Shadows:** `elevation` is Android-only — pair it with `shadowColor/Opacity/Radius/
+    Offset` (and `zIndex` for stacking).
+  - **Modals:** iOS shows ONE RN Modal at a time — a sheet opened from a sheet must be
+    rendered INSIDE it (Quick add → SlotSheet). Navigating away from a closing modal waits
+    for `onDismiss` on iOS (GuestGate `go()`).
+  - **Swipe back:** off where it would skip a screen's own back logic
+    (`gestureEnabled: false` on sign-up step 2).
 - **EAS Update — over-the-air JS (2026-11-05).** `expo-updates`; app.json `updates`
   (`checkAutomatically: ON_LOAD`, `fallbackToCacheTimeout: 0` → downloads in the
   background, runs at the NEXT launch — the app never waits) + `runtimeVersion.policy:

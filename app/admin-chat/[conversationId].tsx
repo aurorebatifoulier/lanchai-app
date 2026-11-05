@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { askCamera } from '@/lib/mediaPermissions';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
@@ -106,11 +107,6 @@ export default function AdminChatScreen() {
   const handlePickImage = useCallback(async () => {
     if (sending || uploading) return;
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showError('Photo access denied. Please allow it in your device settings.');
-      return;
-    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -150,7 +146,7 @@ export default function AdminChatScreen() {
   const handleRecordVideo = useCallback(async () => {
     if (sending || uploading) return;
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    const { status } = await askCamera();
     if (status !== 'granted') {
       showError('Camera access denied. Please allow it in your device settings.');
       return;
@@ -169,11 +165,6 @@ export default function AdminChatScreen() {
   const handlePickVideo = useCallback(async () => {
     if (sending || uploading) return;
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showError('Video access denied. Please allow it in your device settings.');
-      return;
-    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],

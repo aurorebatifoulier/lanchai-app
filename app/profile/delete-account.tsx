@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
+import KeyboardScreen from '@/components/KeyboardScreen';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -155,7 +156,7 @@ export default function DeleteAccountScreen() {
   );
 
   return (
-    <View style={[s.root, screen.root]}>
+    <KeyboardScreen style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
@@ -245,7 +246,7 @@ export default function DeleteAccountScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </KeyboardScreen>
   );
 }
 

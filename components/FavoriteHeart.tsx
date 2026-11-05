@@ -75,6 +75,8 @@ export function FavoriteButton({
 const s = StyleSheet.create({
   btn: {
     position: 'absolute', top: 8, right: 8, zIndex: 2, elevation: 2,
+    // iOS equivalent of Android's elevation 2 (same soft lift on both platforms).
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
     backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center',
   },
 });

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Text } from '@/components/AppText';
+import KeyboardScreen from '@/components/KeyboardScreen';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -56,7 +57,7 @@ export default function LoyaltyScreen() {
   const currentRank = TIER_ORDER.indexOf(tier);
 
   return (
-    <View style={[s.root, screen.root]}>
+    <KeyboardScreen style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -180,7 +181,7 @@ export default function LoyaltyScreen() {
           </Text>
         </ScrollView>
       )}
-    </View>
+    </KeyboardScreen>
   );
 }
 

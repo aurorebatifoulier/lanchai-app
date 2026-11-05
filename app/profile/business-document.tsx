@@ -8,6 +8,7 @@ import {
   Image,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
+import KeyboardScreen from '@/components/KeyboardScreen';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
@@ -103,8 +104,6 @@ export default function BusinessDocumentScreen() {
   const handlePick = async () => {
     const cu = auth.currentUser;
     if (!cu || uploading || !canReplace) return;
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 1,
@@ -145,7 +144,7 @@ export default function BusinessDocumentScreen() {
   }
 
   return (
-    <View style={[s.root, screen.root]}>
+    <KeyboardScreen style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
@@ -246,7 +245,7 @@ export default function BusinessDocumentScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </KeyboardScreen>
   );
 }
 
