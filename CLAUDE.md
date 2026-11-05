@@ -1510,6 +1510,19 @@ a snapshot indefinitely).
   `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
   Never add a READ_MEDIA permission without a Play declaration.
 
+- **Pre-beta test-data cleanup (2026-11-05) — built, NOT run.** `functions/scripts/
+  cleanupTestData.ts` (logic: `planCleanup` reads only, `runCleanup` applies, `describePlan`
+  never prints personal data) + CLI `functions/scripts/cleanup-test-data.ts`:
+  `cd functions && npm run cleanup:test-data` = dry run; `-- --run` = type the project id
+  to apply (TTY only, refuses with emulator env vars or no admin). Credentials = the
+  developer's Google account via `gcloud auth application-default login` (no key file).
+  Keeps products (counters reset + `stockAdjustments` audit line per stock field), config,
+  collections, homeSlides, savedReplies, promoCodes (usage reset), admins, jobHealth and
+  ADMIN accounts (Auth + `ADMIN_PROFILE_FIELDS` only); deletes every other Auth user
+  (guests included), users docs, `WIPE_COLLECTIONS` and `WIPE_STORAGE_PREFIXES` +
+  non-admin profile photos. Auth is deleted LAST so a failed run can be repeated. Tested on
+  the emulators (`functions/test/cleanupTestData.test.ts`). When adding a NEW collection or
+  Storage folder holding renter data, add it to these lists.
 - **Accessibility (2026-11-05).** Every icon-only button has `accessibilityRole="button"` +
   an `accessibilityLabel` ("Back", "Close", "Remove photo", "Clear date", "Previous month",
   dynamic ones like "Save to liked" / "4 stars") and a ≥ 44 pt tap area (size or

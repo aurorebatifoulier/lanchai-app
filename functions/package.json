@@ -8,7 +8,8 @@
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "test": "node --import tsx --import ./test/setup.ts --test --test-concurrency=1 \"test/**/*.test.ts\""
+    "test": "node --import tsx --import ./test/setup.ts --test --test-concurrency=1 \"test/**/*.test.ts\"",
+    "cleanup:test-data": "tsx scripts/cleanup-test-data.ts"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",
