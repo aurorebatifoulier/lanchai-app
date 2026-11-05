@@ -132,7 +132,7 @@ export function AgreementSection({ reservations, handover, ready, beforeSign, st
           >
             <View style={s.photos}>
               {paperPhotos.map(uri => <Image key={uri} source={{ uri }} style={s.photo} />)}
-              <PressScale style={s.addPhoto} onPress={async () => { const u = await pickIdPhoto('camera'); if (u) setPaperPhotos(p => [...p, u].slice(0, 6)); }}>
+              <PressScale accessibilityRole="button" accessibilityLabel="Take a photo" style={s.addPhoto} onPress={async () => { const u = await pickIdPhoto('camera'); if (u) setPaperPhotos(p => [...p, u].slice(0, 6)); }}>
                 <Feather name="camera" size={18} color={SHADES.carbon} />
               </PressScale>
             </View>

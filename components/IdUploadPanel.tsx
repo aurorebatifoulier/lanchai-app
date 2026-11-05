@@ -64,7 +64,7 @@ export function IdUploadPanel({ onDone, submitLabel = 'Save my ID' }: { onDone: 
           {pages.map((uri, i) => (
             <View key={uri}>
               <Image source={{ uri }} style={s.thumb} />
-              <TouchableOpacity style={s.remove} onPress={() => setPages(p => p.filter((_, j) => j !== i))} hitSlop={8}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove photo" style={s.remove} onPress={() => setPages(p => p.filter((_, j) => j !== i))} hitSlop={8}>
                 <Feather name="x" size={12} color={SHADES.white} />
               </TouchableOpacity>
             </View>

@@ -119,11 +119,11 @@ export function QuantityRow({ quantity, available, onChange }: { quantity: numbe
           {c.quantity}
           {available > 0 && <Text style={s.qtyAvail}>{` · ${c.available(available)}`}</Text>}
         </Text>
-        <PressScale style={[s.qtyBtn, quantity <= 1 && s.qtyOff]} onPress={() => onChange(quantity - 1)} disabled={quantity <= 1} accessibilityLabel="Less">
+        <PressScale hitSlop={4} style={[s.qtyBtn, quantity <= 1 && s.qtyOff]} onPress={() => onChange(quantity - 1)} disabled={quantity <= 1} accessibilityLabel="Less">
           <Feather name="minus" size={16} color={SHADES.carbon} />
         </PressScale>
         <Text style={s.qtyNum}>{quantity}</Text>
-        <PressScale style={[s.qtyBtn, quantity >= available && s.qtyOff]} onPress={() => onChange(quantity + 1)} disabled={quantity >= available} accessibilityLabel="More">
+        <PressScale hitSlop={4} style={[s.qtyBtn, quantity >= available && s.qtyOff]} onPress={() => onChange(quantity + 1)} disabled={quantity >= available} accessibilityLabel="More">
           <Feather name="plus" size={16} color={SHADES.carbon} />
         </PressScale>
       </View>
@@ -232,7 +232,7 @@ function PromoField({ promo }: { promo: PromoFieldUi }) {
           value={value}
           onChangeText={t => setValue(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20))}
           placeholder={PROMO_COPY.placeholder}
-          placeholderTextColor={SHADES.carbonFaint}
+          placeholderTextColor={SHADES.carbonPlaceholder}
           autoCapitalize="characters"
           autoCorrect={false}
           returnKeyType="done"
@@ -316,7 +316,7 @@ export function NoteField({ value, onChange }: { value: string; onChange: (v: st
       value={value}
       onChangeText={onChange}
       placeholder={BOOKING_COPY.notePlaceholder}
-      placeholderTextColor={SHADES.carbonFaint}
+      placeholderTextColor={SHADES.carbonPlaceholder}
       multiline
       maxLength={500}
       textAlignVertical="top"
@@ -408,7 +408,7 @@ const s = StyleSheet.create({
   vSep: { width: 0.5, backgroundColor: SHADES.border },
   fieldLabel: { fontSize: 13, fontWeight: '500', color: SHADES.carbonMuted },
   fieldValue: { fontSize: 15, fontWeight: '700', color: SHADES.carbon, marginTop: 3 },
-  fieldEmpty: { color: SHADES.carbonFaint, fontWeight: '600' },
+  fieldEmpty: { color: SHADES.carbonMuted, fontWeight: '600' },
   hint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   hintText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: SHADES.amberDeep },
   qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 22 },

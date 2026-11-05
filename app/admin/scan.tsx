@@ -129,7 +129,7 @@ export default function AdminScanScreen() {
     return (
       <View style={[s.permScreen, { paddingTop: insets.top }]}>
         <StatusBar style="dark" />
-        <TouchableOpacity style={s.permBack} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Back" style={s.permBack} onPress={() => router.back()} activeOpacity={0.7}>
           <Feather name="arrow-left" size={18} color={COLORS.carbon} />
         </TouchableOpacity>
         <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
@@ -144,7 +144,7 @@ export default function AdminScanScreen() {
     return (
       <View style={[s.permScreen, { paddingTop: insets.top }]}>
         <StatusBar style="dark" />
-        <TouchableOpacity style={s.permBack} onPress={() => router.back()} activeOpacity={0.7}>
+        <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Back" style={s.permBack} onPress={() => router.back()} activeOpacity={0.7}>
           <Feather name="arrow-left" size={18} color={COLORS.carbon} />
         </TouchableOpacity>
         <View style={s.permContent}>
@@ -255,7 +255,7 @@ export default function AdminScanScreen() {
                   <Text style={s.resultRenter}>{orderItems[0].renterName}</Text>
                 ) : null}
               </View>
-              <TouchableOpacity
+              <TouchableOpacity hitSlop={6} accessibilityRole="button" accessibilityLabel="Close"
                 style={s.resultCloseBtn}
                 onPress={() => {
                   scannedRef.current = false;

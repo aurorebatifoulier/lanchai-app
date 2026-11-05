@@ -94,7 +94,7 @@ export default function AdminOnboardingScreen() {
                       const ph = sl.photos?.[j];
                       return (
                         <View key={j} style={s.slot}>
-                          <PressScale style={s.photo} onPress={() => pick(i, j)} disabled={busy !== null}>
+                          <PressScale accessibilityRole="button" accessibilityLabel="Change photo" style={s.photo} onPress={() => pick(i, j)} disabled={busy !== null}>
                             <Image source={ph?.url ? { uri: ph.url } : bundledPhoto(i, j)} style={StyleSheet.absoluteFill} contentFit="cover" />
                             {busy === `${i}-${j}` && <View style={s.photoBusy}><ActivityIndicator color={SHADES.white} /></View>}
                           </PressScale>
@@ -110,16 +110,16 @@ export default function AdminOnboardingScreen() {
                   </View>
                   <Text style={UI.fieldLabel}>Title</Text>
                   <TextInput style={UI.input} value={sl.title ?? ''} onChangeText={t => patch(i, x => ({ ...x, title: t }))}
-                    placeholder={d.title} placeholderTextColor={SHADES.carbonFaint} maxLength={80} />
+                    placeholder={d.title} placeholderTextColor={SHADES.carbonPlaceholder} maxLength={80} />
                   <Text style={UI.fieldLabel}>Sub-line</Text>
                   <TextInput style={[UI.input, s.multi]} value={sl.sub ?? ''} onChangeText={t => patch(i, x => ({ ...x, sub: t }))}
-                    placeholder={d.sub} placeholderTextColor={SHADES.carbonFaint} multiline maxLength={140} />
+                    placeholder={d.sub} placeholderTextColor={SHADES.carbonPlaceholder} multiline maxLength={140} />
                   {Object.keys(d.stickers).map(k => (
                     <View key={k}>
                       <Text style={UI.fieldLabel}>{ONBOARDING_STICKER_LABELS[i][k]}</Text>
                       <TextInput style={UI.input} value={sl.stickers?.[k] ?? ''}
                         onChangeText={t => patch(i, x => ({ ...x, stickers: { ...(x.stickers ?? {}), [k]: t } }))}
-                        placeholder={d.stickers[k]} placeholderTextColor={SHADES.carbonFaint} maxLength={40} />
+                        placeholder={d.stickers[k]} placeholderTextColor={SHADES.carbonPlaceholder} maxLength={40} />
                     </View>
                   ))}
                   {i === 0 && <Text style={UI.small}>The “From … LAK / day” chip is computed from the published catalogue.</Text>}

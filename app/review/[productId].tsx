@@ -186,7 +186,7 @@ export default function ReviewScreen() {
             <Text style={styles.fieldLabel}>Your rating</Text>
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map(n => (
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
                   key={n}
                   style={styles.starBtn}
                   onPress={() => { setRating(n); setError(null); }}
@@ -213,7 +213,7 @@ export default function ReviewScreen() {
               style={styles.textInput}
               multiline
               placeholder="Tell us what you thought — quality, ease of use, value for money…"
-              placeholderTextColor={SHADES.carbonFaint}
+              placeholderTextColor={SHADES.carbonPlaceholder}
               value={text}
               onChangeText={t => { setText(t); setError(null); }}
               textAlignVertical="top"
@@ -226,7 +226,7 @@ export default function ReviewScreen() {
           {error && (
             <View style={styles.errorBanner}>
               <Text style={[UI.errorText, { flex: 1 }]}>{error}</Text>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close"
                 onPress={() => setError(null)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >

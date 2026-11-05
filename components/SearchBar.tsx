@@ -44,7 +44,7 @@ export default function SearchBar({
         autoCorrect={false}
       />
       {value.length > 0 && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear"
           onPress={() => onChangeText('')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -58,7 +58,7 @@ export default function SearchBar({
     return (
       <View style={[styles.row, style]}>
         {field}
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Filters"
           style={[styles.filterBtn, filterActive && styles.filterBtnActive, variant === 'account' && styles.filterBtnAccount]}
           onPress={onFilterPress}
           activeOpacity={0.8}
@@ -89,7 +89,7 @@ export default function SearchBar({
         autoCorrect={false}
       />
       {value.length > 0 && (
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear"
           onPress={() => onChangeText('')}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >

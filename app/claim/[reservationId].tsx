@@ -252,7 +252,7 @@ export default function ClaimScreen() {
             style={styles.textInput}
             multiline
             placeholder="Describe the issue with as much detail as you can…"
-            placeholderTextColor={SHADES.carbonFaint}
+            placeholderTextColor={SHADES.carbonPlaceholder}
             value={description}
             onChangeText={t => { setDescription(t); setError(null); }}
             textAlignVertical="top"
@@ -274,12 +274,12 @@ export default function ClaimScreen() {
                     </View>
                   </View>
                 )}
-                <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => handleRemoveMedia(m.uri)}>
+                <TouchableOpacity hitSlop={12} accessibilityRole="button" accessibilityLabel="Remove photo" style={styles.photoRemoveBtn} onPress={() => handleRemoveMedia(m.uri)}>
                   <Feather name="x" size={12} color={COLORS.white} />
                 </TouchableOpacity>
               </View>
             ))}
-            <TouchableOpacity style={styles.addPhotoBtn} onPress={() => setMediaSheetVisible(true)}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Add photos or videos" style={styles.addPhotoBtn} onPress={() => setMediaSheetVisible(true)}>
               <Feather name="plus" size={20} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>
@@ -289,7 +289,7 @@ export default function ClaimScreen() {
           {error && (
             <View style={styles.errorBanner}>
               <Text style={[UI.errorText, { flex: 1 }]}>{error}</Text>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close"
                 onPress={() => setError(null)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >

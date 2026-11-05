@@ -87,7 +87,7 @@ export function PromoGrantPanel({ code }: { code: string }) {
 
       <SectionTitle>{c.give}</SectionTitle>
       <View style={[UI.card, UI.cardPadded, { gap: 10 }]}>
-        <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder={c.giveSearch} placeholderTextColor={SHADES.carbonFaint} autoCorrect={false} />
+        <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder={c.giveSearch} placeholderTextColor={SHADES.carbonPlaceholder} autoCorrect={false} />
         {matches.map(r => {
           const on = picked.includes(r.uid);
           return (
@@ -115,7 +115,7 @@ export function PromoGrantPanel({ code }: { code: string }) {
             <Text style={UI.link}>{expiry ? fmtDay(expiry.getTime()) : c.giveNoExpiry}</Text>
           </TouchableOpacity>
           {expiry && (
-            <TouchableOpacity onPress={() => setExpiry(null)} hitSlop={8}><Feather name="x" size={16} color={SHADES.carbonMuted} /></TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear date" onPress={() => setExpiry(null)} hitSlop={8}><Feather name="x" size={16} color={SHADES.carbonMuted} /></TouchableOpacity>
           )}
         </View>
         <PressScale style={[UI.btnPrimary, (picked.length === 0 || !!busy) && UI.btnDisabled]} onPress={give} disabled={picked.length === 0 || !!busy}>

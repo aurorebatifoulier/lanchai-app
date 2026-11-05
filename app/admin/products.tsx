@@ -121,7 +121,7 @@ export default function AdminProductsScreen() {
         <View style={s.header}>
           <BackButton onPress={() => router.back()} />
           <Text style={s.headerTitle}>Products</Text>
-          <TouchableOpacity
+          <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Add a product"
             style={s.addBtn}
             onPress={() => router.push('/admin/product-form')}
             activeOpacity={0.82}

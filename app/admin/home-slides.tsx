@@ -143,10 +143,10 @@ export default function AdminHomeSlidesScreen() {
                           </View>
                         </TouchableOpacity>
                         <View style={s.arrows}>
-                          <TouchableOpacity onPress={() => move(list, i, -1)} disabled={i === 0 || busy} hitSlop={6} style={(i === 0 || busy) && UI.btnDisabled}>
+                          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move up" onPress={() => move(list, i, -1)} disabled={i === 0 || busy} hitSlop={6} style={(i === 0 || busy) && UI.btnDisabled}>
                             <Feather name="chevron-up" size={20} color={SHADES.carbon} />
                           </TouchableOpacity>
-                          <TouchableOpacity onPress={() => move(list, i, 1)} disabled={i === list.length - 1 || busy} hitSlop={6} style={(i === list.length - 1 || busy) && UI.btnDisabled}>
+                          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move down" onPress={() => move(list, i, 1)} disabled={i === list.length - 1 || busy} hitSlop={6} style={(i === list.length - 1 || busy) && UI.btnDisabled}>
                             <Feather name="chevron-down" size={20} color={SHADES.carbon} />
                           </TouchableOpacity>
                         </View>

@@ -32,7 +32,7 @@ export function IdRequirementStep({
           <View style={s.headerRow}>
             <IconCircle icon={{ set: 'mci', name: 'card-account-details-outline' }} tone="amber" />
             <Text style={s.title}>{rejected ? 'Please add a new ID' : 'One last step: your ID'}</Text>
-            <TouchableOpacity onPress={close} hitSlop={10}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={close} hitSlop={10}>
               <Feather name="x" size={20} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>

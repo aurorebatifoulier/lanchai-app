@@ -135,7 +135,7 @@ export function IdCheckSection({ check }: { check: IdCheck }) {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photos}>
             {check.urls.map(u => (
-              <TouchableOpacity key={u} onPress={() => setZoom(u)} activeOpacity={0.85}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open photo" key={u} onPress={() => setZoom(u)} activeOpacity={0.85}>
                 <Image source={{ uri: u }} style={s.photo} />
               </TouchableOpacity>
             ))}
@@ -162,7 +162,7 @@ export function IdCheckSection({ check }: { check: IdCheck }) {
             {check.counterPhotos.map((u, i) => (
               <View key={u}>
                 <Image source={{ uri: u }} style={s.thumb} />
-                <TouchableOpacity style={s.remove} onPress={() => check.removeCounterPhoto(i)} hitSlop={8}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove photo" style={s.remove} onPress={() => check.removeCounterPhoto(i)} hitSlop={8}>
                   <Feather name="x" size={12} color={COLORS.white} />
                 </TouchableOpacity>
               </View>
@@ -180,7 +180,7 @@ export function IdCheckSection({ check }: { check: IdCheck }) {
       {!check.ready && <Text style={s.required}>Required before handover.</Text>}
 
       <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
-        <TouchableOpacity style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open photo" style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)}>
           {zoom && <Image source={{ uri: zoom }} style={s.zoomImage} resizeMode="contain" />}
         </TouchableOpacity>
       </Modal>

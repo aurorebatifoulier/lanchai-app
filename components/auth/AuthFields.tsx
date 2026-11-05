@@ -26,7 +26,7 @@ import { appleSignInSupported } from '@/lib/appleSignIn';
 // buttons (Apple on iOS builds, Google behind its flag), Terms / Privacy line.
 
 export const AuthInput = forwardRef<TextInput, TextInputProps>(function AuthInput({ style, ...rest }, ref) {
-  return <TextInput ref={ref} placeholderTextColor={SHADES.carbonFaint} style={[s.input, style]} {...rest} />;
+  return <TextInput ref={ref} placeholderTextColor={SHADES.carbonPlaceholder} style={[s.input, style]} {...rest} />;
 });
 
 export const PasswordField = forwardRef<TextInput, TextInputProps>(function PasswordField(props, ref) {
@@ -35,7 +35,7 @@ export const PasswordField = forwardRef<TextInput, TextInputProps>(function Pass
     <View style={s.inputRow}>
       <TextInput
         ref={ref}
-        placeholderTextColor={SHADES.carbonFaint}
+        placeholderTextColor={SHADES.carbonPlaceholder}
         secureTextEntry={!shown}
         autoCapitalize="none"
         autoCorrect={false}

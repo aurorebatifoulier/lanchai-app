@@ -313,7 +313,7 @@ a snapshot indefinitely).
     big title, amber primary button, 2 outline buttons with icons) → white cards
     (14/16px padding, 10px gap) → centered cancellation line → footer with amber top
     line. Icons are hosted PNGs (`hosting/email/icons/`, 32px shown at 16px, amber
-    `#BA7517`), via `iconUrl()` — icon fonts don't work in email; button icons use
+    `#95600D` — same as `SHADES.amberText`), via `iconUrl()` — icon fonts don't work in email; button icons use
     `alt=""` so a blocked image never breaks the label. "Your items": shared dates
     shown once under the title (clock icon) when every line has the same
     pickupAt/returnAt, otherwise per item.
@@ -981,7 +981,7 @@ a snapshot indefinitely).
   - **Product cards:** `ProductRailCard` (Home rails, no "New" badge); Explore's
     `ProductGridCard` keeps "New" in amber-light. `<FavoriteHeart>` everywhere (cards +
     product detail): carbon outline, filled AMBER when liked — never red.
-  - Links ("See all", "Directions") = `UI.link` (`SHADES.amberText` #BA7517).
+  - Links ("See all", "Directions") = `UI.link` (`SHADES.amberText` #95600D — the ONLY amber for text on light backgrounds; brand yellow #F4B400 stays for buttons, highlighter, chips and text on carbon).
   - **Collections** (`collections/{id}`, `lib/collections.ts`): title, subtitle, MCI
     icon, palette shade, `productIds`, optional `activeFrom`/`activeTo` (whole Vientiane
     days), `order`, `published`. Rule: signed-in renters read `published == true` only
@@ -1510,6 +1510,14 @@ a snapshot indefinitely).
   `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
   Never add a READ_MEDIA permission without a Play declaration.
 
+- **Accessibility (2026-11-05).** Every icon-only button has `accessibilityRole="button"` +
+  an `accessibilityLabel` ("Back", "Close", "Remove photo", "Clear date", "Previous month",
+  dynamic ones like "Save to liked" / "4 stars") and a ≥ 44 pt tap area (size or
+  `hitSlop`). Text contrast ≥ 4.5:1: readable grey = `carbonMuted` (#6B6B6B);
+  `carbonFaint` (#B8B6B0) is DECORATIVE / disabled only on light backgrounds (fine as text
+  on carbon cards, 8.3:1); placeholders = `SHADES.carbonPlaceholder` (#77756F); amber
+  TEXT on light = `amberText` (#95600D), never #F4B400; small green status text =
+  `COLORS.success` (#267A4C).
 - **iOS conventions (2026-11-05).**
   - **Photos / camera:** NEVER request photo-library permission before
     `launchImageLibraryAsync` (the system picker needs none on iOS 11+ / Android 13+;

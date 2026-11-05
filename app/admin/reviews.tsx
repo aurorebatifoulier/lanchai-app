@@ -15,6 +15,7 @@ import { Timestamp, collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ReviewDoc, updateReviewReply } from '@/lib/firestore';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatReviewerName } from '@/utils/reviewerName';
@@ -326,7 +327,7 @@ export default function AdminReviewsScreen() {
                           <View style={s.errorBanner}>
                             <Feather name="alert-circle" size={13} color={COLORS.danger} />
                             <Text style={s.errorText}>{replyError}</Text>
-                            <TouchableOpacity
+                            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss"
                               onPress={() => setReplyError(null)}
                               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
@@ -539,7 +540,7 @@ const s = StyleSheet.create({
   replyLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.amber,
+    color: SHADES.amberText,
     letterSpacing: 0.2,
     marginBottom: 4,
   },

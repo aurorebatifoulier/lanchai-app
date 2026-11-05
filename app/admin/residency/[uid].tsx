@@ -107,7 +107,7 @@ export default function AdminResidencyScreen() {
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photos}>
                   {urls.map(u => (
-                    <TouchableOpacity key={u} onPress={() => setZoom(u)} activeOpacity={0.85}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open photo" key={u} onPress={() => setZoom(u)} activeOpacity={0.85}>
                       <Image source={{ uri: u }} style={s.photo} />
                     </TouchableOpacity>
                   ))}
@@ -213,7 +213,7 @@ export default function AdminResidencyScreen() {
       />
 
       <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
-        <TouchableOpacity style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open photo" style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)}>
           {zoom && <Image source={{ uri: zoom }} style={s.zoomImage} resizeMode="contain" />}
         </TouchableOpacity>
       </Modal>

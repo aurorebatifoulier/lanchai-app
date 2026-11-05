@@ -30,7 +30,7 @@ export function QRLightbox({ value, label, onClose }: Props) {
       <View style={s.card}>
         <View style={s.header}>
           <Text style={s.label} numberOfLines={2}>{label}</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={10} style={s.closeBtn}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={10} style={s.closeBtn}>
             <Feather name="x" size={20} color={COLORS.carbon} />
           </TouchableOpacity>
         </View>

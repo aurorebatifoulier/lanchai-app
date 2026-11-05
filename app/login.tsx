@@ -164,7 +164,7 @@ export default function LoginScreen() {
     return (
       <View style={[s.root, screen.root]}>
         <View style={s.topRow}>
-          <TouchableOpacity onPress={() => go('signin')} hitSlop={10}><Feather name="arrow-left" size={22} color={SHADES.carbon} /></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => go('signin')} hitSlop={10}><Feather name="arrow-left" size={22} color={SHADES.carbon} /></TouchableOpacity>
         </View>
         <LegacyAuthForm initialPath="btob" initialMode="signup" />
       </View>

@@ -146,9 +146,9 @@ export default function CollectionFormScreen() {
           <SectionTitle>Text</SectionTitle>
           <View style={[UI.card, UI.cardPadded]}>
             <Text style={UI.fieldLabel}>Title</Text>
-            <TextInput style={UI.input} value={title} onChangeText={setTitle} placeholder="Weekend by the river" placeholderTextColor={SHADES.carbonFaint} maxLength={COLLECTION_LIMITS.title} />
+            <TextInput style={UI.input} value={title} onChangeText={setTitle} placeholder="Weekend by the river" placeholderTextColor={SHADES.carbonPlaceholder} maxLength={COLLECTION_LIMITS.title} />
             <Text style={[UI.fieldLabel, { marginTop: 16 }]}>One-line subtitle</Text>
-            <TextInput style={UI.input} value={subtitle} onChangeText={setSubtitle} placeholder="Tent, cooler, speaker." placeholderTextColor={SHADES.carbonFaint} maxLength={COLLECTION_LIMITS.subtitle} />
+            <TextInput style={UI.input} value={subtitle} onChangeText={setSubtitle} placeholder="Tent, cooler, speaker." placeholderTextColor={SHADES.carbonPlaceholder} maxLength={COLLECTION_LIMITS.subtitle} />
             <Text style={[UI.small, { marginTop: 6 }]}>{subtitle.length}/{COLLECTION_LIMITS.subtitle}</Text>
           </View>
 
@@ -156,7 +156,7 @@ export default function CollectionFormScreen() {
           <View style={[UI.card, UI.cardPadded]}>
             <View style={s.iconGrid}>
               {COLLECTION_ICONS.map(name => (
-                <TouchableOpacity key={name} onPress={() => setIcon(name)} style={[s.iconCell, icon === name && s.iconCellOn]} activeOpacity={0.75}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Icon ${name}`} key={name} onPress={() => setIcon(name)} style={[s.iconCell, icon === name && s.iconCellOn]} activeOpacity={0.75}>
                   <MaterialCommunityIcons name={name} size={22} color={SHADES.carbon} />
                 </TouchableOpacity>
               ))}
@@ -172,7 +172,7 @@ export default function CollectionFormScreen() {
 
           <SectionTitle>Products · {productIds.length} selected</SectionTitle>
           <View style={[UI.card, UI.cardPadded]}>
-            <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder="Search products" placeholderTextColor={SHADES.carbonFaint} autoCorrect={false} />
+            <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder="Search products" placeholderTextColor={SHADES.carbonPlaceholder} autoCorrect={false} />
             <View style={{ marginTop: 8 }}>
               {filtered.map(p => {
                 const on = selected.has(p.id);
@@ -200,7 +200,7 @@ export default function CollectionFormScreen() {
                     <Text style={value ? UI.title : UI.body}>{value ? fmtDay(value) : 'Always'}</Text>
                   </TouchableOpacity>
                   {value && (
-                    <TouchableOpacity onPress={() => (which === 'from' ? setActiveFrom(null) : setActiveTo(null))} hitSlop={8}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear date" onPress={() => (which === 'from' ? setActiveFrom(null) : setActiveTo(null))} hitSlop={8}>
                       <Feather name="x" size={18} color={SHADES.carbonMuted} />
                     </TouchableOpacity>
                   )}

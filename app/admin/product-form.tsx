@@ -32,6 +32,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { db, storage } from '@/lib/firebase';
 import { auth } from '@/lib/auth';
 import { COLORS } from '@/constants/Colors';
+import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
 import type { ProductCategory } from '@/lib/mockData';
 import { adjustProductStockCondition, type LoyaltyTier } from '@/lib/firestore';
@@ -877,7 +878,7 @@ export default function AdminProductFormScreen() {
                     )}
 
                     {/* Remove button */}
-                    <TouchableOpacity
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove"
                       style={f.thumbRemove}
                       onPress={() => handleRemoveImage(item.key)}
                       hitSlop={{ top: 4, right: 4, bottom: 4, left: 4 }}
@@ -889,14 +890,14 @@ export default function AdminProductFormScreen() {
                   {/* Reorder arrows */}
                   {uploadItems.length > 1 && (
                     <View style={f.thumbArrows}>
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move photo left"
                         onPress={() => handleMoveImage(item.key, -1)}
                         disabled={idx === 0}
                         style={[f.thumbArrow, idx === 0 && f.thumbArrowDisabled]}
                       >
                         <Feather name="chevron-left" size={13} color={COLORS.carbon} />
                       </TouchableOpacity>
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move photo right"
                         onPress={() => handleMoveImage(item.key, 1)}
                         disabled={idx === uploadItems.length - 1}
                         style={[f.thumbArrow, idx === uploadItems.length - 1 && f.thumbArrowDisabled]}
@@ -1046,7 +1047,7 @@ export default function AdminProductFormScreen() {
                           autoCapitalize="sentences"
                           returnKeyType="next"
                         />
-                        <TouchableOpacity onPress={() => setPerfectFor(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setPerfectFor(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Feather name="x" size={16} color={COLORS.fg3} />
                         </TouchableOpacity>
                       </View>
@@ -1062,7 +1063,7 @@ export default function AdminProductFormScreen() {
                       <View key={i} style={f.featRow}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={f.iconPresetScroll} contentContainerStyle={f.iconPresetContent}>
                           {ICON_PRESET.map(ic => (
-                            <TouchableOpacity
+                            <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel={`Icon ${ic}`}
                               key={ic}
                               style={[f.iconPresetBtn, feat.icon === ic && f.iconPresetBtnActive]}
                               onPress={() => setKeyFeatures(prev => prev.map((f2, j) => j === i ? { ...f2, icon: ic } : f2))}
@@ -1082,7 +1083,7 @@ export default function AdminProductFormScreen() {
                             autoCapitalize="sentences"
                             returnKeyType="next"
                           />
-                          <TouchableOpacity onPress={() => setKeyFeatures(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setKeyFeatures(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                             <Feather name="x" size={16} color={COLORS.fg3} />
                           </TouchableOpacity>
                         </View>
@@ -1108,7 +1109,7 @@ export default function AdminProductFormScreen() {
                           autoCapitalize="sentences"
                           returnKeyType="next"
                         />
-                        <TouchableOpacity onPress={() => setWhatsIncluded(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setWhatsIncluded(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Feather name="x" size={16} color={COLORS.fg3} />
                         </TouchableOpacity>
                       </View>
@@ -1140,7 +1141,7 @@ export default function AdminProductFormScreen() {
                           autoCapitalize="sentences"
                           returnKeyType="next"
                         />
-                        <TouchableOpacity onPress={() => setBasicInfo(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setBasicInfo(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Feather name="x" size={16} color={COLORS.fg3} />
                         </TouchableOpacity>
                       </View>
@@ -1172,7 +1173,7 @@ export default function AdminProductFormScreen() {
                           autoCapitalize="sentences"
                           returnKeyType="next"
                         />
-                        <TouchableOpacity onPress={() => setTechSpecs(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setTechSpecs(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Feather name="x" size={16} color={COLORS.fg3} />
                         </TouchableOpacity>
                       </View>
@@ -1195,7 +1196,7 @@ export default function AdminProductFormScreen() {
                           autoCapitalize="sentences"
                           returnKeyType="next"
                         />
-                        <TouchableOpacity onPress={() => setGoodToKnow(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setGoodToKnow(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Feather name="x" size={16} color={COLORS.fg3} />
                         </TouchableOpacity>
                       </View>
@@ -1218,7 +1219,7 @@ export default function AdminProductFormScreen() {
                           autoCapitalize="sentences"
                           returnKeyType="next"
                         />
-                        <TouchableOpacity onPress={() => setUsageExamples(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove" onPress={() => setUsageExamples(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                           <Feather name="x" size={16} color={COLORS.fg3} />
                         </TouchableOpacity>
                       </View>
@@ -1634,7 +1635,7 @@ const f = StyleSheet.create({
   asterisk:   { color: COLORS.danger },
   errorText:  { fontSize: 11, fontWeight: '600', color: COLORS.danger, marginTop: 5 },
   hint:       { fontSize: 11, fontWeight: '500', color: COLORS.fg3, marginTop: 5 },
-  preview:    { fontSize: 12, fontWeight: '600', color: COLORS.amber, marginTop: 5 },
+  preview:    { fontSize: 12, fontWeight: '600', color: SHADES.amberText, marginTop: 5 },
 
   // Input
   input: {
@@ -1674,7 +1675,7 @@ const f = StyleSheet.create({
   segBtnPublished: { backgroundColor: '#D1FAE5' },
   segDivider:      { width: 1.5, backgroundColor: COLORS.softGray200 },
   segText:         { fontSize: 14, fontWeight: '700', color: COLORS.fg3 },
-  segTextDraft:    { color: COLORS.amber },
+  segTextDraft:    { color: SHADES.amberText },
   segTextPublished:{ color: '#065F46' },
 
   // Available toggle row
@@ -1890,7 +1891,7 @@ const f = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
   },
   catOptionText:     { fontSize: 15, fontWeight: '600', color: COLORS.carbon },
-  catOptionSelected: { color: COLORS.amber },
+  catOptionSelected: { color: SHADES.amberText },
   catOptionHint:     { fontSize: 11, fontWeight: '400', color: COLORS.fg3, marginTop: 1 },
 
   // ── Product details section ───────────────────────────────────────────────

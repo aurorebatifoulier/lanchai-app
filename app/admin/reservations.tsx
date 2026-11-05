@@ -265,7 +265,7 @@ export default function AdminReservationsScreen() {
         <View style={s.header}>
           <BackButton onPress={() => router.back()} />
           <Text style={s.headerTitle}>Reservations</Text>
-          <TouchableOpacity
+          <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Scan a QR code"
             style={s.scanBtn}
             onPress={() => router.push('/admin/scan')}
             activeOpacity={0.7}
@@ -288,7 +288,7 @@ export default function AdminReservationsScreen() {
               returnKeyType="search"
             />
           </View>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Filters"
             style={[s.dateFilterBtn, isDateFilterActive(dateFilter) && s.dateFilterBtnActive]}
             onPress={() => { setPendingDateFilter(dateFilter); setDateSheetVisible(true); }}
             activeOpacity={0.75}

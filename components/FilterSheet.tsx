@@ -32,7 +32,7 @@ export function ActiveChip({ label, onRemove }: { label: string; onRemove: () =>
   return (
     <View style={styles.activeChip}>
       <Text style={styles.activeChipText}>{label}</Text>
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Remove filter ${label}`}
         onPress={onRemove}
         hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
       >

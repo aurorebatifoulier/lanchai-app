@@ -178,7 +178,7 @@ export function ResidencySection() {
                             {pages.map((u, i) => (
                               <View key={u}>
                                 <Image source={{ uri: u }} style={s.thumb} />
-                                <TouchableOpacity style={s.remove} onPress={() => setPages(p => p.filter((_, j) => j !== i))} hitSlop={8}>
+                                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remove photo" style={s.remove} onPress={() => setPages(p => p.filter((_, j) => j !== i))} hitSlop={8}>
                                   <Feather name="x" size={12} color={SHADES.white} />
                                 </TouchableOpacity>
                               </View>

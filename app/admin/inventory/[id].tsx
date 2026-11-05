@@ -193,11 +193,11 @@ export default function AdminInventoryProductScreen() {
 
         {/* ── Calendar ── */}
         <View style={s.calNav}>
-          <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
+          <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Previous month" style={s.calNavBtn} onPress={prevMonth}>
             <Feather name="chevron-left" size={18} color={COLORS.carbon} />
           </TouchableOpacity>
           <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-          <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
+          <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Next month" style={s.calNavBtn} onPress={nextMonth}>
             <Feather name="chevron-right" size={18} color={COLORS.carbon} />
           </TouchableOpacity>
         </View>

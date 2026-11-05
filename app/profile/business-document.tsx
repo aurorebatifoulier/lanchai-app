@@ -179,11 +179,11 @@ export default function BusinessDocumentScreen() {
             <SectionTitle>Company details</SectionTitle>
             <View style={[UI.card, UI.cardPadded]}>
               <Text style={UI.fieldLabel}>Company name</Text>
-              <TextInput style={UI.input} value={companyName} onChangeText={setCompanyName} maxLength={120} placeholder="Company name" placeholderTextColor={SHADES.carbonFaint} />
+              <TextInput style={UI.input} value={companyName} onChangeText={setCompanyName} maxLength={120} placeholder="Company name" placeholderTextColor={SHADES.carbonPlaceholder} />
               <Text style={[UI.fieldLabel, s.nextField]}>Licence / registration number</Text>
-              <TextInput style={UI.input} value={licenseNumber} onChangeText={setLicenseNumber} maxLength={80} placeholder="Licence number" placeholderTextColor={SHADES.carbonFaint} autoCapitalize="characters" />
+              <TextInput style={UI.input} value={licenseNumber} onChangeText={setLicenseNumber} maxLength={80} placeholder="Licence number" placeholderTextColor={SHADES.carbonPlaceholder} autoCapitalize="characters" />
               <Text style={[UI.fieldLabel, s.nextField]}>Responsible person</Text>
-              <TextInput style={UI.input} value={responsibleName} onChangeText={setResponsibleName} maxLength={120} placeholder="Full name" placeholderTextColor={SHADES.carbonFaint} />
+              <TextInput style={UI.input} value={responsibleName} onChangeText={setResponsibleName} maxLength={120} placeholder="Full name" placeholderTextColor={SHADES.carbonPlaceholder} />
             </View>
           </>
         )}

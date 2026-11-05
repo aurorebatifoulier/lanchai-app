@@ -56,7 +56,7 @@ export default function KeywordsInput({
         blurOnSubmit={false}
         editable={!full}
         placeholder={full ? `Maximum ${SEARCH_LIMITS.keywords} keywords` : 'Add a keyword, then Enter'}
-        placeholderTextColor={SHADES.carbonFaint}
+        placeholderTextColor={SHADES.carbonPlaceholder}
         autoCapitalize="none"
         autoCorrect={false}
         returnKeyType="done"

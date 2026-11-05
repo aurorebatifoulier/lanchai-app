@@ -65,7 +65,7 @@ export default function InviteCodeScreen() {
               value={code}
               onChangeText={t => { setCode(t.toUpperCase()); setError(null); }}
               placeholder="e.g. AURORE-7K2"
-              placeholderTextColor={SHADES.carbonFaint}
+              placeholderTextColor={SHADES.carbonPlaceholder}
               autoCapitalize="characters"
               autoCorrect={false}
             />

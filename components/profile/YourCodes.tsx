@@ -83,7 +83,7 @@ export function YourCodes({ coupons, config }: {
             value={code}
             onChangeText={t => setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20))}
             placeholder={w.addPlaceholder}
-            placeholderTextColor={SHADES.carbonFaint}
+            placeholderTextColor={SHADES.carbonPlaceholder}
             autoCapitalize="characters"
             autoCorrect={false}
             onSubmitEditing={add}

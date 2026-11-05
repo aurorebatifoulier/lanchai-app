@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
   forgotLink: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.amber,
+    color: SHADES.amberText,
   },
 
   // Reset feedback
@@ -925,7 +925,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   consentLink: {
-    color: COLORS.amber,
+    color: SHADES.amberText,
     fontWeight: '600',
   },
   switchModeBtn: {

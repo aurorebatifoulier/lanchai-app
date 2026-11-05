@@ -108,7 +108,7 @@ function MediaTile({ message, onOpen }: { message: ChatMessage; onOpen: (url: st
     );
   }
   return (
-    <TouchableOpacity style={[styles.msgImage, styles.mediaFrame]} activeOpacity={0.85} onPress={() => onOpen(url)}>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Play video" style={[styles.msgImage, styles.mediaFrame]} activeOpacity={0.85} onPress={() => onOpen(url)}>
       <Image
         key={attempt}
         source={{ uri: poster! }}

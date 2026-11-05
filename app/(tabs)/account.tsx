@@ -453,7 +453,7 @@ function AccountScreenSignedIn() {
         <View style={styles.uploadErrorBanner}>
           <Feather name="alert-circle" size={14} color={COLORS.danger} />
           <Text style={styles.uploadErrorText}>Sign-out failed. Check your connection and try again.</Text>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss"
             onPress={() => setLogoutErr(false)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
@@ -467,7 +467,7 @@ function AccountScreenSignedIn() {
         <View style={styles.uploadErrorBanner}>
           <Feather name="alert-circle" size={14} color={COLORS.danger} />
           <Text style={styles.uploadErrorText}>Photo update failed. Try again.</Text>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss"
             onPress={() => setUploadError(false)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >

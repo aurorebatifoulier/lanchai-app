@@ -282,14 +282,14 @@ function PasswordField({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={SHADES.carbonFaint}
+          placeholderTextColor={SHADES.carbonPlaceholder}
           secureTextEntry={!visible}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
         />
-        <TouchableOpacity onPress={onToggle} activeOpacity={0.7} hitSlop={10}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={visible ? 'Hide password' : 'Show password'} onPress={onToggle} activeOpacity={0.7} hitSlop={10}>
           <Feather name={visible ? 'eye-off' : 'eye'} size={18} color={SHADES.carbonMuted} />
         </TouchableOpacity>
       </View>

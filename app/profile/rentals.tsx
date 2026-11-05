@@ -87,14 +87,14 @@ export default function AllRentalsScreen() {
             <TextInput
               style={s.searchInput}
               placeholder="Search an item"
-              placeholderTextColor={SHADES.carbonFaint}
+              placeholderTextColor={SHADES.carbonPlaceholder}
               value={query}
               onChangeText={setQuery}
               returnKeyType="search"
               autoCorrect={false}
             />
             {!!query && (
-              <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear" onPress={() => setQuery('')} hitSlop={8}>
                 <Feather name="x" size={16} color={SHADES.carbonMuted} />
               </TouchableOpacity>
             )}

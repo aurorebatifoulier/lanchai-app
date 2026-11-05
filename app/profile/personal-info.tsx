@@ -255,7 +255,7 @@ export default function PersonalInfoScreen() {
                 onBlur={() => touch('firstName')}
                 onSubmitEditing={() => lastNameRef.current?.focus()}
                 placeholder="e.g. Aurore"
-                placeholderTextColor={SHADES.carbonFaint}
+                placeholderTextColor={SHADES.carbonPlaceholder}
                 autoCapitalize="words"
                 returnKeyType="next"
                 blurOnSubmit={false}
@@ -272,7 +272,7 @@ export default function PersonalInfoScreen() {
                 onBlur={() => touch('lastName')}
                 onSubmitEditing={() => phoneRef.current?.focus()}
                 placeholder="e.g. Batifoulier"
-                placeholderTextColor={SHADES.carbonFaint}
+                placeholderTextColor={SHADES.carbonPlaceholder}
                 autoCapitalize="words"
                 returnKeyType="next"
                 blurOnSubmit={false}
@@ -291,7 +291,7 @@ export default function PersonalInfoScreen() {
             onBlur={() => touch('phone')}
             onSubmitEditing={sameAsPhone ? handleSave : () => whatsappRef.current?.focus()}
             placeholder="+856 20 ..."
-            placeholderTextColor={SHADES.carbonFaint}
+            placeholderTextColor={SHADES.carbonPlaceholder}
             keyboardType="phone-pad"
             returnKeyType={sameAsPhone ? 'done' : 'next'}
             blurOnSubmit={false}
@@ -316,7 +316,7 @@ export default function PersonalInfoScreen() {
             onSubmitEditing={() => addressRef.current?.focus()}
             editable={!sameAsPhone}
             placeholder="+856 20 ..."
-            placeholderTextColor={SHADES.carbonFaint}
+            placeholderTextColor={SHADES.carbonPlaceholder}
             keyboardType="phone-pad"
             returnKeyType="next"
           />
@@ -348,7 +348,7 @@ export default function PersonalInfoScreen() {
             onChangeText={setAddress}
             onSubmitEditing={handleSave}
             placeholder="Street, city…"
-            placeholderTextColor={SHADES.carbonFaint}
+            placeholderTextColor={SHADES.carbonPlaceholder}
             returnKeyType="done"
             maxLength={200}
           />

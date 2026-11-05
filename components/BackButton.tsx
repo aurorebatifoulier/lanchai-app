@@ -22,7 +22,7 @@ export default function BackButton({
   onPress, variant = 'default', size = 18, boxSize = 40, color = COLORS.carbon, style,
 }: BackButtonProps) {
   return (
-    <TouchableOpacity
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back"
       onPress={onPress}
       activeOpacity={0.7}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

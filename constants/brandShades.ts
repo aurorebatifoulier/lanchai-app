@@ -8,11 +8,12 @@ export const SHADES = {
   amberLight: '#F7ECD9',   // light amber circles, gauge track
   amberPale: '#FBF4E6',
   amberDeep: '#8A5A00',    // amber-brown icons/text on light amber
-  amberText: '#BA7517',    // dark amber links ("See all", "Directions") — same as the email icons
+  amberText: '#95600D',    // dark amber TEXT (links, "See all", "Edit") — ≥ 4.5:1 on white / cream / light amber; same as the email icons
   carbon: '#1E1E1E',
   carbonSoft: '#3A3A3A',   // circles on carbon cards
   carbonMuted: '#6B6B6B',  // secondary text
-  carbonFaint: '#B8B6B0',  // dashed / locked
+  carbonFaint: '#B8B6B0',  // dashed / locked / disabled — DECORATIVE only, never readable text on a light background
+  carbonPlaceholder: '#77756F', // input placeholders (≥ 4.5:1 on white)
   carbonLight: '#EFEEEA',  // light grey circles
   cream: '#FAFAF7',
   white: '#FFFFFF',

@@ -345,10 +345,10 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         {/* Left: chat + notifications */}
         <View style={styles.topLeftGroup}>
-          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/chat')}>
+          <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Messages" style={styles.topBtn} onPress={() => router.push('/chat')}>
             <Feather name="message-circle" size={22} color={COLORS.carbon} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/notifications')}>
+          <TouchableOpacity hitSlop={4} style={styles.topBtn} onPress={() => router.push('/notifications')}>
             <Feather name="bell" size={22} color={COLORS.carbon} />
             {unreadCount > 0 && (
               <View style={styles.badge}>
@@ -369,7 +369,7 @@ export default function HomeScreen() {
 
         {/* Right: liked + bag */}
         <View style={styles.topRightGroup}>
-          <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/liked')}>
+          <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Liked items" style={styles.topBtn} onPress={() => router.push('/liked')}>
             <Feather name="heart" size={22} color={COLORS.carbon} />
           </TouchableOpacity>
           <BagButton count={bagCount} onPress={() => router.push('/bag')} />

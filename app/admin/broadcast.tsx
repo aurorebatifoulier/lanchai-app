@@ -325,7 +325,7 @@ export default function AdminBroadcastScreen() {
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity
+                <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Delete"
                   style={s.deleteBtn}
                   onPress={() => setDeletingId(b.id)}
                   activeOpacity={0.75}

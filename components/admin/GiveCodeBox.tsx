@@ -48,7 +48,7 @@ export function GiveCodeBox({ renterId, onClose }: { renterId: string; onClose: 
     <View style={s.box}>
       <View style={s.head}>
         <Text style={UI.title}>{c.giveCodeTitle}</Text>
-        <TouchableOpacity onPress={onClose} hitSlop={8}><Feather name="x" size={18} color={SHADES.carbonMuted} /></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={8}><Feather name="x" size={18} color={SHADES.carbonMuted} /></TouchableOpacity>
       </View>
       {codes == null ? <ActivityIndicator color={SHADES.amber} /> : codes.length === 0 ? (
         <Text style={UI.body}>{c.giveCodeNone}</Text>

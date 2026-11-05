@@ -157,7 +157,7 @@ export default function AdminClaimDetailScreen() {
             <Text style={s.sectionLabel}>Media</Text>
             <View style={s.photoGrid}>
               {media.map((item, i) => (
-                <TouchableOpacity key={item.url} onPress={() => setViewerIndex(i)} activeOpacity={0.85}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Play video" key={item.url} onPress={() => setViewerIndex(i)} activeOpacity={0.85}>
                   {item.type === 'image' ? (
                     <Image source={{ uri: item.url }} style={s.photoThumb} />
                   ) : (

@@ -105,7 +105,7 @@ export default function DateRangePicker({
   const renderDatesPage = () => (
     <>
       <View style={s.subHeader}>
-        <TouchableOpacity style={s.subBackBtn} onPress={() => setPage('main')}>
+        <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Back" style={s.subBackBtn} onPress={() => setPage('main')}>
           <Feather name="arrow-left" size={16} color={COLORS.carbon} />
         </TouchableOpacity>
         <Text style={s.subTitle}>Select dates</Text>
@@ -138,7 +138,7 @@ export default function DateRangePicker({
     return (
       <>
         <View style={s.subHeader}>
-          <TouchableOpacity style={s.subBackBtn} onPress={() => setPage('main')}>
+          <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Back" style={s.subBackBtn} onPress={() => setPage('main')}>
             <Feather name="arrow-left" size={16} color={COLORS.carbon} />
           </TouchableOpacity>
           <Text style={s.subTitle}>{title}</Text>
@@ -178,7 +178,7 @@ export default function DateRangePicker({
             ? 'Edit rental dates'
             : 'Set rental dates'}
         </Text>
-        <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+        <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Close" style={s.closeBtn} onPress={onClose}>
           <Feather name="x" size={18} color={COLORS.carbon} />
         </TouchableOpacity>
       </View>

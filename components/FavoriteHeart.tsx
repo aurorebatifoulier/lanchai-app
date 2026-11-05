@@ -61,7 +61,7 @@ export function FavoriteButton({
   // Guests: the sheet first, then the like once signed in.
   const requireAccount = useRequireAccount();
   return (
-    <TouchableOpacity
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={liked ? 'Remove from liked' : 'Save to liked'}
       style={[s.btn, { width: diameter, height: diameter, borderRadius: diameter / 2 }, style]}
       onPress={e => { e.stopPropagation(); requireAccount({ action: 'save', itemName, run: onPress }); }}
       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}

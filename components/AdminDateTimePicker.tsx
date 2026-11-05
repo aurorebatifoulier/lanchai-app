@@ -148,17 +148,17 @@ export default function AdminDateTimePicker({
           <View>
             <View style={s.header}>
               <Text style={s.title}>{title}</Text>
-              <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Close" style={s.closeBtn} onPress={onClose}>
                 <Feather name="x" size={18} color={COLORS.carbon} />
               </TouchableOpacity>
             </View>
 
             <View style={s.calNav}>
-              <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
+              <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Previous month" style={s.calNavBtn} onPress={prevMonth}>
                 <Feather name="chevron-left" size={18} color={COLORS.carbon} />
               </TouchableOpacity>
               <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-              <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
+              <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Next month" style={s.calNavBtn} onPress={nextMonth}>
                 <Feather name="chevron-right" size={18} color={COLORS.carbon} />
               </TouchableOpacity>
             </View>

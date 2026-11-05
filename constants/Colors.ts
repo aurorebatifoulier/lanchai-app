@@ -18,7 +18,7 @@ export const COLORS = {
   fg3: '#6B6B6B',
 
   // Semantic
-  success: '#2E8B57',
+  success: '#267A4C',
   danger: '#C8412C',
   pending: '#2573B5',
 

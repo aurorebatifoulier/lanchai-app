@@ -832,12 +832,12 @@ export default function ChecklistScreen() {
           {photos.map(p => (
             <View key={p.uri} style={styles.photoThumbWrap}>
               <Image source={{ uri: p.uri }} style={styles.photoThumb} />
-              <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => handleRemovePhoto(p.uri)}>
+              <TouchableOpacity hitSlop={12} accessibilityRole="button" accessibilityLabel="Remove photo" style={styles.photoRemoveBtn} onPress={() => handleRemovePhoto(p.uri)}>
                 <Feather name="x" size={12} color={COLORS.white} />
               </TouchableOpacity>
             </View>
           ))}
-          <TouchableOpacity style={styles.addPhotoBtn} onPress={handleAddPhotos}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Take a photo" style={styles.addPhotoBtn} onPress={handleAddPhotos}>
             <Feather name="camera" size={20} color={COLORS.fg3} />
           </TouchableOpacity>
         </View>

@@ -440,7 +440,7 @@ export default function ProductDetailScreen() {
           {images.length > 1 && lightbox != null && (
             <View style={s.lbCounter}><Text style={s.lbCounterText}>{PRODUCT_COPY.counter(lightbox + 1, images.length)}</Text></View>
           )}
-          <TouchableOpacity style={s.lbClose} onPress={() => setLightbox(null)} activeOpacity={0.85}>
+          <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Close" style={s.lbClose} onPress={() => setLightbox(null)} activeOpacity={0.85}>
             <Feather name="x" size={20} color={COLORS.white} />
           </TouchableOpacity>
         </View>

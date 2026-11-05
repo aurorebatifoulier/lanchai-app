@@ -463,7 +463,7 @@ export default function AdminCalendarDayScreen() {
 
               {tasks.map(task => (
                 <View key={task.id} style={s.taskCard}>
-                  <TouchableOpacity
+                  <TouchableOpacity hitSlop={10} accessibilityRole="button" accessibilityLabel={task.completed ? 'Mark as not done' : 'Mark as done'}
                     style={s.taskCheckbox}
                     onPress={() => handleToggle(task)}
                     activeOpacity={0.7}
@@ -493,7 +493,7 @@ export default function AdminCalendarDayScreen() {
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <TouchableOpacity
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Delete"
                       onPress={() => setDeletingId(task.id)}
                       activeOpacity={0.7}
                       style={s.trashBtn}

@@ -39,7 +39,7 @@ export function ChatInputBar({
 
   return (
     <View style={[styles.inputBar, { paddingBottom: bottomPadding }]}>
-      <TouchableOpacity
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Attach a photo or video"
         style={styles.attachBtn}
         onPress={() => setAttachSheetVisible(true)}
         disabled={uploading || sending}
@@ -63,7 +63,7 @@ export function ChatInputBar({
         blurOnSubmit={false}
       />
 
-      <TouchableOpacity
+      <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Send"
         style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
         onPress={onSend}
         disabled={!canSend}

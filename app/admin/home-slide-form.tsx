@@ -195,11 +195,11 @@ export default function HomeSlideFormScreen() {
           <SectionTitle>Text (optional)</SectionTitle>
           <View style={[UI.card, UI.cardPadded]}>
             <Text style={UI.fieldLabel}>Title</Text>
-            <TextInput style={UI.input} value={title} onChangeText={setTitle} maxLength={SLIDE_LIMITS.title} placeholder="Why buy it when you can rent it?" placeholderTextColor={SHADES.carbonFaint} />
+            <TextInput style={UI.input} value={title} onChangeText={setTitle} maxLength={SLIDE_LIMITS.title} placeholder="Why buy it when you can rent it?" placeholderTextColor={SHADES.carbonPlaceholder} />
             <Text style={[UI.fieldLabel, { marginTop: 14 }]}>Subtitle</Text>
-            <TextInput style={UI.input} value={subtitle} onChangeText={setSubtitle} maxLength={SLIDE_LIMITS.subtitle} placeholder="Everything you need. Only when you need it." placeholderTextColor={SHADES.carbonFaint} />
+            <TextInput style={UI.input} value={subtitle} onChangeText={setSubtitle} maxLength={SLIDE_LIMITS.subtitle} placeholder="Everything you need. Only when you need it." placeholderTextColor={SHADES.carbonPlaceholder} />
             <Text style={[UI.fieldLabel, { marginTop: 14 }]}>Button label</Text>
-            <TextInput style={UI.input} value={ctaLabel} onChangeText={setCtaLabel} maxLength={SLIDE_LIMITS.cta} placeholder="Explore now" placeholderTextColor={SHADES.carbonFaint} />
+            <TextInput style={UI.input} value={ctaLabel} onChangeText={setCtaLabel} maxLength={SLIDE_LIMITS.cta} placeholder="Explore now" placeholderTextColor={SHADES.carbonPlaceholder} />
             <Text style={[UI.small, { marginTop: 6 }]}>The button shows only with a label and a link.</Text>
           </View>
 
@@ -225,7 +225,7 @@ export default function HomeSlideFormScreen() {
           )}
           {linkKind === 'product' && (
             <View style={[UI.card, s.list]}>
-              <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder="Search products" placeholderTextColor={SHADES.carbonFaint} />
+              <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder="Search products" placeholderTextColor={SHADES.carbonPlaceholder} />
               {filteredProducts.map(p => (
                 <TouchableOpacity key={p.id} style={s.listRow} onPress={() => setLinkId(p.id)}>
                   <Feather name={linkId === p.id ? 'check-circle' : 'circle'} size={18} color={linkId === p.id ? SHADES.amber : SHADES.carbonFaint} />
@@ -237,9 +237,9 @@ export default function HomeSlideFormScreen() {
           {linkKind === 'explore' && (
             <View style={[UI.card, UI.cardPadded, { marginTop: 10 }]}>
               <Text style={UI.fieldLabel}>Search text (optional)</Text>
-              <TextInput style={UI.input} value={exploreQ} onChangeText={setExploreQ} placeholder="tent" placeholderTextColor={SHADES.carbonFaint} />
+              <TextInput style={UI.input} value={exploreQ} onChangeText={setExploreQ} placeholder="tent" placeholderTextColor={SHADES.carbonPlaceholder} />
               <Text style={[UI.fieldLabel, { marginTop: 14 }]}>Max price, LAK per day (optional)</Text>
-              <TextInput style={UI.input} value={exploreMax} onChangeText={setExploreMax} keyboardType="number-pad" placeholder="100000" placeholderTextColor={SHADES.carbonFaint} />
+              <TextInput style={UI.input} value={exploreMax} onChangeText={setExploreMax} keyboardType="number-pad" placeholder="100000" placeholderTextColor={SHADES.carbonPlaceholder} />
             </View>
           )}
           {!link && <Text style={[UI.errorText, { marginTop: 8 }]}>Choose where the slide leads.</Text>}
@@ -255,7 +255,7 @@ export default function HomeSlideFormScreen() {
                     <Text style={value ? UI.title : UI.body}>{value ? fmtDay(value) : 'Always'}</Text>
                   </TouchableOpacity>
                   {value && (
-                    <TouchableOpacity onPress={() => (which === 'from' ? setActiveFrom(null) : setActiveTo(null))} hitSlop={8}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear date" onPress={() => (which === 'from' ? setActiveFrom(null) : setActiveTo(null))} hitSlop={8}>
                       <Feather name="x" size={18} color={SHADES.carbonMuted} />
                     </TouchableOpacity>
                   )}

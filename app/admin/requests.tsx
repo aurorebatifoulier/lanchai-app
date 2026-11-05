@@ -155,7 +155,7 @@ function ProductPicker({ onPick, onCancel, busy, initial }: {
   return (
     <View style={s.picker}>
       <Text style={UI.subtitle}>Which product answers this request? The renter is told it’s in the catalogue (in-app + email).</Text>
-      <TextInput style={UI.input} value={q} onChangeText={setQ} placeholder="Search products" placeholderTextColor={SHADES.carbonFaint} autoCorrect={false} />
+      <TextInput style={UI.input} value={q} onChangeText={setQ} placeholder="Search products" placeholderTextColor={SHADES.carbonPlaceholder} autoCorrect={false} />
       {all == null ? <ActivityIndicator color={SHADES.amber} /> : matches.length === 0 ? (
         <Text style={UI.subtitle}>No product matches.</Text>
       ) : matches.map(p => (

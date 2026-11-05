@@ -173,7 +173,7 @@ export default function AdminCalendarScreen() {
           <BackButton onPress={() => router.back()} />
           <Text style={s.headerTitle}>Calendar</Text>
           <View style={s.monthNav}>
-            <TouchableOpacity
+            <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Previous month"
               style={s.navBtn}
               onPress={() => setCurrentMonth(m => addMonths(m, -1))}
               activeOpacity={0.7}
@@ -183,7 +183,7 @@ export default function AdminCalendarScreen() {
             <Text style={s.monthLabel}>
               {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </Text>
-            <TouchableOpacity
+            <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Next month"
               style={s.navBtn}
               onPress={() => setCurrentMonth(m => addMonths(m, 1))}
               activeOpacity={0.7}

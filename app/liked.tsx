@@ -337,7 +337,7 @@ export default function LikedScreen() {
       {unlikeError && (
         <View style={s.errorBanner}>
           <Text style={[UI.errorText, { flex: 1 }]}>Couldn&apos;t remove item — please try again.</Text>
-          <TouchableOpacity onPress={() => setUnlikeError(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setUnlikeError(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Feather name="x" size={14} color={COLORS.danger} />
           </TouchableOpacity>
         </View>

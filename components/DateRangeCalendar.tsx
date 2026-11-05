@@ -111,11 +111,11 @@ export default function DateRangeCalendar({
   return (
     <View>
       <View style={s.calNav}>
-        <TouchableOpacity style={s.calNavBtn} onPress={prevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous month" style={s.calNavBtn} onPress={prevMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="chevron-left" size={18} color={COLORS.carbon} />
         </TouchableOpacity>
         <Text style={s.calMonthTitle}>{MONTHS[calMonth]} {calYear}</Text>
-        <TouchableOpacity style={s.calNavBtn} onPress={nextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next month" style={s.calNavBtn} onPress={nextMonth} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="chevron-right" size={18} color={COLORS.carbon} />
         </TouchableOpacity>
       </View>

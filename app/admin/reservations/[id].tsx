@@ -697,7 +697,7 @@ export default function AdminReservationDetailScreen() {
                     <Text style={d.unverifiedBadgeText}>Missing</Text>
                   </View>
                 )}
-                <TouchableOpacity
+                <TouchableOpacity hitSlop={6} accessibilityRole="button" accessibilityLabel="Edit"
                   style={d.editPhoneBtn}
                   onPress={handleEditPhone}
                   activeOpacity={0.8}

@@ -405,5 +405,5 @@ const s = StyleSheet.create({
   compactName: { flexShrink: 1, fontSize: 15, fontWeight: '800', color: SHADES.carbon },
   compactChip: { paddingHorizontal: 8, paddingVertical: 4 },
   compactPoints: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 8 },
-  compactPointsText: { fontSize: 14, fontWeight: '800', color: SHADES.amber },
+  compactPointsText: { fontSize: 14, fontWeight: '800', color: SHADES.amberText },
 });

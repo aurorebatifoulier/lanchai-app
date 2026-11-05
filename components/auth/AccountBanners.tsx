@@ -170,7 +170,7 @@ export function AccountBanners({ flush = false }: { flush?: boolean }) {
           <View style={s.row}>
             <Feather name="check-circle" size={16} color={SHADES.amberDeep} />
             <Text style={s.msg}>Email verified! Your account is fully set up.</Text>
-            <TouchableOpacity style={s.dismiss} onPress={b.dismissSuccess} activeOpacity={0.7} hitSlop={8}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss" style={s.dismiss} onPress={b.dismissSuccess} activeOpacity={0.7} hitSlop={8}>
               <Feather name="x" size={15} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>
@@ -192,7 +192,7 @@ export function AccountBanners({ flush = false }: { flush?: boolean }) {
                 {b.resendStatus === 'sent' ? 'Sent ✓' : b.resendStatus === 'sending' ? '…' : 'Resend'}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.dismiss} onPress={b.dismissVerify} activeOpacity={0.7} hitSlop={8}>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Dismiss" style={s.dismiss} onPress={b.dismissVerify} activeOpacity={0.7} hitSlop={8}>
               <Feather name="x" size={15} color={SHADES.carbonMuted} />
             </TouchableOpacity>
           </View>

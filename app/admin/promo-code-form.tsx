@@ -178,12 +178,12 @@ export default function PromoCodeFormScreen() {
               autoCapitalize="characters"
               autoCorrect={false}
               placeholder="SUMMER10"
-              placeholderTextColor={SHADES.carbonFaint}
+              placeholderTextColor={SHADES.carbonPlaceholder}
             />
             <Text style={[UI.small, { marginTop: 6 }]}>{c.fields.codeHint}</Text>
             {!existing && code.length > 0 && !codeOk && <Text style={UI.errorText}>{c.errors.code}</Text>}
             <Text style={[UI.fieldLabel, { marginTop: 16 }]}>{c.fields.description}</Text>
-            <TextInput style={UI.input} value={description} onChangeText={setDescription} placeholder="Partner café, Nov 2026" placeholderTextColor={SHADES.carbonFaint} maxLength={120} />
+            <TextInput style={UI.input} value={description} onChangeText={setDescription} placeholder="Partner café, Nov 2026" placeholderTextColor={SHADES.carbonPlaceholder} maxLength={120} />
           </View>
 
           <SectionTitle>{c.fields.value}</SectionTitle>
@@ -196,12 +196,12 @@ export default function PromoCodeFormScreen() {
               ))}
             </View>
             <View style={s.valueRow}>
-              <TextInput style={[UI.input, { flex: 1 }]} value={value} onChangeText={t => setValue(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder={type === 'percent' ? '10' : '50000'} placeholderTextColor={SHADES.carbonFaint} />
+              <TextInput style={[UI.input, { flex: 1 }]} value={value} onChangeText={t => setValue(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder={type === 'percent' ? '10' : '50000'} placeholderTextColor={SHADES.carbonPlaceholder} />
               <Text style={s.unit}>{type === 'percent' ? '%' : 'LAK'}</Text>
             </View>
             {value.length > 0 && !valueOk && <Text style={UI.errorText}>{c.errors.value}</Text>}
             <Text style={[UI.fieldLabel, { marginTop: 16 }]}>{c.fields.minRental}</Text>
-            <TextInput style={UI.input} value={minRental} onChangeText={t => setMinRental(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder="—" placeholderTextColor={SHADES.carbonFaint} />
+            <TextInput style={UI.input} value={minRental} onChangeText={t => setMinRental(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder="—" placeholderTextColor={SHADES.carbonPlaceholder} />
           </View>
 
           <SectionTitle>{c.fields.dates}</SectionTitle>
@@ -215,7 +215,7 @@ export default function PromoCodeFormScreen() {
                     <Text style={v ? UI.title : UI.body}>{v ? fmtDay(v) : c.fields.always}</Text>
                   </TouchableOpacity>
                   {v && (
-                    <TouchableOpacity onPress={() => (which === 'from' ? setValidFrom(null) : setValidTo(null))} hitSlop={8}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear date" onPress={() => (which === 'from' ? setValidFrom(null) : setValidTo(null))} hitSlop={8}>
                       <Feather name="x" size={18} color={SHADES.carbonMuted} />
                     </TouchableOpacity>
                   )}
@@ -228,7 +228,7 @@ export default function PromoCodeFormScreen() {
           <SectionTitle>Limits</SectionTitle>
           <View style={[UI.card, UI.cardPadded]}>
             <Text style={UI.fieldLabel}>{c.fields.maxUses}</Text>
-            <TextInput style={UI.input} value={maxUses} onChangeText={t => setMaxUses(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder="—" placeholderTextColor={SHADES.carbonFaint} />
+            <TextInput style={UI.input} value={maxUses} onChangeText={t => setMaxUses(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder="—" placeholderTextColor={SHADES.carbonPlaceholder} />
             <Text style={[UI.fieldLabel, { marginTop: 16 }]}>{c.fields.perRenter}</Text>
             <TextInput style={UI.input} value={perRenter} onChangeText={t => setPerRenter(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" />
           </View>
@@ -255,7 +255,7 @@ export default function PromoCodeFormScreen() {
               })}
             </View>
             <Text style={[UI.fieldLabel, { marginTop: 16 }]}>{`${c.fields.products} · ${productIds.length}`}</Text>
-            <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder={c.fields.search} placeholderTextColor={SHADES.carbonFaint} autoCorrect={false} />
+            <TextInput style={UI.input} value={search} onChangeText={setSearch} placeholder={c.fields.search} placeholderTextColor={SHADES.carbonPlaceholder} autoCorrect={false} />
             <View style={{ marginTop: 6 }}>
               {filtered.slice(0, 60).map(p => {
                 const on = selected.has(p.id);

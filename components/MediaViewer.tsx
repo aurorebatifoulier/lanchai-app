@@ -198,7 +198,7 @@ export function MediaViewer({ media: mediaProp, openIndex, onClose }: MediaViewe
 
         {media.length > 1 && (
           <>
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous"
               style={[s.navBtn, s.navBtnLeft, index === 0 && s.navBtnDisabled]}
               onPress={() => index > 0 && setIndex(i => i - 1)}
               disabled={index === 0}
@@ -206,7 +206,7 @@ export function MediaViewer({ media: mediaProp, openIndex, onClose }: MediaViewe
             >
               <Feather name="chevron-left" size={22} color={COLORS.white} />
             </TouchableOpacity>
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next"
               style={[s.navBtn, s.navBtnRight, index === media.length - 1 && s.navBtnDisabled]}
               onPress={() => index < media.length - 1 && setIndex(i => i + 1)}
               disabled={index === media.length - 1}
@@ -221,7 +221,7 @@ export function MediaViewer({ media: mediaProp, openIndex, onClose }: MediaViewe
         )}
 
         <View style={s.topBar}>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Save to device"
             style={s.iconBtn}
             onPress={handleDownload}
             disabled={downloading}
@@ -231,7 +231,7 @@ export function MediaViewer({ media: mediaProp, openIndex, onClose }: MediaViewe
               ? <ActivityIndicator size="small" color={COLORS.white} />
               : <Feather name="download" size={20} color={COLORS.white} />}
           </TouchableOpacity>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close"
             style={s.iconBtn}
             onPress={onClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

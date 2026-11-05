@@ -205,14 +205,14 @@ export default function DeleteAccountScreen() {
                     value={password}
                     onChangeText={v => { setPassword(v); setError(null); }}
                     placeholder="Your current password"
-                    placeholderTextColor={SHADES.carbonFaint}
+                    placeholderTextColor={SHADES.carbonPlaceholder}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     autoCorrect={false}
                     returnKeyType="done"
                     onSubmitEditing={handleDelete}
                   />
-                  <TouchableOpacity onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={10}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7} hitSlop={10}>
                     <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={SHADES.carbonMuted} />
                   </TouchableOpacity>
                 </View>

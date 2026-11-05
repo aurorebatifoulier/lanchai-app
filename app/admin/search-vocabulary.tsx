@@ -85,9 +85,9 @@ export default function SearchVocabularyScreen() {
                   value={g.label}
                   onChangeText={t => edit(gs => gs.map(x => (x.id === g.id ? { ...x, label: t } : x)))}
                   placeholder="Group name"
-                  placeholderTextColor={SHADES.carbonFaint}
+                  placeholderTextColor={SHADES.carbonPlaceholder}
                 />
-                <TouchableOpacity onPress={() => setConfirm({ kind: 'delete', id: g.id })} hitSlop={8}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Delete" onPress={() => setConfirm({ kind: 'delete', id: g.id })} hitSlop={8}>
                   <Feather name="trash-2" size={16} color={SHADES.carbonMuted} />
                 </TouchableOpacity>
               </View>
@@ -122,7 +122,7 @@ export default function SearchVocabularyScreen() {
                 onSubmitEditing={() => addTerms(g.id)}
                 blurOnSubmit={false}
                 placeholder="Add words (comma-separated), then Enter"
-                placeholderTextColor={SHADES.carbonFaint}
+                placeholderTextColor={SHADES.carbonPlaceholder}
                 autoCapitalize="none"
                 autoCorrect={false}
               />

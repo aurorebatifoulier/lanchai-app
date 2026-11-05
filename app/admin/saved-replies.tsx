@@ -40,7 +40,7 @@ export default function SavedRepliesScreen() {
       <ScrollView contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: screen.contentBottom, gap: 10 }]} keyboardShouldPersistTaps="handled">
         <Text style={UI.body}>{c.savedRepliesSub}</Text>
         <View style={[UI.card, UI.cardPadded, { gap: 10 }]}>
-          <TextInput style={[UI.input, s.multi]} value={draft} onChangeText={setDraft} placeholder={c.savedPlaceholder} placeholderTextColor={SHADES.carbonFaint} multiline maxLength={1000} />
+          <TextInput style={[UI.input, s.multi]} value={draft} onChangeText={setDraft} placeholder={c.savedPlaceholder} placeholderTextColor={SHADES.carbonPlaceholder} multiline maxLength={1000} />
           <PressScale style={[UI.btnPrimary, (!draft.trim() || busy) && UI.btnDisabled]} disabled={!draft.trim() || busy}
             onPress={() => run(async () => { await addSavedReply(draft); setDraft(''); })}>
             {busy ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{c.savedNew}</Text>}

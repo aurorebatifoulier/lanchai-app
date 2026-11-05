@@ -41,7 +41,7 @@ export function ProductGallery({
           onMomentumScrollEnd={e => setActive(Math.round(e.nativeEvent.contentOffset.x / width))}
         >
           {images.map((uri, i) => (
-            <Pressable key={uri} onPress={() => onOpen(i)}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Photo ${i + 1} of ${images.length}`} key={uri} onPress={() => onOpen(i)}>
               <Image source={{ uri }} style={{ width, height }} contentFit="cover" transition={250} />
             </Pressable>
           ))}
