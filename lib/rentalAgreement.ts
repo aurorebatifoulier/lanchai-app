@@ -22,6 +22,7 @@ import {
 } from '@/functions/src/shared/rentalAgreement';
 import { toSignatureSvg, type Signature } from '@/components/SignaturePad';
 import { discountOf } from '@/functions/src/shared/promo';
+import { markdownToHtml } from '@/utils/markdownHtml';
 
 // Rental agreement signed at pick-up — app side: gathers the data, renders the HTML
 // (receipt PDF style), prints it to PDF (expo-print), uploads it to
@@ -139,31 +140,6 @@ export const fmtDepositReceived = (x: { amount: number; currency: string }, lakA
 
 /** Safe inside a CSS string (page footer). */
 const cssText = (t: string) => t.replace(/[\\"\n]/g, ' ');
-
-/** Minimal Markdown → HTML for the Terms annex (headings, bullets, bold, italic, rules). */
-export function markdownToHtml(md: string): string {
-  const inline = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
-  const out: string[] = [];
-  let list = false;
-  const closeList = () => { if (list) { out.push('</ul>'); list = false; } };
-  for (const raw of md.split('\n')) {
-    const line = raw.replace(/\s+$/, '');
-    if (!line.trim()) { closeList(); continue; }
-    if (line.startsWith('# ')) { closeList(); continue; } // the annex has its own title
-    if (line.startsWith('## ')) { closeList(); out.push(`<h3>${inline(line.slice(3))}</h3>`); continue; }
-    if (line.trim() === '---') { closeList(); out.push('<hr/>'); continue; }
-    const m = /^(\s*)- (.*)$/.exec(line);
-    if (m) {
-      if (!list) { out.push('<ul>'); list = true; }
-      out.push(`<li${m[1].length >= 2 ? ' class="sub"' : ''}>${inline(m[2])}</li>`);
-      continue;
-    }
-    closeList();
-    out.push(`<p>${inline(line)}</p>`);
-  }
-  closeList();
-  return out.join('\n');
-}
 
 export function buildAgreementHtml(data: AgreementData, opts: {
   signatureSvg?: string;

@@ -15,7 +15,8 @@
     "test:emu:rules": "firebase emulators:exec --config firebase.test.json --only firestore,storage --project demo-lanchai \"npm run test:rules\"",
     "test:emu:functions": "firebase emulators:exec --config firebase.test.json --only firestore,storage,auth --project demo-lanchai \"npm --prefix functions test\"",
     "test:emu": "firebase emulators:exec --config firebase.test.json --only firestore,storage,auth --project demo-lanchai \"npm run test:rules && npm --prefix functions test\"",
-    "update:publish": "node scripts/publish-update.mjs"
+    "update:publish": "node scripts/publish-update.mjs",
+    "legal:pages": "tsx scripts/legal-pages.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
