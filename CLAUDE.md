@@ -1501,6 +1501,22 @@ a snapshot indefinitely).
   `MediaLibrary.requestPermissionsAsync(true)` (write-only), picking uses the system picker.
   Never add a READ_MEDIA permission without a Play declaration.
 
+- **EAS Update — over-the-air JS (2026-11-05).** `expo-updates`; app.json `updates`
+  (`checkAutomatically: ON_LOAD`, `fallbackToCacheTimeout: 0` → downloads in the
+  background, runs at the NEXT launch — the app never waits) + `runtimeVersion.policy:
+  fingerprint` (any native change — dependency with native code, plugin, app.json native
+  field, icon, eas.json — gives a new runtime, so an update can never reach an
+  incompatible build). One channel per build profile (`development` / `preview` /
+  `production` in eas.json; production = every Play / TestFlight tester). Publish ONLY with
+  `npm run update:publish -- <preview|production> "message"` (`scripts/publish-update.mjs`:
+  clean + pushed tree, tsc / lint / unit tests, TYPE the channel to confirm, refuses
+  non-TTY / CI; `--environment <channel>` so EAS env vars are used, `EXPO_PUBLIC_APP_ENV=beta`).
+  Never run `eas update` by hand, never from CI; `--auto` would publish to a branch no
+  channel reads. Preview first, then production. Admin → Diagnostics → "App version"
+  (built-in / update date, channel, runtime, "Check for update" = download + restart).
+  OTA is enough for JS / TS / copy / styles / images bundled in the JS; a new store build
+  is needed for any native change (new or upgraded package with native code, app.json
+  plugins / permissions / icon / splash / version, Expo SDK upgrade).
 - **Sentry (2026-11-04, EU region `de.sentry.io`, org `lanchai`, project slug `react-native`).**
   `lib/sentry.ts` is imported FIRST by `app/_layout.tsx` (root wrapped with `Sentry.wrap`);
   DSN = `EXPO_PUBLIC_SENTRY_DSN` (EAS env), environment = `EXPO_PUBLIC_APP_ENV`; off in Expo

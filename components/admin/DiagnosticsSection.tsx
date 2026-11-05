@@ -7,6 +7,7 @@ import { UI, SectionTitle } from '@/components/account/ui';
 import { sentryEnabled, sendTestError, testNativeCrash } from '@/lib/sentry';
 import { getJobHealth, type JobRow } from '@/lib/jobHealth';
 import { vteWhen } from '@/lib/vteTime';
+import { updateInfo, checkAndApplyUpdate } from '@/lib/appUpdates';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 
@@ -20,6 +21,19 @@ export default function DiagnosticsSection() {
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [jobsError, setJobsError] = useState(false);
   useEffect(() => { getJobHealth().then(setJobs).catch(() => setJobsError(true)); }, []);
+  const upd = updateInfo();
+  const [checking, setChecking] = useState(false);
+  const [updResult, setUpdResult] = useState<string | null>(null);
+  const checkUpdate = async () => {
+    setChecking(true); setUpdResult(null);
+    try {
+      const r = await checkAndApplyUpdate();
+      setUpdResult(r === 'off' ? 'Updates are off in this build.' : 'You have the latest version.');
+    } catch {
+      setUpdResult('Couldn’t check for an update. Please try again.');
+    }
+    setChecking(false);
+  };
 
   return (
     <View style={{ marginTop: 28 }}>
@@ -53,6 +67,15 @@ export default function DiagnosticsSection() {
           </View>
         )}
         {!!result && <Text style={UI.subtitle}>{result}</Text>}
+      </View>
+
+      <View style={[UI.card, UI.cardPadded, { gap: 8, marginTop: 10 }]}>
+        <Text style={UI.title}>App version</Text>
+        <Text style={UI.subtitle}>{`${upd.source} · channel ${upd.channel} · runtime ${upd.runtime}`}</Text>
+        <PressScale style={[UI.btnSecondary, UI.btnCard, (!upd.enabled || checking) && UI.btnDisabled]} disabled={!upd.enabled || checking} onPress={checkUpdate}>
+          <Text style={[UI.btnSecondaryText, UI.btnCardText]}>{checking ? 'Checking…' : 'Check for update'}</Text>
+        </PressScale>
+        {!!updResult && <Text style={UI.subtitle}>{updResult}</Text>}
       </View>
 
       <View style={[UI.card, UI.cardPadded, { gap: 8, marginTop: 10 }]}>
