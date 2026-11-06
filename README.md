@@ -4,6 +4,8 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 ## Get started
 
+Node 22 (`.nvmrc`; Expo SDK 54 supports Node 20.19.4+ and 22 — not 24+/26).
+
 1. Install dependencies
 
    ```bash
@@ -12,16 +14,14 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 
 2. Start the app
 
-   ```bash
-   npx expo start
-   ```
+   | Command | Opens in |
+   |---|---|
+   | `npm start` (= `npm run start:go`) | **Expo Go** — phones on the same Wi-Fi scan the QR code |
+   | `npm run tunnel` | Expo Go through a tunnel — any network (slower) |
+   | `npm run start:dev` | a development build (EAS `development` profile) |
+   | `npm run ios` / `npm run android` | Expo Go in the iOS Simulator / an Android emulator |
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   `npx expo start` alone opens in development-build mode (expo-dev-client is installed) — use the scripts above.
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 

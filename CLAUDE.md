@@ -28,7 +28,11 @@ and young professionals.
   upper cap), so future dependency bumps here are unlikely to block a future
   runtime bump either — still worth a quick `engines` check before the next one.
 - Linting: ESLint (`eslint.config.js`).
-- Tested on a physical Android device (Samsung S25 Ultra) via **Expo Go**.
+- Tested on a physical Android device (Samsung S25 Ultra) via **Expo Go**. Start with
+  `npm start` (= `expo start --go`) or `npm run tunnel` — plain `npx expo start` opens in
+  development-build mode because expo-dev-client is installed; `npm run start:dev` for a
+  dev build. **Node 22** locally (`.nvmrc`, `engines` >=20.19.4 <23; Node 26 breaks the
+  @expo/ngrok tunnel), CI on Node 22.
 - Repo: `aurorebatifoulier/lanchai-app`, default branch `master`.
 - Expo plugins in use: `expo-router`, `expo-image-picker`, `expo-splash-screen`.
 
