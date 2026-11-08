@@ -201,20 +201,18 @@ a snapshot indefinitely).
   **If `collectionGroup` is ever needed for another collection, test it in isolation
   early** before building a feature around it.
 
-- **No composite indexes on this project — and no `firestore.indexes.json`.**
-  `firebase firestore:indexes` returns `"indexes": []` (only a `reviews.createdAt`
-  field override exists). Any query that combines an equality with a range/inequality
+- **No composite indexes on this project.** `firestore.indexes.json` is tracked and
+  wired in `firebase.json` (2026-11-08, an export of the live config): `"indexes": []`,
+  only a `reviews.createdAt` field override. Any query that combines an equality with a range/inequality
   on a *different* field, or a `where` + `orderBy` on different fields, needs a
   composite index and fails at runtime with `FAILED_PRECONDITION` (this silently broke
   `expireEarlyAccess` on every run until fixed in `45abf47`). Equality-only filters
   (incl. `in`), a range on a single field, or a single `orderBy` are fine. **Prefer
   filtering in code when the result set is small** (as `expireEarlyAccess` now does:
-  equality-only query, date filtered in memory). Otherwise create the index through a
-  tracked `firestore.indexes.json` (start from `firebase firestore:indexes >
-  firestore.indexes.json` so the existing `reviews.createdAt` override is kept — the
-  CLI offers to delete anything missing from the file), wire it in `firebase.json`
-  (`"firestore": { "indexes": "firestore.indexes.json" }` — indexes only, rules stay
-  manual), and deploy with `firebase deploy --only firestore:indexes`.
+  equality-only query, date filtered in memory). Otherwise add the index to
+  `firestore.indexes.json` (keep the `reviews.createdAt` override — the CLI offers to
+  delete anything missing from the file; indexes only, rules stay manual) and deploy
+  with `firebase deploy --only firestore:indexes`.
 
 - **`UserProfile.address` vs. `UserProfile.addresses`:** `address?: string` (singular)
   is the real, active field — a simple free-text field edited in
@@ -965,11 +963,11 @@ a snapshot indefinitely).
     `storage.rules` states `allow delete` separately — products / home slides: admin;
     profile photos: owner or admin; chat, claims, checklist photos, business documents:
     never from the client (evidence).
-  - **One look per category:** `constants/categoryStyle.ts` (rentable-object icons —
-    fun = speaker, sports = bike — + palette shades). Every category has a UNIQUE combination:
-    Fun mid-amber/carbon · Tools carbon/amber · Outdoor light-amber/dark-amber · Sports
-    dark-amber/light-amber · Kids carbon-soft/soft-amber · Home grey/carbon — all filled
-    circles, no rings (`dark` flag kept for dark backgrounds; the only ring
+  - **One look per category:** `constants/categoryStyle.ts`, derived from the category
+    config (see "Categories — multi-category products"). Every category has a UNIQUE
+    combination: Tools carbon/amber (hammer-wrench) · Home grey/carbon (sofa) · Kids
+    carbon-soft/soft-amber (teddy bear) · Outdoor light-amber/dark-amber (tent) · Games
+    mid-amber/carbon (dice — ex-Fun colours) — all filled circles, no rings (`dark` flag kept for dark backgrounds; the only ring
     is Explore's selection state: amber + 2px carbon ring) via `<CategoryBadge>`; used by Home,
     the stickers AND the My Account header bubbles. Never re-map a category locally.
   - **Product thumbnails (2026-11-04):** `products.thumbs` = 600 px JPEG 0.7 copies, SAME
@@ -1084,6 +1082,33 @@ a snapshot indefinitely).
     fixed footer above the system bar. `addToBag(uid, product, { pickupAt, returnAt },
     quantity)` (dates optional, quantity default 1). Checkout still runs every check.
 
+- **Categories — multi-category products (2026-11-08).** ONE config:
+  `functions/src/shared/categories.ts` (`CATEGORY_CONFIG`: id, label, MCI icon, bg / fg
+  shade names, funny Explore line, empty title, sticker name, search keywords, admin hint,
+  `clientVisible`; ARRAY ORDER = display order: Tools, Home, Kids, Outdoor, Games, then the
+  internal `other` — admin only, never shown to renters). `categoryStyle`, `CATEGORIES`
+  (mockData), Explore lines, sticker names, request categories all derive from it. Adding a
+  category = an entry there + the `categoryIds()` / `clientCategoryIds()` lists in
+  `firestore.rules` (`tests/unit/categories.test.ts` fails while they differ).
+  Products: `categories: string[]` (1–5, no duplicate, valid ids; `[0]` = MAIN category:
+  colour, chip, sticker, emails) + `category` = main (legacy mirror for older builds).
+  ALWAYS read through `categoriesOf()` (falls back to an old product's single `category`),
+  `primaryCategory()`, `displayCategory()` (renter-visible main, else next visible, else
+  null = neutral badge / no chip), `inCategory()` — never `p.category`. Explore filters in
+  MEMORY (`utils/productFilters.ts`, a product shows in each of its categories) — no
+  Firestore category query, no index. Search indexes every renter category label (0.6) +
+  its config keywords (0.35). Promo scope matches ANY category of a line
+  (`PromoLine.categoryIds`). `onCategoryArrival` notifies each NEW renter category
+  (`arrivedCategories`), never on migration writes (`categoriesMigratedAt` changed).
+  Rules: `validProductCategories` — required on create, optional on update of a
+  not-yet-migrated product (tighten once all are migrated). Admin form:
+  `components/admin/CategoryPicker.tsx` (bubbles, "Main: … · Change" row, save blocked
+  without one). Retired ids (fun, sports) stay readable via `categoryLabel()` in admin
+  (requests, promo scope "(retired)", slides — a slide linking one shows no renter link).
+  **Migration:** `cd functions && npm run migrate:categories` (dry run: plan +
+  pre-fills the gitignored `scripts/category-choices.json` — suggestions fun → games,
+  sports → outdoor, `[]` = to decide) → review the file → `-- --run` (typed project id;
+  optional `--delete-stale-watches`). Never decides a retired / unknown category itself.
 - **Categories = Explore (2026-11-03).** There is no category page: every entry point
   (Home bubbles, product category chip, My Account stickers, Home slides, search
   suggestions, deep links) calls `openCategory(router, id)` (`lib/navigation.ts`) → the
