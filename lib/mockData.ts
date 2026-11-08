@@ -1,19 +1,18 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { LoyaltyTier } from './firestore';
+import { CLIENT_CATEGORIES } from '@/functions/src/shared/categories';
 
-export type ProductCategory =
-  | 'fun'
-  | 'tools'
-  | 'outdoor'
-  | 'sports'
-  | 'kids'
-  | 'home';
+/** A category id from functions/src/shared/categories.ts (CATEGORY_CONFIG). */
+export type ProductCategory = string;
 
 export interface Product {
   id: string;
   name: string;
   shortDesc: string;
   description: string;
+  /** 1–5 category ids, main first — ALWAYS read via categoriesOf / displayCategory. */
+  categories?: ProductCategory[];
+  /** Legacy single category (= categories[0] on saved products; only field on old ones). */
   category: ProductCategory;
   pricePerDay: number;       // 1–2 day rate (base rate used by catalogue) — USD
   price3to6: number;         // 3–6 day rate — USD
@@ -72,13 +71,9 @@ export interface Product {
   earlyAccessUntil?: Timestamp;
 }
 
-export const CATEGORIES = [
-  { id: 'all',     name: 'All',     icon: 'grid',      iconSet: 'Feather' as const },
-  { id: 'fun',     name: 'Fun',     icon: 'book-open', iconSet: 'Feather' as const },
-  { id: 'tools',   name: 'Tools',   icon: 'tool',      iconSet: 'Feather' as const },
-  { id: 'outdoor', name: 'Outdoor', icon: 'compass',   iconSet: 'Feather' as const },
-  { id: 'sports',  name: 'Sports',  icon: 'target',    iconSet: 'Feather' as const },
-  { id: 'kids',    name: 'Kids',    icon: 'smile',     iconSet: 'Feather' as const },
-  { id: 'home',    name: 'Home',    icon: 'home',      iconSet: 'Feather' as const },
+// Renter-facing category list: "All" + the client categories, display order (config).
+export const CATEGORIES: readonly { id: string; name: string }[] = [
+  { id: 'all', name: 'All' },
+  ...CLIENT_CATEGORIES.map(c => ({ id: c.id, name: c.label })),
 ];
 
