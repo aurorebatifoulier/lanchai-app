@@ -58,10 +58,10 @@ const SPEAKER_LOOP_R = BUBBLE / 2 + 11;
 // chips, between them and the bike (computed from the measured chips, see Decor).
 const BUBBLES: { cat: string; icon: CategoryIconName; x?: number; y?: number; bg: string; fg: string; rot: string }[] = ([
   { cat: 'outdoor', rot: '-8deg' },
-  { cat: 'fun', x: 92, y: 24, rot: '6deg' },
+  { cat: 'games', x: 92, y: 24, rot: '6deg' },
   // Same ~20px right margin as the hexagon (244 − 20 − 36).
   { cat: 'tools', x: 188, y: 68, rot: '-6deg' },
-  { cat: 'sports', x: 184, y: 128, rot: '5deg' },
+  { cat: 'kids', x: 184, y: 128, rot: '5deg' },
 ] as const).map(b => ({ ...b, ...categoryStyle(b.cat) })); // one look per category, everywhere
 
 // Kept as an alias — the hook lives in constants/motion.ts.
@@ -70,7 +70,7 @@ export const useReduceMotion = useReducedMotion;
 /** One text line (greeting, name, chips) in header coordinates, from onLayout. */
 interface Box { left: number; top: number; right: number; bottom: number }
 const MARGIN = 8;
-const BIKE = BUBBLES.find(b => b.cat === 'sports');
+const BIKE = BUBBLES.find(b => b.cat === 'kids'); // the "bike" slot of the flight path
 
 type Rect = { x: number; y: number; w: number; h: number };
 const isNum = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
@@ -151,7 +151,8 @@ function Decor({ headerWidth, headerHeight, lines, chips }: { headerWidth: numbe
   const hex = { x: decorLeft + HEX.x, y: DECOR_TOP + HEX.y };
   const flight = ready ? buildFlightPath({
     width: headerWidth, height: headerHeight,
-    bike: centre('sports'), speaker: centre('fun'), hexagon: hex, speakerLoopRadius: SPEAKER_LOOP_R,
+    // The flight path's "bike" / "speaker" loops = the kids / games bubble slots (same spots).
+    bike: centre('kids'), speaker: centre('games'), hexagon: hex, speakerLoopRadius: SPEAKER_LOOP_R,
   }) : null;
   const flightLength = flight?.length ?? 0;
   const revealProps = useAnimatedProps(() => ({ strokeDashoffset: draw.value * flightLength }));

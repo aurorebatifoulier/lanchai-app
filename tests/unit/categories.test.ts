@@ -57,3 +57,39 @@ test('a product is in each of its categories', () => {
   assert.ok(inCategory(p, 'home'));
   assert.ok(!inCategory(p, 'kids'));
 });
+
+test('Explore filter: a product in 2 categories shows in both; legacy products too', async () => {
+  const { filterProducts } = await import('../../utils/productFilters');
+  const { DEFAULT_FILTERS } = await import('../../lib/filterConfig');
+  type P = Parameters<typeof filterProducts>[0][number];
+  const mk = (id: string, extra: Partial<P>) => ({ id, name: id, available: true, pricePerDay: 1, ...extra }) as P;
+  const products = [
+    mk('ladder', { categories: ['tools', 'home'] }),
+    mk('stroller', { category: 'kids' }), // legacy
+    mk('old', { category: 'sports' }),    // retired → only under "All"
+  ];
+  const ids = (category: string) => filterProducts(products, DEFAULT_FILTERS, { category }).map(p => p.id);
+  assert.deepEqual(ids('tools'), ['ladder']);
+  assert.deepEqual(ids('home'), ['ladder']);
+  assert.deepEqual(ids('kids'), ['stroller']);
+  assert.deepEqual(ids('games'), []);
+  assert.deepEqual(ids('all'), ['ladder', 'stroller', 'old']);
+});
+
+test('stickers follow the main category shown to renters', async () => {
+  const { computeAccountStats } = await import('../../lib/accountStats');
+  type R = Parameters<typeof computeAccountStats>[0][number];
+  type P = Parameters<typeof computeAccountStats>[1][number];
+  const at = (ms: number) => ({ toMillis: () => ms });
+  const rental = (productId: string, ms: number) =>
+    ({ productId, productName: productId, status: 'returned', returnedAt: at(ms) }) as unknown as R;
+  const products = [
+    { id: 'ladder', categories: ['home', 'tools'] },
+    { id: 'thing', categories: ['other'] },
+    { id: 'legacy', category: 'kids' },
+  ] as unknown as P[];
+  const st = computeAccountStats([rental('ladder', 1), rental('thing', 2), rental('legacy', 3)], products, null);
+  assert.deepEqual(st.stickers, ['home', 'kids']); // config order, main category only
+  assert.equal(st.stickerUnlocks.home.productName, 'ladder');
+  assert.equal(st.nextSticker, 'tools');
+});

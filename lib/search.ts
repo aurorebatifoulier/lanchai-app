@@ -8,15 +8,17 @@
 // transpositions: 1 for words ≥ 4 letters, 2 for ≥ 8), prefix matching on the last word
 // while typing, and lexical-field expansion through the search vocabulary
 // (lib/searchVocabulary.ts / config/search).
-// Scoring: field weight (name > keywords > category > collection titles > description)
+// Scoring: field weight (name > keywords > category > collection titles > category
+// search terms (config keywords of every category of the product) > description)
 // × match kind (direct > prefix > lexical > typo); multi-word queries average their
 // words (+ a small bonus when every word matched) → 0–100. Ties → popularity.
 import type { SearchGroup } from './searchVocabulary';
+import { categoryConfig, categoryLabel, clientCategoriesOf } from '@/functions/src/shared/categories';
 
 export const MIN_SEARCH_SCORE = 30;
 export const BEST_MATCH_GAP = 15;
 
-const FIELD = { name: 1, keywords: 0.85, category: 0.6, collection: 0.5, description: 0.3 } as const;
+const FIELD = { name: 1, keywords: 0.85, category: 0.6, collection: 0.5, categoryTerms: 0.35, description: 0.3 } as const;
 const KIND = { direct: 1, prefix: 0.85, lexical: 0.55, typo: 0.5 } as const;
 /** Expansion reached through a TYPO of a vocabulary term counts a bit less ("tnet" → tent > cooler). */
 const TYPO_EXPANSION = 0.8;
@@ -27,7 +29,9 @@ const STOP_WORDS = new Set(['a', 'an', 'the', 'for', 'my', 'to', 'and', 'with', 
 export interface SearchableProduct {
   id: string;
   name: string;
-  category: string;
+  /** Read through clientCategoriesOf (multi-category + legacy `category`). */
+  categories?: string[];
+  category?: string;
   shortDesc?: string;
   description?: string;
   keywords?: string[];
@@ -122,8 +126,9 @@ export function buildSearchIndex<P extends SearchableProduct>(products: P[], ctx
       fields: [
         field(FIELD.name, [p.name]),
         field(FIELD.keywords, p.keywords ?? []),
-        field(FIELD.category, [catName.get(p.category) ?? p.category]),
+        field(FIELD.category, clientCategoriesOf(p).map(id => catName.get(id) ?? categoryLabel(id))),
         field(FIELD.collection, colTitles.get(p.id) ?? []),
+        field(FIELD.categoryTerms, clientCategoriesOf(p).flatMap(id => categoryConfig(id)?.keywords ?? [])),
         field(FIELD.description, [p.shortDesc, p.description, ...(p.perfectFor ?? []), ...(p.usageExamples ?? [])]),
       ].filter(f => f.tokens.length > 0),
     })),
@@ -214,13 +219,11 @@ export function isBestMatch(results: SearchResult<unknown>[]): boolean {
   return results.length === 1 || results[0].score - results[1].score >= BEST_MATCH_GAP;
 }
 
-/** Keyword suggestions for a product: meaningful name words + its category group terms. */
-export function suggestKeywords(name: string, categoryId: string, groups: SearchGroup[], max = 10): string[] {
+/** Keyword suggestions for a product: meaningful name words + its main category's search terms (config). */
+export function suggestKeywords(name: string, categoryId: string, max = 10): string[] {
   const words = normalize(name).split(' ').filter(w => w.length >= 3 && !STOP_WORDS.has(w) && !/^\d+$/.test(w));
-  const ALIASES: Record<string, string> = { fun: 'party', tools: 'diy', outdoor: 'camping', kids: 'baby' };
-  const group = groups.find(g => g.id === (ALIASES[categoryId] ?? categoryId));
   const out: string[] = [];
-  for (const t of [...words, ...(group?.terms ?? [])]) {
+  for (const t of [...words, ...(categoryConfig(categoryId)?.keywords ?? [])]) {
     const k = t.trim().toLowerCase();
     if (k && !out.includes(k)) out.push(k);
     if (out.length >= max) break;

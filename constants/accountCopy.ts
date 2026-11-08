@@ -1,5 +1,6 @@
 // ALL the playful My Account strings in one place — edit freely. (Loyalty card lines
 // live in constants/loyaltyCopy.ts.) Sentence case, English.
+import { CLIENT_CATEGORIES } from '@/functions/src/shared/categories';
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
@@ -23,14 +24,8 @@ export const ACCOUNT_COPY = {
 
   // ── Stickers (one per category rented at least once) ──
   stickersTitle: 'Your stickers',
-  stickerNames: {
-    outdoor: 'Weekend camper',
-    tools: 'DIY hero',
-    fun: 'Party starter',
-    sports: 'Game on',
-    kids: 'Super parent',
-    home: 'Home hero',
-  } as Record<string, string>,
+  // Sticker names live in the category config (functions/src/shared/categories.ts).
+  stickerNames: Object.fromEntries(CLIENT_CATEGORIES.map(c => [c.id, c.stickerName])) as Record<string, string>,
   stickerLocked: (category: string) => `Rent ${category.toLowerCase()} to unlock`,
   stickerUnlockedWith: (product: string, date: string) => `Unlocked with ${product}, ${date}`,
   stickerBrowse: (category: string) => `Browse ${category.toLowerCase()}`,

@@ -57,7 +57,7 @@ export function AuthHeaderDecor() {
         <Path d={d} stroke="url(#authFade)" strokeWidth={2} strokeDasharray={DASH} strokeLinecap="round" fill="none" />
         <Polygon points={hexagon(w * (318 / 340), 24, 8)} fill={SHADES.amberSoft} opacity={0.55} />
       </Svg>
-      <Bubble cat="fun" size={44} x={w * 0.07} y={22} delay={0} />
+      <Bubble cat="games" size={44} x={w * 0.07} y={22} delay={0} />
       <Bubble cat="tools" size={44} x={w * 0.78} y={96} delay={600} />
       <Bubble cat="outdoor" size={38} x={w * 0.21} y={152} delay={1200} />
 

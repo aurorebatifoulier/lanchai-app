@@ -28,6 +28,7 @@ import { GuestRentals } from '@/components/auth/GuestAccount';
 import { AccountBanners } from '@/components/auth/AccountBanners';
 import VteTimeNote from '@/components/VteTimeNote';
 import { productThumb } from '@/utils/productImage';
+import { displayCategory } from '@/functions/src/shared/categories';
 
 // "My rentals" tab (validated mockup, 2026-11-02) — Upcoming (carbon "Next pick-up" card
 // + countdown cards), Active (due-back countdown, Extend, calm late card with "I'm on my
@@ -44,12 +45,12 @@ async function productLooks(rentals: RentalDoc[]): Promise<Map<string, ProductLo
   // Thumbnails (600 px) of the first two photos, then the legacy imageUrl.
   const imagesOf = (p: { images?: string[]; thumbs?: string[]; imageUrl?: string } | null) =>
     [productThumb(p, 0), productThumb(p, 1), p?.imageUrl].filter((u): u is string => typeof u === 'string' && u.length > 0);
-  for (const p of products) looks.set(p.id, { images: imagesOf(p), category: p.category ?? null });
+  for (const p of products) looks.set(p.id, { images: imagesOf(p), category: displayCategory(p) });
   const missing = [...new Set(rentals.map(r => r.productId))].filter(id => id && !looks.has(id));
   await Promise.all(missing.map(async id => {
     if (!extraLooks.has(id)) {
       const p = await getProduct(id).catch(() => null);
-      extraLooks.set(id, { images: imagesOf(p), category: p?.category ?? null });
+      extraLooks.set(id, { images: imagesOf(p), category: displayCategory(p) });
     }
     looks.set(id, extraLooks.get(id)!);
   }));

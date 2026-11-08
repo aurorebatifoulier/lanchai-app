@@ -13,7 +13,7 @@ export interface Product {
   /** 1–5 category ids, main first — ALWAYS read via categoriesOf / displayCategory. */
   categories?: ProductCategory[];
   /** Legacy single category (= categories[0] on saved products; only field on old ones). */
-  category: ProductCategory;
+  category?: ProductCategory;
   pricePerDay: number;       // 1–2 day rate (base rate used by catalogue) — USD
   price3to6: number;         // 3–6 day rate — USD
   price7to13: number;        // 7–13 day rate — USD

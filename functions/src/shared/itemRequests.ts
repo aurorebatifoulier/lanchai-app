@@ -3,11 +3,13 @@
 //   { text, contact, category | null, renterId, renterName, status, createdAt,
 //     statusAt?, statusBy?, productId?, productName?, renterNotified?: { [status]: Timestamp } }
 
+import { CLIENT_CATEGORY_IDS } from './categories';
+
 export const ITEM_REQUEST_STATUSES = ['new', 'ordered', 'declined', 'added'] as const;
 export type ItemRequestStatus = typeof ITEM_REQUEST_STATUSES[number];
 
-/** Categories a renter may tag a request with (same ids as the catalogue). */
-export const ITEM_REQUEST_CATEGORIES = ['fun', 'tools', 'outdoor', 'sports', 'kids', 'home'] as const;
+/** Categories a renter may tag a request with (the renter categories, config order). */
+export const ITEM_REQUEST_CATEGORIES: readonly string[] = CLIENT_CATEGORY_IDS;
 
 /** Short quote of the request for notifications ("“Stand-up paddle…”"). */
 export function requestQuote(text: string, max = 60): string {

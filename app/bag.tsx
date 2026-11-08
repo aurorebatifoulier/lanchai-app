@@ -11,6 +11,7 @@ import { SHADES } from '@/constants/brandShades';
 import { MOTION } from '@/constants/motion';
 import { BAG_COPY } from '@/constants/bagCopy';
 import { categoryStyle } from '@/constants/categoryStyle';
+import { displayCategory } from '@/functions/src/shared/categories';
 import { UI, Chip, SectionTitle, useScreenInsets } from '@/components/account/ui';
 import BackButton from '@/components/BackButton';
 import BookingHoldNotice from '@/components/BookingHoldNotice';
@@ -413,7 +414,7 @@ function ItemCard({
   const canDec = item.quantity > 1;
   const canInc = item.quantity < max;
   const access = product ? getProductAccessState(product, userTier ?? null) : null;
-  const cat = product ? categoryStyle(product.category) : null;
+  const cat = product ? categoryStyle(displayCategory(product)) : null;
 
   // The product's current 600 px copy, else the photo stored when it was added.
   const thumb = productThumb(product) ?? item.productImage;

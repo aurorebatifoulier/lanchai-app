@@ -27,6 +27,7 @@ import {
   removeFavorite,
 } from '@/lib/firestore';
 import { CATEGORIES, type Product } from '@/lib/mockData';
+import { inCategory } from '@/functions/src/shared/categories';
 import { SHADES } from '@/constants/brandShades';
 import {
   Filters,
@@ -75,15 +76,8 @@ const H_PAD = 16;
 const COL_GAP = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - H_PAD * 2 - COL_GAP) / 2;
 
-const EXPLORE_CATEGORIES = [
-  { id: 'all',     name: 'All'     },
-  { id: 'fun',     name: 'Fun'     },
-  { id: 'tools',   name: 'Tools'   },
-  { id: 'outdoor', name: 'Outdoor' },
-  { id: 'sports',  name: 'Sports'  },
-  { id: 'kids',    name: 'Kids'    },
-  { id: 'home',    name: 'Home'    },
-] as const;
+// "All" + the renter categories, config order (functions/src/shared/categories.ts).
+const EXPLORE_CATEGORIES = CATEGORIES;
 
 type QuickKey = 'weekend' | 'under' | 'newItems' | 'popular';
 const NO_QUICK: Record<QuickKey, boolean> = { weekend: false, under: false, newItems: false, popular: false };
@@ -515,7 +509,7 @@ export default function ExploreScreen() {
 
   // Items in the selected category (catalogue only, whatever the other filters).
   const categoryCount = useMemo(
-    () => (activeCategory === 'all' ? allProducts.length : allProducts.filter(p => p.category === activeCategory).length),
+    () => (activeCategory === 'all' ? allProducts.length : allProducts.filter(p => inCategory(p, activeCategory)).length),
     [allProducts, activeCategory],
   );
 

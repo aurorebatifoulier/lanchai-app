@@ -41,7 +41,8 @@ import {
 } from '@/lib/firestore';
 import { recordProductView } from '@/lib/recentViews';
 import { auth } from '@/lib/auth';
-import { CATEGORIES, type Product } from '@/lib/mockData';
+import type { Product } from '@/lib/mockData';
+import { clientCategoriesOf, displayCategory } from '@/functions/src/shared/categories';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
 import { useExchangeRate, useVatPercent } from '@/lib/exchangeRate';
 import { useLoyaltyConfig, depositPercentFor, loyaltyPointsFor } from '@/lib/loyalty';
@@ -174,7 +175,7 @@ export default function ProductDetailScreen() {
     if (id) requireAccount({ action: 'save', itemName: product?.name, run: () => toggleFavFor(id) });
   }, [id, toggleFavFor, requireAccount, product?.name]);
 
-  // Pairs well with: same published collections first, then the same category.
+  // Pairs well with: same published collections first, then any shared renter category.
   const pairs = useMemo(() => {
     if (!product) return [];
     const ok = (p: Product) => p.id !== product.id && !getProductAccessState(p, userTier).locked;
@@ -182,7 +183,8 @@ export default function ProductDetailScreen() {
     const out: Product[] = [];
     const add = (p: Product | undefined) => { if (p && ok(p) && !out.some(x => x.id === p.id)) out.push(p); };
     collections.filter(c => c.productIds.includes(product.id)).forEach(c => c.productIds.forEach(pid => add(byId.get(pid))));
-    catalogue.filter(p => p.category === product.category).forEach(add);
+    const cats = clientCategoriesOf(product);
+    catalogue.filter(p => clientCategoriesOf(p).some(c => cats.includes(c))).forEach(add);
     return out.slice(0, PAIRS_MAX);
   }, [product, catalogue, collections, userTier]);
 
@@ -227,7 +229,8 @@ export default function ProductDetailScreen() {
   const points = !loyalty.excluded && weekendLak != null ? loyaltyPointsFor(weekendLak) : null;
   const pointsLine = !loyalty.excluded && loyalty.progress ? loyaltyCardSubline(loyalty.progress, avgPoints, loyalty.config) : null;
 
-  const categoryName = CATEGORIES.find(c => c.id === product.category)?.name ?? product.category;
+  // The ONE category shown (main, renter-visible) — none = no chip.
+  const shownCategory = displayCategory(product);
   const badges: Badge[] = [
     ...(access.badgeLabel ? [{ key: 'tier', label: access.badgeLabel, icon: access.locked ? 'lock' as const : undefined, tone: access.badgeTone === 'unlocked' ? 'amber' as const : 'carbon' as const }] : []),
     ...(product.showInNew ? [{ key: 'new', label: 'New', tone: 'amberLight' as const }] : []),
@@ -302,7 +305,7 @@ export default function ProductDetailScreen() {
 
         <View style={s.content}>
           {!!favError && <Text style={[UI.errorText, { marginBottom: 8 }]}>{favError}</Text>}
-          <ProductIntro product={product} categoryName={categoryName} badges={badges} signal={signal} />
+          <ProductIntro product={product} category={shownCategory} badges={badges} signal={signal} />
 
           <View style={{ marginTop: 16 }}>
             <AvailabilityCard product={product} onPickRange={(start, end) => openQuickAdd(product, { range: { start, end } })} />

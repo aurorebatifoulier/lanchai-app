@@ -14,8 +14,9 @@ export interface SearchGroup {
 export const SEARCH_LIMITS = { groups: 60, termsPerGroup: 40, termLength: 30, keywords: 20 } as const;
 
 export const DEFAULT_SEARCH_GROUPS: SearchGroup[] = [
-  // ── The 6 categories ──
-  { id: 'party', label: 'Fun & party', terms: ['party', 'fun', 'speaker', 'music', 'sound', 'lights', 'karaoke', 'dj', 'celebration', 'game', 'board game', 'book', 'projector', 'movie night'] },
+  // ── Lexical fields (catalogue categories live in functions/src/shared/categories.ts) ──
+  { id: 'party', label: 'Fun & party', terms: ['party', 'fun', 'speaker', 'music', 'sound', 'lights', 'karaoke', 'dj', 'celebration', 'projector', 'movie night'] },
+  { id: 'games', label: 'Games', terms: ['game', 'games', 'board game', 'game night', 'dice', 'cards', 'card game', 'puzzle', 'console', 'controller', 'book'] },
   { id: 'diy', label: 'Tools & DIY', terms: ['diy', 'tools', 'tool', 'drill', 'repair', 'build', 'hammer', 'saw', 'ladder', 'screwdriver', 'fix', 'garden', 'renovation'] },
   { id: 'camping', label: 'Outdoor & camping', terms: ['camping', 'outdoor', 'tent', 'river', 'sleeping', 'sleeping bag', 'nature', 'weekend', 'hiking', 'cooler', 'picnic', 'trip', 'mountain'] },
   { id: 'baby', label: 'Kids & baby', terms: ['baby', 'kids', 'kid', 'child', 'children', 'cot', 'crib', 'stroller', 'pram', 'toddler', 'infant', 'high chair', 'car seat', 'toy'] },

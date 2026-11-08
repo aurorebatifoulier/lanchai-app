@@ -45,7 +45,6 @@ import AdminDateTimePicker from '@/components/AdminDateTimePicker';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import KeywordsInput, { cleanKeyword } from '@/components/admin/KeywordsInput';
 import { suggestKeywords } from '@/lib/search';
-import { useSearchGroups } from '@/lib/searchConfig';
 import { clearHomeCache } from '@/lib/homeCache';
 import { makeProductThumb } from '@/lib/productThumbs';
 import { thumbsAligned } from '@/utils/productImage';
@@ -165,7 +164,6 @@ export default function AdminProductFormScreen() {
   // vocabulary) until the admin edits them; existing products: untouched, Suggested row only.
   const [keywords, setKeywords] = useState<string[]>([]);
   const keywordsTouched = useRef(false);
-  const searchGroups = useSearchGroups();
   const [pricePerDay, setPricePerDay] = useState('');
   const [price3to6,   setPrice3to6]   = useState('');
   const [price7to13,  setPrice7to13]  = useState('');
@@ -276,8 +274,8 @@ export default function AdminProductFormScreen() {
 
   // ── Search keywords ───────────────────────────────────────────────────────
   const keywordSuggestions = useMemo(
-    () => (name.trim() && category ? suggestKeywords(name, category, searchGroups) : []),
-    [name, category, searchGroups],
+    () => (name.trim() && category ? suggestKeywords(name, category) : []),
+    [name, category],
   );
   useEffect(() => {
     if (isEdit || keywordsTouched.current) return;

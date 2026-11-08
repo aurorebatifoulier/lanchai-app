@@ -14,6 +14,7 @@ import type { Product } from '@/lib/mockData';
 import type { ReviewDoc } from '@/lib/firestore';
 import Stars from '@/components/Stars';
 import { openCategory } from '@/lib/navigation';
+import { categoryLabel } from '@/functions/src/shared/categories';
 
 // Product page sections (validated mockup) — My Account / Home language. Copy in
 // constants/productCopy.ts. The page (app/product/[id].tsx) computes the figures.
@@ -29,18 +30,21 @@ export function kLak(v: number): string {
 
 export interface Badge { key: string; label: string; icon?: 'lock' | 'award'; tone: 'amber' | 'amberLight' | 'carbon' }
 
-export function ProductIntro({ product, categoryName, badges, signal }: {
-  product: Product; categoryName: string; badges: Badge[]; signal: ProductSignal | null;
+export function ProductIntro({ product, category, badges, signal }: {
+  /** displayCategory(product) — null = no category chip. */
+  product: Product; category: string | null; badges: Badge[]; signal: ProductSignal | null;
 }) {
   const router = useRouter();
   return (
     <View>
       <View style={s.chipRow}>
-        <PressScale style={s.catChip} onPress={() => openCategory(router, product.category)}>
-          <CategoryBadge cat={product.category} size={24} />
-          <Text style={s.catText}>{categoryName}</Text>
-          <Feather name="chevron-right" size={14} color={SHADES.carbonMuted} />
-        </PressScale>
+        {category && (
+          <PressScale style={s.catChip} onPress={() => openCategory(router, category)}>
+            <CategoryBadge cat={category} size={24} />
+            <Text style={s.catText}>{categoryLabel(category)}</Text>
+            <Feather name="chevron-right" size={14} color={SHADES.carbonMuted} />
+          </PressScale>
+        )}
         {badges.map(b => (
           <View key={b.key} style={[s.badge, b.tone === 'amber' ? s.bAmber : b.tone === 'carbon' ? s.bCarbon : s.bLight]}>
             {b.icon && <Feather name={b.icon} size={12} color={b.tone === 'carbon' ? SHADES.cream : SHADES.carbon} />}

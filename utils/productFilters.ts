@@ -1,6 +1,7 @@
 import type { Product } from '@/lib/mockData';
 import { Filters, SortOption, PRICE_CONFIG } from '@/lib/filterConfig';
 import { toLak } from './currency';
+import { inCategory } from '@/functions/src/shared/categories';
 
 export interface ProductFilterContext {
   // 'all' or omitted = no category restriction.
@@ -26,7 +27,8 @@ export function filterProducts(
   const { category, exchangeRate } = context;
   let list = [...products];
 
-  if (category && category !== 'all') list = list.filter(p => p.category === category);
+  // A product shows in EACH of its categories (legacy single-category products too).
+  if (category && category !== 'all') list = list.filter(p => inCategory(p, category));
   if (filters.availableOnly) list = list.filter(p => p.available);
 
   // Price range (always on pricePerDay = 1–2 day base rate). PRICE_CONFIG /

@@ -4,19 +4,24 @@ import { buildSearchIndex, searchProducts, isBestMatch, withinDistance, stem, no
 import { DEFAULT_SEARCH_GROUPS } from '../../lib/searchVocabulary';
 
 const products = [
-  { id: 'tent', name: 'Camping tent', category: 'outdoor', shortDesc: '4-person tent for river weekends', rentalCount: 9 },
-  { id: 'cooler', name: 'Cooler box 40L', category: 'outdoor', rentalCount: 4 },
-  { id: 'speaker', name: 'Party speaker', category: 'fun', rentalCount: 7 },
-  { id: 'lights', name: 'LED string lights', category: 'fun', rentalCount: 2 },
-  { id: 'cot', name: 'Chicco travel cot', category: 'kids', rentalCount: 6 },
+  { id: 'tent', name: 'Camping tent', categories: ['outdoor'], shortDesc: '4-person tent for river weekends', rentalCount: 9 },
+  { id: 'cooler', name: 'Cooler box 40L', categories: ['outdoor'], rentalCount: 4 },
+  { id: 'speaker', name: 'Party speaker', categories: ['home'], rentalCount: 7 },
+  { id: 'lights', name: 'LED string lights', categories: ['home'], rentalCount: 2 },
+  { id: 'cot', name: 'Chicco travel cot', categories: ['kids'], rentalCount: 6 },
+  // Legacy product: single `category` field only — still indexed.
   { id: 'stroller', name: 'Baby stroller', category: 'kids', rentalCount: 3 },
-  { id: 'drill', name: 'Bosch cordless drill', category: 'tools', rentalCount: 8 },
-  { id: 'chairs', name: 'Folding chairs (set of 4)', category: 'home', rentalCount: 5 },
-  { id: 'bike', name: 'City bike', category: 'sports', rentalCount: 1 },
+  { id: 'drill', name: 'Bosch cordless drill', categories: ['tools'], rentalCount: 8 },
+  // Two categories: found through either.
+  { id: 'chairs', name: 'Folding chairs (set of 4)', categories: ['home', 'outdoor'], rentalCount: 5 },
+  { id: 'bike', name: 'City bike', categories: ['outdoor'], rentalCount: 1 },
+  { id: 'catan', name: 'Catan', categories: ['games', 'kids'], rentalCount: 2 },
+  // Retired category: never matched by a category name.
+  { id: 'old', name: 'Old thing', category: 'sports', rentalCount: 0 },
 ];
 const categories = [
-  { id: 'outdoor', name: 'Outdoor' }, { id: 'fun', name: 'Fun' }, { id: 'kids', name: 'Kids' },
-  { id: 'tools', name: 'Tools' }, { id: 'home', name: 'Home' }, { id: 'sports', name: 'Sports' },
+  { id: 'tools', name: 'Tools' }, { id: 'home', name: 'Home' }, { id: 'kids', name: 'Kids' },
+  { id: 'outdoor', name: 'Outdoor' }, { id: 'games', name: 'Games' },
 ];
 const index = buildSearchIndex(products, {
   groups: DEFAULT_SEARCH_GROUPS, categories,
@@ -41,8 +46,12 @@ check('boat racing', () => { const r = ids('boat racing'); ['speaker', 'chairs',
 check('prefix while typing', () => { assert.ok(ids('te').includes('tent')); assert.ok(ids('ten').includes('tent')); assert.equal(ids('tent')[0], 'tent'); });
 check('nonsense', () => assert.equal(ids('xyzq').length, 0));
 check('best match', () => assert.ok(isBestMatch(searchProducts(index, 'drill'))));
-check('suggest', () => { const k = suggestKeywords('Chicco travel cot', 'kids', DEFAULT_SEARCH_GROUPS); assert.ok(k.includes('chicco') && k.includes('baby')); });
+check('suggest', () => { const k = suggestKeywords('Chicco travel cot', 'kids'); assert.ok(k.includes('chicco') && k.includes('baby')); });
+check('legacy category', () => assert.ok(ids('kids').includes('stroller')));
+check('two categories', () => { assert.ok(ids('home').includes('chairs')); assert.ok(ids('outdoor').includes('chairs')); });
+check('category terms', () => { const r = ids('board game'); assert.equal(r[0], 'catan'); });
+check('retired category', () => assert.ok(!ids('sports').includes('old')));
 
-['party', 'camping', 'baby', 'tnet', 'drills', 'boat racing', 'te', 'xyzq'].forEach(show);
+['board game', 'game', 'party', 'camping', 'baby', 'tnet', 'drills', 'boat racing', 'te', 'xyzq'].forEach(show);
 if (failed) { console.error(`${failed} failed`); process.exit(1); }
 console.log('All search tests passed.');

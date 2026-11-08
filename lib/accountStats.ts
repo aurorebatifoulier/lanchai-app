@@ -1,6 +1,7 @@
 import type { RentalDoc } from './firestore';
 import type { Product } from './mockData';
 import { CATEGORIES } from './mockData';
+import { displayCategory } from '@/functions/src/shared/categories';
 import { toLak } from '@/utils/currency';
 
 // My Account stats + stickers — pure, from the renter's reservations and the catalogue.
@@ -45,11 +46,14 @@ export function computeAccountStats(rentals: RentalDoc[], products: Product[], e
     }
   }
 
-  const rentedCats = new Set(returned.map(r => byId.get(r.productId)?.category).filter(Boolean) as string[]);
+  // Stickers follow the MAIN category shown to renters (displayCategory); retired /
+  // internal-only categories never make a sticker.
+  const catOf = (productId: string) => displayCategory(byId.get(productId));
+  const rentedCats = new Set(returned.map(r => catOf(r.productId)).filter(Boolean) as string[]);
   const stickers = ORDER.filter(c => rentedCats.has(c));
   const stickerUnlocks: Record<string, StickerUnlock> = {};
   for (const r of returned) {
-    const cat = byId.get(r.productId)?.category;
+    const cat = catOf(r.productId);
     const atMs = (r.returnedAt ?? r.returnAt)?.toMillis?.();
     if (!cat || atMs == null) continue;
     if (!stickerUnlocks[cat] || atMs < stickerUnlocks[cat].atMs) stickerUnlocks[cat] = { productName: r.productName, atMs };
