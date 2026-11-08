@@ -21,6 +21,7 @@ import BackButton from '@/components/BackButton';
 import AdminDateTimePicker from '@/components/AdminDateTimePicker';
 import { UI, SectionTitle, ToggleRow, useScreenInsets } from '@/components/account/ui';
 import { CATEGORIES, type Product } from '@/lib/mockData';
+import { categoryLabel, isClientCategory } from '@/functions/src/shared/categories';
 import { getProducts } from '@/lib/firestore';
 import { getAllCollections, type CollectionDoc } from '@/lib/collections';
 import {
@@ -210,6 +211,8 @@ export default function HomeSlideFormScreen() {
           {linkKind === 'category' && (
             <View style={[s.chips, { marginTop: 10 }]}>
               {CATEGORIES.filter(c => c.id !== 'all').map(c => choice(linkId === c.id, c.name, () => setLinkId(c.id), c.id))}
+              {/* A retired category still linked: shown so it can be replaced (renters see no link). */}
+              {!!linkId && !isClientCategory(linkId) && choice(true, `${categoryLabel(linkId)} (retired)`, () => setLinkId(''), linkId)}
             </View>
           )}
           {linkKind === 'collection' && (

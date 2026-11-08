@@ -34,9 +34,9 @@ import { auth } from '@/lib/auth';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import BackButton from '@/components/BackButton';
-import type { ProductCategory } from '@/lib/mockData';
 import { adjustProductStockCondition, type LoyaltyTier } from '@/lib/firestore';
-import { CATEGORY_LABELS } from './products';
+import CategoryPicker from '@/components/admin/CategoryPicker';
+import { categoriesOf, categoryLabel, isCategoryId, sanitizeCategories } from '@/functions/src/shared/categories';
 import CropScreen from '@/components/CropScreen';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { formatLak } from '@/utils/currency';
@@ -50,17 +50,6 @@ import { makeProductThumb } from '@/lib/productThumbs';
 import { thumbsAligned } from '@/utils/productImage';
 
 type ProductAccessMode = 'public' | 'earlyAccess' | 'exclusive';
-
-// ── Category picker data ──────────────────────────────────────────────────────
-
-const PRODUCT_CATEGORIES: ReadonlyArray<{ value: ProductCategory; label: string; hint?: string }> = [
-  { value: 'fun',     label: 'Fun',     hint: 'Books (kids & novels) and board games'          },
-  { value: 'tools',   label: 'Tools',   hint: 'DIY & garden — drills, hedge trimmers, shovels' },
-  { value: 'outdoor', label: 'Outdoor', hint: 'Camping, hiking, tents, hammocks, backpacks'    },
-  { value: 'sports',  label: 'Sports',  hint: 'Archery, pétanque, trampoline, golf, darts'     },
-  { value: 'kids',    label: 'Kids',    hint: 'Strollers, baby beds, playards, kids gear'      },
-  { value: 'home',    label: 'Home',    hint: 'Kitchen, appliances, cleaning, bedding'          },
-];
 
 // ── Access mode picker data (Loyalty Phase 2) ───────────────────────────────────
 
@@ -158,7 +147,11 @@ export default function AdminProductFormScreen() {
   // ── Form state ─────────────────────────────────────────────────────────────
   const [name,        setName]        = useState('');
   const [shortDesc,   setShortDesc]   = useState('');
-  const [category,    setCategory]    = useState<ProductCategory | ''>('');
+  // Categories, main first (functions/src/shared/categories.ts). `legacyCategory` = a
+  // retired / unknown single category of an old product, shown until new ones are picked.
+  const [categories,  setCategories]  = useState<string[]>([]);
+  const [legacyCategory, setLegacyCategory] = useState<string | null>(null);
+  const category = categories[0] ?? '';
   const [description, setDescription] = useState('');
   // Search keywords. NEW product: auto-filled with the suggestions (name words + category
   // vocabulary) until the admin edits them; existing products: untouched, Suggested row only.
@@ -206,7 +199,6 @@ export default function AdminProductFormScreen() {
   const [saving,         setSaving]         = useState(false);
   const [submitted,      setSubmitted]      = useState(false);
   const [saveMsg,        setSaveMsg]        = useState<{ ok: boolean; text: string } | null>(null);
-  const [catPickerOpen,  setCatPickerOpen]  = useState(false);
   const [accessPickerOpen, setAccessPickerOpen] = useState(false);
   const [tierPickerOpen,   setTierPickerOpen]   = useState(false);
   const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
@@ -225,7 +217,9 @@ export default function AdminProductFormScreen() {
         const d = snap.data();
         setName(d.name        ?? '');
         setShortDesc(d.shortDesc   ?? '');
-        setCategory(d.category    ?? '');
+        const cats = categoriesOf(d).filter(isCategoryId);
+        setCategories(cats);
+        setLegacyCategory(cats.length === 0 && typeof d.category === 'string' && d.category ? d.category : null);
         setDescription(d.description ?? '');
         setPricePerDay(d.pricePerDay != null ? String(d.pricePerDay) : '');
         setPrice3to6(d.price3to6  != null ? String(d.price3to6)  : '');
@@ -286,7 +280,7 @@ export default function AdminProductFormScreen() {
   const errors = submitted ? (() => {
     const e: Record<string, string> = {};
     if (!name.trim())              e.name        = 'Name is required.';
-    if (!category)                 e.category    = 'Category is required.';
+    if (categories.length === 0)   e.category    = 'Pick at least one category.';
     if (parseNum(pricePerDay) <= 0) e.pricePerDay = 'Enter a price greater than 0.';
     if (parseNum(deposit) < 0)     e.deposit     = 'Enter 0 or more.';
     if (parseQty(quantity) < 1)    e.quantity    = 'At least 1 unit required.';
@@ -304,7 +298,7 @@ export default function AdminProductFormScreen() {
   const canSave =
     !saving &&
     name.trim().length > 0 &&
-    !!category &&
+    categories.length > 0 &&
     parseNum(pricePerDay) > 0 &&
     parseNum(deposit) >= 0 &&
     parseQty(quantity) >= 1 &&
@@ -466,7 +460,9 @@ export default function AdminProductFormScreen() {
         name:        name.trim(),
         shortDesc:   shortDesc.trim() || name.trim(),
         description: description.trim(),
-        category,
+        // Main category first; `category` = legacy mirror for older app versions.
+        categories:  sanitizeCategories(categories),
+        category:    categories[0],
         pricePerDay: parseNum(pricePerDay),
         price3to6:   parseNum(price3to6),
         price7to13:  parseNum(price7to13),
@@ -530,7 +526,7 @@ export default function AdminProductFormScreen() {
     }
   }, [
     canSave, saving, isEdit, id,
-    name, shortDesc, description, category,
+    name, shortDesc, description, categories,
     pricePerDay, price3to6, price7to13, price14to29, price30plus,
     retailPrice, deposit, quantity, status, available, router,
     uploadItems,
@@ -685,18 +681,12 @@ export default function AdminProductFormScreen() {
             />
           </Field>
 
-          {/* Category picker trigger */}
-          <Field label="Category" required error={errors.category}>
-            <TouchableOpacity
-              style={[f.input, f.pickerRow, errors.category && f.inputErr]}
-              onPress={() => setCatPickerOpen(true)}
-              activeOpacity={0.75}
-            >
-              <Text style={[f.pickerText, !category && f.pickerPlaceholder]}>
-                {category ? CATEGORY_LABELS[category] : 'Select a category…'}
-              </Text>
-              <Feather name="chevron-down" size={16} color={COLORS.fg3} />
-            </TouchableOpacity>
+          {/* Categories — multi-select bubbles, first = main */}
+          <Field label="Categories" required error={errors.category}>
+            {legacyCategory && categories.length === 0 && (
+              <Text style={f.legacyCat}>Old category: {categoryLabel(legacyCategory)} — pick new ones.</Text>
+            )}
+            <CategoryPicker value={categories} onChange={setCategories} error={!!errors.category} />
           </Field>
 
           <Field label="Search keywords">
@@ -1465,43 +1455,6 @@ export default function AdminProductFormScreen() {
         )}
       </Modal>
 
-      {/* ── Category picker modal ─────────────────────────────────────── */}
-      <Modal
-        visible={catPickerOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCatPickerOpen(false)}
-        statusBarTranslucent
-      >
-        <View style={f.modalOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setCatPickerOpen(false)} />
-          <View style={[f.catSheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={f.catHandle} />
-            <Text style={f.catSheetTitle}>Select category</Text>
-            {PRODUCT_CATEGORIES.map(cat => (
-              <TouchableOpacity
-                key={cat.value}
-                style={f.catOption}
-                onPress={() => { setCategory(cat.value); setCatPickerOpen(false); }}
-                activeOpacity={0.75}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[f.catOptionText, category === cat.value && f.catOptionSelected]}>
-                    {cat.label}
-                  </Text>
-                  {cat.hint && (
-                    <Text style={f.catOptionHint}>{cat.hint}</Text>
-                  )}
-                </View>
-                {category === cat.value && (
-                  <Feather name="check" size={16} color={COLORS.amber} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </Modal>
-
       {/* ── Access mode picker modal ──────────────────────────────────── */}
       <Modal
         visible={accessPickerOpen}
@@ -1891,6 +1844,7 @@ const f = StyleSheet.create({
   catOptionText:     { fontSize: 15, fontWeight: '600', color: COLORS.carbon },
   catOptionSelected: { color: SHADES.amberText },
   catOptionHint:     { fontSize: 11, fontWeight: '400', color: COLORS.fg3, marginTop: 1 },
+  legacyCat:         { fontSize: 13, fontWeight: '600', color: SHADES.amberText, marginBottom: 8 },
 
   // ── Product details section ───────────────────────────────────────────────
   detailsToggle: {

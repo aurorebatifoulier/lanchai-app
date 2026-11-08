@@ -15,27 +15,17 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
-import type { ProductCategory } from '@/lib/mockData';
+import { CATEGORY_CONFIG, categoriesOf, categoryLabel } from '@/functions/src/shared/categories';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { formatLak } from '@/utils/currency';
-
-// ── Category labels — mirror explore.tsx EXPLORE_CATEGORIES ──────────────────
-
-export const CATEGORY_LABELS: Record<ProductCategory, string> = {
-  'fun':     'Fun',
-  'tools':   'Tools',
-  'outdoor': 'Outdoor',
-  'sports':  'Sports',
-  'kids':    'Kids',
-  'home':    'Home',
-};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ProductRow {
   id: string;
   name: string;
-  category: string;
+  /** categoriesOf(doc) — main first; may hold a retired id on unmigrated products. */
+  categories: string[];
   pricePerDay: number;
   quantity: number;
   status: 'draft' | 'published' | 'archived';
@@ -48,9 +38,10 @@ const ACCESS_MODE_LABELS: Record<'earlyAccess' | 'exclusive', string> = {
   exclusive:   'Exclusive',
 };
 
-const CATEGORY_FILTER_OPTIONS: Array<{ id: 'all' | ProductCategory; label: string }> = [
+// Every category incl. the internal "Other" (functions/src/shared/categories.ts).
+const CATEGORY_FILTER_OPTIONS: { id: string; label: string }[] = [
   { id: 'all', label: 'All' },
-  ...(Object.entries(CATEGORY_LABELS) as [ProductCategory, string][]).map(([id, label]) => ({ id, label })),
+  ...CATEGORY_CONFIG.map(c => ({ id: c.id, label: c.label })),
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,7 +65,7 @@ export default function AdminProductsScreen() {
   const [loading,    setLoading]    = useState(true);
   const [search,         setSearch]         = useState('');
   const [filterMode,     setFilterMode]     = useState<'active' | 'archived'>('active');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | ProductCategory>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('updatedAt', 'desc'));
@@ -87,7 +78,7 @@ export default function AdminProductsScreen() {
             return {
               id:          d.id,
               name:        data.name        ?? '',
-              category:    data.category    ?? 'home',
+              categories:  categoriesOf(data),
               pricePerDay: data.pricePerDay ?? 0,
               quantity:    data.quantity    ?? 0,
               status:      data.status      ?? 'draft',
@@ -106,7 +97,7 @@ export default function AdminProductsScreen() {
     let list = rows.filter(r =>
       filterMode === 'archived' ? r.status === 'archived' : r.status !== 'archived',
     );
-    if (categoryFilter !== 'all') list = list.filter(r => r.category === categoryFilter);
+    if (categoryFilter !== 'all') list = list.filter(r => r.categories.includes(categoryFilter));
     const q = search.trim().toLowerCase();
     if (q) list = list.filter(r => r.name.toLowerCase().includes(q));
     return list;
@@ -201,7 +192,7 @@ export default function AdminProductsScreen() {
               {search.trim()
                 ? 'No products match your search.'
                 : categoryFilter !== 'all'
-                ? `No ${CATEGORY_LABELS[categoryFilter].toLowerCase()} products${filterMode === 'archived' ? ' in Archived' : ''}.`
+                ? `No ${categoryLabel(categoryFilter).toLowerCase()} products${filterMode === 'archived' ? ' in Archived' : ''}.`
                 : filterMode === 'archived'
                 ? 'No archived products.'
                 : 'No products yet.'}
@@ -213,7 +204,7 @@ export default function AdminProductsScreen() {
         ) : (
           filtered.map((item, index) => {
             const badge    = getStatusStyle(item.status, item.available);
-            const catLabel = CATEGORY_LABELS[item.category as ProductCategory] ?? item.category;
+            const catLabel = item.categories.length > 0 ? item.categories.map(categoryLabel).join(' · ') : 'No category';
             return (
               <React.Fragment key={item.id}>
                 {index > 0 && <View style={s.sep} />}

@@ -30,6 +30,7 @@ export default function SlideCarousel({
       slides={slides.map(slide => {
         const target = slideTarget(slide.link);
         const go = () => {
+          if (!target) return;
           if (slide.link.kind === 'category') openCategory(router, slide.link.id); // → Explore with that category
           else if (target) router.push(target as never);
         };

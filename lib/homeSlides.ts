@@ -7,6 +7,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { db, storage } from './firebase';
 import { clearHomeCache } from './homeCache';
 import { isCollectionActive } from './collections';
+import { isClientCategory } from '@/functions/src/shared/categories';
 
 // Home slides — the hero carousel and the mid-page banner, managed in Admin → Home
 // slides. Renters read PUBLISHED slides only (firestore.rules homeSlides), so the
@@ -84,7 +85,8 @@ export async function getPublishedSlides(): Promise<HomeSlide[]> {
 /** Where a slide's button / tap goes (expo-router push target), or null. */
 export function slideTarget(link: SlideLink): string | { pathname: string; params: Record<string, string> } | null {
   switch (link.kind) {
-    case 'category': return { pathname: '/explore', params: { category: link.id } };
+    // A retired / internal category = no link (no dead button on the renter Home).
+    case 'category': return isClientCategory(link.id) ? { pathname: '/explore', params: { category: link.id } } : null;
     case 'collection': return `/collection/${link.id}`;
     case 'product': return `/product/${link.id}`;
     case 'explore': {

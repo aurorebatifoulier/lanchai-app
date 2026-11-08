@@ -22,7 +22,8 @@ import PressScale from '@/components/PressScale';
 import { PromoGrantPanel } from '@/components/admin/PromoGrantPanel';
 import { UI, SectionTitle, ToggleRow, StatusChip, useScreenInsets } from '@/components/account/ui';
 import { getProducts } from '@/lib/firestore';
-import { CATEGORIES, type Product } from '@/lib/mockData';
+import type { Product } from '@/lib/mockData';
+import { CLIENT_CATEGORY_IDS, categoryLabel, isClientCategory } from '@/functions/src/shared/categories';
 import {
   createPromoCode, deletePromoCode, getPromoCode, setPromoActive, updatePromoCode, type PromoDoc,
 } from '@/lib/promoCodes';
@@ -42,7 +43,6 @@ const fromIsoDay = (s: string | null | undefined) => {
 };
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const intOrNull = (t: string) => { const n = parseInt(t.replace(/[^0-9]/g, ''), 10); return Number.isFinite(n) && n > 0 ? n : null; };
-const CATS = CATEGORIES.filter(x => x.id !== 'all');
 
 export default function PromoCodeFormScreen() {
   const { code: editCode } = useLocalSearchParams<{ code?: string }>();
@@ -245,11 +245,13 @@ export default function PromoCodeFormScreen() {
             <Text style={UI.small}>{c.fields.scopeSub}</Text>
             <Text style={[UI.fieldLabel, { marginTop: 12 }]}>{c.fields.categories}</Text>
             <View style={s.chips}>
-              {CATS.map(cat => {
-                const on = categoryIds.includes(cat.id);
+              {/* Renter categories + any retired one still in this code's scope (to remove it). */}
+              {[...CLIENT_CATEGORY_IDS, ...categoryIds.filter(id => !isClientCategory(id))].map(id => {
+                const on = categoryIds.includes(id);
+                const label = isClientCategory(id) ? categoryLabel(id) : `${categoryLabel(id)} (retired)`;
                 return (
-                  <TouchableOpacity key={cat.id} style={[s.chip, on && s.chipOn]} onPress={() => toggle(categoryIds, setCategoryIds, cat.id)} activeOpacity={0.8}>
-                    <Text style={[s.chipText, on && s.chipTextOn]}>{cat.name}</Text>
+                  <TouchableOpacity key={id} style={[s.chip, on && s.chipOn]} onPress={() => toggle(categoryIds, setCategoryIds, id)} activeOpacity={0.8}>
+                    <Text style={[s.chipText, on && s.chipTextOn]}>{label}</Text>
                   </TouchableOpacity>
                 );
               })}

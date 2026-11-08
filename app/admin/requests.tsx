@@ -11,7 +11,7 @@ import BackButton from '@/components/BackButton';
 import PressScale from '@/components/PressScale';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { UI, useScreenInsets } from '@/components/account/ui';
-import { CATEGORIES } from '@/lib/mockData';
+import { categoryLabel } from '@/functions/src/shared/categories';
 import { vteWhen } from '@/lib/vteTime';
 import {
   useItemRequests, setItemRequestStatus, ITEM_REQUEST_STATUSES,
@@ -26,7 +26,7 @@ import {
 type Filter = 'all' | ItemRequestStatus;
 const FILTERS: Filter[] = ['all', ...ITEM_REQUEST_STATUSES];
 const LABEL: Record<Filter, string> = { all: 'All', new: 'New', ordered: 'Ordered', declined: 'Declined', added: 'Added' };
-const categoryName = (id: string | null) => (id ? CATEGORIES.find(c => c.id === id)?.name ?? id : null);
+const categoryName = (id: string | null) => (id ? categoryLabel(id) : null); // retired ids stay readable
 
 export default function ItemRequestsScreen() {
   const router = useRouter();
