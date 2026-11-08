@@ -3,7 +3,7 @@
 // grants, invite codes, referrals, product locks, and the unmatched server collections.
 import { describe, test } from 'node:test';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 import { setupRulesEnv, as, ok, no, noRule, UID } from './env';
 
@@ -30,9 +30,11 @@ describe('products + stock log', () => {
     await ok(P, put('n3', { categories: ['tools', 'home', 'kids', 'outdoor', 'games'] }));
     await ok(P, put('n4', { categories: ['other'] }));
     await ok(P, updateDoc(doc(admin, 'products/p2'), { categories: ['home', 'tools'], category: 'home' }));
-    // Legacy product (no `categories`) still editable; can be migrated
+    // Partial updates keep the stored categories (stock, price…)
     await ok(P, updateDoc(doc(admin, 'products/p1'), { stockLeft: 3 }));
-    await ok(P, updateDoc(doc(admin, 'products/p1'), { categories: ['outdoor'] }));
+    // Legacy product (no `categories`): refused until the same write adds them
+    await no(P, updateDoc(doc(admin, 'products/p3'), { stockLeft: 3 }));
+    await ok(P, updateDoc(doc(admin, 'products/p3'), { categories: ['tools'], stockLeft: 3 }));
     // Invalid
     await no(P, put('x1', { category: 'tools' }));                       // create without categories
     await no(P, put('x2', { categories: [] }));
@@ -44,6 +46,8 @@ describe('products + stock log', () => {
     await no(P, put('x8', { categories: ['tools', 'home'], category: 'home' })); // mirror ≠ main
     await no(P, updateDoc(doc(admin, 'products/p2'), { categories: ['sports'] }));
     await no(P, updateDoc(doc(admin, 'products/p2'), { categories: [] }));
+    await no(P, updateDoc(doc(admin, 'products/p2'), { categories: deleteField() })); // removing them
+    await no(P, updateDoc(doc(admin, 'products/p2'), { category: 'kids' }));          // mirror ≠ main (home)
     // Renters never write
     await no(P, updateDoc(doc(db('A'), 'products/p2'), { categories: ['games'] }));
   });

@@ -63,9 +63,11 @@ const SEED: Record<string, Record<string, unknown>> = {
   [`users/${UID.A}/favorites/p1`]: { productId: 'p1', addedAt: T0 },
   [`users/${UID.A}/bag/b1`]: { productId: 'p1', quantity: 1 },
   [`users/${UID.A}/loyaltyHistory/l1`]: { amount: 20, source: 'rental' },
-  // p1 = legacy product (single `category`), p2 = multi-category product.
-  'products/p1': { name: 'Camping tent', category: 'outdoor', status: 'published', pricePerDay: 10, stockLeft: 2 },
+  // p1 = single-category product, p2 = multi-category product, p3 = legacy product
+  // (single `category`, never migrated — admin updates refused until it gets `categories`).
+  'products/p1': { name: 'Camping tent', categories: ['outdoor'], category: 'outdoor', status: 'published', pricePerDay: 10, stockLeft: 2 },
   'products/p2': { name: 'Ladder', categories: ['tools', 'home'], category: 'tools', status: 'published', pricePerDay: 5, stockLeft: 1 },
+  'products/p3': { name: 'Old drill', category: 'tools', status: 'published', pricePerDay: 4, stockLeft: 1 },
   'products/p1/stockAdjustments/s1': { field: 'lostUnits', delta: 1 },
   'collections/c1': { title: 'Weekend', published: true },
   'collections/c2': { title: 'Draft', published: false },

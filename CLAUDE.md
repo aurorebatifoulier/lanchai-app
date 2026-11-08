@@ -1100,8 +1100,9 @@ a snapshot indefinitely).
   its config keywords (0.35). Promo scope matches ANY category of a line
   (`PromoLine.categoryIds`). `onCategoryArrival` notifies each NEW renter category
   (`arrivedCategories`), never on migration writes (`categoriesMigratedAt` changed).
-  Rules: `validProductCategories` — required on create, optional on update of a
-  not-yet-migrated product (tighten once all are migrated). Admin form:
+  Rules: `validProductCategories` — a valid `categories` is required on create AND
+  update (all products migrated 2026-11-08; a doc without it can't be edited until the
+  same write adds it). Admin form:
   `components/admin/CategoryPicker.tsx` (bubbles, "Main: … · Change" row, save blocked
   without one). Retired ids (fun, sports) stay readable via `categoryLabel()` in admin
   (requests, promo scope "(retired)", slides — a slide linking one shows no renter link).

@@ -82,13 +82,12 @@ service cloud.firestore {
       return c is list && c.size() >= 1 && c.size() <= 5
         && c.hasOnly(categoryIds()) && c.toSet().size() == c.size();
     }
-    // Product write: `categories` required on create; on update of a not-yet-migrated
-    // product (no `categories`) it may stay absent. The legacy `category` mirror, when
-    // both are present, must be the main category.
-    function validProductCategories(d, isCreate) {
-      return ('categories' in d)
-        ? validCategories(d.categories) && (!('category' in d) || d.category == d.categories[0])
-        : !isCreate;
+    // Product write (create AND update — every product is migrated since 2026-11-08):
+    // a valid `categories` list is required on the resulting doc. The legacy `category`
+    // mirror, when present, must be the main category.
+    function validProductCategories(d) {
+      return ('categories' in d) && validCategories(d.categories)
+        && (!('category' in d) || d.category == d.categories[0]);
     }
 
     // ── admins/{uid} ──────────────────────────────────────────────────────
@@ -108,8 +107,8 @@ service cloud.firestore {
     // admin/back-office only, with a valid `categories` list (validProductCategories).
     match /products/{productId} {
       allow read:   if isAuthed();
-      allow create: if isAdmin() && validProductCategories(request.resource.data, true);
-      allow update: if isAdmin() && validProductCategories(request.resource.data, false);
+      allow create: if isAdmin() && validProductCategories(request.resource.data);
+      allow update: if isAdmin() && validProductCategories(request.resource.data);
       allow delete: if isAdmin();
     }
 
