@@ -52,3 +52,6 @@ tests/.coverage/
 firestore-debug.log
 storage-debug.log
 firebase-debug.log
+
+# Category migration choices (filled by the dry run, reviewed by hand — local only)
+functions/scripts/category-choices.json
