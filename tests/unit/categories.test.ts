@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   CATEGORY_CONFIG, CLIENT_CATEGORY_IDS, ALL_CATEGORY_IDS, MAX_CATEGORIES,
   categoriesOf, primaryCategory, displayCategory, clientCategoriesOf, sanitizeCategories,
-  inCategory, categoryLabel, isClientCategory,
+  inCategory, categoryLabel, isClientCategory, arrivedCategories,
 } from '../../functions/src/shared/categories';
 
 test('client categories in display order; other is internal', () => {
@@ -92,4 +92,29 @@ test('stickers follow the main category shown to renters', async () => {
   assert.deepEqual(st.stickers, ['home', 'kids']); // config order, main category only
   assert.equal(st.stickerUnlocks.home.productName, 'ladder');
   assert.equal(st.nextSticker, 'tools');
+});
+
+test('firestore.rules category lists mirror the config', async () => {
+  const { readFileSync } = await import('node:fs');
+  const rules = readFileSync('firestore.rules', 'utf8');
+  const listOf = (fn: string) => {
+    const m = rules.match(new RegExp(`function ${fn}\\(\\)\\s*\\{\\s*return\\s*\\[([^\\]]*)\\]`));
+    assert.ok(m, `${fn}() not found in firestore.rules`);
+    return m[1].split(',').map(x => x.trim().replace(/'/g, '')).filter(Boolean);
+  };
+  assert.deepEqual(listOf('categoryIds'), [...ALL_CATEGORY_IDS], 'update categoryIds() in firestore.rules');
+  assert.deepEqual(listOf('clientCategoryIds'), [...CLIENT_CATEGORY_IDS], 'update clientCategoryIds() in firestore.rules');
+  assert.ok(rules.includes(`c.size() <= ${MAX_CATEGORIES}`), 'MAX_CATEGORIES differs from validCategories()');
+});
+
+test('category arrival: only NEW renter categories of a visible product; never on migration', () => {
+  const pub = (extra: object) => ({ status: 'published', ...extra });
+  assert.deepEqual(arrivedCategories(undefined, pub({ categories: ['tools', 'home'] })), ['tools', 'home']);
+  assert.deepEqual(arrivedCategories(pub({ categories: ['tools'] }), pub({ categories: ['tools', 'games'] })), ['games']);
+  assert.deepEqual(arrivedCategories(pub({ category: 'tools' }), pub({ categories: ['tools'] })), []);
+  assert.deepEqual(arrivedCategories({ status: 'draft', categories: ['kids'] }, pub({ categories: ['kids'] })), ['kids']);
+  assert.deepEqual(arrivedCategories(pub({}), { status: 'draft', categories: ['kids'] }), []);
+  assert.deepEqual(arrivedCategories(pub({}), pub({ categories: ['other'] })), []);
+  const stamp = { toMillis: () => 1 };
+  assert.deepEqual(arrivedCategories(pub({ category: 'fun' }), pub({ categories: ['games'], categoriesMigratedAt: stamp })), []);
 });

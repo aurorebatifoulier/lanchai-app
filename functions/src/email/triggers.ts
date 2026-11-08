@@ -23,6 +23,7 @@ import {
 } from './templates';
 import { productThumb } from '../shared/productImage';
 import { trackJob } from '../jobHealth';
+import { displayCategory } from '../shared/categories';
 
 // Transactional emails (Brevo). Every sender: claim → send → finish, so nothing is ever
 // sent twice. Handlers catch everything — email problems never crash or retry a trigger.
@@ -236,7 +237,8 @@ async function withProductInfo(items: ResData[]): Promise<ResData[]> {
   const byId = new Map(snaps.map(s => [s.id, s.data() ?? {}]));
   return items.map(r => {
     const p = byId.get(r.productId ?? '') ?? {};
-    return { ...r, isPremium: p.isPremium === true, categoryId: typeof p.category === 'string' ? p.category : undefined };
+    // The renter-visible main category (none for a retired / internal one → Explore link).
+    return { ...r, isPremium: p.isPremium === true, categoryId: displayCategory(p) ?? undefined };
   });
 }
 

@@ -67,6 +67,30 @@ service cloud.firestore {
       return isAccount() && request.auth.uid == uid;
     }
 
+    // ── Categories ────────────────────────────────────────────────────────
+    // MIRROR of functions/src/shared/categories.ts (CATEGORY_CONFIG ids, incl. the internal
+    // 'other'; renter ones = clientCategoryIds). tests/unit/categories.test.ts fails while
+    // these lists differ from the config.
+    function categoryIds() {
+      return ['tools', 'home', 'kids', 'outdoor', 'games', 'other'];
+    }
+    function clientCategoryIds() {
+      return ['tools', 'home', 'kids', 'outdoor', 'games'];
+    }
+    // categories: a list of 1–5 known ids, no duplicate; [0] = main category.
+    function validCategories(c) {
+      return c is list && c.size() >= 1 && c.size() <= 5
+        && c.hasOnly(categoryIds()) && c.toSet().size() == c.size();
+    }
+    // Product write: `categories` required on create; on update of a not-yet-migrated
+    // product (no `categories`) it may stay absent. The legacy `category` mirror, when
+    // both are present, must be the main category.
+    function validProductCategories(d, isCreate) {
+      return ('categories' in d)
+        ? validCategories(d.categories) && (!('category' in d) || d.category == d.categories[0])
+        : !isCreate;
+    }
+
     // ── admins/{uid} ──────────────────────────────────────────────────────
     // Managed only via the Firebase Console / Admin SDK — clients never
     // write here. A signed-in user may read ONLY their own admin doc, which
@@ -79,12 +103,14 @@ service cloud.firestore {
     }
 
     // ── products ──────────────────────────────────────────────────────────
-    // App usage: getDocs(collection('products')), getDocs(query(...,
-    // where('category','==',cat))), getDoc(doc('products', id)) — all reads.
-    // Writes are admin/back-office only.
+    // App usage: getDocs(collection('products')), getDoc(doc('products', id)) — all
+    // reads (category filtering happens in memory, on categoriesOf()). Writes are
+    // admin/back-office only, with a valid `categories` list (validProductCategories).
     match /products/{productId} {
-      allow read:  if isAuthed();
-      allow write: if isAdmin();
+      allow read:   if isAuthed();
+      allow create: if isAdmin() && validProductCategories(request.resource.data, true);
+      allow update: if isAdmin() && validProductCategories(request.resource.data, false);
+      allow delete: if isAdmin();
     }
 
     // ── collections/{id} (Home "Got plans?") ─────────────────────────────
@@ -304,7 +330,7 @@ service cloud.firestore {
                                       (request.resource.data.contact is string &&
                                        request.resource.data.contact.size() <= 200)) &&
                                      (request.resource.data.category == null ||
-                                      request.resource.data.category in ['fun', 'tools', 'outdoor', 'sports', 'kids', 'home']) &&
+                                      request.resource.data.category in clientCategoryIds()) &&
                                      request.resource.data.renterId == request.auth.uid &&
                                      request.resource.data.renterName is string &&
                                      request.resource.data.renterName.size() <= 120 &&

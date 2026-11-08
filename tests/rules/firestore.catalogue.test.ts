@@ -20,6 +20,33 @@ describe('products + stock log', () => {
     await no(P, updateDoc(doc(db('biz'), 'products/p1'), { stockLeft: 99 }));
     await no(P, setDoc(doc(db('A'), 'products/mine'), { name: 'Free stuff' }));
   });
+  test('products: categories = list of 1–5 known ids, no duplicate, main = category', async () => {
+    const P = 'fs:products/{productId}';
+    const admin = db('admin');
+    const put = (id: string, data: Record<string, unknown>) => setDoc(doc(admin, `products/${id}`), { name: 'X', ...data });
+    // Valid
+    await ok(P, put('n1', { categories: ['games'] }));
+    await ok(P, put('n2', { categories: ['tools', 'home'], category: 'tools' }));
+    await ok(P, put('n3', { categories: ['tools', 'home', 'kids', 'outdoor', 'games'] }));
+    await ok(P, put('n4', { categories: ['other'] }));
+    await ok(P, updateDoc(doc(admin, 'products/p2'), { categories: ['home', 'tools'], category: 'home' }));
+    // Legacy product (no `categories`) still editable; can be migrated
+    await ok(P, updateDoc(doc(admin, 'products/p1'), { stockLeft: 3 }));
+    await ok(P, updateDoc(doc(admin, 'products/p1'), { categories: ['outdoor'] }));
+    // Invalid
+    await no(P, put('x1', { category: 'tools' }));                       // create without categories
+    await no(P, put('x2', { categories: [] }));
+    await no(P, put('x3', { categories: ['tools', 'home', 'kids', 'outdoor', 'games', 'other'] }));
+    await no(P, put('x4', { categories: ['tools', 'tools'] }));
+    await no(P, put('x5', { categories: ['luxury'] }));
+    await no(P, put('x6', { categories: ['fun'] }));
+    await no(P, put('x7', { categories: 'tools' }));
+    await no(P, put('x8', { categories: ['tools', 'home'], category: 'home' })); // mirror ≠ main
+    await no(P, updateDoc(doc(admin, 'products/p2'), { categories: ['sports'] }));
+    await no(P, updateDoc(doc(admin, 'products/p2'), { categories: [] }));
+    // Renters never write
+    await no(P, updateDoc(doc(db('A'), 'products/p2'), { categories: ['games'] }));
+  });
   test('stock adjustments: admin append-only log', async () => {
     const S = 'fs:products/{productId}/stockAdjustments/{adjustmentId}';
     await ok(S, getDocs(collection(db('admin'), 'products/p1/stockAdjustments')));

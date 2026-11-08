@@ -6,7 +6,7 @@ import { evaluatePromo, promoStatus, normalizePromoCode, PROMO_CODE_RE, discount
 const NOW = Date.UTC(2026, 10, 10, 5); // 10 Nov 2026 12:00 Vientiane
 const base: PromoCode = { code: 'SUMMER10', type: 'percent', value: 10, active: true };
 const ctx = (over: Partial<PromoContext> = {}): PromoContext => ({
-  lines: [{ subtotal: 500_000, productId: 'tent', categoryId: 'outdoor' }],
+  lines: [{ subtotal: 500_000, productId: 'tent', categoryIds: ['outdoor'] }],
   nowMs: NOW, isBusiness: false, hasPriorBooking: false, usesByRenter: 0, ...over,
 });
 const err = (code: PromoCode, c = ctx()) => { const r = evaluatePromo(code, c); return r.ok ? 'ok' : r.error; };
@@ -37,20 +37,23 @@ test('limits: total, per renter, first rental, business', () => {
 
 test('scope + minimum apply to in-scope lines only', () => {
   const c = ctx({ lines: [
-    { subtotal: 300_000, productId: 'tent', categoryId: 'outdoor' },
-    { subtotal: 700_000, productId: 'drill', categoryId: 'tools' },
+    { subtotal: 300_000, productId: 'tent', categoryIds: ['outdoor'] },
+    { subtotal: 700_000, productId: 'drill', categoryIds: ['tools', 'home'] },
   ] });
   const r = evaluatePromo({ ...base, scope: { categoryIds: ['outdoor'] } }, c);
   assert.ok(r.ok);
   assert.deepEqual(r.ok && r.perLine, [30_000, 0]);
   assert.equal(err({ ...base, scope: { categoryIds: ['kids'] } }, c), 'not-in-scope');
   assert.equal(err({ ...base, scope: { categoryIds: ['outdoor'] }, minRentalLak: 400_000 }, c), 'min-amount');
+  // A product in several categories is in scope through any of them (here its 2nd one).
+  const home = evaluatePromo({ ...base, scope: { categoryIds: ['home'] } }, c);
+  assert.deepEqual(home.ok && home.perLine, [0, 70_000]);
 });
 
 test('a promo never makes a line free (≥ 1,000 LAK left per in-scope line)', () => {
   const r = evaluatePromo({ ...base, type: 'fixed', value: 10_000_000 }, ctx());
   assert.ok(r.ok && r.total === 499_000);
-  assert.equal(err({ ...base, type: 'percent', value: 100 }, ctx({ lines: [{ subtotal: 1_000, productId: 'x', categoryId: null }] })), 'not-in-scope');
+  assert.equal(err({ ...base, type: 'percent', value: 100 }, ctx({ lines: [{ subtotal: 1_000, productId: 'x', categoryIds: [] }] })), 'not-in-scope');
 });
 
 test('personal codes exist only with a grant; grant used / expired / override', () => {

@@ -8,6 +8,7 @@ import { sendAccountEmail, availabilityEmail, categoryArrivalEmail } from './ema
 import { computeAvailableUnits, effectiveStock, OCCUPYING_STATUSES, PICKUP_DELAY_MS, type OccupancyRecord } from './shared/availability';
 import { vteDay, vteIsoDay } from './shared/dates';
 import { productThumb } from './shared/productImage';
+import { arrivedCategories, categoryLabel } from './shared/categories';
 import { trackJob } from './jobHealth';
 
 // "Notify me" (Liked) — availabilityWatches/{uid}_{productId} (renter-written). Hourly:
@@ -107,49 +108,47 @@ export const availabilityWatchJob = onSchedule(
 
 // ── Category watch ("Notify me when items arrive", Explore empty category) ─────────
 // categoryWatches/{uid}_{category} (renter-written). When a product BECOMES visible to
-// renters in a category (created / published / moved there — not draft, not archived),
-// every watcher of that category gets an in-app notification (→ Explore with the
-// category) + an email (respects emailRemindersOptOut), then the watch is deleted.
-
-const CATEGORY_NAMES: Record<string, string> = {
-  fun: 'Fun', tools: 'Tools', outdoor: 'Outdoor', sports: 'Sports', kids: 'Kids', home: 'Home',
-};
-const renterVisible = (p: admin.firestore.DocumentData | undefined) =>
-  !!p && p.status !== 'draft' && p.status !== 'archived';
+// renters in a category (created / published / that category added — not draft, not
+// archived), every watcher of that category gets an in-app notification (→ Explore with
+// the category) + an email (respects emailRemindersOptOut), then the watch is deleted.
+// Products have several categories (categoriesOf): each NEW renter category counts.
+// The category migration (categoriesMigratedAt changed) never notifies.
 
 export const onCategoryArrival = onDocumentWritten(
   { document: 'products/{productId}', region: REGION, secrets: [BREVO_API_KEY] },
   async event => {
     const before = event.data?.before.data();
     const after = event.data?.after.data();
-    if (!renterVisible(after)) return;
-    const category = String(after!.category ?? '');
-    if (!category) return;
-    if (renterVisible(before) && before!.category === category) return; // nothing new here
-    const watches = (await db().collection('categoryWatches').where('category', '==', category).get()).docs;
-    if (watches.length === 0) return;
-    const categoryName = CATEGORY_NAMES[category] ?? category;
-    const productName = String(after!.name ?? 'A new item');
+    const productName = String(after?.name ?? 'A new item');
     const image = productThumb(after);
-    let notified = 0;
-    for (const w of watches) {
-      const uid = String(w.get('uid'));
-      try {
-        await db().collection('notifications').doc(uid).collection('items').add({
-          type: 'rental', icon: 'package', iconColor: 'amber',
-          title: `New in ${categoryName}`,
-          body: `${productName} just arrived. You asked us to tell you.`,
-          deepLink: `/explore?category=${category}`, createdAt: FieldValue.serverTimestamp(), readAt: null,
-        });
-        await sendAccountEmail(uid, (shopE, r) => categoryArrivalEmail(shopE, {
-          firstName: r.firstName || r.name || 'there', categoryName, categoryId: category, productName, image,
-        }), 'category-arrival', { respectOptOut: true });
-        await w.ref.delete();
-        notified++;
-      } catch (err) {
-        logger.error('[onCategoryArrival] watcher failed', { uid, category, err: String(err) });
-      }
+    for (const category of arrivedCategories(before, after)) {
+      await notifyCategoryWatchers(category, productName, image, event.params.productId);
     }
-    logger.info('[onCategoryArrival] done', { category, productId: event.params.productId, notified });
   },
 );
+
+async function notifyCategoryWatchers(category: string, productName: string, image: string | null, productId: string): Promise<void> {
+  const watches = (await db().collection('categoryWatches').where('category', '==', category).get()).docs;
+  if (watches.length === 0) return;
+  const categoryName = categoryLabel(category);
+  let notified = 0;
+  for (const w of watches) {
+    const uid = String(w.get('uid'));
+    try {
+      await db().collection('notifications').doc(uid).collection('items').add({
+        type: 'rental', icon: 'package', iconColor: 'amber',
+        title: `New in ${categoryName}`,
+        body: `${productName} just arrived. You asked us to tell you.`,
+        deepLink: `/explore?category=${category}`, createdAt: FieldValue.serverTimestamp(), readAt: null,
+      });
+      await sendAccountEmail(uid, (shopE, r) => categoryArrivalEmail(shopE, {
+        firstName: r.firstName || r.name || 'there', categoryName, categoryId: category, productName, image,
+      }), 'category-arrival', { respectOptOut: true });
+      await w.ref.delete();
+      notified++;
+    } catch (err) {
+      logger.error('[onCategoryArrival] watcher failed', { uid, category, err: String(err) });
+    }
+  }
+  logger.info('[onCategoryArrival] done', { category, productId, notified });
+}

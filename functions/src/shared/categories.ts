@@ -168,3 +168,21 @@ export function displayCategory(p: WithCategories | null | undefined): string | 
 export function inCategory(p: WithCategories | null | undefined, id: string): boolean {
   return categoriesOf(p).includes(id);
 }
+
+// ── "Notify me when items arrive" (onCategoryArrival) ───────────────────────────
+
+type ProductLike = WithCategories & { status?: unknown; categoriesMigratedAt?: unknown };
+const renterVisible = (p: ProductLike | undefined | null) => !!p && p.status !== 'draft' && p.status !== 'archived';
+const stampMs = (v: unknown) => (v as { toMillis?: () => number } | null | undefined)?.toMillis?.() ?? null;
+
+/**
+ * Renter categories a product write just made it appear in: the product is renter-visible
+ * after the write, and each category wasn't among its renter categories while it was
+ * visible before. A category migration write (categoriesMigratedAt changed) → none.
+ */
+export function arrivedCategories(before: ProductLike | undefined | null, after: ProductLike | undefined | null): string[] {
+  if (!renterVisible(after)) return [];
+  if (before && stampMs(after!.categoriesMigratedAt) !== stampMs(before.categoriesMigratedAt)) return [];
+  const had = renterVisible(before) ? clientCategoriesOf(before) : [];
+  return clientCategoriesOf(after).filter(c => !had.includes(c));
+}

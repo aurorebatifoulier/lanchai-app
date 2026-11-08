@@ -10,6 +10,7 @@ import { sendAccountEmail, promoGrantedEmail, promoExpiringEmail } from './email
 import { priceLine, depositPercentFor, type PricedProduct } from './shared/pricing';
 import { isLoyaltyExcluded } from './shared/loyalty';
 import { vteDay } from './shared/dates';
+import { categoriesOf } from './shared/categories';
 import {
   evaluatePromo, normalizePromoCode, promoErrorText, promoStatus, promoValueText, promoConditionsText, grantId,
   grantExpiryMs, PROMO_ATTEMPTS_PER_HOUR, PROMO_CODE_RE, NOT_FIRST_RENTAL_STATUSES, EXPIRY_REMINDER_DAYS,
@@ -78,7 +79,7 @@ export async function readPromo(
 
 /** Promo line from a product doc + its priced subtotal. */
 export const promoLine = (productId: string, product: Record<string, unknown>, subtotal: number): PromoLine => ({
-  subtotal, productId, categoryId: typeof product.category === 'string' ? product.category : null,
+  subtotal, productId, categoryIds: categoriesOf(product),
 });
 
 /** Server-priced lines for a booking being prepared (same rule as createReservations). */

@@ -4,6 +4,7 @@
 // Dependency-free (see latePenalty.ts). Discount always computed server-side.
 
 import { vteIsoDay, vteIsoDayEndMs } from './dates';
+import { categoryLabel } from './categories';
 
 export type PromoType = 'percent' | 'fixed';
 
@@ -57,7 +58,8 @@ export type PromoError =
   | 'not-found' | 'inactive' | 'not-started' | 'expired' | 'exhausted' | 'already-used'
   | 'first-rental-only' | 'business-not-allowed' | 'not-in-scope' | 'min-amount' | 'too-many-attempts';
 
-export interface PromoLine { subtotal: number; productId: string; categoryId: string | null }
+/** categoryIds = every category of the line's product (categoriesOf — main first). */
+export interface PromoLine { subtotal: number; productId: string; categoryIds: string[] }
 
 /** The renter's wallet entry for this code (promoGrants/{CODE}_{uid}), when they have one. */
 export interface PromoGrantInfo {
@@ -101,7 +103,7 @@ export const promoValueText = (type: PromoType, value: number) =>
   type === 'percent' ? `${value}% off` : `${Math.round(value).toLocaleString('en-US')} LAK off`;
 
 /** One-line conditions, e.g. "First rental · Outdoor only · min. 300,000 LAK". */
-export function promoConditionsText(p: PromoCode, categoryName: (id: string) => string = id => id.charAt(0).toUpperCase() + id.slice(1)): string {
+export function promoConditionsText(p: PromoCode, categoryName: (id: string) => string = categoryLabel): string {
   const parts: string[] = [];
   if (p.firstRentalOnly) parts.push('First rental');
   const cats = p.scope?.categoryIds ?? [];
@@ -116,12 +118,12 @@ export type PromoResult =
   | { ok: true; total: number; perLine: number[] }
   | { ok: false; error: PromoError; minLak?: number };
 
-/** In scope: no scope = every line; else the line's product OR category is listed. */
+/** In scope: no scope = every line; else the line's product OR ANY of its categories is listed. */
 export function lineInScope(p: PromoCode, l: PromoLine): boolean {
   const cats = p.scope?.categoryIds ?? [];
   const prods = p.scope?.productIds ?? [];
   if (cats.length === 0 && prods.length === 0) return true;
-  return prods.includes(l.productId) || (!!l.categoryId && cats.includes(l.categoryId));
+  return prods.includes(l.productId) || l.categoryIds.some(c => cats.includes(c));
 }
 
 /** Spreads `total` over the in-scope lines by subtotal (remainder on the last one). */

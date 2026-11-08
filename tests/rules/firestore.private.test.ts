@@ -136,7 +136,7 @@ describe('claims', () => {
 describe('requests ("Ask for an item")', () => {
   const RQ = 'fs:requests/{requestId}';
   const req = (over: Record<string, unknown> = {}) => ({
-    text: 'Stand-up paddle board', contact: null, category: 'sports', renterId: UID.A, renterName: 'Ann',
+    text: 'Stand-up paddle board', contact: null, category: 'outdoor', renterId: UID.A, renterName: 'Ann',
     status: 'new', createdAt: serverTimestamp(), ...over,
   });
   test('create as myself, status new, server time, valid category', async () => {
@@ -144,6 +144,9 @@ describe('requests ("Ask for an item")', () => {
     await no(RQ, addDoc(collection(db('A'), 'requests'), req({ renterId: UID.B })));
     await no(RQ, addDoc(collection(db('A'), 'requests'), req({ status: 'added' })));
     await no(RQ, addDoc(collection(db('A'), 'requests'), req({ category: 'weapons' })));
+    await ok(RQ, addDoc(collection(db('A'), 'requests'), req({ category: 'games' })));
+    await no(RQ, addDoc(collection(db('A'), 'requests'), req({ category: 'sports' }))); // retired
+    await no(RQ, addDoc(collection(db('A'), 'requests'), req({ category: 'other' })));  // internal
     await no(RQ, addDoc(collection(db('A'), 'requests'), req({ createdAt: new Date(0) })));
     await no(RQ, addDoc(collection(db('A'), 'requests'), req({ text: 'x'.repeat(1001) })));
     await no(RQ, addDoc(collection(db('guest'), 'requests'), req({ renterId: UID.GUEST })));

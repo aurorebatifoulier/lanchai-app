@@ -54,7 +54,7 @@ export function vteSlot(daysAhead: number, hhmm = '10:00'): number {
 
 export const RATE = 20_000; // LAK per USD
 export const PRODUCT = {
-  name: 'Camping tent', category: 'outdoor', status: 'published', available: true,
+  name: 'Camping tent', categories: ['outdoor'], category: 'outdoor', status: 'published', available: true,
   pricePerDay: 10, price3to6: 8, price7to13: 6, price14to29: 5, price30plus: 4, deposit: 50, stockLeft: 1,
 };
 
