@@ -18,7 +18,8 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import ProductGridCard, { useProductCardLayout } from '@/components/ProductGridCard';
 import SearchBar from '@/components/SearchBar';
-import FilterSheet, { ActiveChip } from '@/components/FilterSheet';
+import { ActiveChip } from '@/components/FilterSheet';
+import SortMenu from '@/components/explore/SortMenu';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getProducts,
@@ -29,17 +30,12 @@ import {
 import { CATEGORIES, type Product } from '@/lib/mockData';
 import { inCategory } from '@/functions/src/shared/categories';
 import { SHADES } from '@/constants/brandShades';
-import {
-  Filters,
-  PRICE_CONFIG,
-  SORT_LABELS,
-  DEFAULT_FILTERS,
-} from '@/lib/filterConfig';
+import type { SortOption } from '@/lib/filterConfig';
 import { filterProducts, sortProducts } from '@/utils/productFilters';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { useLoyaltyTier } from '@/lib/loyalty';
 import {
-  fetchAllOccupancy, gridAvailability, computeAvailableUnits, effectiveStock, type OccupancyRecord,
+  fetchAllOccupancy, gridAvailability, type OccupancyRecord,
 } from '@/utils/availability';
 import { EXPLORE_COPY } from '@/constants/exploreCopy';
 import RotatingLine from '@/components/explore/RotatingLine';
@@ -48,11 +44,11 @@ import { useMyCategoryWatches, watchCategory, unwatchCategory } from '@/lib/cate
 import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
 import { MOTION, useReducedMotion } from '@/constants/motion';
 import { weekendWindow, whyBuyCatalogueRanked } from '@/lib/homeData';
+import { availableNowWindow, freeForWindow } from '@/lib/exploreWindows';
 import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
-import { vteMonthKey } from '@/functions/src/shared/dates';
-import { toLak, formatLakRange } from '@/utils/currency';
+import { toLak } from '@/utils/currency';
 import { useProductSearch, bestMatchId } from '@/hooks/useProductSearch';
 import { SEARCH_COPY } from '@/constants/searchCopy';
 import { cached, HOME_TTL } from '@/lib/homeCache';
@@ -79,8 +75,9 @@ const CARD_WIDTH = (SCREEN_WIDTH - H_PAD * 2 - COL_GAP) / 2;
 // "All" + the renter categories, config order (functions/src/shared/categories.ts).
 const EXPLORE_CATEGORIES = CATEGORIES;
 
-type QuickKey = 'weekend' | 'under' | 'newItems' | 'popular';
-const NO_QUICK: Record<QuickKey, boolean> = { weekend: false, under: false, newItems: false, popular: false };
+// One row of quick chips (combinable with category, search and the bag period chip).
+type QuickKey = 'now' | 'weekend' | 'under' | 'newItems';
+const NO_QUICK: Record<QuickKey, boolean> = { now: false, weekend: false, under: false, newItems: false };
 const P_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const P_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtPeriodDay = (at: Date) => { const d = vteDayToken(at); return `${P_DOW[d.getDay()]} ${d.getDate()} ${P_MON[d.getMonth()]}`; }; // Vientiane day
@@ -103,7 +100,8 @@ export default function ExploreScreen() {
   const userTier = useLoyaltyTier();
   const exchangeRate = useExchangeRate();
   const CURRENT_USER = user?.uid ?? '';
-  // maxPrice (LAK / day, optional): starts with the price filter set — Home "Under X LAK a day".
+  // maxPrice (LAK / day, optional): turns the "Under X" chip on — Home "Under X LAK a day"
+  // (= the admin threshold) or a Home slide link (its own value, shown on the chip).
   // from / to (ms, optional): a period from the bag's "Add more items" — only products
   // free for that whole window (removable "Free …" chip); "+" pre-fills it.
   // category + t (lib/navigation openCategory): every category entry point of the app lands
@@ -120,14 +118,13 @@ export default function ExploreScreen() {
 
   // Filters
   const [activeCategory, setActiveCategory] = useState('all');
-  const [filters, setFilters]               = useState<Filters>(DEFAULT_FILTERS);
-  const [pendingFilters, setPendingFilters]  = useState<Filters>(DEFAULT_FILTERS);
+  const [sort, setSort]                     = useState<SortOption>('popular');
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter sheet
-  const [sheetVisible, setSheetVisible] = useState(false);
+  // Sort-only menu
+  const [sortVisible, setSortVisible] = useState(false);
 
   // Request modal
   const [requestVisible, setRequestVisible] = useState(false);
@@ -140,10 +137,13 @@ export default function ExploreScreen() {
   // All products' occupancy in ONE query (fetchAllOccupancy) — null until loaded or if
   // it failed, in which case cards show no booking badge (never a false "Back on").
   const [occupancy,      setOccupancy]      = useState<Map<string, OccupancyRecord[]> | null>(null);
-  // Quick filter chips (combinable with category, search and the filter sheet).
+  // Quick filter chips (combinable with category and search).
   const [quick, setQuick] = useState<Record<QuickKey, boolean>>(NO_QUICK);
+  // "Under X" value from a ?maxPrice= link when it differs from the admin threshold.
+  const [underOverrideLak, setUnderOverrideLak] = useState<number | null>(null);
   const [period, setPeriod] = useState<{ pickupAt: Date; returnAt: Date } | null>(null);
   const [budgetLak, setBudgetLak] = useState(DEFAULT_BUDGET_THRESHOLD_LAK);
+  const underLak = underOverrideLak ?? budgetLak;
   const shop = useShopInfo();
   const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
   const reduce = useReducedMotion();
@@ -185,19 +185,20 @@ export default function ExploreScreen() {
     appliedToken.current = token;
     if (!EXPLORE_CATEGORIES.some(c => c.id === id)) return;
     setActiveCategory(id);
-    setFilters(DEFAULT_FILTERS);
-    setPendingFilters(DEFAULT_FILTERS);
+    setSort('popular');
     setSearchQuery('');
     setQuick(NO_QUICK);
+    setUnderOverrideLak(null);
     setPeriod(null);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [categoryParam, categoryToken]));
 
-  // "See all" from Home "Under X LAK a day": start with the max-price filter (removable chip).
+  // "See all" from Home "Under X LAK a day" (or a slide link): the "Under X" chip, on.
   useEffect(() => {
     const max = Number(maxPrice);
     if (!maxPrice || !Number.isFinite(max) || max <= 0) return;
-    setFilters(f => ({ ...f, priceMax: Math.min(max, PRICE_CONFIG.max) }));
+    setUnderOverrideLak(Math.round(max));
+    setQuick(q => ({ ...q, under: true }));
   }, [maxPrice]);
 
   // Bag "Add more items": a valid future period (pick-up before return) → the filter.
@@ -223,25 +224,6 @@ export default function ExploreScreen() {
       return next;
     });
   }, [CURRENT_USER]);
-
-  // ── Rating data availability ──────────────────────────────────────────────
-
-  const hasRatingData = useMemo(
-    () => allProducts.some(p => p.averageRating != null && p.averageRating > 0),
-    [allProducts]
-  );
-
-  // ── Filter sheet ──────────────────────────────────────────────────────────
-
-  const openSheet = useCallback(() => {
-    setPendingFilters(filters);
-    setSheetVisible(true);
-  }, [filters]);
-
-  const applyAndClose = useCallback(() => {
-    setFilters(pendingFilters);
-    setSheetVisible(false);
-  }, [pendingFilters]);
 
   // ── Request modal ─────────────────────────────────────────────────────────
 
@@ -282,19 +264,11 @@ export default function ExploreScreen() {
 
   const clearAllFilters = useCallback(() => {
     setActiveCategory('all');
-    setFilters(DEFAULT_FILTERS);
     setSearchQuery('');
     setQuick(NO_QUICK);
+    setUnderOverrideLak(null);
     setPeriod(null);
   }, []);
-
-  const hasActiveFilters = useMemo(() => (
-    filters.availableOnly
-    || filters.sort !== 'popular'
-    || filters.minRating !== 0
-    || filters.priceMin > PRICE_CONFIG.min
-    || filters.priceMax < PRICE_CONFIG.max
-  ), [filters]);
 
   const activeChips = useMemo(() => {
     const chips: Array<{ id: string; label: string; onRemove: () => void }> = [];
@@ -315,36 +289,8 @@ export default function ExploreScreen() {
         onRemove: () => setActiveCategory('all'),
       });
     }
-    if (filters.priceMin > PRICE_CONFIG.min || filters.priceMax < PRICE_CONFIG.max) {
-      chips.push({
-        id: 'price',
-        label: `${formatLakRange(filters.priceMin, filters.priceMax)} / day`,
-        onRemove: () => setFilters(f => ({ ...f, priceMin: PRICE_CONFIG.min, priceMax: PRICE_CONFIG.max })),
-      });
-    }
-    if (filters.availableOnly) {
-      chips.push({
-        id: 'avail',
-        label: 'Available only',
-        onRemove: () => setFilters(f => ({ ...f, availableOnly: false })),
-      });
-    }
-    if (filters.sort !== 'popular') {
-      chips.push({
-        id: 'sort',
-        label: SORT_LABELS[filters.sort],
-        onRemove: () => setFilters(f => ({ ...f, sort: 'popular' })),
-      });
-    }
-    if (filters.minRating !== 0) {
-      chips.push({
-        id: 'rating',
-        label: `${filters.minRating}+ stars`,
-        onRemove: () => setFilters(f => ({ ...f, minRating: 0 })),
-      });
-    }
     return chips;
-  }, [activeCategory, filters, searchQuery]);
+  }, [activeCategory, searchQuery]);
 
   // "Free this weekend": units free per product for the weekend window (booking rule).
   const weekend = useMemo(
@@ -354,53 +300,50 @@ export default function ExploreScreen() {
   const weekendUnitsById = useMemo(() => {
     const m = new Map<string, number>();
     if (!weekend || !occupancy) return m;
-    for (const p of allProducts) {
-      if (p.available === false) continue;
-      m.set(p.id, computeAvailableUnits(occupancy.get(p.id) ?? [], weekend.pickupAt, weekend.returnAt, effectiveStock(p)));
-    }
+    for (const p of allProducts) m.set(p.id, freeForWindow(p, occupancy.get(p.id), weekend));
     return m;
   }, [allProducts, occupancy, weekend]);
+  // "Available now": a 1-day booking from the first slot left today (2h lead time) —
+  // "Available tomorrow" from tomorrow's first slot once today has none left.
+  const nowWindow = useMemo(
+    () => availableNowWindow(new Date(), d => getAvailableTimeSlots(d, timeSlots)),
+    [timeSlots],
+  );
+  const nowFreeIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!nowWindow || !occupancy) return ids;
+    for (const p of allProducts) if (freeForWindow(p, occupancy.get(p.id), nowWindow) >= 1) ids.add(p.id);
+    return ids;
+  }, [allProducts, occupancy, nowWindow]);
   // Same rule for the bag period ("Free {dates}" chip).
   const periodFreeIds = useMemo(() => {
     const ids = new Set<string>();
     if (!period || !occupancy) return ids;
-    for (const p of allProducts) {
-      if (p.available === false) continue;
-      if (computeAvailableUnits(occupancy.get(p.id) ?? [], period.pickupAt, period.returnAt, effectiveStock(p)) >= 1) ids.add(p.id);
-    }
+    for (const p of allProducts) if (freeForWindow(p, occupancy.get(p.id), period) >= 1) ids.add(p.id);
     return ids;
   }, [allProducts, occupancy, period]);
-  // "Popular" chip: ≥ 3 returns this month (rentalsByMonth) OR the admin "Popular" flag
-  // (the flag alone while the month has no data yet).
-  const isPopular = useCallback((p: Product) => {
-    const n = p.rentalsByMonth?.[vteMonthKey(Date.now())] ?? 0;
-    return n >= 3 || p.showInPopular === true;
-  }, []);
   // Search (lib/search.ts, debounced): relevance order by default ("Popular" = the
-  // default sort); an explicit other sort (price, newest, rating) is respected.
+  // default sort); an explicit other sort (price, newest) is respected.
   const search = useProductSearch(allProducts, searchQuery);
   const filteredProducts = useMemo(() => {
-    const matched = filterProducts(allProducts, filters, {
-      category: activeCategory,
-      exchangeRate,
-      categories: EXPLORE_CATEGORIES,
-    });
+    const matched = filterProducts(allProducts, { category: activeCategory });
     const quickOk = (p: Product) =>
-      (!quick.weekend || (weekendUnitsById.get(p.id) ?? 0) >= 1)
-      && (!quick.under || (exchangeRate != null && p.pricePerDay > 0 && toLak(p.pricePerDay, exchangeRate) <= budgetLak))
+      (!quick.now || nowFreeIds.has(p.id))
+      && (!quick.weekend || (weekendUnitsById.get(p.id) ?? 0) >= 1)
+      && (!quick.under || (exchangeRate != null && p.pricePerDay > 0 && toLak(p.pricePerDay, exchangeRate) <= underLak))
       && (!quick.newItems || p.showInNew === true)
-      && (!quick.popular || isPopular(p))
       && (!period || periodFreeIds.has(p.id));
     const base = matched.filter(quickOk);
-    if (!search.active) return sortProducts(base, filters.sort);
+    if (!search.active) return sortProducts(base, sort);
     const allowed = new Set(base.map(p => p.id));
     const ranked = search.results.filter(r => allowed.has(r.product.id)).map(r => r.product);
-    return filters.sort === 'popular' ? ranked : sortProducts(ranked, filters.sort);
-  }, [allProducts, activeCategory, filters, exchangeRate, search, quick, weekendUnitsById, budgetLak, isPopular, period, periodFreeIds]);
-  const bestId = search.active && filters.sort === 'popular' ? bestMatchId(filteredProducts, search.scoreById) : null;
+    return sort === 'popular' ? ranked : sortProducts(ranked, sort);
+  }, [allProducts, activeCategory, sort, exchangeRate, search, quick, nowFreeIds, weekendUnitsById, underLak, period, periodFreeIds]);
+  const bestId = search.active && sort === 'popular' ? bestMatchId(filteredProducts, search.scoreById) : null;
 
-  const budgetLabel = budgetLak.toLocaleString('en-US');
-  const sortLabel = search.active && filters.sort === 'popular' ? EXPLORE_COPY.bestMatchSort : SORT_LABELS[filters.sort];
+  const underLabel = underLak.toLocaleString('en-US');
+  const popularLabel = search.active ? EXPLORE_COPY.bestMatchSort : EXPLORE_COPY.sort.popular;
+  const sortLabel = sort === 'popular' ? popularLabel : EXPLORE_COPY.sort[sort];
 
   // Surprise card data (real only).
   const [quotes, setQuotes] = useState<ReviewQuote[]>([]);
@@ -481,12 +424,20 @@ export default function ExploreScreen() {
       : <View style={styles.surprise}><SurpriseCard item={item.item} /></View>
   ), [renderCard]);
 
-  const toggleQuick = (k: QuickKey) => setQuick(q => ({ ...q, [k]: !q[k] }));
+  const toggleQuick = (k: QuickKey) => {
+    // Turning "Under X" off forgets a link's custom value (back to the admin threshold).
+    if (k === 'under' && quick.under) setUnderOverrideLak(null);
+    setQuick(q => ({ ...q, [k]: !q[k] }));
+  };
   const quickChips: { key: QuickKey; label: string; icon?: 'calendar'; disabled?: boolean }[] = [
+    {
+      key: 'now',
+      label: nowWindow?.day === 'tomorrow' ? EXPLORE_COPY.chips.tomorrow : EXPLORE_COPY.chips.now,
+      disabled: !nowWindow || !occupancy,
+    },
     { key: 'weekend', label: EXPLORE_COPY.chips.weekend, icon: 'calendar', disabled: !weekend || !occupancy },
-    { key: 'under', label: EXPLORE_COPY.chips.under(budgetLabel) },
+    { key: 'under', label: EXPLORE_COPY.chips.under(underLabel) },
     { key: 'newItems', label: EXPLORE_COPY.chips.newItems },
-    { key: 'popular', label: EXPLORE_COPY.chips.popular },
   ];
 
   // Search field + categories: inline in the header, and as the pinned overlay copy.
@@ -497,9 +448,6 @@ export default function ExploreScreen() {
         value={searchQuery}
         onChangeText={setSearchQuery}
         placeholder={EXPLORE_COPY.searchPlaceholder}
-        showFilter
-        onFilterPress={openSheet}
-        filterActive={hasActiveFilters}
       />
       <View style={{ marginTop: 12 }}>
         <CategoryFilterRow categories={EXPLORE_CATEGORIES} active={activeCategory} onSelect={setActiveCategory} />
@@ -573,7 +521,7 @@ export default function ExploreScreen() {
       {/* Sort selector alone on a small right-aligned line (no results count). */}
       {!loading && (
         <View style={styles.resultsBar}>
-          <TouchableOpacity onPress={openSheet} hitSlop={8} style={styles.sortBtn}>
+          <TouchableOpacity onPress={() => setSortVisible(true)} hitSlop={8} style={styles.sortBtn} accessibilityRole="button" accessibilityLabel={`Sort: ${sortLabel}`}>
             <Text style={UI.link}>{sortLabel}</Text>
             <Feather name="chevron-down" size={14} color={SHADES.amberText} />
           </TouchableOpacity>
@@ -650,14 +598,13 @@ export default function ExploreScreen() {
         </Animated.View>
       </View>
 
-      {/* ── Filter bottom sheet ───────────────────────────────────────────── */}
-      <FilterSheet
-        visible={sheetVisible}
-        pendingFilters={pendingFilters}
-        onChange={setPendingFilters}
-        hasRatingData={hasRatingData}
-        onClose={() => setSheetVisible(false)}
-        onApply={applyAndClose}
+      {/* ── Sort-only menu ─────────────────────────────────────────────────── */}
+      <SortMenu
+        visible={sortVisible}
+        value={sort}
+        popularLabel={popularLabel}
+        onSelect={setSort}
+        onClose={() => setSortVisible(false)}
       />
 
       {/* ── Request item modal ────────────────────────────────────────────── */}
@@ -1119,41 +1066,8 @@ const styles = StyleSheet.create({
     color: COLORS.carbon,
   },
 
-  // ── Filter bottom sheet ───────────────────────────────────────────────────
-  dimOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(30,30,30,0.55)',
-  },
-  sheet: {
-    backgroundColor: COLORS.porcelain,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    maxHeight: '85%',
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: COLORS.softGray,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-    color: COLORS.carbon,
-    marginBottom: 20,
-  },
-  sheetBody: {
-    paddingBottom: 8,
-  },
+  // ── Sheets (request modal) ────────────────────────────────────────────────
+
   requestCats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sectionLabel: {
     fontSize: 11,
@@ -1161,80 +1075,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     color: COLORS.fg3,
     marginBottom: 10,
-  },
-  sliderRangeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.carbon,
-    marginBottom: 8,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  optChip: {
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: COLORS.white,
-    borderWidth: 1.5,
-    borderColor: COLORS.softGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  optChipActive: {
-    backgroundColor: COLORS.carbon,
-    borderColor: COLORS.carbon,
-  },
-  optChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  optChipTextActive: {
-    color: COLORS.porcelain,
-  },
-
-  // Toggle
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginBottom: 20,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.carbon,
-  },
-  toggleTrack: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.softGray,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleTrackOn: {
-    backgroundColor: COLORS.amber,
-  },
-  toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.white,
-    shadowColor: COLORS.carbon,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 2,
-    transform: [{ translateX: 0 }],
-  },
-  toggleThumbOn: {
-    transform: [{ translateX: 22 }],
   },
 
   // Sheet footer actions

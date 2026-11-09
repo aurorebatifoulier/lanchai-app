@@ -60,7 +60,6 @@ test('a product is in each of its categories', () => {
 
 test('Explore filter: a product in 2 categories shows in both; legacy products too', async () => {
   const { filterProducts } = await import('../../utils/productFilters');
-  const { DEFAULT_FILTERS } = await import('../../lib/filterConfig');
   type P = Parameters<typeof filterProducts>[0][number];
   const mk = (id: string, extra: Partial<P>) => ({ id, name: id, available: true, pricePerDay: 1, ...extra }) as P;
   const products = [
@@ -68,7 +67,7 @@ test('Explore filter: a product in 2 categories shows in both; legacy products t
     mk('stroller', { category: 'kids' }), // legacy
     mk('old', { category: 'sports' }),    // retired → only under "All"
   ];
-  const ids = (category: string) => filterProducts(products, DEFAULT_FILTERS, { category }).map(p => p.id);
+  const ids = (category: string) => filterProducts(products, { category }).map(p => p.id);
   assert.deepEqual(ids('tools'), ['ladder']);
   assert.deepEqual(ids('home'), ['ladder']);
   assert.deepEqual(ids('kids'), ['stroller']);

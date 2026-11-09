@@ -1044,12 +1044,19 @@ a snapshot indefinitely).
 - **Explore (validated mockup, 2026-10-27).** Copy in `constants/exploreCopy.ts`. White
   header band: title, `<RotatingLine>` (4s, static with reduce motion) — no counter, no
   results-count line (removed 2026-10-27; the sort selector sits alone, right-aligned) —
-  `SearchBar variant="account"` + carbon/amber filter button, `<CategoryFilterRow>` (All +
+  full-width `SearchBar variant="account"` (no filter button / filter sheet in Explore
+  since 2026-11-09 — Liked still has its own), `<CategoryFilterRow>` (All +
   `CategoryBadge`, selected = amber). Scrolling pins an overlay copy of search +
-  categories (Home sticky pattern). Quick chips: Free this weekend (`weekendWindow` +
-  `computeAvailableUnits`), Under {X} (`config/home`), New, Popular (≥ 3 returns this
-  month via `rentalsByMonth` OR `showInPopular`) — combinable with category, search and
-  the filter sheet; witty results line + dark amber sort. The list is ONE column of rows
+  categories (Home sticky pattern). ONE quick-chips row, in this order: Available now
+  (`availableNowWindow`: 1-day booking from the first slot left today, 2h lead — becomes
+  "Available tomorrow" from tomorrow's first slot once today has none), Free this weekend
+  (`weekendWindow`), Under {X} (`config/home`; `?maxPrice=` turns it on, with the link's
+  own value when it differs), New — combinable with category, search and the bag "Free
+  {dates}" chip. Window chips use `freeForWindow()` (`lib/exploreWindows.ts`, pure,
+  `tests/unit/exploreFilters.test.ts`: ≥ 1 unit free for the whole window, booking rule).
+  No price-range / min-rating / Popular chip. The dark amber "Popular ▾" link ("Best
+  match" during a search) opens `<SortMenu>` (sort only: Popular, Price: low to high,
+  Price: high to low, Newest). The list is ONE column of rows
   (card pairs or full-width surprise cards — keep it that way, numColumns can't host
   full-width items). Surprise cards (`components/explore/SurpriseCards.tsx`): every 8
   products, never in the first 4, never two in a row, none during a search; collection →
@@ -1114,7 +1121,7 @@ a snapshot indefinitely).
   (Home bubbles, product category chip, My Account stickers, Home slides, search
   suggestions, deep links) calls `openCategory(router, id)` (`lib/navigation.ts`) → the
   Explore tab with `?category={id}&t={token}`; Explore re-applies it on focus whenever the
-  token changes (category selected, search / quick chips / period / filter sheet cleared,
+  token changes (category selected, search / quick chips / period cleared, sort reset,
   list back to the top). Tabs use `backBehavior="history"` (Android back → the previous
   tab, e.g. Home). A selected category replaces the rotating line by its own line +
   "· n items" (`EXPLORE_COPY.categoryLines`); an EMPTY category shows its title

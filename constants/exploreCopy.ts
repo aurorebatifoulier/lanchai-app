@@ -23,12 +23,18 @@ export const EXPLORE_COPY = {
   allCategory: 'All',
 
   chips: {
-    weekend: 'Free this weekend', under: (x: string) => `Under ${x}`, newItems: 'New', popular: 'Popular',
+    now: 'Available now', tomorrow: 'Available tomorrow',
+    weekend: 'Free this weekend', under: (x: string) => `Under ${x}`, newItems: 'New',
     /** Bag "Add more items" period (removable). */
     period: (dates: string) => `Free ${dates}`,
     removePeriod: 'Remove the date filter',
   },
   bestMatchSort: 'Best match',
+  /** Sort-only menu (the "Popular ▾" link above the grid). */
+  sort: {
+    title: 'Sort by',
+    popular: 'Popular', 'price-asc': 'Price: low to high', 'price-desc': 'Price: high to low', newest: 'Newest',
+  },
 
   // Card signal line — real data only, first applicable.
   signal: {
