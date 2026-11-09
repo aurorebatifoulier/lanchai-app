@@ -134,7 +134,7 @@ export function IconCircle({ icon, tone = 'grey', size = 36 }: { icon: AnyIcon; 
 export function CategoryBadge({ cat, size = 64, rotate, selected }: { cat: string; size?: number; rotate?: string; selected?: boolean }) {
   const base = categoryStyle(cat);
   // Selected (Explore filter) = amber circle, carbon icon + a 2px carbon ring, so it
-  // never reads like Fun's mid-amber circle. (The ring is the selection state only.)
+  // never reads like Games' mid-amber circle. (The ring is the selection state only.)
   const st = selected ? { ...base, bg: SHADES.amber, fg: SHADES.carbon } : base;
   return (
     <View style={{

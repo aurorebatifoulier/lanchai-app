@@ -8,7 +8,7 @@ export const EXPLORE_COPY = {
     'Rent the drill. Skip the drawer.',
     'Your closet called. It says thanks.',
   ],
-  searchPlaceholder: 'Tent, drill, party…',
+  searchPlaceholder: 'Tent, drill, board game…',
   // A selected category replaces the rotating line: its own line + "· {n} items".
   // Lines / empty titles live in the category config (functions/src/shared/categories.ts).
   categoryLines: Object.fromEntries(CLIENT_CATEGORIES.map(c => [c.id, c.line])) as Record<string, string>,
