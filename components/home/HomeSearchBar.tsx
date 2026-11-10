@@ -1,8 +1,7 @@
 // Home search (Home only — Explore / Liked keep components/SearchBar.tsx): ONE full-width
-// soft amber field — SHADES.amberLight fill, 1.5px brand amber border, soft shadow, carbon
-// magnifier. No search button: the keyboard "search" key submits. The amber border alone
-// is ~1.8:1 on porcelain; the carbon icon (~16:1) and the fg2 placeholder (~7.6:1 on
-// amberLight) are what identify the field.
+// soft amber field — SHADES.amberLight fill, 1.5px amberDeep border (~5.7:1 on porcelain,
+// meets the 3:1 UI-contrast rule on its own), soft shadow, carbon magnifier. No search
+// button: the keyboard "search" key submits.
 // The placeholder is drawn as a one-line Text overlay so a long first name ends with
 // "…" (Android's native TextInput placeholder is clipped, never ellipsized); the input
 // keeps the full text as its accessibility label.
@@ -70,7 +69,7 @@ const s = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: SHADES.amberLight,
     borderWidth: 1.5,
-    borderColor: SHADES.amber,
+    borderColor: SHADES.amberDeep, // ~5.7:1 on porcelain (brand amber was ~1.8:1)
     // Soft lift (elevation = Android, shadow* = iOS).
     shadowColor: SHADES.carbon,
     shadowOpacity: 0.08,
