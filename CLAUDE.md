@@ -911,16 +911,10 @@ a snapshot indefinitely).
   `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides: h52, 1.5px
   carbon border (amber fails the 3:1 UI-contrast rule on porcelain), soft shadow, one-line
   `fg2` placeholder overlay ending in "…" for long names, amber 46px square "Search"
-  button = keyboard key, empty query → Explore without `q`; STICKY via the PLAIN
-  ScrollView's `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose
-  fade window started before scroll 0 showed twice once the bar moved to the top); the
-  sticky block is OPAQUE porcelain edge to edge, hairline once past the stick point
-  (content padding + measured banners height — keep the banners wrapper as child 0).
-  COMPACT on scroll: Reanimated `useScrollOffset(useAnimatedRef())` → `compact` 0 → 1 over
-  the first 40px (UI thread; reduce motion = switch at 20px): field 52 → 40, text scaled 14 → 13 (never an animated fontSize / animated Text or TextInput),
-  icons 20 → 18, button 46 → 40, header padding 8 → 4. NEVER `Reanimated.ScrollView`
-  here: createAnimatedComponent(ScrollView) + sticky header + RefreshControl crashed on
-  reload in Expo Go ("set the key `current` … frozen", reverted c07bdb4))
+  button = keyboard key, empty query → Explore without `q`; STICKY via the ScrollView's
+  `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose fade window
+  started before scroll 0 showed twice once the bar moved to the top); its white band +
+  hairline fade in from the measured stick point only — keep AccountBanners as child 0)
   → hero `InsetCarousel` → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
