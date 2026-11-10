@@ -1,5 +1,5 @@
 // Home search (Home only — Explore / Liked keep components/SearchBar.tsx): ONE full-width
-// soft amber field — SHADES.amberLight fill, 1.5px amberDeep border (~5.7:1 on porcelain,
+// soft amber field — SHADES.amberWash fill, 1.5px amberDeep border (~5.7:1 on porcelain,
 // meets the 3:1 UI-contrast rule on its own), soft shadow, carbon magnifier. No search
 // button: the keyboard "search" key submits.
 // The placeholder is drawn as a one-line Text overlay so a long first name ends with
@@ -67,7 +67,7 @@ const s = StyleSheet.create({
     height: 52,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: SHADES.amberLight,
+    backgroundColor: SHADES.amberWash,
     borderWidth: 1.5,
     borderColor: SHADES.amberDeep, // ~5.7:1 on porcelain (brand amber was ~1.8:1)
     // Soft lift (elevation = Android, shadow* = iOS).
