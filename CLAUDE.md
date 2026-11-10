@@ -928,10 +928,14 @@ a snapshot indefinitely).
   Reanimated version (Reanimated.ScrollView, then useScrollOffset + animated styles)
   crashed on reload in Expo Go — "set the key `current` … frozen" (reverted c07bdb4,
   689a1c2, f28a49a))
-  → hero `InsetCarousel` → `<NextPickupCard>` (nearest
+  → hero `InsetCarousel` (140px band — `HERO_HEIGHT`; built-in and admin hero slides use
+  compact text: title ≤ 2 lines 18/22, subtitle 1 line) → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
-  one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
-  `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) → "Got
+  one row up to 6, circles ≤ 52px; scroll from 7; right under the hero the title margin is
+  8 so hero image → title = the standard 24px gap, dots included) → New arrivals rail →
+  `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) →
+  `<WhyRentSection>` ("Spend less / Live lighter" — right under it for new renters, same
+  place after New arrivals for returning ones) → "Got
   plans?" `<CollectionTiles>` (2-col tiles in the collection's shade, `COLLECTION_TILE`, 4
   max + "See all" inline; admin-only dashed hint when none) → "Free this weekend"
   `<FreeWeekend>` (`weekendWindow`: Mon–Thu → coming Fri–Sun, Fri–Sat → today–Sun, Sunday
@@ -939,7 +943,8 @@ a snapshot indefinitely).
   ONE `fetchAllOccupancy()` + `computeAvailableUnits` for the exact window — the booking
   rule — top 12 bookable by popularity, tier-locked excluded, 8 shown, hidden under 3 or if
   occupancy failed; tap → `booking/new?productId&pickupAt&returnAt` (ms, pre-fill ignored
-  when no longer valid)) → "Consume better" banner →
+  when no longer valid)) → mid-page banner = admin banner slides ONLY (nothing when none;
+  WhyRentSection no longer falls back here) →
   "Rent again" `<RentAgainList>` (one card, 3 rows, `rentAgainRows`) →
   `<MostRentedPodium>` (`podiumPick`: `products.rentalsByMonth.{YYYY-MM}` — written by
   `applyRentalCount`, Vientiane month of the return — when 3 products have some, else
@@ -949,7 +954,8 @@ a snapshot indefinitely).
   under 2; "See all" → `explore?maxPrice=X` = the Explore price filter) → `<WhyBuyCard>` (returning:
   `whyBuyMine` = most-returned product with a `retailPrice`, total paid = sum of frozen
   `total` LAK; else `whyBuyCatalogue` = best retailPrice / daily price; hidden without a
-  retail value or rate) → returning renters (≥ 1 returned rental, not loyalty-excluded):
+  retail value or rate) → every signed-in renter, new or returning (`hasAccount`, not
+  loyalty-excluded — guests and business / BtoB accounts never see it):
   `<ReferralPromoCard>` (→ `/profile/loyalty?section=referral`). `<ShopStatusLine>` /
   `shopOpenState()` / `closedDays` are kept but NOT on the Home (removed 2026-10-27, for
   reuse later). Admins see

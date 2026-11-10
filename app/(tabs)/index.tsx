@@ -84,10 +84,13 @@ const PREVIEW_KEY = 'home.adminPreviewAll';
 const CONTENT_PAD_TOP = 8;
 const COMPACT_ON = 24;
 const COMPACT_OFF = 16;
+// Hero carousel: a band, not a block (was 190). Admin hero photos are cropped 9:4, which
+// fits this height on a phone with almost no extra crop.
+const HERO_HEIGHT = 140;
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, isAdmin, isGuest } = useAuth();
+  const { user, isAdmin, isGuest, hasAccount } = useAuth();
   const exchangeRate = useExchangeRate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -342,6 +345,9 @@ export default function HomeScreen() {
     const q = homeQuery.trim();
     router.push((q ? { pathname: '/explore', params: { q } } : '/explore') as never);
   };
+  // Nothing between the hero and "Categories" (no admin toggle, guest banner, pick-up).
+  const heroRightAbove = !isAdmin && !isGuest && !pickup && !preview;
+
   const search = (
     <BrandSearchBar
       value={homeQuery}
@@ -423,7 +429,7 @@ export default function HomeScreen() {
 
           <View style={styles.heroWrap}>
             {heroSlides.length > 0
-              ? <SlideCarousel slides={heroSlides} height={190} intervalMs={10000} showDraft={preview} />
+              ? <SlideCarousel slides={heroSlides} height={HERO_HEIGHT} intervalMs={10000} showDraft={preview} compact />
               : <HeroCarousel />}
           </View>
 
@@ -445,8 +451,10 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* Categories — same circles as the My Account stickers, all on one row */}
-            <SectionTitle>{HOME_COPY.categoriesTitle}</SectionTitle>
+            {/* Categories — same circles as the My Account stickers, all on one row. Right
+                under the hero, the carousel dots (16px) already sit in the gap: the title
+                margin is reduced so image → title = the standard 24px section gap. */}
+            <SectionTitle style={heroRightAbove ? styles.titleAfterHero : undefined}>{HOME_COPY.categoriesTitle}</SectionTitle>
             {catFit ? (
               <View style={styles.catRow}>
                 {HOME_CATEGORIES.map(cat => categoryItem(cat))}
@@ -479,6 +487,10 @@ export default function HomeScreen() {
               {(preview || !returning) && <RentReturnRepeat />}
             </HomeSection>
 
+            {/* "Spend less / Live lighter" — right under Rent. Return. Repeat. (one story) for
+                new renters; for returning renters it takes that place after New arrivals. */}
+            <View style={styles.whyRent}><WhyRentSection /></View>
+
             {/* Got plans? — 2-column tiles */}
             <HomeSection loading={!ready.products || !ready.collections} skeleton={<TilesSkeleton />}>
               {preview ? (
@@ -505,12 +517,12 @@ export default function HomeScreen() {
             </HomeSection>
           </View>
 
-          {/* Banner — breaks the rhythm between the rails and the lists */}
-          <View style={{ marginTop: 28 }}>
-            {bannerSlides.length > 0
-              ? <SlideCarousel slides={bannerSlides} height={200} intervalMs={6000} showDraft={preview} />
-              : <WhyRentSection />}
-          </View>
+          {/* Banner — admin banner slides only (WhyRentSection moved up; nothing when none) */}
+          {bannerSlides.length > 0 && (
+            <View style={{ marginTop: 28 }}>
+              <SlideCarousel slides={bannerSlides} height={200} intervalMs={6000} showDraft={preview} />
+            </View>
+          )}
 
           <View style={styles.content}>
             {/* Rent again — compact list (returning renters) */}
@@ -566,9 +578,10 @@ export default function HomeScreen() {
             ) : null}
             </HomeSection>
 
-            {/* Bottom: returning renters → referral card */}
+            {/* Bottom: referral card — every signed-in renter (new or returning); hidden for
+                guests and loyalty-excluded accounts (business / BtoB), via loyalty.excluded. */}
             <HomeSection loading={!ready.mine} skeleton={null}>
-              {(preview || (returning && !loyalty.excluded)) && (
+              {(preview || (hasAccount && !loyalty.excluded)) && (
                 <View style={{ marginTop: 16 }}><ReferralPromoCard points={referralPts} percent={referralWelcomePercent(loyalty.config)} /></View>
               )}
             </HomeSection>
@@ -596,7 +609,7 @@ function HeroCarousel() {
   const router = useRouter();
   return (
     <InsetCarousel
-      height={190}
+      height={HERO_HEIGHT}
       intervalMs={10000}
       slides={HERO_BUILT_IN.map((slide, i) => (
         <View key={i} style={[styles.slide, { backgroundColor: slide.tint }]}>
@@ -605,8 +618,8 @@ function HeroCarousel() {
           )}
           <View style={styles.slideOverlay} />
           <View style={styles.slideContent}>
-            <Text style={styles.slideTitle}>{slide.title}</Text>
-            <Text style={styles.slideSub}>{slide.subtitle}</Text>
+            <Text style={styles.slideTitle} numberOfLines={2}>{slide.title}</Text>
+            <Text style={styles.slideSub} numberOfLines={1}>{slide.subtitle}</Text>
             <PressScale style={styles.slideCta} onPress={() => openAppRoute(router, slide.route)} activeOpacity={0.85}>
               <Text style={styles.slideCtaText}>{slide.cta}</Text>
             </PressScale>
@@ -691,10 +704,11 @@ const styles = StyleSheet.create({
   // Hero slides (inside InsetCarousel)
   slide: { flex: 1, overflow: 'hidden' },
   slideOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.35)' },
-  slideContent: { flex: 1, justifyContent: 'flex-end', padding: 18 },
-  slideTitle: { fontSize: 22, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 26, marginBottom: 4 },
-  slideSub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 18, marginBottom: 12 },
-  slideCta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12 },
+  // Sized for the 140px band: 2-line title + 1-line subtitle + button fit with room.
+  slideContent: { flex: 1, justifyContent: 'flex-end', padding: 14 },
+  slideTitle: { fontSize: 18, fontWeight: '800', color: SHADES.white, letterSpacing: -0.3, lineHeight: 22, marginBottom: 2 },
+  slideSub: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 16, marginBottom: 8 },
+  slideCta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 12 },
   slideCtaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },
 
   // Rails bleed to the screen edges, content stays on the 16px gutter.
@@ -709,7 +723,10 @@ const styles = StyleSheet.create({
   searchWrapCompact: { paddingVertical: 4 },
   searchWrapPinned: { borderBottomColor: SHADES.border },
   heroWrap: { marginTop: 8 },
+  whyRent: { marginTop: 24 },
 
+  // 10 (dots padding) + 6 (dots) + 8 = 24 from the hero image, like every section gap.
+  titleAfterHero: { marginTop: 8 },
   catRow: { flexDirection: 'row' },
   catRail: { paddingHorizontal: 12, gap: 4 },
   catItem: { alignItems: 'center' },

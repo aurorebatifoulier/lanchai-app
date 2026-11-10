@@ -13,14 +13,16 @@ import { openCategory } from '@/lib/navigation';
 // Admin-managed Home slides (hero carousel / mid-page banner): photo full-bleed in the
 // rounded 16px-margin card, a subtle dark overlay ONLY when there's text, amber button
 // when there's a label and a link; a tap anywhere follows the link. `showDraft` (admin
-// preview) marks unpublished slides.
+// preview) marks unpublished slides. `compact` = the 140px Home hero band: smaller text,
+// title ≤ 2 lines, subtitle 1 line (the mid-page banner keeps the full size).
 export default function SlideCarousel({
-  slides, height, intervalMs, showDraft,
+  slides, height, intervalMs, showDraft, compact = false,
 }: {
   slides: HomeSlide[];
   height: number;
   intervalMs: number;
   showDraft?: boolean;
+  compact?: boolean;
 }) {
   const router = useRouter();
   return (
@@ -44,11 +46,11 @@ export default function SlideCarousel({
             {showDraft && !slide.published && (
               <View style={s.draft}><Text style={s.draftText}>{HOME_COPY.adminDraft}</Text></View>
             )}
-            <View style={s.content}>
-              {!!slide.title && <Text style={s.title} numberOfLines={2}>{slide.title}</Text>}
-              {!!slide.subtitle && <Text style={s.sub} numberOfLines={2}>{slide.subtitle}</Text>}
+            <View style={[s.content, compact && s.contentCompact]}>
+              {!!slide.title && <Text style={[s.title, compact && s.titleCompact]} numberOfLines={2}>{slide.title}</Text>}
+              {!!slide.subtitle && <Text style={[s.sub, compact && s.subCompact]} numberOfLines={compact ? 1 : 2}>{slide.subtitle}</Text>}
               {!!slide.ctaLabel && target && (
-                <PressScale style={s.cta} onPress={go} activeOpacity={0.85}>
+                <PressScale style={[s.cta, compact && s.ctaCompact]} onPress={go} activeOpacity={0.85}>
                   <Text style={s.ctaText}>{slide.ctaLabel}</Text>
                 </PressScale>
               )}
@@ -68,6 +70,11 @@ const s = StyleSheet.create({
   sub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 18 },
   cta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, marginTop: 8 },
   ctaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },
+  // Hero band (140px): 2-line title + 1-line subtitle + button fit.
+  contentCompact: { padding: 14, gap: 2 },
+  titleCompact: { fontSize: 18, lineHeight: 22, letterSpacing: -0.3 },
+  subCompact: { fontSize: 12, lineHeight: 16 },
+  ctaCompact: { paddingHorizontal: 14, paddingVertical: 7, marginTop: 6 },
   draft: { position: 'absolute', top: 12, left: 12, backgroundColor: SHADES.amberLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   draftText: { fontSize: 11, fontWeight: '800', color: SHADES.amberDeep },
 });
