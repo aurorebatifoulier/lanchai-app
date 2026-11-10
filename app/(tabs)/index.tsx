@@ -1,15 +1,18 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   Image,
-  Animated,
   useWindowDimensions,
   RefreshControl,
 } from 'react-native';
 import { Text } from '@/components/AppText';
+import Reanimated, {
+  interpolate, Extrapolation, useAnimatedScrollHandler, useAnimatedStyle, useDerivedValue, useSharedValue,
+} from 'react-native-reanimated';
+import { useReducedMotion } from '@/constants/motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -75,9 +78,13 @@ import { openCategory, openAppRoute } from '@/lib/navigation';
 const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
 // Admin "Preview all sections" toggle, remembered per device.
 const PREVIEW_KEY = 'home.adminPreviewAll';
-// Search block vertical padding: 8 + the scroll content's 8 = 16px under the top bar at
-// rest; once stuck (ScrollView sticky header) the field sits 8px under the top bar.
-const SEARCH_PAD_Y = 8;
+// Search block vertical padding, full → compact: 8 + the scroll content's 8 = 16px under
+// the top bar at rest; 4 once compact, so the pinned header stays small.
+const SEARCH_PAD_Y: [number, number] = [8, 4];
+const CONTENT_PAD_TOP = 8;
+// The search shrinks over the first COMPACT_SCROLL px of scroll (reduce motion: switches
+// at half of it, no in-between).
+const COMPACT_SCROLL = 40;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -114,13 +121,25 @@ export default function HomeScreen() {
   const [focusTick, setFocusTick] = useState(0);
   const { width: screenW } = useWindowDimensions();
 
-  // Sticky search: an overlay copy of the field pins under the header once the inline
-  // field reaches the top of the scroll area (threshold from its measured position).
-  const scrollY = useRef(new Animated.Value(0)).current;
-  // The search block is the ScrollView's sticky header; it sticks once the scroll reaches
-  // its measured top (searchY). Its white band fades in only from that point on.
-  const [searchY, setSearchY] = useState<number | null>(null);
-  const stickAt = searchY ?? Number.MAX_SAFE_INTEGER;
+  // Sticky search: the search block is the ScrollView's sticky header (ONE field). Its
+  // background is always opaque porcelain (nothing shows behind it once pinned); the
+  // hairline appears from the stick point (content padding + the banners' height).
+  // Scroll → `compact` (0 → 1 over COMPACT_SCROLL px) on the UI thread.
+  const reduceMotion = useReducedMotion();
+  const scrollY = useSharedValue(0);
+  const bannersH = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler({ onScroll: e => { scrollY.value = e.contentOffset.y; } });
+  const compact = useDerivedValue(() => (
+    reduceMotion
+      ? (scrollY.value >= COMPACT_SCROLL / 2 ? 1 : 0)
+      : interpolate(scrollY.value, [0, COMPACT_SCROLL], [0, 1], Extrapolation.CLAMP)
+  ), [reduceMotion]);
+  const searchWrapStyle = useAnimatedStyle(() => ({
+    paddingVertical: interpolate(compact.value, [0, 1], SEARCH_PAD_Y),
+  }));
+  const hairlineStyle = useAnimatedStyle(() => ({
+    opacity: scrollY.value > CONTENT_PAD_TOP + bannersH.value ? 1 : 0,
+  }));
 
   // Every independent Home read in parallel. Admin-managed / slow data comes from a
   // short in-memory cache (lib/homeCache.ts); `force` (pull-to-refresh) bypasses it.
@@ -328,6 +347,7 @@ export default function HomeScreen() {
       onChangeText={setHomeQuery}
       onSubmit={submitSearch}
       placeholder={HOME_COPY.searchPlaceholder(firstName)}
+      compact={compact}
     />
   );
 
@@ -377,32 +397,29 @@ export default function HomeScreen() {
 
       {/* Scroll area (one fixed sibling above: the top bar); the search is its sticky header. */}
       <View style={{ flex: 1 }}>
-        <Animated.ScrollView
+        <Reanimated.ScrollView
           style={styles.scroll}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 8, paddingBottom: SCREEN_BOTTOM_GAP }}
+          contentContainerStyle={{ paddingTop: CONTENT_PAD_TOP, paddingBottom: SCREEN_BOTTOM_GAP }}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[SHADES.amber]} tintColor={SHADES.amber} progressBackgroundColor={SHADES.white} />
           }
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-          // Child 1 = the search block (child 0 = AccountBanners, an element even when it
-          // renders nothing) — keep that order.
+          onScroll={onScroll}
+          // Child 1 = the search block (child 0 = the banners wrapper) — keep that order.
           stickyHeaderIndices={[1]}
         >
           {/* Verify-email / verified banners — under the top bar, never over it. */}
-          <AccountBanners />
-          {/* Search right under the top bar, above the slides — sticky header (one field). */}
-          <View style={styles.searchWrap} onLayout={e => setSearchY(e.nativeEvent.layout.y)}>
-            <Animated.View
-              pointerEvents="none"
-              style={[styles.searchBand, {
-                opacity: scrollY.interpolate({ inputRange: [stickAt, stickAt + 1], outputRange: [0, 1], extrapolate: 'clamp' }),
-              }]}
-            />
-            {search}
+          <View onLayout={e => { bannersH.value = e.nativeEvent.layout.height; }}>
+            <AccountBanners />
           </View>
+          {/* Search right under the top bar, above the slides — sticky header (one field),
+              opaque edge to edge, shrinks on scroll. */}
+          <Reanimated.View style={[styles.searchWrap, searchWrapStyle]}>
+            {search}
+            <Reanimated.View pointerEvents="none" style={[styles.searchHairline, hairlineStyle]} />
+          </Reanimated.View>
 
           <View style={styles.heroWrap}>
             {heroSlides.length > 0
@@ -556,7 +573,7 @@ export default function HomeScreen() {
               )}
             </HomeSection>
           </View>
-        </Animated.ScrollView>
+        </Reanimated.ScrollView>
 
       </View>
     </SafeAreaView>
@@ -683,12 +700,9 @@ const styles = StyleSheet.create({
   // Rails bleed to the screen edges, content stays on the 16px gutter.
   railScroll: { marginHorizontal: -16 },
   rail: { paddingHorizontal: 16, gap: 12 },
-  searchWrap: { paddingHorizontal: 16, paddingVertical: SEARCH_PAD_Y },
-  // White band + hairline behind the stuck search (transparent at rest).
-  searchBand: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
-  },
+  // Opaque, full width: nothing (slides, cards) shows behind the pinned search.
+  searchWrap: { paddingHorizontal: 16, backgroundColor: COLORS.porcelain },
+  searchHairline: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 0.5, backgroundColor: SHADES.border },
   heroWrap: { marginTop: 8 },
 
   catRow: { flexDirection: 'row' },
