@@ -17,7 +17,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/Colors';
 import ProductGridCard, { useProductCardLayout } from '@/components/ProductGridCard';
-import SearchBar from '@/components/SearchBar';
+import BrandSearchBar from '@/components/BrandSearchBar';
 import { ActiveChip } from '@/components/FilterSheet';
 import SortMenu from '@/components/explore/SortMenu';
 import { useAuth } from '@/contexts/AuthContext';
@@ -443,8 +443,7 @@ export default function ExploreScreen() {
   // Search field + categories: inline in the header, and as the pinned overlay copy.
   const searchAndCategories = (
     <>
-      <SearchBar
-        variant="account"
+      <BrandSearchBar
         value={searchQuery}
         onChangeText={setSearchQuery}
         placeholder={EXPLORE_COPY.searchPlaceholder}

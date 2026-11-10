@@ -1,12 +1,14 @@
-// Home search (Home only — Explore / Liked keep components/SearchBar.tsx): ONE full-width
-// WHITE field, 1.5px carbon border, soft shadow, magnifier in the exact logo yellow
+// The brand search field, SHARED by Home and Explore so they can't drift apart (Liked
+// keeps components/SearchBar.tsx with its filter button): ONE full-width WHITE field (h52,
+// radius 14), 1.5px carbon border, soft shadow, magnifier in the exact logo yellow
 // COLORS.amber #F4B400 (deliberate: 1.85:1 on white, decorative — the carbon border and
 // the fg2 placeholder, ~8.9:1, identify the field), fg2 clear icon, carbon text. No
-// search button: the keyboard "search" key submits.
+// search button: the keyboard "search" key calls `onSubmit` (Home → Explore); Explore
+// searches live and passes none.
 // The placeholder is drawn as a one-line Text overlay so a long first name ends with
 // "…" (Android's native TextInput placeholder is clipped, never ellipsized); the input
 // keeps the full text as its accessibility label.
-// `compact` (Home scrolled) switches to smaller plain styles: field 52 → 40, text 14 →
+// `compact` (Home scrolled; Explore never sets it) switches to smaller plain styles: field 52 → 40, text 14 →
 // 13, icon 20 → 18 — the Home animates the switch with LayoutAnimation.
 // No Reanimated here: see the Home sticky search notes.
 import React from 'react';
@@ -17,13 +19,13 @@ import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { TYPE } from '@/constants/typography';
 
-export default function HomeSearchBar({
+export default function BrandSearchBar({
   value, onChangeText, onSubmit, placeholder, compact = false,
 }: {
   value: string;
   onChangeText: (text: string) => void;
-  /** Keyboard "search" key (empty query handled by the caller). */
-  onSubmit: () => void;
+  /** Keyboard "search" key (empty query handled by the caller). Optional: live search. */
+  onSubmit?: () => void;
   placeholder: string;
   /** Smaller sizes once the Home is scrolled. */
   compact?: boolean;

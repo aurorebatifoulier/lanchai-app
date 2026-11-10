@@ -14,7 +14,8 @@ interface Props {
   showFilter?: boolean;
   onFilterPress?: () => void;
   filterActive?: boolean;
-  /** 'account' = the My Account field look (Home): white, thin border, radius 14, h50. */
+  /** 'account' = the My Account field look (Liked): white, thin border, radius 14. Home and
+   *  Explore use components/BrandSearchBar.tsx. */
   variant?: 'default' | 'account';
 }
 

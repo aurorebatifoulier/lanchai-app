@@ -25,7 +25,7 @@ import { SHADES } from '@/constants/brandShades';
 import { HOME_COPY } from '@/constants/homeCopy';
 import { UI, SectionTitle, CategoryBadge, ToggleRow, SCREEN_BOTTOM_GAP } from '@/components/account/ui';
 import { TYPE, SIZES } from '@/constants/typography';
-import HomeSearchBar from '@/components/home/HomeSearchBar';
+import BrandSearchBar from '@/components/BrandSearchBar';
 import { useReducedMotion } from '@/constants/motion';
 import ProductRailCard from '@/components/ProductRailCard';
 import InsetCarousel from '@/components/home/InsetCarousel';
@@ -343,7 +343,7 @@ export default function HomeScreen() {
     router.push((q ? { pathname: '/explore', params: { q } } : '/explore') as never);
   };
   const search = (
-    <HomeSearchBar
+    <BrandSearchBar
       value={homeQuery}
       onChangeText={setHomeQuery}
       onSubmit={submitSearch}

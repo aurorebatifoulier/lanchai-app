@@ -907,8 +907,9 @@ a snapshot indefinitely).
 
 - **Home (validated mockups, 2026-10-27) — My Account design, alternating formats.** Copy
   in `constants/homeCopy.ts`, pure picks in `lib/homeData.ts`, blocks in `components/home/`.
-  Order: header → search (`<HomeSearchBar>`, Home only — Explore / Liked keep
-  `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides): ONE
+  Order: header → search (`<BrandSearchBar>` (`components/BrandSearchBar.tsx`) — the ONE
+  brand search field, shared with Explore so they can't drift apart; Liked keeps
+  `SearchBar` with its filter button; since 2026-11-10 right under the top bar, ABOVE the slides): ONE
   full-width WHITE field (final design after the soft amber / carbon / deeper-amber
   trials, 2026-11-10), 1.5px carbon border, soft shadow — magnifier in the exact logo
   yellow `COLORS.amber` #F4B400 (Aurore's choice: 1.85:1 on white, decorative — the carbon
@@ -921,7 +922,7 @@ a snapshot indefinitely).
   measured banners height — keep the banners wrapper as child 0). COMPACT on scroll =
   plain React state from `onScroll` (on above 24px, off below 16 — hysteresis), sizes
   switched by plain styles (field 52 → 40, text 14 → 13, icon 20 → 18, padding 8 → 4) with a 160 ms `LayoutAnimation` (none with reduce motion). NO
-  Reanimated in the Home sticky search or `HomeSearchBar`: every
+  Reanimated in the Home sticky search or `BrandSearchBar`: every
   Reanimated version (Reanimated.ScrollView, then useScrollOffset + animated styles)
   crashed on reload in Expo Go — "set the key `current` … frozen" (reverted c07bdb4,
   689a1c2, f28a49a))
@@ -1060,8 +1061,9 @@ a snapshot indefinitely).
 - **Explore (validated mockup, 2026-10-27).** Copy in `constants/exploreCopy.ts`. White
   header band: title, `<RotatingLine>` (4s, static with reduce motion) — no counter, no
   results-count line (removed 2026-10-27; the sort selector sits alone, right-aligned) —
-  full-width `SearchBar variant="account"` (no filter button / filter sheet in Explore
-  since 2026-11-09 — Liked still has its own), `<CategoryFilterRow>` (All +
+  full-width `<BrandSearchBar>` (same field as the Home — white, carbon border, logo-yellow
+  magnifier, h52; live search, no `onSubmit`, never compact; no filter button / filter
+  sheet in Explore since 2026-11-09 — Liked still has its own), `<CategoryFilterRow>` (All +
   `CategoryBadge`, selected = amber). Scrolling pins an overlay copy of search +
   categories (Home sticky pattern). ONE quick-chips row, in this order: Available now
   (`availableNowWindow`: 1-day booking from the first slot left today, 2h lead — becomes
