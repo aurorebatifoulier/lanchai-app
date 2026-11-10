@@ -7,6 +7,7 @@ export const SHADES = {
   amberSoft: '#FAC775',    // discreet end point (header flight-path hexagon)
   amberLight: '#F7ECD9',   // light amber circles, gauge track
   amberPale: '#FBF4E6',
+  amberIcon: '#B98900',    // brand amber deepened just enough for ICONS on white (3.16:1 — #F4B400 is 1.85:1)
   amberDeep: '#8A5A00',    // amber-brown icons/text on light amber
   amberText: '#95600D',    // dark amber TEXT (links, "See all", "Edit") — ≥ 4.5:1 on white / cream / light amber; same as the email icons
   carbon: '#1E1E1E',

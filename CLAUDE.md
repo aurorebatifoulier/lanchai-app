@@ -909,11 +909,11 @@ a snapshot indefinitely).
   in `constants/homeCopy.ts`, pure picks in `lib/homeData.ts`, blocks in `components/home/`.
   Order: header → search (`<HomeSearchBar>`, Home only — Explore / Liked keep
   `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides): ONE
-  full-width CARBON field (replaced the soft amber one, 2026-11-10), no border, soft
-  shadow — colours on carbon: magnifier brand amber (~9:1), placeholder + clear (x)
-  `carbonFaint` #B8B6B0 (~8.2:1), typed text `cream` (~16:1), `cursorColor` amber +
-  translucent amber `selectionColor`; one-line placeholder overlay ending in "…" for long
-  names, NO search button — the keyboard "search" key submits, empty query → Explore without `q`; STICKY via the PLAIN
+  full-width WHITE field (after the soft amber and carbon trials, 2026-11-10), 1.5px
+  carbon border, soft shadow — magnifier `SHADES.amberIcon` #B98900 (brand amber deepened
+  for icons on white: 3.16:1; #F4B400 is 1.85:1), placeholder + clear (x) `fg2` (~8.9:1),
+  typed text carbon; one-line placeholder overlay ending in "…" for long names, NO search
+  button — the keyboard "search" key submits, empty query → Explore without `q`; STICKY via the PLAIN
   ScrollView's `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose
   fade window started before scroll 0 showed twice once the bar moved to the top); the
   sticky block is OPAQUE porcelain edge to edge, hairline once pinned (content padding +
