@@ -38,7 +38,6 @@ import { RailHeader } from '@/components/home/RailHeader';
 import {
   HomeSection, RailSkeleton, ThumbsSkeleton, TilesSkeleton, ListSkeleton, PodiumSkeleton, CardSkeleton,
 } from '@/components/home/Skeletons';
-import { useReduceMotion } from '@/components/account/AccountHeader';
 import {
   rentAgainRows, podiumPick, whyBuyMine, whyBuyCatalogue, whyBuyMineRanked, whyBuyCatalogueRanked,
   weekendWindow, freeThisWeekend, budgetPicks, bookableByPopularity, pickSections, type WhyBuy,
@@ -76,9 +75,9 @@ import { openCategory, openAppRoute } from '@/lib/navigation';
 const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
 // Admin "Preview all sections" toggle, remembered per device.
 const PREVIEW_KEY = 'home.adminPreviewAll';
-// Sticky search geometry: inline field top padding, overlay vertical padding.
-const SEARCH_PAD_TOP = 8; // + the scroll content's 8 = 16px under the top bar
-const STICKY_PAD = 8;
+// Search block vertical padding: 8 + the scroll content's 8 = 16px under the top bar at
+// rest; once stuck (ScrollView sticky header) the field sits 8px under the top bar.
+const SEARCH_PAD_Y = 8;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -113,15 +112,15 @@ export default function HomeScreen() {
   const [occupancy, setOccupancy] = useState<Map<string, OccupancyRecord[]> | null>(null);
   const [budgetLak, setBudgetLak] = useState(DEFAULT_BUDGET_THRESHOLD_LAK);
   const [focusTick, setFocusTick] = useState(0);
-  const reduceMotion = useReduceMotion();
   const { width: screenW } = useWindowDimensions();
 
   // Sticky search: an overlay copy of the field pins under the header once the inline
   // field reaches the top of the scroll area (threshold from its measured position).
   const scrollY = useRef(new Animated.Value(0)).current;
+  // The search block is the ScrollView's sticky header; it sticks once the scroll reaches
+  // its measured top (searchY). Its white band fades in only from that point on.
   const [searchY, setSearchY] = useState<number | null>(null);
-  const [pinned, setPinned] = useState(false);
-  const pinAt = searchY != null ? searchY + SEARCH_PAD_TOP - STICKY_PAD : Number.MAX_SAFE_INTEGER;
+  const stickAt = searchY ?? Number.MAX_SAFE_INTEGER;
 
   // Every independent Home read in parallel. Admin-managed / slow data comes from a
   // short in-memory cache (lib/homeCache.ts); `force` (pull-to-refresh) bypasses it.
@@ -317,8 +316,8 @@ export default function HomeScreen() {
     </ScrollView>
   );
 
-  // Same field inline and pinned — shared value, same submit (keyboard key + amber
-  // button): a query → Explore with ?q=, empty → Explore as is.
+  // Search submit (keyboard key + amber button): a query → Explore with ?q=, empty →
+  // Explore as is.
   const submitSearch = () => {
     const q = homeQuery.trim();
     router.push((q ? { pathname: '/explore', params: { q } } : '/explore') as never);
@@ -376,7 +375,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Scroll area + the sticky search overlay (one fixed sibling above: the top bar). */}
+      {/* Scroll area (one fixed sibling above: the top bar); the search is its sticky header. */}
       <View style={{ flex: 1 }}>
         <Animated.ScrollView
           style={styles.scroll}
@@ -387,18 +386,21 @@ export default function HomeScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[SHADES.amber]} tintColor={SHADES.amber} progressBackgroundColor={SHADES.white} />
           }
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-            useNativeDriver: true,
-            listener: (e: { nativeEvent: { contentOffset: { y: number } } }) => {
-              const next = e.nativeEvent.contentOffset.y >= pinAt;
-              setPinned(prev => (prev === next ? prev : next));
-            },
-          })}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          // Child 1 = the search block (child 0 = AccountBanners, an element even when it
+          // renders nothing) — keep that order.
+          stickyHeaderIndices={[1]}
         >
           {/* Verify-email / verified banners — under the top bar, never over it. */}
           <AccountBanners />
-          {/* Search right under the top bar, above the slides (sticky copy below). */}
+          {/* Search right under the top bar, above the slides — sticky header (one field). */}
           <View style={styles.searchWrap} onLayout={e => setSearchY(e.nativeEvent.layout.y)}>
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.searchBand, {
+                opacity: scrollY.interpolate({ inputRange: [stickAt, stickAt + 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+              }]}
+            />
             {search}
           </View>
 
@@ -556,16 +558,6 @@ export default function HomeScreen() {
           </View>
         </Animated.ScrollView>
 
-        {/* Sticky search overlay — fades in once the inline field reaches the top */}
-        <Animated.View
-          pointerEvents={pinned ? 'auto' : 'none'}
-          style={[styles.sticky, {
-            opacity: scrollY.interpolate({ inputRange: [pinAt - (reduceMotion ? 0.5 : 10), pinAt], outputRange: [0, 1], extrapolate: 'clamp' }),
-            transform: [{ translateY: scrollY.interpolate({ inputRange: [pinAt - (reduceMotion ? 0.5 : 10), pinAt], outputRange: [reduceMotion ? 0 : -6, 0], extrapolate: 'clamp' }) }],
-          }]}
-        >
-          {search}
-        </Animated.View>
       </View>
     </SafeAreaView>
   );
@@ -691,13 +683,13 @@ const styles = StyleSheet.create({
   // Rails bleed to the screen edges, content stays on the 16px gutter.
   railScroll: { marginHorizontal: -16 },
   rail: { paddingHorizontal: 16, gap: 12 },
-  searchWrap: { paddingHorizontal: 16, paddingTop: SEARCH_PAD_TOP },
-  heroWrap: { marginTop: 16 },
-  sticky: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingHorizontal: 16, paddingVertical: STICKY_PAD,
+  searchWrap: { paddingHorizontal: 16, paddingVertical: SEARCH_PAD_Y },
+  // White band + hairline behind the stuck search (transparent at rest).
+  searchBand: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
+  heroWrap: { marginTop: 8 },
 
   catRow: { flexDirection: 'row' },
   catRail: { paddingHorizontal: 12, gap: 4 },

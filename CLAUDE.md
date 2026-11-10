@@ -911,9 +911,11 @@ a snapshot indefinitely).
   `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides: h52, 1.5px
   carbon border (amber fails the 3:1 UI-contrast rule on porcelain), soft shadow, one-line
   `fg2` placeholder overlay ending in "…" for long names, amber 46px square "Search"
-  button = keyboard key, empty query → Explore without `q`; STICKY: an overlay copy fades
-  in under the header once the inline field reaches the top — shared value, native-driver
-  opacity, instant with reduce motion) → hero `InsetCarousel` → `<NextPickupCard>` (nearest
+  button = keyboard key, empty query → Explore without `q`; STICKY via the ScrollView's
+  `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose fade window
+  started before scroll 0 showed twice once the bar moved to the top); its white band +
+  hairline fade in from the measured stick point only — keep AccountBanners as child 0)
+  → hero `InsetCarousel` → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) → "Got
