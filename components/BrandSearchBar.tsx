@@ -8,10 +8,13 @@
 // The placeholder is drawn as a one-line Text overlay so a long first name ends with
 // "…" (Android's native TextInput placeholder is clipped, never ellipsized); the input
 // keeps the full text as its accessibility label.
-// `compact` (Home scrolled; Explore never sets it) switches to smaller plain styles: field 52 → 40, text 14 →
-// 13, icon 20 → 18 — the Home animates the switch with LayoutAnimation.
+// `compact` (Home scrolled; Explore never sets it) switches to smaller plain styles: field
+// 52 → 40, text 14 → 13, icon 20 → 18 — the Home animates the switch with LayoutAnimation.
+// Clear (x): a REAL 40px-wide, full-height touch target inside the field (Android ignores
+// hitSlop outside the parent, and an 18px target let taps land on the input), focus kept
+// in the field after clearing.
 // No Reanimated here: see the Home sticky search notes.
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Text, TextInput } from '@/components/AppText';
@@ -30,6 +33,11 @@ export default function BrandSearchBar({
   /** Smaller sizes once the Home is scrolled. */
   compact?: boolean;
 }) {
+  const inputRef = useRef<TextInput>(null);
+  const clear = () => {
+    onChangeText('');
+    inputRef.current?.focus();
+  };
   return (
     <View style={[s.field, compact && s.fieldCompact]}>
       <Feather name="search" size={compact ? 18 : 20} color={COLORS.amber} />
@@ -40,6 +48,7 @@ export default function BrandSearchBar({
           </Text>
         )}
         <TextInput
+          ref={inputRef}
           style={[s.input, compact && s.textCompact]}
           value={value}
           onChangeText={onChangeText}
@@ -52,8 +61,9 @@ export default function BrandSearchBar({
       </View>
       {value.length > 0 && (
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear"
-          onPress={() => onChangeText('')}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={clear}
+          style={s.clear}
+          activeOpacity={0.6}
         >
           <Feather name="x" size={18} color={COLORS.fg2} />
         </TouchableOpacity>
@@ -85,4 +95,8 @@ const s = StyleSheet.create({
   placeholder: { ...TYPE.body, color: COLORS.fg2, position: 'absolute', left: 0, right: 0 },
   input: { ...TYPE.body, color: SHADES.carbon, padding: 0, height: '100%' },
   textCompact: { fontSize: 13, lineHeight: 18 },
+  // 40px wide × the field's full inner height; the negative margin eats into the field's
+  // right padding so the 18px icon stays where it was (centred ~25px / ~23px compact from
+  // the edge).
+  clear: { width: 40, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center', marginRight: -11, marginLeft: -6 },
 });

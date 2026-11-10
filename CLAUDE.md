@@ -914,7 +914,9 @@ a snapshot indefinitely).
   trials, 2026-11-10), 1.5px carbon border, soft shadow — magnifier in the exact logo
   yellow `COLORS.amber` #F4B400 (Aurore's choice: 1.85:1 on white, decorative — the carbon
   border and the placeholder identify the field; don't swap it for a deeper amber),
-  placeholder + clear (x) `fg2` (~8.9:1), typed text carbon; one-line placeholder overlay ending in "…" for long names, NO search
+  placeholder + clear (x) `fg2` (~8.9:1) — the x is a real 40px-wide full-height target
+  inside the field (no hitSlop: Android ignores it outside the parent), focus kept after
+  clearing —, typed text carbon; one-line placeholder overlay ending in "…" for long names, NO search
   button — the keyboard "search" key submits, empty query → Explore without `q`; STICKY via the PLAIN
   ScrollView's `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose
   fade window started before scroll 0 showed twice once the bar moved to the top); the
