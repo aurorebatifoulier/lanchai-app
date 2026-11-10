@@ -1,8 +1,9 @@
 // Home search (Home only — Explore / Liked keep components/SearchBar.tsx): a stronger
 // field (1.5px carbon border, soft shadow) + an amber square search button.
 // `compact` (0 → 1, a Reanimated shared value driven by the Home scroll) shrinks it on the
-// UI thread: field 52 → 40, font 14 → 13, icons 20 → 18, button 46 → 40. Worklets read
-// that shared value and plain numbers only (no captured objects / refs).
+// UI thread: field 52 → 40, text 14 → ~13 (a scale on the text block — no animated
+// Text / TextInput: an animated fontSize on them crashed on reload in Expo Go), icons
+// 20 → 18, button 46 → 40. Worklets read that shared value and plain numbers only.
 // The placeholder is drawn as a one-line Text overlay so a long first name ends with
 // "…" (Android's native TextInput placeholder is clipped, never ellipsized); the input
 // keeps the full text as its accessibility label.
@@ -10,13 +11,11 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import Reanimated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
-import { TextInput } from '@/components/AppText';
+import { Text, TextInput } from '@/components/AppText';
 import PressScale from '@/components/PressScale';
 import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
-import { TYPE, MAX_FONT_SCALE } from '@/constants/typography';
-
-const AnimatedInput = Reanimated.createAnimatedComponent(TextInput);
+import { TYPE } from '@/constants/typography';
 
 export default function HomeSearchBar({
   value, onChangeText, onSubmit, placeholder, compact,
@@ -40,8 +39,10 @@ export default function HomeSearchBar({
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(compact.value, [0, 1], [1, 0.9]) }], // 20 → 18
   }));
-  const fontStyle = useAnimatedStyle(() => ({
-    fontSize: interpolate(compact.value, [0, 1], [14, 13]),
+  // Text 14 → 13 as a scale from the left edge (layout unchanged, so the placeholder's
+  // one-line "…" stays computed on the real width).
+  const textStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(compact.value, [0, 1], [1, 13 / 14]) }],
   }));
 
   return (
@@ -50,21 +51,14 @@ export default function HomeSearchBar({
         <Reanimated.View style={iconStyle}>
           <Feather name="search" size={20} color={SHADES.carbon} />
         </Reanimated.View>
-        <View style={s.inputWrap}>
+        <Reanimated.View style={[s.inputWrap, textStyle]}>
           {value.length === 0 && (
-            <Reanimated.Text
-              style={[s.placeholder, fontStyle]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-              pointerEvents="none"
-              importantForAccessibility="no"
-            >
+            <Text style={s.placeholder} numberOfLines={1} ellipsizeMode="tail" pointerEvents="none" importantForAccessibility="no">
               {placeholder}
-            </Reanimated.Text>
+            </Text>
           )}
-          <AnimatedInput
-            style={[s.input, fontStyle]}
+          <TextInput
+            style={s.input}
             value={value}
             onChangeText={onChangeText}
             onSubmitEditing={onSubmit}
@@ -73,7 +67,7 @@ export default function HomeSearchBar({
             autoCorrect={false}
             accessibilityLabel={placeholder}
           />
-        </View>
+        </Reanimated.View>
         {value.length > 0 && (
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear"
             onPress={() => onChangeText('')}
@@ -114,7 +108,7 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  inputWrap: { flex: 1, justifyContent: 'center', height: '100%' },
+  inputWrap: { flex: 1, justifyContent: 'center', height: '100%', transformOrigin: 'left center' },
   placeholder: { ...TYPE.body, lineHeight: undefined, color: COLORS.fg2, position: 'absolute', left: 0, right: 0 },
   input: { ...TYPE.body, lineHeight: undefined, color: SHADES.carbon, padding: 0, height: '100%' },
   // Same radius as the old Explore filter button; size animated by the wrapper.

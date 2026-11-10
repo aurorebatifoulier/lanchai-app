@@ -917,7 +917,7 @@ a snapshot indefinitely).
   sticky block is OPAQUE porcelain edge to edge, hairline once past the stick point
   (content padding + measured banners height — keep the banners wrapper as child 0).
   COMPACT on scroll: Reanimated `useScrollOffset(useAnimatedRef())` → `compact` 0 → 1 over
-  the first 40px (UI thread; reduce motion = switch at 20px): field 52 → 40, font 14 → 13,
+  the first 40px (UI thread; reduce motion = switch at 20px): field 52 → 40, text scaled 14 → 13 (never an animated fontSize / animated Text or TextInput),
   icons 20 → 18, button 46 → 40, header padding 8 → 4. NEVER `Reanimated.ScrollView`
   here: createAnimatedComponent(ScrollView) + sticky header + RefreshControl crashed on
   reload in Expo Go ("set the key `current` … frozen", reverted c07bdb4))
