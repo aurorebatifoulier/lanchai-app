@@ -336,7 +336,7 @@ export default function HomeScreen() {
     </ScrollView>
   );
 
-  // Search submit (keyboard key + amber button): a query → Explore with ?q=, empty →
+  // Search submit (keyboard "search" key): a query → Explore with ?q=, empty →
   // Explore as is.
   const submitSearch = () => {
     const q = homeQuery.trim();

@@ -908,18 +908,19 @@ a snapshot indefinitely).
 - **Home (validated mockups, 2026-10-27) — My Account design, alternating formats.** Copy
   in `constants/homeCopy.ts`, pure picks in `lib/homeData.ts`, blocks in `components/home/`.
   Order: header → search (`<HomeSearchBar>`, Home only — Explore / Liked keep
-  `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides: h52, 1.5px
-  carbon border (amber fails the 3:1 UI-contrast rule on porcelain), soft shadow, one-line
-  `fg2` placeholder overlay ending in "…" for long names, amber 46px square "Search"
-  button = keyboard key, empty query → Explore without `q`; STICKY via the PLAIN
+  `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides): ONE
+  full-width soft amber field — `SHADES.amberLight` fill, 1.5px brand amber border (~1.8:1
+  on porcelain: the carbon magnifier ~16:1 and the `fg2` placeholder ~7.6:1 identify the
+  field; switch the border to `amberDeep` (~5.7:1) if it ever needs to stand alone), soft
+  shadow, one-line placeholder overlay ending in "…" for long names, NO search button —
+  the keyboard "search" key submits, empty query → Explore without `q`; STICKY via the PLAIN
   ScrollView's `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose
   fade window started before scroll 0 showed twice once the bar moved to the top); the
   sticky block is OPAQUE porcelain edge to edge, hairline once pinned (content padding +
   measured banners height — keep the banners wrapper as child 0). COMPACT on scroll =
   plain React state from `onScroll` (on above 24px, off below 16 — hysteresis), sizes
-  switched by plain styles (field 52 → 40, text 14 → 13, icons 20 → 18, button 46 → 40,
-  padding 8 → 4) with a 160 ms `LayoutAnimation` (none with reduce motion). NO
-  Reanimated in the Home sticky search or `HomeSearchBar` (not even PressScale): every
+  switched by plain styles (field 52 → 40, text 14 → 13, icon 20 → 18, padding 8 → 4) with a 160 ms `LayoutAnimation` (none with reduce motion). NO
+  Reanimated in the Home sticky search or `HomeSearchBar`: every
   Reanimated version (Reanimated.ScrollView, then useScrollOffset + animated styles)
   crashed on reload in Expo Go — "set the key `current` … frozen" (reverted c07bdb4,
   689a1c2, f28a49a))
