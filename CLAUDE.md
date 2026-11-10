@@ -1064,10 +1064,18 @@ a snapshot indefinitely).
   header band: title, `<RotatingLine>` (4s, static with reduce motion) — no counter, no
   results-count line (removed 2026-10-27; the sort selector sits alone, right-aligned) —
   full-width `<BrandSearchBar>` (same field as the Home — white, carbon border, logo-yellow
-  magnifier, h52; live search, no `onSubmit`, never compact; no filter button / filter
+  magnifier, h52; live search, no `onSubmit`; no filter button / filter
   sheet in Explore since 2026-11-09 — Liked still has its own), `<CategoryFilterRow>` (All +
-  `CategoryBadge`, selected = amber). Scrolling pins an overlay copy of search +
-  categories (Home sticky pattern). ONE quick-chips row, in this order: Available now
+  `CategoryBadge`, selected = amber). Search + categories = ONE instance, a REAL sticky
+  row of the FlatList (2026-11-10, no overlay copy any more): `ListHeaderComponent` = the
+  white title band only; data = [search row (sticky — `stickyHeaderIndices={[1]}`, the
+  header being index 0), controls row (banners, quick chips, active chips, sort), product
+  / surprise rows — or ONE skeleton / empty-state row, so no `ListEmptyComponent`].
+  The sticky row is white at rest (continues the band), opaque porcelain once pinned,
+  hairline always (no layout shift). Compact like the Home (`BrandSearchBar compact`, plain
+  `onScroll` state + LayoutAnimation, no Reanimated / Animated): on 16px past the pin point
+  (measured header height), off below 8 — padding 8/12 → 4/8, bubbles unchanged. No
+  pull-to-refresh on Explore. ONE quick-chips row, in this order: Available now
   (`availableNowWindow`: 1-day booking from the first slot left today, 2h lead — becomes
   "Available tomorrow" from tomorrow's first slot once today has none), Free this weekend
   (`weekendWindow`), Under {X} (`config/home`; `?maxPrice=` turns it on, with the link's

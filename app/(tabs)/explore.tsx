@@ -8,8 +8,10 @@ import {
   Platform,
   Dimensions,
   KeyboardAvoidingView,
-  Animated,
-  type FlatList,
+  FlatList,
+  LayoutAnimation,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -42,7 +44,7 @@ import RotatingLine from '@/components/explore/RotatingLine';
 import { plural } from '@/lib/navigation';
 import { useMyCategoryWatches, watchCategory, unwatchCategory } from '@/lib/categoryWatch';
 import CategoryFilterRow from '@/components/explore/CategoryFilterRow';
-import { MOTION, useReducedMotion } from '@/constants/motion';
+import { useReducedMotion } from '@/constants/motion';
 import { weekendWindow, whyBuyCatalogueRanked } from '@/lib/homeData';
 import { availableNowWindow, freeForWindow } from '@/lib/exploreWindows';
 import { getHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK } from '@/lib/homeConfig';
@@ -82,11 +84,17 @@ const P_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const P_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtPeriodDay = (at: Date) => { const d = vteDayToken(at); return `${P_DOW[d.getDay()]} ${d.getDate()} ${P_MON[d.getMonth()]}`; }; // Vientiane day
 const fmtPeriod = (a: Date, b: Date) => `${fmtPeriodDay(a)} – ${fmtPeriodDay(b)}`;
-// Sticky search + categories: overlay vertical padding (like the Home sticky search).
-const STICKY_PAD = 8;
+// Sticky search + categories (a real sticky row of the list): compact once scrolled
+// STICK_COMPACT_ON px past the point where it pins, back below STICK_COMPACT_OFF
+// (hysteresis — same feel as the Home, whose bar pins at ~8px and compacts at 24 / 16).
+const STICK_COMPACT_ON = 16;
+const STICK_COMPACT_OFF = 8;
 
 /** One-column list rows: pairs of cards, or a full-width surprise card. */
 type Row = { key: string; kind: 'pair'; items: Product[] } | { key: string; kind: 'surprise'; item: Surprise };
+/** List data: the sticky search row, the controls row, then products (or a skeleton /
+ *  empty-state row — the list is never empty, so no ListEmptyComponent). */
+type ListRow = Row | { key: string; kind: 'search' | 'controls' | 'skeleton' | 'empty' };
 // Surprise cards: after every SURPRISE_EVERY pairs (8 products — never in the first 4),
 // rotating types, a type with no data skipped, never two in a row, none during a search.
 const SURPRISE_EVERY = 4;
@@ -148,12 +156,27 @@ export default function ExploreScreen() {
   const timeSlots = useMemo(() => getShopTimeSlots(shop), [shop]);
   const reduce = useReducedMotion();
 
-  // Sticky search + categories (overlay copy once the inline block reaches the top).
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const listRef = useRef<FlatList<Row>>(null);
-  const [pinY, setPinY] = useState<number | null>(null);
+  // Sticky search + categories: ONE instance, the list's sticky row (data[0] →
+  // stickyHeaderIndices [1], the ListHeaderComponent being index 0). Plain state from
+  // onScroll (no Reanimated, no Animated): `pinned` once past the measured header height,
+  // `compact` from STICK_COMPACT_ON / OFF px past that point (LayoutAnimation unless reduce
+  // motion). The refs are local bookkeeping only, never passed as props.
+  const listRef = useRef<FlatList<ListRow>>(null);
   const [pinned, setPinned] = useState(false);
-  const pinAt = pinY != null ? pinY - STICKY_PAD : Number.MAX_SAFE_INTEGER;
+  const [compact, setCompact] = useState(false);
+  const compactNow = useRef(false);
+  const stickAt = useRef(Number.MAX_SAFE_INTEGER);
+  const onListScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    setPinned(y > stickAt.current);
+    const past = y - stickAt.current;
+    const next = compactNow.current ? past > STICK_COMPACT_OFF : past > STICK_COMPACT_ON;
+    if (next !== compactNow.current) {
+      compactNow.current = next;
+      if (!reduce) LayoutAnimation.configureNext({ duration: 160, update: { type: LayoutAnimation.Types.easeInEaseOut } });
+      setCompact(next);
+    }
+  }, [reduce]);
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -418,11 +441,6 @@ export default function ExploreScreen() {
     );
   }, [favorites, handleToggleFavorite, router, exchangeRate, userTier, occupancy, bestId, isAdmin, search, quick.weekend, weekendUnitsById, openQuickAdd, period]);
 
-  const renderRow = useCallback(({ item }: { item: Row }) => (
-    item.kind === 'pair'
-      ? <View style={styles.row}>{item.items.map(renderCard)}</View>
-      : <View style={styles.surprise}><SurpriseCard item={item.item} /></View>
-  ), [renderCard]);
 
   const toggleQuick = (k: QuickKey) => {
     // Turning "Under X" off forgets a link's custom value (back to the admin threshold).
@@ -440,10 +458,11 @@ export default function ExploreScreen() {
     { key: 'newItems', label: EXPLORE_COPY.chips.newItems },
   ];
 
-  // Search field + categories: inline in the header, and as the pinned overlay copy.
+  // Search field + categories: the list's sticky row (one instance).
   const searchAndCategories = (
     <>
       <BrandSearchBar
+        compact={compact}
         value={searchQuery}
         onChangeText={setSearchQuery}
         placeholder={EXPLORE_COPY.searchPlaceholder}
@@ -461,7 +480,7 @@ export default function ExploreScreen() {
   );
 
   const header = (
-    <View>
+    <View onLayout={e => { stickAt.current = e.nativeEvent.layout.height; }}>
       <View style={styles.headerBand}>
         <View style={styles.titleRow}>
           <View style={{ flex: 1 }}>
@@ -477,8 +496,20 @@ export default function ExploreScreen() {
             )}
           </View>
         </View>
-        <View onLayout={e => setPinY(e.nativeEvent.layout.y)}>{searchAndCategories}</View>
       </View>
+    </View>
+  );
+
+  // Sticky row: white at rest (continues the header band), opaque porcelain once pinned;
+  // the hairline is always there, so pinning never shifts the layout.
+  const searchRow = (
+    <View style={[styles.stickyRow, compact && styles.stickyRowCompact, pinned && styles.stickyRowPinned]}>
+      {searchAndCategories}
+    </View>
+  );
+
+  const controls = (
+    <View>
       <AccountBanners flush />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
@@ -529,9 +560,49 @@ export default function ExploreScreen() {
     </View>
   );
 
+  const listData = useMemo<ListRow[]>(() => [
+    { key: 'search', kind: 'search' },
+    { key: 'controls', kind: 'controls' },
+    ...(loading ? [{ key: 'skeleton', kind: 'skeleton' as const }] : rows.length > 0 ? rows : [{ key: 'empty', kind: 'empty' as const }]),
+  ], [loading, rows]);
+
+  // Rebuilt each render on purpose: the search / controls / empty rows read live state
+  // (product cards are memoised, so this stays cheap).
+  const renderRow = ({ item }: { item: ListRow }) => {
+    switch (item.kind) {
+      case 'search': return searchRow;
+      case 'controls': return controls;
+      case 'pair': return <View style={styles.row}>{item.items.map(renderCard)}</View>;
+      case 'surprise': return <View style={styles.surprise}><SurpriseCard item={item.item} /></View>;
+      case 'skeleton':
+        return (
+          <View style={styles.skeletonGrid}>
+            {[0, 1, 2, 3].map(i => <View key={i} style={[styles.skeletonCard, { height: cardLayout.card }]} />)}
+          </View>
+        );
+      case 'empty':
+        return search.active && allProducts.length > 0 ? (
+          <SearchEmptyState
+            query={search.query}
+            collections={search.collections}
+            onRequestItem={openRequest}
+            onCategory={id => { setSearchQuery(''); setActiveCategory(id); listRef.current?.scrollToOffset({ offset: 0, animated: false }); }}
+          />
+        ) : activeCategory !== 'all' && categoryCount === 0 && allProducts.length > 0 ? (
+          <CategoryEmptyState category={activeCategory} onRequestItem={openRequest} />
+        ) : (
+          <SmartEmptyState
+            catalogueEmpty={allProducts.length === 0}
+            onClearFilters={clearAllFilters}
+            onRequestItem={openRequest}
+          />
+        );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* One flex child (list) + the absolute sticky overlay — Fabric-safe layout. */}
+      {/* One flex child: the list (search + categories = its sticky row) — Fabric-safe. */}
       <View style={{ flex: 1 }}>
         {loadError ? (
           <View style={styles.loadError}>
@@ -540,61 +611,24 @@ export default function ExploreScreen() {
             <Text style={styles.loadErrorBody}>Check your connection and try again.</Text>
           </View>
         ) : (
-          <Animated.FlatList
+          <FlatList
             ref={listRef}
             style={styles.grid}
-            data={loading ? [] : rows}
+            data={listData}
             renderItem={renderRow}
             keyExtractor={item => item.key}
             contentContainerStyle={styles.gridContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            extraData={{ favorites, productCount: allProducts.length }}
+            extraData={{ favorites, productCount: allProducts.length, compact, pinned, searchQuery, activeCategory, quick, sort, period, loading }}
             ListHeaderComponent={header}
+            // data[0] = the search row; index 0 here is the ListHeaderComponent.
+            stickyHeaderIndices={[1]}
             ListFooterComponent={!loading && rows.length > 0 ? <View style={{ marginTop: 4 }}><AskCard onPress={openRequest} /></View> : null}
             scrollEventThrottle={16}
-            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-              useNativeDriver: true,
-              listener: (e: { nativeEvent: { contentOffset: { y: number } } }) => {
-                const next = e.nativeEvent.contentOffset.y >= pinAt;
-                setPinned(prev => (prev === next ? prev : next));
-              },
-            })}
-            ListEmptyComponent={
-              loading ? (
-                <View style={styles.skeletonGrid}>
-                  {[0, 1, 2, 3].map(i => <View key={i} style={[styles.skeletonCard, { height: cardLayout.card }]} />)}
-                </View>
-              ) : search.active && allProducts.length > 0 ? (
-                <SearchEmptyState
-                  query={search.query}
-                  collections={search.collections}
-                  onRequestItem={openRequest}
-                  onCategory={id => { setSearchQuery(''); setActiveCategory(id); listRef.current?.scrollToOffset({ offset: 0, animated: false }); }}
-                />
-              ) : activeCategory !== 'all' && categoryCount === 0 && allProducts.length > 0 ? (
-                <CategoryEmptyState category={activeCategory} onRequestItem={openRequest} />
-              ) : (
-                <SmartEmptyState
-                  catalogueEmpty={allProducts.length === 0}
-                  onClearFilters={clearAllFilters}
-                  onRequestItem={openRequest}
-                />
-              )
-            }
+            onScroll={onListScroll}
           />
         )}
-
-        {/* Pinned search + categories — fades in once the inline block reaches the top */}
-        <Animated.View
-          pointerEvents={pinned ? 'auto' : 'none'}
-          style={[styles.sticky, {
-            opacity: scrollY.interpolate({ inputRange: [pinAt - (reduce ? 0.5 : 10), pinAt], outputRange: [0, 1], extrapolate: 'clamp' }),
-            transform: [{ translateY: scrollY.interpolate({ inputRange: [pinAt - (reduce ? 0.5 : 10), pinAt], outputRange: [reduce ? 0 : -MOTION.riseY, 0], extrapolate: 'clamp' }) }],
-          }]}
-        >
-          {searchAndCategories}
-        </Animated.View>
       </View>
 
       {/* ── Sort-only menu ─────────────────────────────────────────────────── */}
@@ -831,11 +865,11 @@ function SmartEmptyState({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  // Title band only (the sticky row below continues it in white and carries the hairline).
   headerBand: {
-    backgroundColor: SHADES.white, marginHorizontal: -H_PAD, paddingHorizontal: H_PAD, paddingTop: 8, paddingBottom: 14,
-    borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
+    backgroundColor: SHADES.white, marginHorizontal: -H_PAD, paddingHorizontal: H_PAD, paddingTop: 8,
   },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 6 },
   oneLiner: { fontSize: 14, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   categoryCount: { fontWeight: '700', color: SHADES.carbon },
   catBtn: { alignSelf: 'stretch', marginTop: 12 },
@@ -854,10 +888,13 @@ const styles = StyleSheet.create({
   quickChipText: { ...TYPE.tab, color: SHADES.carbon },
   quickChipTextOn: { color: SHADES.cream },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  sticky: {
-    position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: H_PAD, paddingVertical: STICKY_PAD,
+  // The list's sticky row (search + categories): full width, opaque.
+  stickyRow: {
+    marginHorizontal: -H_PAD, paddingHorizontal: H_PAD, paddingTop: 8, paddingBottom: 12,
     backgroundColor: SHADES.white, borderBottomWidth: 0.5, borderBottomColor: SHADES.border,
   },
+  stickyRowCompact: { paddingTop: 4, paddingBottom: 8 },
+  stickyRowPinned: { backgroundColor: COLORS.porcelain },
   searchEmpty: { paddingTop: 32, paddingHorizontal: 4 },
   suggestLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbonMuted, marginBottom: 10 },
   suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
