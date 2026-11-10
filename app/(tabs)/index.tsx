@@ -23,7 +23,7 @@ import { SHADES } from '@/constants/brandShades';
 import { HOME_COPY } from '@/constants/homeCopy';
 import { UI, SectionTitle, CategoryBadge, ToggleRow, SCREEN_BOTTOM_GAP } from '@/components/account/ui';
 import { TYPE, SIZES } from '@/constants/typography';
-import SearchBar from '@/components/SearchBar';
+import HomeSearchBar from '@/components/home/HomeSearchBar';
 import ProductRailCard from '@/components/ProductRailCard';
 import InsetCarousel from '@/components/home/InsetCarousel';
 import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
@@ -77,7 +77,7 @@ const HOME_CATEGORIES = CATEGORIES.filter(c => c.id !== 'all');
 // Admin "Preview all sections" toggle, remembered per device.
 const PREVIEW_KEY = 'home.adminPreviewAll';
 // Sticky search geometry: inline field top padding, overlay vertical padding.
-const SEARCH_PAD_TOP = 16;
+const SEARCH_PAD_TOP = 8; // + the scroll content's 8 = 16px under the top bar
 const STICKY_PAD = 8;
 
 export default function HomeScreen() {
@@ -317,17 +317,17 @@ export default function HomeScreen() {
     </ScrollView>
   );
 
-  // Same field inline and pinned — shared value, same submit.
+  // Same field inline and pinned — shared value, same submit (keyboard key + amber
+  // button): a query → Explore with ?q=, empty → Explore as is.
+  const submitSearch = () => {
+    const q = homeQuery.trim();
+    router.push((q ? { pathname: '/explore', params: { q } } : '/explore') as never);
+  };
   const search = (
-    <SearchBar
-      variant="account"
+    <HomeSearchBar
       value={homeQuery}
       onChangeText={setHomeQuery}
-      onSubmit={() => {
-        if (homeQuery.trim()) {
-          router.push({ pathname: '/explore', params: { q: homeQuery.trim() } } as never);
-        }
-      }}
+      onSubmit={submitSearch}
       placeholder={HOME_COPY.searchPlaceholder(firstName)}
     />
   );
@@ -397,12 +397,15 @@ export default function HomeScreen() {
         >
           {/* Verify-email / verified banners — under the top bar, never over it. */}
           <AccountBanners />
-          {heroSlides.length > 0
-            ? <SlideCarousel slides={heroSlides} height={190} intervalMs={10000} showDraft={preview} />
-            : <HeroCarousel />}
-
+          {/* Search right under the top bar, above the slides (sticky copy below). */}
           <View style={styles.searchWrap} onLayout={e => setSearchY(e.nativeEvent.layout.y)}>
             {search}
+          </View>
+
+          <View style={styles.heroWrap}>
+            {heroSlides.length > 0
+              ? <SlideCarousel slides={heroSlides} height={190} intervalMs={10000} showDraft={preview} />
+              : <HeroCarousel />}
           </View>
 
           <View style={styles.content}>
@@ -689,6 +692,7 @@ const styles = StyleSheet.create({
   railScroll: { marginHorizontal: -16 },
   rail: { paddingHorizontal: 16, gap: 12 },
   searchWrap: { paddingHorizontal: 16, paddingTop: SEARCH_PAD_TOP },
+  heroWrap: { marginTop: 16 },
   sticky: {
     position: 'absolute', top: 0, left: 0, right: 0,
     paddingHorizontal: 16, paddingVertical: STICKY_PAD,

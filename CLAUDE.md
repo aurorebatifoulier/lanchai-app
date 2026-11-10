@@ -907,9 +907,13 @@ a snapshot indefinitely).
 
 - **Home (validated mockups, 2026-10-27) — My Account design, alternating formats.** Copy
   in `constants/homeCopy.ts`, pure picks in `lib/homeData.ts`, blocks in `components/home/`.
-  Order: header → hero `InsetCarousel` → search (`SearchBar variant="account"`, STICKY: an
-  overlay copy fades in under the header once the inline field reaches the top — shared
-  value, native-driver opacity, instant with reduce motion) → `<NextPickupCard>` (nearest
+  Order: header → search (`<HomeSearchBar>`, Home only — Explore / Liked keep
+  `SearchBar`; since 2026-11-10 right under the top bar, ABOVE the slides: h52, 1.5px
+  carbon border (amber fails the 3:1 UI-contrast rule on porcelain), soft shadow, one-line
+  `fg2` placeholder overlay ending in "…" for long names, amber 46px square "Search"
+  button = keyboard key, empty query → Explore without `q`; STICKY: an overlay copy fades
+  in under the header once the inline field reaches the top — shared value, native-driver
+  opacity, instant with reduce motion) → hero `InsetCarousel` → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) → "Got
