@@ -931,8 +931,9 @@ a snapshot indefinitely).
   → hero `InsetCarousel` (140px band — `HERO_HEIGHT`; built-in and admin hero slides use
   compact text: title ≤ 2 lines 18/22, subtitle 1 line) → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
-  one row up to 6, circles ≤ 52px; scroll from 7; right under the hero the title margin is
-  8 so hero image → title = the standard 24px gap, dots included) → New arrivals rail →
+  one row up to 6, circles ≤ 52px; scroll from 7; the hero draws its dots INSIDE the gap
+  below it (`InsetCarousel dotsInGap`, no layout space; no dots with one slide), so the
+  title's normal 24px margin = the same visible gap as every section) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) →
   `<WhyRentSection>` ("Spend less / Live lighter" — right under it for new renters, same
   place after New arrivals for returning ones) → "Got

@@ -3,15 +3,21 @@ import { View, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
 import { SHADES } from '@/constants/brandShades';
 
 // Home photo carousels (hero + "Consume better"): 16px side margins, radius 18 like every
-// card, auto-advancing pages, dots below — only the active one amber.
+// card, auto-advancing pages, dots below — only the active one amber. No dots (and no
+// space for them) with a single slide. `dotsInGap` (Home hero): the dots are drawn in the
+// gap BELOW the component without taking layout space, so the next element's normal
+// margin is the whole visible gap (dots included) — it must be ≥ ~16px (every Home
+// section margin is).
 export const CAROUSEL_SIDE = 16;
+const DOTS_GAP_TOP = 8;
 
 export default function InsetCarousel({
-  slides, height, intervalMs,
+  slides, height, intervalMs, dotsInGap = false,
 }: {
   slides: React.ReactNode[];
   height: number;
   intervalMs: number;
+  dotsInGap?: boolean;
 }) {
   const { width: screenW } = useWindowDimensions();
   const width = screenW - CAROUSEL_SIDE * 2;
@@ -52,7 +58,7 @@ export default function InsetCarousel({
         </ScrollView>
       </View>
       {count > 1 && (
-        <View style={s.dots}>
+        <View style={dotsInGap ? [s.dots, s.dotsInGap, { top: height + DOTS_GAP_TOP }] : s.dots} pointerEvents="none">
           {slides.map((_, i) => <View key={i} style={[s.dot, i === active && s.dotActive]} />)}
         </View>
       )}
@@ -63,6 +69,7 @@ export default function InsetCarousel({
 const s = StyleSheet.create({
   frame: { alignSelf: 'center', borderRadius: 18, overflow: 'hidden', backgroundColor: SHADES.carbonLight },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingTop: 10 },
+  dotsInGap: { position: 'absolute', left: 0, right: 0, paddingTop: 0 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: SHADES.carbonFaint },
   dotActive: { width: 18, backgroundColor: SHADES.amber },
 });

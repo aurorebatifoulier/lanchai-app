@@ -345,9 +345,6 @@ export default function HomeScreen() {
     const q = homeQuery.trim();
     router.push((q ? { pathname: '/explore', params: { q } } : '/explore') as never);
   };
-  // Nothing between the hero and "Categories" (no admin toggle, guest banner, pick-up).
-  const heroRightAbove = !isAdmin && !isGuest && !pickup && !preview;
-
   const search = (
     <BrandSearchBar
       value={homeQuery}
@@ -451,10 +448,10 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {/* Categories — same circles as the My Account stickers, all on one row. Right
-                under the hero, the carousel dots (16px) already sit in the gap: the title
-                margin is reduced so image → title = the standard 24px section gap. */}
-            <SectionTitle style={heroRightAbove ? styles.titleAfterHero : undefined}>{HOME_COPY.categoriesTitle}</SectionTitle>
+            {/* Categories — same circles as the My Account stickers, all on one row. The hero
+                draws its dots inside the gap (no layout space), so this title's normal 24px
+                margin is the whole gap — same as every other section. */}
+            <SectionTitle>{HOME_COPY.categoriesTitle}</SectionTitle>
             {catFit ? (
               <View style={styles.catRow}>
                 {HOME_CATEGORIES.map(cat => categoryItem(cat))}
@@ -611,6 +608,7 @@ function HeroCarousel() {
     <InsetCarousel
       height={HERO_HEIGHT}
       intervalMs={10000}
+      dotsInGap
       slides={HERO_BUILT_IN.map((slide, i) => (
         <View key={i} style={[styles.slide, { backgroundColor: slide.tint }]}>
           {slide.image != null && (
@@ -725,8 +723,6 @@ const styles = StyleSheet.create({
   heroWrap: { marginTop: 8 },
   whyRent: { marginTop: 24 },
 
-  // 10 (dots padding) + 6 (dots) + 8 = 24 from the hero image, like every section gap.
-  titleAfterHero: { marginTop: 8 },
   catRow: { flexDirection: 'row' },
   catRail: { paddingHorizontal: 12, gap: 4 },
   catItem: { alignItems: 'center' },

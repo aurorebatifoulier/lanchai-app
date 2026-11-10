@@ -14,7 +14,8 @@ import { openCategory } from '@/lib/navigation';
 // rounded 16px-margin card, a subtle dark overlay ONLY when there's text, amber button
 // when there's a label and a link; a tap anywhere follows the link. `showDraft` (admin
 // preview) marks unpublished slides. `compact` = the 140px Home hero band: smaller text,
-// title ≤ 2 lines, subtitle 1 line (the mid-page banner keeps the full size).
+// title ≤ 2 lines, subtitle 1 line, dots drawn inside the gap below (the mid-page banner
+// keeps the full size and its dots row).
 export default function SlideCarousel({
   slides, height, intervalMs, showDraft, compact = false,
 }: {
@@ -29,6 +30,7 @@ export default function SlideCarousel({
     <InsetCarousel
       height={height}
       intervalMs={intervalMs}
+      dotsInGap={compact}
       slides={slides.map(slide => {
         const target = slideTarget(slide.link);
         const go = () => {
