@@ -1,7 +1,8 @@
 // Home search (Home only — Explore / Liked keep components/SearchBar.tsx): ONE full-width
-// WHITE field, 1.5px carbon border, soft shadow, amber magnifier in SHADES.amberIcon
-// (#B98900, 3.16:1 on white — brand #F4B400 is only 1.85:1), fg2 placeholder + clear icon
-// (~8.9:1), carbon text. No search button: the keyboard "search" key submits.
+// WHITE field, 1.5px carbon border, soft shadow, magnifier in the exact logo yellow
+// COLORS.amber #F4B400 (deliberate: 1.85:1 on white, decorative — the carbon border and
+// the fg2 placeholder, ~8.9:1, identify the field), fg2 clear icon, carbon text. No
+// search button: the keyboard "search" key submits.
 // The placeholder is drawn as a one-line Text overlay so a long first name ends with
 // "…" (Android's native TextInput placeholder is clipped, never ellipsized); the input
 // keeps the full text as its accessibility label.
@@ -29,7 +30,7 @@ export default function HomeSearchBar({
 }) {
   return (
     <View style={[s.field, compact && s.fieldCompact]}>
-      <Feather name="search" size={compact ? 18 : 20} color={SHADES.amberIcon} />
+      <Feather name="search" size={compact ? 18 : 20} color={COLORS.amber} />
       <View style={s.inputWrap}>
         {value.length === 0 && (
           <Text style={[s.placeholder, compact && s.textCompact]} numberOfLines={1} ellipsizeMode="tail" pointerEvents="none" importantForAccessibility="no">
