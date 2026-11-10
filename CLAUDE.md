@@ -913,12 +913,8 @@ a snapshot indefinitely).
   `fg2` placeholder overlay ending in "…" for long names, amber 46px square "Search"
   button = keyboard key, empty query → Explore without `q`; STICKY via the ScrollView's
   `stickyHeaderIndices={[1]}` — ONE field, no overlay copy (an overlay whose fade window
-  started before scroll 0 showed twice once the bar moved to the top); the sticky block is
-  OPAQUE porcelain edge to edge (nothing shows behind it), hairline once past the stick
-  point (content padding + measured banners height — keep the banners wrapper as child
-  0). COMPACT on scroll: Reanimated `compact` 0 → 1 over the first 40px (UI thread,
-  `useAnimatedScrollHandler`; reduce motion = switch at 20px): field 52 → 40, font 14 →
-  13, icons 20 → 18, button 46 → 40, header padding 8 → 4 — sizes in `HOME_SEARCH_SIZES`)
+  started before scroll 0 showed twice once the bar moved to the top); its white band +
+  hairline fade in from the measured stick point only — keep AccountBanners as child 0)
   → hero `InsetCarousel` → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7) → New arrivals rail →
