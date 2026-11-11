@@ -933,8 +933,8 @@ a snapshot indefinitely).
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7; the hero draws its dots INSIDE the gap
   below it (`InsetCarousel dotsInGap`, no layout space; no dots with one slide), so the
-  hero wrapper's 4px bottom padding + a 16px top margin on the "Categories" title ONLY
-  (every other section title keeps 24) = a 20px gap, dots centred in it (7px / 7px —
+  hero wrapper's 4px bottom padding + a 12px top margin on the "Categories" title ONLY
+  (every other section title keeps 24) = a 16px gap, dots centred in it (5px / 5px —
   `DOTS_GAP_TOP` in InsetCarousel follows this gap); the blocks that may sit between hero and title — admin toggle, guest invite
   banner, next pick-up — carry their 14px margin ON the visible card, never on a wrapper,
   so a block that renders nothing leaves no gap) → New arrivals rail →

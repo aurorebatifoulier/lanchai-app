@@ -445,8 +445,8 @@ export default function HomeScreen() {
             {preview && !pickup && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPickupExample}</Text>}
 
             {/* Categories — same circles as the My Account stickers, all on one row. The hero
-                draws its dots inside the gap (no layout space); this title alone uses a 16px
-                top margin (other sections keep 24) → gap = 4 (hero padding) + 16 = 20px. */}
+                draws its dots inside the gap (no layout space); this title alone uses a 12px
+                top margin (other sections keep 24) → gap = 4 (hero padding) + 12 = 16px. */}
             <SectionTitle style={styles.categoriesTitle}>{HOME_COPY.categoriesTitle}</SectionTitle>
             {catFit ? (
               <View style={styles.catRow}>
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
   previewCard: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 4 },
   topBlock: { marginTop: 14 },
   // "Categories" only (tighter under the hero); every other section title keeps 24.
-  categoriesTitle: { marginTop: 16 },
+  categoriesTitle: { marginTop: 12 },
   adminNote: { marginTop: 6, fontStyle: 'italic' },
   adminHint: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 24, padding: 12,

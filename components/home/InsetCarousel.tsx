@@ -9,9 +9,9 @@ import { SHADES } from '@/constants/brandShades';
 // margin is the whole visible gap (dots included) — it must be ≥ ~16px (every Home
 // section margin is).
 export const CAROUSEL_SIDE = 16;
-// Dots (6px) centred in the 20px gap the Home leaves under the hero (4px hero padding +
-// the 16px "Categories" margin): 7px above, 7px below.
-const DOTS_GAP_TOP = 7;
+// Dots (6px) centred in the 16px gap the Home leaves under the hero (4px hero padding +
+// the 12px "Categories" margin): 5px above, 5px below.
+const DOTS_GAP_TOP = 5;
 
 export default function InsetCarousel({
   slides, height, intervalMs, dotsInGap = false,
