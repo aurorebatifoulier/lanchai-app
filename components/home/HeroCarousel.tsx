@@ -3,11 +3,14 @@
 // placeholder of the same size). 16px gutter, one 16:9 card at a time (radius 20, cream
 // fallback), snapping per card. Admin slides = the shared <AdminSlideCard> in the same
 // frame (photo cover, their own text layout). Built-in banners: no overlay / gradient /
-// text shadow (the photos keep an empty zone for the text). 'light' = text centred-left on a bright photo, solid
-// amber pill; 'dark' = text bottom-left, amber text link (subtitle across the whole 78%).
-// Fit: the text block is MEASURED and steps down until it fits the card — title 20 →
-// title 17 → subtitle 12 → (last resort, e.g. large system font) subtitle hidden. The
-// subtitle is always hidden under 300px of card width. Text is invisible until it fits.
+// text shadow (the photos keep an empty zone for the text). 'light' = text centred-left on
+// a bright photo, small amber pill; 'dark' = text bottom-left, amber text link. Text zone =
+// the banner's `textWidth` (default 0.45 light / 0.58 dark) of the card width, from its
+// left edge. Type: eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each.
+// Fit: the block height and the title / subtitle line counts are MEASURED and the type
+// steps down until it fits — title 18 → 16 → 14 while it needs > 2 lines; subtitle hidden
+// ONLY if the block is still taller than the card (last resort, e.g. large system font);
+// always hidden under 300px of card width. Text invisible until it fits.
 // Auto-advance every 5s (looping), paused while touched and for 5s after release, only
 // while the Home is focused (useFocusEffect), never with reduce motion. Dots 8px under the
 // card, tappable. The whole card is the button (opens ctaHref through openAppRoute, like
@@ -24,7 +27,7 @@ import { Text } from '@/components/AppText';
 import { useReducedMotion } from '@/constants/motion';
 import { HOME_COPY } from '@/constants/homeCopy';
 import { SHADES } from '@/constants/brandShades';
-import type { HomeBanner } from '@/constants/homeBanners';
+import { DEFAULT_TEXT_WIDTH, type HomeBanner } from '@/constants/homeBanners';
 import type { HeroEntry } from '@/lib/heroItems';
 import { openAppRoute } from '@/lib/navigation';
 import AdminSlideCard from '@/components/home/AdminSlideCard';
@@ -36,7 +39,11 @@ const SMALL_CARD = 300;
 const LIGHT_PAD = 8;
 const DARK_TOP = 12;
 const DARK_BOTTOM = 18;
-const LAST_LEVEL = 3;
+// Title steps: 18/21 → 16/19 → 14/17.
+const TITLE_STEPS = [{ fontSize: 18, lineHeight: 21 }, { fontSize: 16, lineHeight: 19 }, { fontSize: 14, lineHeight: 17 }];
+const TEXT_LEFT = 20;
+// Title and subtitle: 2 lines max each (a longer one steps the type down).
+const MAX_LINES = 2;
 // Fixed-height card: system font size is honoured, but capped lower than the app's 1.3.
 const FONT_CAP = 1.15;
 
@@ -171,20 +178,36 @@ function BannerCard({ banner: b, width, height, small, draft, onPress }: {
   banner: HomeBanner; width: number; height: number; small: boolean; draft: boolean; onPress: () => void;
 }) {
   const dark = b.variant === 'dark';
-  // 0 = title 20 · 1 = title 17 · 2 = + subtitle 12 · 3 = subtitle hidden.
-  const [level, setLevel] = useState(small ? LAST_LEVEL : 0);
+  // Text zone = textWidth × card width from the card's left edge (the 20px inset included).
+  const zone = b.textWidth ?? DEFAULT_TEXT_WIDTH[b.variant];
+  const textW = Math.max(80, Math.round(width * zone) - TEXT_LEFT);
+  // Two independent steps: the title shrinks while it needs more than 2 lines; the
+  // subtitle is hidden ONLY if the block is still taller than the card (last resort).
+  const [titleStep, setTitleStep] = useState(0);
+  const [subHidden, setSubHidden] = useState(small);
   const [fits, setFits] = useState(false);
+  const showSub = !subHidden;
+  const level = titleStep * 2 + (subHidden ? 1 : 0);
+  // Measures of the CURRENT step: block height + title / subtitle line counts (measured
+  // without a line limit; the 2-line limit applies once it fits).
+  const [m, setM] = useState<{ level: number; h?: number; t?: number; s?: number }>({ level });
   const avail = dark ? height - DARK_TOP - DARK_BOTTOM : height - LIGHT_PAD * 2;
-  const onContentLayout = (h: number) => {
-    if (h > avail && level < LAST_LEVEL) setLevel(level + 1);
-    else setFits(true);
-  };
-  // Safety net: never leave the text invisible if a step didn't trigger a new layout.
+  useEffect(() => {
+    if (fits || m.level !== level || m.h == null || m.t == null || (showSub && m.s == null)) return;
+    if (m.t > MAX_LINES && titleStep < TITLE_STEPS.length - 1) {
+      setTitleStep(titleStep + 1);
+      setM({ level: (titleStep + 1) * 2 + (subHidden ? 1 : 0) });
+    } else if (m.h > avail && showSub) {
+      setSubHidden(true);
+      setM({ level: titleStep * 2 + 1 });
+    } else setFits(true);
+  }, [m, level, fits, avail, showSub, subHidden, titleStep]);
+  // Safety net: never leave the text invisible if a step didn't trigger a new measure.
   useEffect(() => {
     const t = setTimeout(() => setFits(true), 400);
     return () => clearTimeout(t);
   }, [level]);
-  const showSub = level < LAST_LEVEL;
+  const lines = fits ? MAX_LINES : undefined;
   return (
     <Pressable
       onPress={onPress}
@@ -200,38 +223,47 @@ function BannerCard({ banner: b, width, height, small, draft, onPress }: {
         accessible={false}
       />
       {draft && <View style={s.draft}><Text style={s.draftText}>{HOME_COPY.adminDraft}</Text></View>}
-      <View style={dark ? s.darkBlock : s.lightBlock} pointerEvents="none">
-        <View style={!fits && s.hidden} onLayout={e => onContentLayout(e.nativeEvent.layout.height)}>
-        <View style={s.eyebrowRow}>
-          <Hexagon />
-          <Text style={[s.eyebrow, { color: dark ? C.darkMuted : C.lightEyebrow }]} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>
-            {b.eyebrow}
-          </Text>
-        </View>
-        <Text
-          style={[s.title, level >= 1 && s.titleTight, { color: dark ? C.cream : C.carbon }]}
-          numberOfLines={dark ? 3 : 4}
-          adjustsFontSizeToFit
-          minimumFontScale={0.8}
-          maxFontSizeMultiplier={FONT_CAP}
+      <View style={[dark ? s.darkBlock : s.lightBlock, { width: textW }]} pointerEvents="none">
+        <View
+          style={!fits && s.hidden}
+          onLayout={e => { const h = e.nativeEvent.layout.height; setM(x => (x.level === level ? { ...x, h } : x)); }}
         >
-          {b.title}
-        </Text>
-        {showSub && (
-          <Text style={[s.sub, level >= 2 && s.subTight, { color: dark ? C.darkMuted : C.lightSub }]} numberOfLines={dark ? 2 : 4} maxFontSizeMultiplier={FONT_CAP}>
-            {b.subtitle}
+          <View style={s.eyebrowRow}>
+            <Hexagon />
+            <Text style={[s.eyebrow, { color: dark ? C.darkMuted : C.lightEyebrow }]} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>
+              {b.eyebrow}
+            </Text>
+          </View>
+          <Text
+            style={[s.title, TITLE_STEPS[titleStep], { color: dark ? C.cream : C.carbon }]}
+            numberOfLines={lines}
+            adjustsFontSizeToFit={fits}
+            minimumFontScale={0.85}
+            maxFontSizeMultiplier={FONT_CAP}
+            onTextLayout={e => { const t = e.nativeEvent.lines.length; setM(x => (x.level === level ? { ...x, t } : x)); }}
+          >
+            {b.title}
           </Text>
-        )}
-        {dark ? (
-          <View style={s.link}>
-            <Text style={s.linkText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
-            <Feather name="arrow-right" size={14} color={C.amber} />
-          </View>
-        ) : (
-          <View style={s.pill}>
-            <Text style={s.pillText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
-          </View>
-        )}
+          {showSub && (
+            <Text
+              style={[s.sub, { color: dark ? C.darkMuted : C.lightSub }]}
+              numberOfLines={lines}
+              maxFontSizeMultiplier={FONT_CAP}
+              onTextLayout={e => { const n = e.nativeEvent.lines.length; setM(x => (x.level === level ? { ...x, s: n } : x)); }}
+            >
+              {b.subtitle}
+            </Text>
+          )}
+          {dark ? (
+            <View style={s.link}>
+              <Text style={s.linkText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
+              <Feather name="arrow-right" size={12} color={C.amber} />
+            </View>
+          ) : (
+            <View style={s.pill}>
+              <Text style={s.pillText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
+            </View>
+          )}
         </View>
       </View>
     </Pressable>
@@ -240,7 +272,7 @@ function BannerCard({ banner: b, width, height, small, draft, onPress }: {
 
 function Hexagon() {
   return (
-    <Svg width={14} height={14} viewBox="0 0 24 24">
+    <Svg width={12} height={12} viewBox="0 0 24 24">
       <Path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z" fill="none" stroke={C.amber} strokeWidth={2.2} strokeLinejoin="round" />
     </Svg>
   );
@@ -278,27 +310,25 @@ const s = StyleSheet.create({
   draftText: { fontSize: 11, fontWeight: '800', color: SHADES.amberDeep },
   pressed: { opacity: 0.9 },
 
-  lightBlock: { position: 'absolute', left: 20, top: 0, bottom: 0, maxWidth: '55%', justifyContent: 'center' },
-  darkBlock: { position: 'absolute', left: 20, bottom: DARK_BOTTOM, maxWidth: '78%' },
+  lightBlock: { position: 'absolute', left: TEXT_LEFT, top: 0, bottom: 0, justifyContent: 'center' },
+  darkBlock: { position: 'absolute', left: TEXT_LEFT, bottom: DARK_BOTTOM },
   hidden: { opacity: 0 },
 
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
   eyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
-  title: { fontSize: 20, lineHeight: 23, fontWeight: '700', letterSpacing: -0.3 },
-  titleTight: { fontSize: 17, lineHeight: 20 },
-  sub: { fontSize: 13, lineHeight: 17, marginTop: 4 },
-  subTight: { fontSize: 12, lineHeight: 16 },
+  title: { fontWeight: '700', letterSpacing: -0.3 },
+  sub: { fontSize: 12, lineHeight: 16, marginTop: 4 },
 
   pill: {
-    alignSelf: 'flex-start', marginTop: 8, height: 34, paddingHorizontal: 14, borderRadius: 10,
+    alignSelf: 'flex-start', marginTop: 8, height: 30, paddingHorizontal: 12, borderRadius: 8,
     backgroundColor: C.amber, justifyContent: 'center',
   },
-  pillText: { fontSize: 13, fontWeight: '600', color: C.carbon },
+  pillText: { fontSize: 12, fontWeight: '600', color: C.carbon },
   link: {
     alignSelf: 'flex-start', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingBottom: 2, borderBottomWidth: 2, borderBottomColor: C.amber,
+    paddingBottom: 2, borderBottomWidth: 1.5, borderBottomColor: C.amber,
   },
-  linkText: { fontSize: 13, fontWeight: '600', color: C.amber },
+  linkText: { fontSize: 12, fontWeight: '600', color: C.amber },
 
   // Dots 8px under the card (paddingTop of each tap area), centred.
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start' },

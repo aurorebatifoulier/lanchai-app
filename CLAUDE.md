@@ -931,10 +931,12 @@ a snapshot indefinitely).
   → hero `<HeroCarousel>` (`components/home/HeroCarousel.tsx`) = admin hero slides AND
   the built-in marketing banners in ONE admin order (see "Home hero" below); built-in
   content ONLY in `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 16:9 cards radius 20,
-  'light' = text centred-left + amber pill / 'dark' = bottom-left + amber text link, no
-  overlay / gradient / shadow; text block MEASURED and stepped down until it fits (title 20 →
-  17 → subtitle 12 → subtitle hidden only as a last resort, e.g. big system font; always
-  hidden under 300px of card width — 328px cards on 360px phones keep it); expo-image
+  'light' = text centred-left + small amber pill / 'dark' = bottom-left + amber text link,
+  no overlay / gradient / shadow; text zone = per-banner `textWidth` (fraction of the card
+  width from its left edge, default 0.45 light / 0.58 dark — tune it so text never covers
+  the photo's subject); eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each; MEASURED
+  fit: title 18 → 16 → 14 while > 2 lines, subtitle hidden only if the block is still too
+  tall (last resort, e.g. big system font; always hidden under 300px of card width); expo-image
   `contentPosition` = focalPoint, radius + overflow on the WRAPPER View, never the image;
   auto-advance 5s looping, paused while touched + 5s after, stopped when Home isn't focused
   (useFocusEffect) and with reduce motion; dots 8px under the card (RN Animated width, no

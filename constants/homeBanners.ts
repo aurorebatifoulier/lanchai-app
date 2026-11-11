@@ -4,7 +4,9 @@
 // (lib/navigation.ts): `/category/{id}` → Explore with that category, `/explore?…` gets a
 // fresh `t` token so Explore re-applies it (`q`, `ask=1`) even when already mounted.
 // Photos are composed with an empty zone for the text: no overlay, no gradient.
-// "\n" in a subtitle = forced line break.
+// `textWidth` = the text zone as a fraction of the card width, from the card's left edge
+// (the 20px inset included) — default 0.45 light / 0.58 dark; tune it per banner so the
+// text never runs over the photo's subject.
 
 export type HomeBanner = {
   id: string;
@@ -13,6 +15,8 @@ export type HomeBanner = {
   image: number;
   /** expo-image contentPosition. */
   focalPoint: { top: string; left: string };
+  /** Text zone width, fraction of the card width (default: light 0.45, dark 0.58). */
+  textWidth?: number;
   eyebrow: string;
   title: string;
   subtitle: string;
@@ -21,6 +25,8 @@ export type HomeBanner = {
   accessibilityLabel: string;
 };
 
+export const DEFAULT_TEXT_WIDTH = { light: 0.45, dark: 0.58 } as const;
+
 export const HOME_BANNERS: HomeBanner[] = [
   {
     id: 'manifesto',
@@ -28,11 +34,11 @@ export const HOME_BANNERS: HomeBanner[] = [
     image: require('@/assets/images/banners/banner-1-manifesto.jpg'),
     focalPoint: { top: '0%', left: '50%' },
     eyebrow: 'Rentals in Vientiane',
-    title: 'Rent. Return. Repeat.',
-    subtitle: "Why buy it when you'll use it twice?",
-    ctaLabel: 'Explore the catalogue',
+    title: "That drill you'll use once?",
+    subtitle: 'Yeah, rent it.',
+    ctaLabel: 'Explore',
     ctaHref: '/explore',
-    accessibilityLabel: 'Rent. Return. Repeat. Explore the catalogue',
+    accessibilityLabel: "That drill you'll use once? Explore",
   },
   {
     id: 'how-it-works',
@@ -40,11 +46,11 @@ export const HOME_BANNERS: HomeBanner[] = [
     image: require('@/assets/images/banners/banner-3-how-it-works.jpg'),
     focalPoint: { top: '30%', left: '50%' },
     eyebrow: 'How it works',
-    title: 'Book in 2 minutes. Pick up in store.',
-    subtitle: 'No online payment.\nPay at the shop, cash or QR.',
-    ctaLabel: 'See how it works',
+    title: 'Faster than finding your charger.',
+    subtitle: 'Book in 2 min, pay at the shop.',
+    ctaLabel: 'How it works',
     ctaHref: '/profile/faq',
-    accessibilityLabel: 'Book in 2 minutes. Pick up in store. See how it works',
+    accessibilityLabel: 'Faster than finding your charger. How it works',
   },
   {
     id: 'weekend',
@@ -52,11 +58,11 @@ export const HOME_BANNERS: HomeBanner[] = [
     image: require('@/assets/images/banners/banner-5-weekend.jpg'),
     focalPoint: { top: '62%', left: '50%' },
     eyebrow: 'Weekend escape',
-    title: "Weekend plans? We've got the gear.",
-    subtitle: 'Pack light. Rent the rest.',
-    ctaLabel: 'Browse outdoor gear',
+    title: 'Nature called.',
+    subtitle: "Don't buy a tent to answer.",
+    ctaLabel: 'Outdoor gear',
     ctaHref: '/category/outdoor',
-    accessibilityLabel: "Weekend plans? We've got the gear. Browse outdoor gear",
+    accessibilityLabel: 'Nature called. Outdoor gear',
   },
   {
     id: 'party',
@@ -64,11 +70,11 @@ export const HOME_BANNERS: HomeBanner[] = [
     image: require('@/assets/images/banners/banner-6-party.jpg'),
     focalPoint: { top: '100%', left: '50%' },
     eyebrow: 'Party night',
-    title: 'Throwing a party? Skip the shopping.',
-    subtitle: 'Sound, light, screen, games. Rented for the night.',
-    ctaLabel: 'Browse party gear',
+    title: 'Your neighbours will hate us.',
+    subtitle: 'Speakers, lights, projector, games.',
+    ctaLabel: 'Party gear',
     ctaHref: '/explore?q=party',
-    accessibilityLabel: 'Throwing a party? Skip the shopping. Browse party gear',
+    accessibilityLabel: 'Your neighbours will hate us. Party gear',
   },
   {
     id: 'ask-us',
@@ -76,11 +82,11 @@ export const HOME_BANNERS: HomeBanner[] = [
     image: require('@/assets/images/banners/banner-9-ask-us.jpg'),
     focalPoint: { top: '20%', left: '50%' },
     eyebrow: 'Item requests',
-    title: "Can't find it? Ask us.",
-    subtitle: 'Tell us what you need.\nWe might just get it.',
+    title: "We don't have it. Yet.",
+    subtitle: 'Ask, and we might just get it.',
     ctaLabel: 'Request an item',
     ctaHref: '/explore?ask=1',
-    accessibilityLabel: "Can't find it? Ask us. Request an item",
+    accessibilityLabel: "We don't have it. Yet. Request an item",
   },
   {
     id: 'new-in-town',
@@ -88,10 +94,10 @@ export const HOME_BANNERS: HomeBanner[] = [
     image: require('@/assets/images/banners/banner-10-new-in-town.jpg'),
     focalPoint: { top: '60%', left: '50%' },
     eyebrow: 'New in town',
-    title: "New in Vientiane? Don't buy everything.",
-    subtitle: 'Settle in with what you need,\nfor as long as you need it.',
+    title: 'Just moved in?',
+    subtitle: 'Rent now. No garage sale later.',
     ctaLabel: 'Start renting',
     ctaHref: '/explore',
-    accessibilityLabel: "New in Vientiane? Don't buy everything. Start renting",
+    accessibilityLabel: 'Just moved in? Start renting',
   },
 ];
