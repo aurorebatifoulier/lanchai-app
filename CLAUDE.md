@@ -937,10 +937,11 @@ a snapshot indefinitely).
   the photo's subject); eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each, gaps 8 / 6 / 14 before the
   pill (never reduced to fit); dark CTA link 11px bottom-RIGHT (right 20, bottom 18); MEASURED
   fit: title 18 → 16 → 14 while > 2 lines, subtitle hidden only if the block is still too
-  tall (last resort, e.g. big system font; always hidden under 300px of card width; dev
-  builds log the step per banner: `[hero fit]` in Metro); expo-image
+  tall (last resort, e.g. big system font; always hidden under 300px of card width); expo-image
   `contentPosition` = focalPoint, radius + overflow on the WRAPPER View, never the image;
-  auto-advance 5s looping, paused while touched + 5s after, stopped when Home isn't focused
+  auto-advance 5s looping (countdown restarted whenever the items list changes), paused while
+  touched + 5s after (touch state also released on drag / momentum end — Android may skip the
+  touch end), stopped when Home isn't focused
   (useFocusEffect) and with reduce motion; dots 8px under the card (RN Animated width, no
   Reanimated), tappable; whole card = button via `openAppRoute`, which adds a fresh `t` to
   `/explore?…` links so Explore re-applies `q` / opens the request sheet for `ask=1`;

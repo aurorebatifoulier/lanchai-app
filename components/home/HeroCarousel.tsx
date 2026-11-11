@@ -20,7 +20,7 @@
 // expo-image: borderRadius + overflow:'hidden' on the wrapping View, NEVER on the image
 // (Android). Plain RN Animated for the dot width — no Reanimated in the Home hero.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -49,10 +49,6 @@ const TEXT_LEFT = 20;
 const MAX_LINES = 2;
 // Fixed-height card: system font size is honoured, but capped lower than the app's 1.3.
 const FONT_CAP = 1.15;
-
-// TEMPORARY (debug auto-advance, 2026-11-11): dev-only Metro logs, prefix [hero]. Remove
-// with the [hero fit] log once confirmed on the S25.
-const dlog = (...a: unknown[]) => { if (__DEV__) console.log('[hero]', ...a); };
 
 const C = {
   amber: '#F4B400',
@@ -86,17 +82,8 @@ export default function HeroCarousel({ items, showDraft }: {
   const touching = useRef(false);
   const [active, setActive] = useState(0);
 
-  // TEMPORARY debug: the reduce-motion value the carousel sees. On Android React Native
-  // derives it from the GLOBAL "transition animation scale" — Samsung's "Remove
-  // animations" sets it to 0, but so does Developer options → Transition animation scale
-  // "Animation off".
-  useEffect(() => { dlog('reduceMotion =', reduce); }, [reduce]);
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(v => dlog('isReduceMotionEnabled() raw =', v)).catch(() => {});
-  }, []);
-
-  const stop = useCallback((why = '') => {
-    if (timer.current) { clearTimeout(timer.current); dlog('timer stop', why); }
+  const stop = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
     timer.current = null;
   }, []);
 
@@ -108,46 +95,38 @@ export default function HeroCarousel({ items, showDraft }: {
 
   // (Re)starts the 5s countdown — only when focused, not touched, several banners and no
   // reduce motion. Each tick schedules the next one.
-  const schedule = useCallback((why = '') => {
-    stop('reschedule');
-    if (reduce || count < 2 || !focused.current || touching.current) {
-      dlog('timer NOT started', why, { reduce, count, focused: focused.current, touching: touching.current });
-      return;
-    }
-    dlog('timer start', why, `${ADVANCE_MS}ms, from index`, index.current);
+  const schedule = useCallback(() => {
+    stop();
+    if (reduce || count < 2 || !focused.current || touching.current) return;
     timer.current = setTimeout(function tick() {
-      const next = (index.current + 1) % count;
-      dlog('advance →', next, `/ ${count}`);
-      goTo(next);
+      goTo((index.current + 1) % count);
       timer.current = setTimeout(tick, ADVANCE_MS);
     }, ADVANCE_MS);
   }, [reduce, count, goTo, stop]);
 
   useFocusEffect(useCallback(() => {
-    dlog('focus');
     focused.current = true;
-    schedule('focus');
-    return () => { dlog('blur / effect cleanup'); focused.current = false; stop('blur'); };
+    schedule();
+    return () => { focused.current = false; stop(); };
   }, [schedule, stop]));
-  useEffect(() => () => stop('unmount'), [stop]);
+  useEffect(() => stop, [stop]);
   // The list changed (data loaded, admin preview toggled): back to the first card, and
   // restart the countdown for the new list.
   const listKey = list.map(e => e.key).join('|');
   useEffect(() => {
-    dlog('items', count, listKey ? '' : '(none yet)');
     if (index.current !== 0) {
       index.current = 0;
       setActive(0);
       scrollRef.current?.scrollTo({ x: 0, animated: false });
     }
-    schedule('items changed');
+    schedule();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey]);
 
-  const onTouchStart = useCallback(() => { dlog('touch start → pause'); touching.current = true; stop('touch'); }, [stop]);
+  const onTouchStart = useCallback(() => { touching.current = true; stop(); }, [stop]);
   // Also released at the end of a drag / momentum: Android doesn't always deliver a touch
   // end to the ScrollView once it took over the gesture (a stuck "touching" = no advance).
-  const onTouchEnd = useCallback(() => { dlog('touch end → resume in 5s'); touching.current = false; schedule('touch end'); }, [schedule]);
+  const onTouchEnd = useCallback(() => { touching.current = false; schedule(); }, [schedule]);
 
   if (items === null) {
     return <View style={[s.card, s.placeholder, { width, height }]} />;
@@ -173,7 +152,7 @@ export default function HeroCarousel({ items, showDraft }: {
             setActive(i);
             // A momentum end = the finger is up (programmatic scrolls fire it too on Android).
             touching.current = false;
-            schedule('momentum end');
+            schedule();
           }}
         >
           {list.map(e => (e.kind === 'slide' ? (
@@ -199,7 +178,7 @@ export default function HeroCarousel({ items, showDraft }: {
               active={i === active}
               reduce={reduce}
               label={`Show banner ${i + 1} of ${count}`}
-              onPress={() => { dlog('dot tap →', i); goTo(i); schedule('dot tap'); }}
+              onPress={() => { goTo(i); schedule(); }}
             />
           ))}
         </View>
@@ -241,11 +220,6 @@ function BannerCard({ banner: b, width, height, small, draft, onPress }: {
     const t = setTimeout(() => setFits(true), 400);
     return () => clearTimeout(t);
   }, [level]);
-  // Dev only: which fit step each banner ended on (Metro log) — to tune `textWidth`.
-  useEffect(() => {
-    if (!fits || !__DEV__) return;
-    console.log(`[hero fit] ${b.id} @${width}px: title ${TITLE_STEPS[titleStep].fontSize}px${subHidden ? ', subtitle HIDDEN' : ''}`);
-  }, [fits, b.id, width, titleStep, subHidden]);
   const lines = fits ? MAX_LINES : undefined;
   return (
     <Pressable
