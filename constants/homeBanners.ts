@@ -79,6 +79,7 @@ export const HOME_BANNERS: HomeBanner[] = [
   {
     id: 'ask-us',
     variant: 'light',
+    textWidth: 0.42,
     image: require('@/assets/images/banners/banner-9-ask-us.jpg'),
     focalPoint: { top: '20%', left: '50%' },
     eyebrow: 'Item requests',
@@ -91,6 +92,7 @@ export const HOME_BANNERS: HomeBanner[] = [
   {
     id: 'new-in-town',
     variant: 'light',
+    textWidth: 0.42,
     image: require('@/assets/images/banners/banner-10-new-in-town.jpg'),
     focalPoint: { top: '60%', left: '50%' },
     eyebrow: 'New in town',
