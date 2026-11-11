@@ -264,6 +264,9 @@ export interface RentalDoc {
   couponApplied?: { id: string; percent: number; discountAmount: number };
   /** Promo code on this line (createReservations — server-computed share of the order discount). */
   promoApplied?: { code: string; type: 'percent' | 'fixed'; value: number; discountAmount: number };
+  /** Pack price on this line (createReservations); removedAt once another item of the pack
+   *  was cancelled (removeBrokenPackDiscount — total back to subtotal). */
+  packApplied?: { packId: string; title: string; percent: number; discountAmount: number; removedAt?: Timestamp; removedReason?: string };
   // Set by the restoreCancelledCoupon Cloud Function once the coupon was given back.
   couponRestored?: boolean;
 
@@ -403,7 +406,7 @@ export type BookingErrorCode =
   | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
   | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
   | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal'
-  | 'id-required' | 'id-rejected' | 'promo-invalid' | 'one-discount';
+  | 'id-required' | 'id-rejected' | 'promo-invalid' | 'one-discount' | 'pack-invalid';
 
 const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
   'unauthenticated':        'Please sign in to book.',
@@ -425,6 +428,7 @@ const BOOKING_ERROR_MESSAGES: Record<BookingErrorCode, string> = {
   'id-rejected':            'Your ID document was declined — please add a new one to book.',
   'promo-invalid':          'This promo code can’t be used anymore. Remove it and try again.',
   'one-discount':           'Only one discount can be used per booking.',
+  'pack-invalid':           'The pack price no longer applies. Check your items and try again.',
 };
 
 /** Thrown by createBooking — `message` is ready to show to the renter. */
@@ -441,6 +445,8 @@ export async function createBooking(input: {
   couponId?: string | null;
   /** Promo code (never together with a coupon — one discount per booking). */
   promoCode?: string | null;
+  /** Pack price (collections/{id} with isPack) — never together with a coupon / promo. */
+  packId?: string | null;
   notes?: string;
   /** "I'll show my ID at the shop" (no ID document on file yet). */
   idCheckAtCounter?: boolean;
@@ -457,6 +463,7 @@ export async function createBooking(input: {
     })),
     couponId: input.couponId ?? null,
     promoCode: input.promoCode ?? null,
+    packId: input.packId ?? null,
     notes: input.notes ?? '',
     idCheckAtCounter: input.idCheckAtCounter === true,
     requestId: input.requestId ?? null,
@@ -476,7 +483,7 @@ export async function createBooking(input: {
   } catch (err: any) {
     const code = (err?.details?.code ?? 'internal') as BookingErrorCode;
     // Promo: the server's own line ("This code has expired", "Minimum 300,000 LAK"…).
-    if (code === 'promo-invalid' && typeof err?.message === 'string' && err.message) throw new BookingError(code, err.message);
+    if ((code === 'promo-invalid' || code === 'pack-invalid') && typeof err?.message === 'string' && err.message) throw new BookingError(code, err.message);
     throw new BookingError(code, BOOKING_ERROR_MESSAGES[code] ?? BOOKING_ERROR_MESSAGES.internal);
   }
 }

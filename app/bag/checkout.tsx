@@ -27,6 +27,7 @@ import {
 } from '@/lib/firestore';
 import { couponPercentFor, orderDiscount, depositForLine } from '@/functions/src/shared/pricing';
 import { useDiscountChoice } from '@/lib/discountChoice';
+import { usePublishedPacks, packOptions } from '@/lib/packs';
 import { removeBagItems, listenBagItems, BagItem } from '@/lib/bag';
 import { sendNotif } from '@/lib/notifications';
 import { Product } from '@/lib/mockData';
@@ -177,7 +178,17 @@ export default function BagSummaryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [itemsKey],
   );
+  // Pack prices this booking completes (same shared rule as createReservations).
+  const publishedPacks = usePublishedPacks();
+  const packChoices = useMemo(
+    () => packOptions(publishedPacks, items.map(i => ({
+      productId: i.productId, pickupAtMs: i.pickupAt, returnAtMs: i.returnAt, quantity: i.quantity, subtotal: i.subtotal,
+    }))).map(o => ({ id: o.packId, label: o.label, savings: o.savings })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [publishedPacks, itemsKey, totalRental],
+  );
   const discountChoice = useDiscountChoice({
+    packs: packChoices,
     coupons: unusedCoupons.map(cp => ({
       id: cp.id,
       label: BOOKING_COPY.coupon(TIER_LABELS[cp.tier], couponPct(cp)),
@@ -187,7 +198,7 @@ export default function BagSummaryScreen() {
     items: promoItems,
   });
   // One idempotency key per checkout attempt (same order → same key across retries).
-  const requestId = useCheckoutRequestId(`${items.map(i => `${i.bagItemId}:${i.pickupAt}:${i.returnAt}:${i.quantity}`).join('|')}|${discountChoice.couponId ?? ''}|${discountChoice.promoCode ?? ''}`);
+  const requestId = useCheckoutRequestId(`${items.map(i => `${i.bagItemId}:${i.pickupAt}:${i.returnAt}:${i.quantity}`).join('|')}|${discountChoice.couponId ?? ''}|${discountChoice.promoCode ?? ''}|${discountChoice.packId ?? ''}`);
   const discountAmount = discountChoice.discountTotal;
   const finalTotal = totalRental - discountAmount;
   const vatPct = vatPercent ?? DEFAULT_VAT_PERCENT;
@@ -238,6 +249,7 @@ export default function BagSummaryScreen() {
         })),
         couponId: discountChoice.couponId,
         promoCode: discountChoice.promoCode,
+        packId: discountChoice.packId,
         idCheckAtCounter: opts.idCheckAtCounter === true && !opts.idJustAdded,
         notes,
         requestId,

@@ -29,6 +29,7 @@ const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 // ── Component ───────────────────────────────────────────────────────────────
 
 export interface DateRangeCalendarProps {
+  /** '' = no product (pack dates): no availability marks. */
   productId: string;
   totalStock: number;
   startDate: Date | null;
@@ -65,6 +66,9 @@ export default function DateRangeCalendar({
   // this same in-memory data via computeMonthAvailability, no re-fetch per month.
   useEffect(() => {
     let cancelled = false;
+    // No product (a pack's dates — each item's availability is checked after): plain
+    // calendar, no per-day marks.
+    if (!productId) { setOccupancy(null); setLoadingAvail(false); setAvailError(false); return; }
     setLoadingAvail(true);
     setAvailError(false);
     fetchOccupancy(productId)

@@ -11,6 +11,7 @@ rules_version = '2';
 //   claim-photos/{uid}/{fileName}                — renter-submitted claim evidence photos
 //   claim-videos/{uid}/{fileName}                — renter-submitted claim evidence videos
 //   homeSlides/{slideId}/{fileName}             — Home hero / banner slide photos
+//   collections/{collectionId}/{fileName}       — pack photos (Admin → Collections)
 //   rentalAgreements/{agreementId}/{fileName}   — signed rental agreements (PDF)
 //
 // Admin detection mirrors firestore.rules exactly:
@@ -236,6 +237,17 @@ service firebase.storage {
     // Path: homeSlides/{slideId}/{fileName}. Read: signed-in users (the Home is behind
     // sign-in). Write: admins only (Admin → Home slides), images < 10 MB.
     match /homeSlides/{slideId}/{fileName} {
+      allow read:           if request.auth != null;
+      allow create, update: if isAdmin()
+                            && request.resource.size < 10 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+      allow delete:         if isAdmin();
+    }
+
+    // ── Pack photos (Admin → Collections, isPack) ─────────────────────────
+    // Path: collections/{collectionId}/{fileName}. Read: any session (guests are an
+    // anonymous session). Write: admins only, images < 10 MB.
+    match /collections/{collectionId}/{fileName} {
       allow read:           if request.auth != null;
       allow create, update: if isAdmin()
                             && request.resource.size < 10 * 1024 * 1024

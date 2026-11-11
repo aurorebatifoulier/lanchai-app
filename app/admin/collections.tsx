@@ -10,9 +10,11 @@ import { COLLECTION_SEEDS } from '@/constants/homeCopy';
 import BackButton from '@/components/BackButton';
 import { UI, StatusChip, useScreenInsets } from '@/components/account/ui';
 import {
-  getAllCollections, createCollection, saveCollectionOrder, shadeOf, isCollectionActive,
+  getAllCollections, createCollection, saveCollectionOrder, shadeOf, isCollectionActive, packMissingItems,
   type CollectionDoc, type CollectionIcon, type CollectionShade,
 } from '@/lib/collections';
+import { getProducts } from '@/lib/firestore';
+import type { Product } from '@/lib/mockData';
 import PressScale from '@/components/PressScale';
 
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -24,8 +26,11 @@ function windowText(c: CollectionDoc): string | null {
   return `${from} → ${to}`;
 }
 
-// Admin → Collections: the Home "Got plans?" cards. Order (↑/↓), draft/published,
-// optional seasonal window. "Create example drafts" seeds 4 unpublished examples.
+// Admin → Collections: the Home "Packs" (bookable packs, isPack) and "Got plans?" cards,
+// in two sections. Order (↑/↓) within a section, draft/published, optional seasonal
+// window; a pack shows "Pack · 5%" and, when some item is missing / unavailable / tier-
+// locked, "Hidden: n item(s)…" (renters only see complete packs). "Create example
+// drafts" seeds 4 unpublished collection examples.
 export default function AdminCollectionsScreen() {
   const router = useRouter();
   const screen = useScreenInsets();
@@ -33,9 +38,11 @@ export default function AdminCollectionsScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
+    getProducts().then(setProducts).catch(() => setProducts([]));
     getAllCollections()
       .then(list => { setItems(list); setError(null); })
       .catch(() => setError("Couldn't load collections."))
@@ -43,11 +50,15 @@ export default function AdminCollectionsScreen() {
   }, []);
   useFocusEffect(load);
 
-  const move = async (index: number, delta: -1 | 1) => {
+  const packs = items.filter(c => c.isPack);
+  const plain = items.filter(c => !c.isPack);
+  // Within one section; the saved order = packs then collections (Home shows them apart).
+  const move = async (section: CollectionDoc[], index: number, delta: -1 | 1) => {
     const j = index + delta;
-    if (j < 0 || j >= items.length || busy) return;
-    const next = [...items];
-    [next[index], next[j]] = [next[j], next[index]];
+    if (j < 0 || j >= section.length || busy) return;
+    const moved = [...section];
+    [moved[index], moved[j]] = [moved[j], moved[index]];
+    const next = section === packs ? [...moved, ...plain] : [...packs, ...moved];
     setItems(next);
     setBusy(true);
     try { await saveCollectionOrder(next.map(c => c.id)); }
@@ -82,11 +93,11 @@ export default function AdminCollectionsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: screen.contentBottom }]}>
-        <Text style={UI.body}>Shown on Home under &quot;Got plans?&quot; when published, in their dates, and with at least one visible product.</Text>
+        <Text style={UI.body}>Packs: shown on Home under &quot;Packs&quot; when published, in their dates, and every item is bookable. Collections: under &quot;Got plans?&quot; with at least one visible product.</Text>
 
         <PressScale style={[UI.btnPrimary, s.newBtn]} onPress={() => router.push('/admin/collection-form' as never)} activeOpacity={0.85}>
           <Feather name="plus" size={18} color={SHADES.carbon} />
-          <Text style={UI.btnPrimaryText}>New collection</Text>
+          <Text style={UI.btnPrimaryText}>New collection or pack</Text>
         </PressScale>
 
         {error && <Text style={[UI.errorText, { marginTop: 12 }]}>{error}</Text>}
@@ -102,8 +113,10 @@ export default function AdminCollectionsScreen() {
             </PressScale>
           </View>
         ) : (
-          <View style={{ marginTop: 16, gap: 10 }}>
-            {items.map((c, i) => {
+          [{ label: 'Packs', list: packs }, { label: 'Collections', list: plain }].map(sec => sec.list.length === 0 ? null : (
+          <View key={sec.label} style={{ marginTop: 16, gap: 10 }}>
+            <Text style={UI.sectionTitle}>{sec.label}</Text>
+            {sec.list.map((c, i) => {
               const shade = shadeOf(c);
               const win = windowText(c);
               const live = c.published && isCollectionActive(c);
@@ -122,16 +135,23 @@ export default function AdminCollectionsScreen() {
                       <Text style={UI.small} numberOfLines={1}>
                         {c.productIds.length} product{c.productIds.length === 1 ? '' : 's'}{win ? ` · ${win}` : ''}
                       </Text>
-                      <View style={{ flexDirection: 'row' }}>
+                      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                         <StatusChip label={!c.published ? 'Draft' : live ? 'Published' : 'Out of dates'} tone={!c.published ? 'grey' : live ? 'amber' : 'grey'} />
+                        {c.isPack && <StatusChip label={`Pack · ${c.packDiscountPct}%`} tone="grey" />}
                       </View>
+                      {c.isPack && products.length > 0 && (() => {
+                        const missing = packMissingItems(c, products, null).length;
+                        return missing > 0
+                          ? <Text style={[UI.small, { color: SHADES.amberText }]}>{`Hidden: ${missing} item${missing === 1 ? '' : 's'} missing, unavailable or tier-locked`}</Text>
+                          : null;
+                      })()}
                     </View>
                   </TouchableOpacity>
                   <View style={s.arrows}>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move up" onPress={() => move(i, -1)} disabled={i === 0 || busy} hitSlop={6} style={(i === 0 || busy) && UI.btnDisabled}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move up" onPress={() => move(sec.list, i, -1)} disabled={i === 0 || busy} hitSlop={6} style={(i === 0 || busy) && UI.btnDisabled}>
                       <Feather name="chevron-up" size={20} color={SHADES.carbon} />
                     </TouchableOpacity>
-                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move down" onPress={() => move(i, 1)} disabled={i === items.length - 1 || busy} hitSlop={6} style={(i === items.length - 1 || busy) && UI.btnDisabled}>
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Move down" onPress={() => move(sec.list, i, 1)} disabled={i === sec.list.length - 1 || busy} hitSlop={6} style={(i === sec.list.length - 1 || busy) && UI.btnDisabled}>
                       <Feather name="chevron-down" size={20} color={SHADES.carbon} />
                     </TouchableOpacity>
                   </View>
@@ -139,6 +159,7 @@ export default function AdminCollectionsScreen() {
               );
             })}
           </View>
+          ))
         )}
       </ScrollView>
     </View>

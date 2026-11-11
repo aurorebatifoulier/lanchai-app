@@ -33,6 +33,9 @@ export const BAG_COPY = {
   toPay: 'To pay at pick-up',
   deposit: 'Refundable deposit',
   note: 'Given back at return. Coupons and points on the next step.',
+  // Pack price (shared/packs.ts): the best complete pack, applied at checkout (one discount).
+  packLine: (label: string) => label,
+  packHint: (title: string, reason: string) => `${title} pack: ${reason}`,
   needDates: (n: number) => `${n} ${n === 1 ? 'item needs' : 'items need'} dates before you continue.`,
 
   barSub: (n: number) => `${n} ${n === 1 ? 'item' : 'items'} · pay at pick-up`,

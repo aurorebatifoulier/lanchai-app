@@ -15,6 +15,7 @@ import { identityBookingDecision, idCheckNeeded, type IdentityRecord } from './s
 import { evaluatePromo, normalizePromoCode, promoErrorText, PROMO_CODE_RE } from './shared/promo';
 import { readPromo, promoLine } from './promo';
 import { productThumb } from './shared/productImage';
+import { packOf, packDiscount, PACK_ERROR_TEXT, type PackError } from './shared/packs';
 
 // ── createReservations ─────────────────────────────────────────────────────────
 // The ONLY way a renter creates reservations (firestore.rules: reservations create is
@@ -42,7 +43,7 @@ export type BookingErrorCode =
   | 'unauthenticated' | 'invalid-request' | 'phone-required' | 'account-pending' | 'account-on-hold'
   | 'product-unavailable' | 'access-restricted' | 'invalid-slot' | 'too-soon' | 'invalid-dates'
   | 'unpriced' | 'slot-unavailable' | 'coupon-invalid' | 'pricing-not-configured' | 'internal'
-  | 'id-required' | 'id-rejected' | 'promo-invalid' | 'one-discount';
+  | 'id-required' | 'id-rejected' | 'promo-invalid' | 'one-discount' | 'pack-invalid';
 
 function fail(code: BookingErrorCode, message: string, extra: Record<string, unknown> = {}): never {
   const status = code === 'unauthenticated' ? 'unauthenticated'
@@ -54,7 +55,7 @@ function fail(code: BookingErrorCode, message: string, extra: Record<string, unk
 
 interface ItemInput { productId: string; pickupAtMs: number; returnAtMs: number; quantity: number }
 
-function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; promoCode: string | null; notes: string; idCheckAtCounter: boolean; requestId: string | null } {
+function parseInput(data: unknown): { items: ItemInput[]; couponId: string | null; promoCode: string | null; packId: string | null; notes: string; idCheckAtCounter: boolean; requestId: string | null } {
   const d = (data ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(d.items) ? d.items : [];
   if (raw.length === 0 || raw.length > MAX_ITEMS) fail('invalid-request', 'Choose between 1 and 10 items.');
@@ -74,12 +75,14 @@ function parseInput(data: unknown): { items: ItemInput[]; couponId: string | nul
   const notes = typeof d.notes === 'string' ? d.notes.trim().slice(0, MAX_NOTES) : '';
   const promoCode = normalizePromoCode(d.promoCode) || null;
   if (promoCode && !PROMO_CODE_RE.test(promoCode)) fail('promo-invalid', promoErrorText('not-found'), { promoError: 'not-found' });
-  // ONE discount per booking: a loyalty coupon OR a promo code.
-  if (promoCode && couponId) fail('one-discount', 'Only one discount can be used per booking.');
+  // Pack price (collections/{packId}, isPack) — re-validated in the transaction.
+  const packId = typeof d.packId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(d.packId) ? d.packId : null;
+  // ONE discount per booking: a loyalty coupon OR a promo code OR a pack price.
+  if ([couponId, promoCode, packId].filter(Boolean).length > 1) fail('one-discount', 'Only one discount can be used per booking.');
   // Idempotency key of ONE checkout attempt (the app keeps it across retries of the same
   // order): a repeat returns the order already created instead of booking it twice.
   const requestId = typeof d.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(d.requestId) ? d.requestId : null;
-  return { items, couponId, promoCode, notes, idCheckAtCounter: d.idCheckAtCounter === true, requestId };
+  return { items, couponId, promoCode, packId, notes, idCheckAtCounter: d.idCheckAtCounter === true, requestId };
 }
 
 function randomOrderCode(length = 4): string {
@@ -91,7 +94,7 @@ function randomOrderCode(length = 4): string {
 export const createReservations = onCall({ region: REGION }, async request => {
   const uid = accountUid(request);
   if (!uid) fail('unauthenticated', 'Please sign in to book.');
-  const { items, couponId, promoCode, notes, idCheckAtCounter, requestId } = parseInput(request.data);
+  const { items, couponId, promoCode, packId, notes, idCheckAtCounter, requestId } = parseInput(request.data);
   const db = admin.firestore();
   const now = Date.now();
 
@@ -161,12 +164,13 @@ export const createReservations = onCall({ region: REGION }, async request => {
     // All reads first.
     const lockRefs = productIds.map(id => db.collection('productLocks').doc(id));
     const productRefs = productIds.map(id => db.collection('products').doc(id));
-    const [lockSnaps, productSnaps, freshUser, freshHold, requestSnap] = await Promise.all([
+    const [lockSnaps, productSnaps, freshUser, freshHold, requestSnap, packSnap] = await Promise.all([
       Promise.all(lockRefs.map(r => tx.get(r))),
       Promise.all(productRefs.map(r => tx.get(r))),
       tx.get(db.collection('users').doc(uid)),
       tx.get(db.collection('bookingHolds').doc(uid)),
       requestRef ? tx.get(requestRef) : Promise.resolve(null),
+      packId ? tx.get(db.collection('collections').doc(packId)) : Promise.resolve(null),
     ]);
     // Two concurrent calls with the same key: the second one sees the first's record here.
     if (requestSnap?.exists) {
@@ -268,6 +272,23 @@ export const createReservations = onCall({ region: REGION }, async request => {
       }
     }
 
+    // Pack price: every pack item booked for the same dates with the full quantity — the
+    // % comes from the pack document (clamped 0–30), applied to server prices only
+    // (shared/packs.ts packDiscount). Deposits are untouched (priceLine above).
+    let pack: { packId: string; title: string; percent: number } | null = null;
+    if (packId) {
+      const pk = packOf(packId, packSnap?.exists ? (packSnap.data() as Record<string, unknown>) : {});
+      const res = packSnap?.exists
+        ? packDiscount(pk, lines.map(l => ({
+          productId: l.it.productId, pickupAtMs: l.it.pickupAtMs, returnAtMs: l.it.returnAtMs,
+          quantity: l.it.quantity, subtotal: l.subtotal,
+        })), now)
+        : { ok: false as const, error: 'inactive' as PackError };
+      if (!res.ok) fail('pack-invalid', PACK_ERROR_TEXT[res.error], { packError: res.error });
+      discount = { total: (res as { total: number }).total, perLine: (res as { perLine: number[] }).perLine };
+      pack = { packId, title: pk.title, percent: pk.discountPct };
+    }
+
     // Writes.
     const reservationIds: string[] = [];
     lines.forEach((l, i) => {
@@ -302,6 +323,7 @@ export const createReservations = onCall({ region: REGION }, async request => {
         firstRentalIdCheck,
         ...(couponId ? { couponApplied: { id: couponId, percent: couponPercent, discountAmount: discount.perLine[i] } } : {}),
         ...(promo && discount.perLine[i] > 0 ? { promoApplied: { ...promo, discountAmount: discount.perLine[i] } } : {}),
+        ...(pack && discount.perLine[i] > 0 ? { packApplied: { ...pack, discountAmount: discount.perLine[i] } } : {}),
         createdAt:    FieldValue.serverTimestamp(),
       });
     });
@@ -334,7 +356,7 @@ export const createReservations = onCall({ region: REGION }, async request => {
     if (requestRef) {
       tx.set(requestRef, { uid, orderId, reservationIds, createdAt: FieldValue.serverTimestamp() });
     }
-    logger.info('[createReservations] created', { uid, orderId, lines: lines.length, coupon: !!couponId, promo: promo?.code ?? null });
+    logger.info('[createReservations] created', { uid, orderId, lines: lines.length, coupon: !!couponId, promo: promo?.code ?? null, pack: pack?.packId ?? null });
     return { orderId, reservationIds };
   });
 });

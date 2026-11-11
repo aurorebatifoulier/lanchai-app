@@ -16,7 +16,8 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { SHADES } from '@/constants/brandShades';
 import { UI, RowGroup, Row, IconCircle, useScreenInsets } from '@/components/account/ui';
-import { getReservationById, cancelReservation, getUserProfile, RentalDoc, UserProfile } from '@/lib/firestore';
+import { getReservationById, cancelReservation, getUserProfile, getMyReservations, RentalDoc, UserProfile } from '@/lib/firestore';
+import PackCancelNote from '@/components/packs/PackCancelNote';
 import { overdueSeverity, overdueLabel, overdueChipColors, renterLateFeeText } from '@/utils/overdue';
 import { sendNotif } from '@/lib/notifications';
 import { useShopInfo, buildMapsUrl } from '@/lib/shop';
@@ -126,6 +127,17 @@ export default function RentalDetailScreen() {
     if (!user || !id) return;
     getClaimsForReservation(user.uid, id).then(setClaims).catch(() => {});
   }, [user, id]);
+
+  // The other lines of this order — only when this line carries a pack price, for the
+  // "cancelling removes the pack price" note (own reservations query, filtered in code).
+  const [orderLines, setOrderLines] = useState<RentalDoc[]>([]);
+  const packLive = !!rental?.packApplied && !rental.packApplied.removedAt;
+  useEffect(() => {
+    if (!user || !rental?.orderId || !packLive) return;
+    getMyReservations(user.uid)
+      .then(all => setOrderLines(all.filter(r => r.orderId === rental.orderId)))
+      .catch(() => setOrderLines([]));
+  }, [user, rental?.orderId, packLive]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -425,6 +437,7 @@ export default function RentalDetailScreen() {
                 <Text style={s.cancelCardBody}>
                   {CANCEL_CONFIRM_TEXT}
                 </Text>
+                {packLive && <PackCancelNote orderLines={orderLines} cancelIds={[rental.id]} />}
                 <View style={s.cancelBtnRow}>
                   <TouchableOpacity style={s.cancelKeepBtn} onPress={() => setCancelPhase('idle')} activeOpacity={0.8}>
                     <Text style={UI.btnSecondaryText}>Keep it</Text>

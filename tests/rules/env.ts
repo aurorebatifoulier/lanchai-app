@@ -131,6 +131,7 @@ const FILES: Record<string, string> = {
   [`businessDocs/${UID.BIZ}/1.jpg`]: 'image/jpeg',
   [`idDocs/${UID.A}/id_1_1.jpg`]: 'image/jpeg',
   'homeSlides/h1/1.jpg': 'image/jpeg',
+  'collections/k1/1.jpg': 'image/jpeg',
   'onboarding/s1p1/1.jpg': 'image/jpeg',
   'misc/other.txt': 'text/plain',
 };

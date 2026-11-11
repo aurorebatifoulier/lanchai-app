@@ -12,7 +12,10 @@ import ProductGridCard from '@/components/ProductGridCard';
 import { UI, useScreenInsets } from '@/components/account/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { getProducts, getFavorites, addFavorite, removeFavorite } from '@/lib/firestore';
-import { getCollection, isCollectionActive, shadeOf, type CollectionDoc } from '@/lib/collections';
+import { getCollection, isCollectionActive, isPackVisible, shadeOf, type CollectionDoc } from '@/lib/collections';
+import PackScreen from '@/components/packs/PackScreen';
+import { PACK_COPY } from '@/constants/packCopy';
+import { useMyLoyalty } from '@/lib/loyaltyUi';
 import type { Product } from '@/lib/mockData';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { useLoyaltyTier } from '@/lib/loyalty';
@@ -25,6 +28,8 @@ const CARD_WIDTH = (SCREEN_WIDTH - H_PAD * 2 - COL_GAP) / 2;
 // A Home "Got plans?" collection: its header, then its renter-visible products in the
 // admin's order (2-column grid, same cards as Explore). Drafts / out-of-window
 // collections show "not available" (renters can't even read a draft — firestore.rules).
+// A PACK (isPack) shows <PackScreen> instead — only when every item is bookable for this
+// renter (isPackVisible); admins can open any pack (preview).
 export default function CollectionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -36,6 +41,9 @@ export default function CollectionScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const loyalty = useMyLoyalty();
+  const profile = loyalty.profile as { customerType?: string; loyaltyTier?: string | null } | null;
 
   useEffect(() => {
     if (!id) return;
@@ -44,6 +52,7 @@ export default function CollectionScreen() {
         // Admins can open drafts / out-of-date ones (Home "Preview all sections").
         const usable = c && (isAdmin || (c.published && isCollectionActive(c))) ? c : null;
         setCol(usable);
+        setAllProducts(all);
         if (usable) {
           const byId = new Map(all.map(p => [p.id, p]));
           setProducts(usable.productIds.map(pid => byId.get(pid)).filter((p): p is Product => !!p));
@@ -68,6 +77,7 @@ export default function CollectionScreen() {
   }, [user]);
 
   const shade = col ? shadeOf(col) : null;
+  const packOk = !!col?.isPack && (isAdmin || isPackVisible(col, allProducts, userTier ?? null));
 
   return (
     <View style={[s.root, screen.root]}>
@@ -78,6 +88,14 @@ export default function CollectionScreen() {
 
       {loading ? (
         <View style={s.centered}><ActivityIndicator color={SHADES.amber} /></View>
+      ) : col?.isPack ? (
+        packOk ? (
+          <PackScreen pack={col} products={products} profile={profile} />
+        ) : (
+          <View style={s.centered}>
+            <Text style={[UI.body, { textAlign: 'center' }]}>{PACK_COPY.unavailable}</Text>
+          </View>
+        )
       ) : !col || !shade ? (
         <View style={s.centered}>
           <Text style={[UI.body, { textAlign: 'center' }]}>{HOME_COPY.collectionUnavailable}</Text>

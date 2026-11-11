@@ -671,7 +671,7 @@ a snapshot indefinitely).
   fallback, the Terms annexed to the PDF, and keeping agreements as business records,
   Privacy §2 / §6), and the wording "our contract procedure applies" on a non-return
   (Terms §9, FAQ "What happens if I return late?" — kept as is on purpose; what that
-  procedure is and whether it's enforceable), the payment wording of Terms §4 ("You pay at pick-up, in store. There is no online payment and no advance." — renter copy says "Pay at pick-up.", never "nothing to pay" except for a CANCELLATION; no-show = "Your booking was released. Message us to book again."), the anonymous guest identifier (Privacy §2 "Browsing without an account" — deleted after 30 days without sign-up by `guestCleanupDaily`), and force majeure (Terms §14 + FAQ "What about events beyond
+  procedure is and whether it's enforceable), the pack price bullet (Terms §16: rental only, one discount, cancelling an item removes it), the payment wording of Terms §4 ("You pay at pick-up, in store. There is no online payment and no advance." — renter copy says "Pay at pick-up.", never "nothing to pay" except for a CANCELLATION; no-show = "Your booking was released. Message us to book again."), the anonymous guest identifier (Privacy §2 "Browsing without an account" — deleted after 30 days without sign-up by `guestCleanupDaily`), and force majeure (Terms §14 + FAQ "What about events beyond
   your control?" — aligned on 2026-10-30: "we'll work with you in good faith to find a
   fair solution", no statement about refunding used days). No "DRAFT" banner is shown to renters; the review note lives in
   the file header and here. Placeholders filled by `components/LegalScreen.tsx`
@@ -1354,6 +1354,46 @@ a snapshot indefinitely).
     `welcomeGrant` keep both-sides points). Copy everywhere: "they get X% off their first
     rental, you get N points" (`LOYALTY_COPY.referralSub`, Home card, share message,
     invite-code screen, FAQ — built from config).
+
+- **Bookable packs (2026-11-11)** — a pack = a collection with `isPack: true`, `items:
+  {productId, qty}[]` (2–10, `productIds` kept = the same products), `packDiscountPct`
+  (0–30, default 5), optional photo (`imagePath`/`imageUrl`, Storage
+  `collections/{id}/…`). NOT a product type: each item stays its own reservation line
+  (stock, deposit, checklist, agreement, late / damage unchanged). ONE rule, pure:
+  `functions/src/shared/packs.ts` (`packOf`, `isPackActive`, `packDiscount` — every pack
+  item booked for the SAME pick-up + return with at least the pack qty; only the pack qty
+  is discounted, extra units / other lines full price; `packCancelImpact`; `packLabel`;
+  `PACK_ERROR_TEXT`) — tests `tests/unit/packs.test.ts`. The pack price applies to the
+  RENTAL only, never the deposit.
+  - **One discount per booking:** the pack is one more radio row in `useDiscountChoice`
+    (`k:{packId}`, best preselected, the renter may switch to a coupon / code) — bag
+    checkout only. `createReservations` takes `packId` (never with `couponId` /
+    `promoCode` → `one-discount`), reads `collections/{packId}` in the transaction,
+    `packDiscount` on SERVER prices, refuses `pack-invalid` (+ `packError`), writes
+    `packApplied {packId, title, percent, discountAmount}` on the discounted lines.
+    `discountOf` / `orderDiscountOf` label it "Pack {title} ({pct}%)" → confirmation,
+    rental + admin detail, receipt (screen / PDF / email), booking email, agreement
+    (template .4). Loyalty points stay on the pre-discount subtotal.
+  - **Partial cancellation:** `removeBrokenPackDiscount` (`functions/src/packs.ts`, any
+    cancellation of a line carrying `packApplied`) puts the OTHER lines of that pack still
+    `pending_payment` / `confirmed` back to full price (`total = subtotal`,
+    `packApplied.removedAt` + `removedReason`), idempotent; removed discounts no longer
+    display. Before confirming, `<PackCancelNote>` (`components/packs/`, same
+    `packCancelImpact`) shows "cancelling removes the pack price — your other n items:
+    ~~before~~ → after LAK" — rental detail, `OrderSheet`, admin cancel ("this line").
+  - **App:** `lib/collections.ts` (`toPack`, `isPackVisible` = active + EVERY item
+    renter-visible, available, not tier-locked; `packMissingItems`), `lib/packs.ts`
+    (`usePublishedPacks` — the cached `collections:published` read, `packOptions`,
+    `packNearMisses`). Pack page = `app/collection/[id].tsx` → `<PackScreen>`: hero, items
+    (× qty, LAK / day), total, struck total → pack price, deposit (plain sum), "Book this
+    pack" (guest gate) → `DateRangePicker` with `productId=""` (no per-day marks) → each
+    item's `freeForWindow` → "Add pack to bag" (same dates + quantities) or "Add the n
+    available items" (no pack price). Bag: best pack line in "Your total" (to pay reduced)
+    + a hint for an almost-complete pack. Home "Packs" right above "Got plans?" (same
+    `CollectionTiles`, "−5%" chip; packs never in Got plans; hidden when none). Admin →
+    Collections: Packs / Collections sections, "Pack · 5%", "Hidden: n item(s)…";
+    collection form "This is a pack" (qty steppers, %, 16:9 photo). Copy:
+    `constants/packCopy.ts`. Terms §16 "Packs" bullet (lawyer list).
 
 - **Chat, Notifications, Liked (validated mockups, 2026-10-30).** Copy:
   `constants/chatCopy.ts`, `constants/notificationsCopy.ts`, `constants/likedCopy.ts`.

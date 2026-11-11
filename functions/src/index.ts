@@ -63,6 +63,9 @@ export * from './guestCleanup';
 // "Ask for an item" requests: admin alert + renter messages on status changes.
 export * from './itemRequests';
 
+// Pack price removed from the rest of a pack when one of its items is cancelled.
+export * from './packs';
+
 admin.initializeApp();
 const db = admin.firestore();
 

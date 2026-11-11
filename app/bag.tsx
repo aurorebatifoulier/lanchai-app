@@ -10,6 +10,8 @@ import { COLORS } from '@/constants/Colors';
 import { SHADES } from '@/constants/brandShades';
 import { MOTION } from '@/constants/motion';
 import { BAG_COPY } from '@/constants/bagCopy';
+import { usePublishedPacks, packOptions, packNearMisses } from '@/lib/packs';
+import { PACK_ERROR_TEXT } from '@/functions/src/shared/packs';
 import { categoryStyle } from '@/constants/categoryStyle';
 import { displayCategory } from '@/functions/src/shared/categories';
 import { UI, Chip, SectionTitle, useScreenInsets } from '@/components/account/ui';
@@ -180,6 +182,22 @@ export default function BagScreen() {
   }, 0);
   const itemsNeedingDates = items.filter(i => !i.pickupAt || !i.returnAt).length;
 
+  // Pack price: the best pack these ready lines complete (preselected at checkout, where
+  // the renter may still pick a better coupon / code — one discount per booking), and a
+  // hint for a pack that's almost complete (missing item, different dates, quantity).
+  const publishedPacks = usePublishedPacks();
+  const packLines = useMemo(() => readyItems.map(item => ({
+    productId: item.productId,
+    pickupAtMs: item.pickupAt!.toMillis(), returnAtMs: item.returnAt!.toMillis(),
+    quantity: item.quantity, subtotal: rentalOf(item) ?? 0,
+  })), [readyItems, rentalOf]);
+  const bestPack = useMemo(() => packOptions(publishedPacks, packLines)[0] ?? null, [publishedPacks, packLines]);
+  const packHints = useMemo(() => (bestPack ? [] : packNearMisses(publishedPacks, items
+    .filter(i => i.pickupAt && i.returnAt)
+    .map(i => ({ productId: i.productId, pickupAtMs: i.pickupAt!.toMillis(), returnAtMs: i.returnAt!.toMillis(), quantity: i.quantity, subtotal: rentalOf(i) ?? 0 })))),
+  [bestPack, publishedPacks, items, rentalOf]);
+  const toPay = totalRental - (bestPack?.savings ?? 0);
+
   // The bag's period when EVERY item has the same pick-up and return (Explore filter).
   const sharedWindow = useMemo(() => {
     const first = items[0];
@@ -342,16 +360,27 @@ export default function BagScreen() {
                 <Text style={s.lineLabel}>{b.rental(readyItems.length)}</Text>
                 <Text style={s.lineValue}>{`${n(totalRental)} LAK`}</Text>
               </View>
+              {bestPack && (
+                <View style={s.line}>
+                  <Text style={[s.lineLabel, { flex: 1 }]} numberOfLines={2}>{b.packLine(bestPack.label)}</Text>
+                  <Text style={s.lineValue}>{`−${n(bestPack.savings)} LAK`}</Text>
+                </View>
+              )}
               <View style={s.sep} />
               <View style={s.line}>
                 <Text style={s.toPayLabel}>{b.toPay}</Text>
-                <Text style={s.toPayValue}>{`${n(totalRental)} LAK`}</Text>
+                <Text style={s.toPayValue}>{`${n(toPay)} LAK`}</Text>
               </View>
               <View style={s.line}>
                 <Text style={s.lineLabel}>{b.deposit}</Text>
                 <Text style={s.depositValue}>{exchangeRate != null ? `${n(totalDeposit)} LAK` : '—'}</Text>
               </View>
               <Text style={s.note}>{b.note}</Text>
+              {packHints.map(h => (
+                <Text key={h.title} style={[s.note, { color: SHADES.amberText, marginTop: 6 }]}>
+                  {b.packHint(h.title, PACK_ERROR_TEXT[h.error])}
+                </Text>
+              ))}
             </View>
           </>
         )}
@@ -360,7 +389,7 @@ export default function BagScreen() {
       </ScrollView>
 
       <BookingBottomBar
-        total={readyItems.length > 0 ? totalRental : null}
+        total={readyItems.length > 0 ? toPay : null}
         sub={b.barSub(readyItems.length)}
         label={readyItems.length > 0 ? b.continue : b.setDatesToContinue}
         disabled={readyItems.length === 0 || !!bookingHold}

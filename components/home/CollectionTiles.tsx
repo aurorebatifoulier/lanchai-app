@@ -8,14 +8,20 @@ import { HOME_COPY } from '@/constants/homeCopy';
 import { COLLECTION_TILE, type CollectionDoc } from '@/lib/collections';
 import { RailHeader } from '@/components/home/RailHeader';
 import PressScale from '@/components/PressScale';
+import { SHADES } from '@/constants/brandShades';
 
 // Home "Got plans?" (validated mockup): 2-column grid of large tiles in the collection's
 // shade — big icon, title, one short line. 4 tiles max, "See all" shows the rest inline.
 // Odd count (incl. a single collection): the LAST tile takes the full width — never a
-// half-empty row.
+// half-empty row. Also the Home "Packs" section (title + a "−5%" chip per pack tile).
 const MAX = 4;
 
-export default function CollectionTiles({ collections }: { collections: CollectionDoc[] }) {
+export default function CollectionTiles({ collections, title = HOME_COPY.collectionsTitle, badge }: {
+  collections: CollectionDoc[];
+  title?: string;
+  /** Small chip on a tile (packs: "−5%"), null = none. */
+  badge?: (c: CollectionDoc) => string | null;
+}) {
   const router = useRouter();
   const [all, setAll] = useState(false);
   if (collections.length === 0) return null;
@@ -23,7 +29,7 @@ export default function CollectionTiles({ collections }: { collections: Collecti
   return (
     <View>
       <RailHeader
-        title={HOME_COPY.collectionsTitle}
+        title={title}
         onSeeAll={!all && collections.length > MAX ? () => setAll(true) : undefined}
       />
       <View style={s.grid}>
@@ -37,7 +43,10 @@ export default function CollectionTiles({ collections }: { collections: Collecti
               onPress={() => router.push(`/collection/${c.id}`)}
               activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name={c.icon} size={30} color={t.icon} />
+              <View style={s.top}>
+                <MaterialCommunityIcons name={c.icon} size={30} color={t.icon} />
+                {!!badge?.(c) && <View style={s.badge}><Text style={s.badgeText}>{badge(c)}</Text></View>}
+              </View>
               <View style={{ marginTop: 'auto' }}>
                 <Text style={[s.title, { color: t.title }]} numberOfLines={2}>{c.title}</Text>
                 {!!c.subtitle && <Text style={[UI.subtitle, { color: t.sub }]} numberOfLines={2}>{c.subtitle}</Text>}
@@ -55,4 +64,7 @@ const s = StyleSheet.create({
   tile: { width: '48.4%', minHeight: 150, borderRadius: 18, padding: 16, gap: 18 },
   tileWide: { width: '100%', minHeight: 130 },
   title: { fontSize: 15, fontWeight: '800', lineHeight: 19, letterSpacing: -0.2 },
+  top: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  badge: { backgroundColor: SHADES.white, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 12, fontWeight: '700', color: SHADES.carbon },
 });

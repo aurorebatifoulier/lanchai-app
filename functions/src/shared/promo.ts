@@ -5,6 +5,7 @@
 
 import { vteIsoDay, vteIsoDayEndMs } from './dates';
 import { categoryLabel } from './categories';
+import { packLabel } from './packs';
 
 export type PromoType = 'percent' | 'fixed';
 
@@ -192,13 +193,18 @@ export const promoErrorText = (e: PromoError, minLak?: number) =>
 /** "Promo SUMMER10" — receipts, emails, rental detail, agreement. */
 export const promoLabel = (code: string) => `Promo ${code}`;
 
-/** The ONE description of a booking line's discount — loyalty coupon or promo code —
- *  for receipts (screen / PDF / email), emails, rental + admin detail, agreement. */
+/** The ONE description of a booking line's discount — loyalty coupon, promo code or pack
+ *  price — for receipts (screen / PDF / email), emails, rental + admin detail, agreement.
+ *  A pack discount removed after a partial cancellation (removedAt) no longer counts. */
 export interface DiscountInput {
   couponApplied?: { percent: number; discountAmount: number } | null;
   promoApplied?: { code: string; discountAmount: number } | null;
+  packApplied?: { title: string; percent: number; discountAmount: number; removedAt?: unknown } | null;
 }
 export function discountOf(r: DiscountInput): { label: string; amount: number } | null {
+  if (r.packApplied && !r.packApplied.removedAt && r.packApplied.discountAmount > 0) {
+    return { label: packLabel(r.packApplied.title, r.packApplied.percent), amount: r.packApplied.discountAmount };
+  }
   if (r.promoApplied && r.promoApplied.discountAmount > 0) return { label: promoLabel(r.promoApplied.code), amount: r.promoApplied.discountAmount };
   if (r.couponApplied && r.couponApplied.discountAmount > 0) return { label: `Loyalty coupon (${r.couponApplied.percent}%)`, amount: r.couponApplied.discountAmount };
   return null;

@@ -51,7 +51,8 @@ import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
-import { getPublishedCollections, getAllCollections, isCollectionActive, type CollectionDoc } from '@/lib/collections';
+import { getPublishedCollections, getAllCollections, isCollectionActive, isPackVisible, type CollectionDoc } from '@/lib/collections';
+import { PACK_COPY } from '@/constants/packCopy';
 import WhyRentSection from '@/components/WhyRentSection';
 import HeroCarousel from '@/components/home/HeroCarousel';
 import { HOME_BANNERS } from '@/constants/homeBanners';
@@ -251,11 +252,16 @@ export default function HomeScreen() {
     [products]
   );
   const podium = useMemo(() => podiumPick(products), [products]);
-  // "Got plans?": hide a collection with no product the renter can see.
+  // "Got plans?": plain collections (packs have their own section) with at least one
+  // product the renter can see. "Packs": every item bookable for this renter.
   const visibleCollections = useMemo(() => {
     const ids = new Set(products.map(p => p.id));
-    return collections.filter(c => c.productIds.some(id => ids.has(id)));
+    return collections.filter(c => !c.isPack && c.productIds.some(id => ids.has(id)));
   }, [collections, products]);
+  const visiblePacks = useMemo(
+    () => collections.filter(c => isPackVisible(c, products, userTier ?? null)),
+    [collections, products, userTier],
+  );
   const pickup = useMemo(() => nextPickup(reservations), [reservations]);
   const returnedCount = useMemo(() => reservations.filter(r => r.status === 'returned').length, [reservations]);
   const rentAgain = useMemo(() => rentAgainRows(reservations, products), [reservations, products]);
@@ -494,11 +500,22 @@ export default function HomeScreen() {
                 new renters; for returning renters it takes that place after New arrivals. */}
             <View style={styles.whyRent}><WhyRentSection /></View>
 
+            {/* Packs — bookable bundles (pack price at checkout); hidden when none. */}
+            <HomeSection loading={!ready.products || !ready.collections} skeleton={<TilesSkeleton />}>
+              {(preview ? allCollections.filter(c => c.isPack) : visiblePacks).length > 0 && (
+                <CollectionTiles
+                  title={PACK_COPY.homeTitle}
+                  collections={preview ? allCollections.filter(c => c.isPack) : visiblePacks}
+                  badge={c => (c.packDiscountPct > 0 ? PACK_COPY.chip(c.packDiscountPct) : null)}
+                />
+              )}
+            </HomeSection>
+
             {/* Got plans? — 2-column tiles */}
             <HomeSection loading={!ready.products || !ready.collections} skeleton={<TilesSkeleton />}>
               {preview ? (
                 <>
-                  <CollectionTiles collections={allCollections} />
+                  <CollectionTiles collections={allCollections.filter(c => !c.isPack)} />
                   {allCollections.length > 0 && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminDraftsIncluded}</Text>}
                   {allCollections.length === 0 && <AdminHint />}
                 </>

@@ -2,7 +2,7 @@
 // booking; tier lock; stock race; idempotency; Vientiane opening-hours slots; holds / ID.
 import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { fns, call, rejects, db, set, UID, RATE, vteSlot, seedBookingWorld } from './helpers';
+import { fns, fft, call, rejects, db, set, UID, RATE, vteSlot, seedBookingWorld } from './helpers';
 
 const book = (uid: string, items: Record<string, unknown>[], extra: Record<string, unknown> = {}) =>
   call(fns.createReservations, { items, ...extra }, uid);
@@ -53,6 +53,67 @@ describe('discounts: one per booking', () => {
     assert.equal(res.promoApplied.discountAmount, Math.round(res.subtotal * 0.1));
     assert.equal((await db().doc('promoCodes/SUMMER10').get()).get('usedCount'), 1);
     await rejects(book(UID.A, [line('kayak', 1)], { promoCode: 'SUMMER10' }), 'failed-precondition', 'promo-invalid'); // per-renter limit
+  });
+});
+
+describe('packs: pack price server-side', () => {
+  // Kayak × 2 + tent × 1, 10% — the rental only.
+  const seedPack = (extra: Record<string, unknown> = {}) => set('collections/river', {
+    title: 'River day', isPack: true, published: true, packDiscountPct: 10,
+    items: [{ productId: 'kayak', qty: 2 }, { productId: 'tent', qty: 1 }], productIds: ['kayak', 'tent'], ...extra,
+  });
+  const lines = async (r: { reservationIds: string[] }) =>
+    Promise.all(r.reservationIds.map(async id => (await db().doc(`reservations/${id}`).get()).data()!));
+
+  test('complete pack, same dates, full quantities → discount on the rental, deposits unchanged', async () => {
+    await seedPack();
+    const plain = await lines(await book(UID.B, [line('kayak', 3, 1)]));    // reference deposit / unit
+    const r = await book(UID.A, [line('kayak', 3, 2), line('tent', 3, 1)], { packId: 'river' });
+    const [k, t] = await lines(r);
+    assert.equal(k.packApplied.packId, 'river');
+    assert.equal(k.packApplied.percent, 10);
+    assert.equal(k.total, k.subtotal - k.packApplied.discountAmount);
+    assert.equal(k.packApplied.discountAmount + t.packApplied.discountAmount, Math.round((k.subtotal + t.subtotal) * 0.1));
+    assert.equal(k.deposit, 50 * RATE * 2);                                 // never discounted
+    assert.equal(t.deposit, 50 * RATE);
+    assert.ok(plain[0].depositPerUnit > 0);
+  });
+  test('incomplete pack (missing item / short quantity / other dates / unpublished) → pack-invalid', async () => {
+    await seedPack();
+    await rejects(book(UID.A, [line('kayak', 3, 2)], { packId: 'river' }), 'failed-precondition', 'pack-invalid');
+    await rejects(book(UID.A, [line('kayak', 3, 1), line('tent', 3, 1)], { packId: 'river' }), 'failed-precondition', 'pack-invalid');
+    await rejects(book(UID.A, [line('kayak', 3, 2), line('tent', 4, 1)], { packId: 'river' }), 'failed-precondition', 'pack-invalid');
+    await seedPack({ published: false });
+    await rejects(book(UID.A, [line('kayak', 3, 2), line('tent', 3, 1)], { packId: 'river' }), 'failed-precondition', 'pack-invalid');
+    await rejects(book(UID.A, [line('kayak', 3, 2), line('tent', 3, 1)], { packId: 'nope' }), 'failed-precondition', 'pack-invalid');
+  });
+  test('one discount per booking: pack + coupon, pack + promo refused', async () => {
+    await seedPack();
+    await set('promoCodes/SUMMER10', { code: 'SUMMER10', type: 'percent', value: 10, active: true, usedCount: 0, discountGivenLak: 0 });
+    const both = [line('kayak', 3, 2), line('tent', 3, 1)];
+    await rejects(book(UID.A, both, { packId: 'river', couponId: 'cpn1' }), 'failed-precondition', 'one-discount');
+    await rejects(book(UID.A, both, { packId: 'river', promoCode: 'SUMMER10' }), 'failed-precondition', 'one-discount');
+  });
+  test('cancelling one item removes the pack price from the others (trigger, idempotent)', async () => {
+    await seedPack();
+    const r = await book(UID.A, [line('kayak', 3, 2), line('tent', 3, 1)], { packId: 'river' });
+    const [kId, tId] = r.reservationIds;
+    const before = (await db().doc(`reservations/${tId}`).get()).data()!;
+    await db().doc(`reservations/${tId}`).update({ status: 'cancelled', cancelledBy: 'renter' });
+    const after = (await db().doc(`reservations/${tId}`).get()).data()!;
+    const fire = () => (fft.wrap(fns.removeBrokenPackDiscount) as unknown as (e: unknown) => Promise<unknown>)({
+      data: fft.makeChange(
+        fft.firestore.makeDocumentSnapshot(before, `reservations/${tId}`),
+        fft.firestore.makeDocumentSnapshot(after, `reservations/${tId}`),
+      ),
+      params: { reservationId: tId },
+    });
+    await fire();
+    await fire(); // delivered twice → same result
+    const k = (await db().doc(`reservations/${kId}`).get()).data()!;
+    assert.equal(k.total, k.subtotal);
+    assert.ok(k.packApplied.removedAt);
+    assert.equal(k.packApplied.removedReason, 'item-cancelled');
   });
 });
 

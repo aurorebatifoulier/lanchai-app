@@ -5,7 +5,7 @@
 // several visits. Never mentions the internal late-return grace period.
 
 /** Bumped whenever the agreement's wording or layout changes (stamped on each agreement). */
-export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.3';
+export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.4';
 
 export type AgreementMethod = 'signature' | 'paper';
 

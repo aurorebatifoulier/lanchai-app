@@ -9,6 +9,7 @@ import { UI, useScreenInsets } from '@/components/account/ui';
 import PressScale from '@/components/PressScale';
 import { QRThumb } from '@/components/QRThumb';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import PackCancelNote from '@/components/packs/PackCancelNote';
 import { displayOrderId } from '@/utils/rentalDocs';
 import type { RentalDoc } from '@/lib/firestore';
 import { type RentalEntry, isPrePickup, isCancelledLike, tabOf, lak, orderTotal } from '@/lib/rentalsList';
@@ -106,6 +107,7 @@ export function OrderSheet({ entry, onClose, onOpenQR, onCancel, reviewPoints }:
                   {cancellable.map(r => (
                     <Text key={r.id} style={UI.small} numberOfLines={1}>{`• ${r.productName}${r.quantity > 1 ? ` × ${r.quantity}` : ''}`}</Text>
                   ))}
+                  <PackCancelNote orderLines={items} cancelIds={cancellable.map(r => r.id)} />
                 </ConfirmBox>
               ) : (
                 <PressScale style={[UI.btnDestructive, { marginTop: 4 }]} onPress={() => setAsking(true)}>

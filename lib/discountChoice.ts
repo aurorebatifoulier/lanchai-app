@@ -3,12 +3,15 @@ import { PROMO_COPY } from '@/constants/promoCopy';
 import { usePromoCode, useMyCodes, savePromoCode, type PromoItem } from './promoCodes';
 
 // ONE discount per booking, shared by "Your booking" and the bag checkout: the loyalty
-// coupons, the renter's wallet codes that apply to this booking (evaluateMyCodes) and a
-// typed promo code (validatePromoCode) become radio-like rows; the best one is
-// preselected until the renter picks (or clears) one themselves. Only what's chosen is
-// sent to createReservations (couponId OR promoCode) — the server re-checks everything.
+// coupons, the pack prices this booking completes (bag checkout only — lib/packs.ts), the
+// renter's wallet codes that apply (evaluateMyCodes) and a typed promo code
+// (validatePromoCode) become radio-like rows; the best one is preselected until the
+// renter picks (or clears) one themselves. Only what's chosen is sent to
+// createReservations (couponId OR promoCode OR packId) — the server re-checks everything.
 
 export interface CouponChoice { id: string; label: string; savings: number }
+/** A pack price this booking completes ("Pack Karaoke night (5%)"). */
+export interface PackChoice { id: string; label: string; savings: number }
 
 export interface DiscountRowUi {
   key: string;
@@ -35,7 +38,7 @@ export interface PromoFieldUi {
 
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
 
-export function useDiscountChoice({ coupons, items }: { coupons: CouponChoice[]; items: PromoItem[] | null }) {
+export function useDiscountChoice({ coupons, packs = [], items }: { coupons: CouponChoice[]; packs?: PackChoice[]; items: PromoItem[] | null }) {
   const typed = usePromoCode(items);
   const wallet = useMyCodes(items);
   const [choice, setChoice] = useState<string | null>(null);
@@ -49,6 +52,7 @@ export function useDiscountChoice({ coupons, items }: { coupons: CouponChoice[];
   wallet.codes.forEach(w => promoAmounts.set(w.code, w.discountTotal));
   if (typed.applied) promoAmounts.set(typed.applied.code, typed.applied.discountTotal);
   const options = [
+    ...packs.map(k => ({ key: `k:${k.id}`, amount: k.savings })),
     ...coupons.map(c => ({ key: `c:${c.id}`, amount: c.savings })),
     ...[...promoAmounts].map(([code, amount]) => ({ key: `p:${code}`, amount })),
   ];
@@ -87,6 +91,11 @@ export function useDiscountChoice({ coupons, items }: { coupons: CouponChoice[];
   };
 
   const rows: DiscountRowUi[] = [
+    ...packs.map(k => {
+      const key = `k:${k.id}`;
+      const on = choice === key;
+      return { key, label: on ? `${k.label} · −${n(k.savings)} LAK` : k.label, amount: k.savings, selected: on, onPress: () => pick(key) };
+    }),
     ...coupons.map(c => {
       const key = `c:${c.id}`;
       const on = choice === key;
@@ -118,5 +127,6 @@ export function useDiscountChoice({ coupons, items }: { coupons: CouponChoice[];
     discountTotal: chosen?.amount ?? 0,
     couponId: chosen?.key.startsWith('c:') ? chosen.key.slice(2) : null,
     promoCode: chosen?.key.startsWith('p:') ? chosen.key.slice(2) : null,
+    packId: chosen?.key.startsWith('k:') ? chosen.key.slice(2) : null,
   };
 }

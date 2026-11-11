@@ -48,6 +48,7 @@ export interface ResData extends ReceiptInput {
   subtotal: number;
   couponApplied?: { percent: number; discountAmount: number } | null;
   promoApplied?: { code: string; discountAmount: number } | null;
+  packApplied?: { title: string; percent: number; discountAmount: number; removedAt?: unknown } | null;
   chargeAmount?: number;
   chargeReason?: string;
   lateChargeAmount?: number;

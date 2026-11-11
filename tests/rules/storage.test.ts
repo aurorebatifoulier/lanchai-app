@@ -125,9 +125,10 @@ describe('profile photos, business documents, ID documents', () => {
   });
 });
 
-describe('home slides + onboarding (admin media)', () => {
+describe('home slides + pack photos + onboarding (admin media)', () => {
   for (const [block, path] of [
     ['st:homeSlides/{slideId}/{fileName}', 'homeSlides/h1'],
+    ['st:collections/{collectionId}/{fileName}', 'collections/k1'],
     ['st:onboarding/{slot}/{fileName}', 'onboarding/s1p1'],
   ] as const) {
     test(path.split('/')[0], async () => {

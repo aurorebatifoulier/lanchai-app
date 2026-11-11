@@ -47,6 +47,7 @@ import { SettlementSummary } from '@/components/SettlementSummary';
 import { RentalReceipt } from '@/components/RentalReceipt';
 import { SettlementActions } from '@/components/SettlementActions';
 import { ConfirmBox } from '@/components/ConfirmBox';
+import PackCancelNote from '@/components/packs/PackCancelNote';
 import UnitsStepper from '@/components/UnitsStepper';
 import { AgreementAdminCard } from '@/components/admin/AgreementAdminCard';
 import { discountOf } from '@/functions/src/shared/promo';
@@ -1205,6 +1206,14 @@ export default function AdminReservationDetailScreen() {
                 confirmDisabled={!cancelReason || (cancelReason === 'other' && !cancelReasonText.trim())}
                 destructive
               >
+                {/* Cancelling one item of a pack removes the pack price on the others. */}
+                {reservation && (
+                  <PackCancelNote
+                    staff
+                    orderLines={[reservation, ...orderSiblings.filter(r => r.id !== reservation.id)]}
+                    cancelIds={cancelScope === 'order' ? [id!, ...otherLines.map(r => r.id)] : [id!]}
+                  />
+                )}
                 {otherLines.length > 0 && (
                   <View style={d.chipRow}>
                     {(['item', 'order'] as const).map(sc => (
