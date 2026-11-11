@@ -720,7 +720,9 @@ const styles = StyleSheet.create({
   },
   searchWrapCompact: { paddingVertical: 4 },
   searchWrapPinned: { borderBottomColor: SHADES.border },
-  heroWrap: { marginTop: 8 },
+  // paddingBottom 4 = the empty line-box space under the category labels (12px text in a
+  // 16px line), so hero → "Categories" matches labels → "New arrivals" EDGE to edge.
+  heroWrap: { marginTop: 8, paddingBottom: 4 },
   whyRent: { marginTop: 24 },
 
   catRow: { flexDirection: 'row' },

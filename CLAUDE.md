@@ -933,7 +933,9 @@ a snapshot indefinitely).
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7; the hero draws its dots INSIDE the gap
   below it (`InsetCarousel dotsInGap`, no layout space; no dots with one slide), so the
-  title's normal 24px margin = the same visible gap as every section) → New arrivals rail →
+  title's normal 24px margin + the hero wrapper's 4px bottom padding (= the empty line-box
+  space under the category labels) = the same visible edge-to-edge gap as labels → New
+  arrivals) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) →
   `<WhyRentSection>` ("Spend less / Live lighter" — right under it for new renters, same
   place after New arrivals for returning ones) → "Got
