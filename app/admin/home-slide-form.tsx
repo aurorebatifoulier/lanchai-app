@@ -29,6 +29,9 @@ import {
   SLIDE_LIMITS, type SlideLink, type SlidePlacement,
 } from '@/lib/homeSlides';
 import PressScale from '@/components/PressScale';
+import { HOME_BANNERS } from '@/constants/homeBanners';
+import { mergeHeroList } from '@/lib/heroItems';
+import { getHeroState, saveHeroOrder } from '@/lib/homeHero';
 
 type LinkKind = SlideLink['kind'];
 const LINK_KINDS: { key: LinkKind; label: string }[] = [
@@ -41,7 +44,8 @@ const LINK_KINDS: { key: LinkKind; label: string }[] = [
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Admin → Home slides → new / edit (?id=). Photo from the gallery with a landscape crop
-// (9:4, about 1080 × 480), compressed like product photos and uploaded on Save.
+// (16:9 = the hero card, about 1600 × 900), compressed like product photos and uploaded on
+// Save. A NEW hero slide goes last in the shared hero order (slides + built-in banners).
 export default function HomeSlideFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
@@ -62,6 +66,8 @@ export default function HomeSlideFormScreen() {
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [localUri, setLocalUri] = useState<string | null>(null);
+  // New slide only: the current hero list (slides + built-ins) for its place in the order.
+  const [heroList, setHeroList] = useState<{ key: string }[]>([]);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [collections, setCollections] = useState<CollectionDoc[]>([]);
@@ -77,7 +83,8 @@ export default function HomeSlideFormScreen() {
       getAllCollections().catch(() => [] as CollectionDoc[]),
       id ? getSlide(id).catch(() => null) : Promise.resolve(null),
       id ? Promise.resolve([]) : getAllSlides().catch(() => []),
-    ]).then(([prods, cols, slide, all]) => {
+      id ? Promise.resolve(null) : getHeroState(),
+    ]).then(([prods, cols, slide, all, hero]) => {
       setProducts([...prods].sort((a, b) => a.name.localeCompare(b.name)));
       setCollections(cols);
       if (slide) {
@@ -89,7 +96,8 @@ export default function HomeSlideFormScreen() {
         setPublished(slide.published); setOrder(slide.order);
         setImagePath(slide.imagePath); setImageUrl(slide.imageUrl);
       } else {
-        setOrder(all.length); // new slides go last
+        setOrder(all.length); // new slides go last (hero: see save())
+        setHeroList(mergeHeroList(all, hero, HOME_BANNERS));
       }
     }).finally(() => setLoading(false));
   }, [id]);
@@ -98,7 +106,7 @@ export default function HomeSlideFormScreen() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [9, 4],
+      aspect: [16, 9],
       quality: 1,
     });
     if (!res.canceled && res.assets[0]) { setLocalUri(res.assets[0].uri); setError(null); }
@@ -142,7 +150,11 @@ export default function HomeSlideFormScreen() {
         order, published, ...photo,
       };
       if (id) await updateSlide(id, data);
-      else await createSlideWithId(slideId, data);
+      else if (placement === 'hero') {
+        // Last in the shared hero order: the current list rewritten 0..n-1, then this one.
+        await createSlideWithId(slideId, { ...data, order: heroList.length });
+        await saveHeroOrder([...heroList, { key: `slide:${slideId}` }]).catch(() => {});
+      } else await createSlideWithId(slideId, data);
       router.replace('/admin/home-slides' as never);
     } catch {
       setError("Couldn't save the slide. Please try again.");
@@ -191,7 +203,7 @@ export default function HomeSlideFormScreen() {
                 </View>
               )}
           </TouchableOpacity>
-          <Text style={[UI.small, { marginTop: 6 }]}>Landscape, about 1080 × 480 — the picker crops to this shape.</Text>
+          <Text style={[UI.small, { marginTop: 6 }]}>Landscape photos, 16:9 — about 1600 × 900. The picker crops to this shape.</Text>
 
           <SectionTitle>Text (optional)</SectionTitle>
           <View style={[UI.card, UI.cardPadded]}>
@@ -298,7 +310,7 @@ const s = StyleSheet.create({
   headerTitle: { position: 'absolute', left: 0, right: 0, textAlign: 'center', fontSize: 17, fontWeight: '800', color: SHADES.carbon },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photo: {
-    aspectRatio: 9 / 4, borderRadius: 18, overflow: 'hidden', backgroundColor: SHADES.carbonLight,
+    aspectRatio: 16 / 9, borderRadius: 18, overflow: 'hidden', backgroundColor: SHADES.carbonLight,
     borderWidth: 0.5, borderColor: SHADES.border, alignItems: 'center', justifyContent: 'center',
   },
   list: { marginTop: 10, padding: 12, gap: 2 },

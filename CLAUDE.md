@@ -928,10 +928,9 @@ a snapshot indefinitely).
   Reanimated version (Reanimated.ScrollView, then useScrollOffset + animated styles)
   crashed on reload in Expo Go — "set the key `current` … frozen" (reverted c07bdb4,
   689a1c2, f28a49a))
-  → hero: a published admin hero slide → `SlideCarousel` in `InsetCarousel` (140px band —
-  `HERO_HEIGHT`, compact text: title ≤ 2 lines 18/22, subtitle 1 line); otherwise the
-  marketing banners `<HeroCarousel>` (`components/home/HeroCarousel.tsx`, data ONLY in
-  `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 16:9 cards radius 20,
+  → hero `<HeroCarousel>` (`components/home/HeroCarousel.tsx`) = admin hero slides AND
+  the built-in marketing banners in ONE admin order (see "Home hero" below); built-in
+  content ONLY in `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 16:9 cards radius 20,
   'light' = text centred-left + amber pill / 'dark' = bottom-left + amber text link, no
   overlay / gradient / shadow; text block MEASURED and stepped down until it fits (title 20 →
   17 → subtitle 12 → subtitle hidden only as a last resort, e.g. big system font; always
@@ -941,13 +940,12 @@ a snapshot indefinitely).
   (useFocusEffect) and with reduce motion; dots 8px under the card (RN Animated width, no
   Reanimated), tappable; whole card = button via `openAppRoute`, which adds a fresh `t` to
   `/explore?…` links so Explore re-applies `q` / opens the request sheet for `ask=1`;
-  `heroWrapBanners` drops the 4px pad → ~26px card → "Categories") → `<NextPickupCard>` (nearest
+  admin slides = the shared `<AdminSlideCard>` in the same 16:9 frame; cream placeholder of
+  the same size while loading) → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
-  one row up to 6, circles ≤ 52px; scroll from 7; the hero draws its dots INSIDE the gap
-  below it (`InsetCarousel dotsInGap`, no layout space; no dots with one slide), so the
-  hero wrapper's 4px bottom padding + a 12px top margin on the "Categories" title ONLY
-  (every other section title keeps 24) = a 16px gap, dots centred in it (5px / 5px —
-  `DOTS_GAP_TOP` in InsetCarousel follows this gap); the blocks that may sit between hero and title — admin toggle, guest invite
+  one row up to 6, circles ≤ 52px; scroll from 7; hero card → dots 8 + 6, then a 12px top
+  margin on the "Categories" title ONLY (every other section title keeps 24) = ~26px card →
+  title; the blocks that may sit between hero and title — admin toggle, guest invite
   banner, next pick-up — carry their 14px margin ON the visible card, never on a wrapper,
   so a block that renders nothing leaves no gap) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) →
@@ -981,14 +979,31 @@ a snapshot indefinitely).
   cards, data-source notes).
   - **Home slides** (`homeSlides/{id}`, `lib/homeSlides.ts`, Admin → Home slides,
     `app/admin/home-slides.tsx` + `home-slide-form.tsx?id=`): placement hero | banner,
-    photo (Storage `homeSlides/{id}/…`, picker crop 9:4, 1600px JPEG 0.7 like product
+    photo (Storage `homeSlides/{id}/…`, picker crop 16:9 (1600 × 900), 1600px JPEG 0.7 like product
     photos; path + download URL stored), optional title / subtitle / button label, link
     (category, collection, product, Explore `q` / `maxPrice`, none), optional dates,
     order, published. Renters read published ones only (rule + equality query).
-    `<SlideCarousel>`: overlay only with text, button only with label + link. No published
-    active slide for a placement (or a read error) → the built-in content (hero: the
-    `HOME_BANNERS` marketing banners; banner: `WhyRentSection` WHY_RENT_SLIDES).
-    `components/home/builtInSlides.ts` HERO_BUILT_IN now only seeds "Create example drafts".
+    `<AdminSlideCard>` (hero + mid-page `<SlideCarousel>`): overlay only with text, button
+    only with label + link. Banner placement: no published active slide (or a read error)
+    → `WhyRentSection` WHY_RENT_SLIDES. `components/home/builtInSlides.ts` HERO_BUILT_IN
+    only seeds "Create example drafts".
+  - **Home hero (2026-11-11) — admin slides + built-in banners, ONE order.** Built-in
+    state (no content) in **`config/homeHero`** `{ builtIns: { [bannerId]: { published?,
+    order? } } }` (`lib/homeHero.ts`; covered by the existing `config/*` rule — no rule
+    change). Pure merge in `lib/heroItems.ts` (`mergeHeroList`, `visibleHeroItems`,
+    `heroStateOf` — `tests/unit/heroItems.test.ts`): slides use `homeSlides.order`,
+    built-ins their stored order, same numbering; a built-in with no stored order goes
+    after every ordered item in config order; ties → the slide first; no stored
+    `published` = published. Visible = published (slides also within their dates); preview
+    = everything with "Draft"; NOTHING visible → all built-ins (never an empty hero; admin
+    info line). Admin ↑/↓ = `saveHeroOrder` rewrites the whole hero list 0..n-1 in ONE
+    batch (homeSlides updates + config/homeHero merge); toggle = `setBuiltInPublished`
+    (merge). Built-ins: "Built-in" chip, no edit / delete. A NEW hero slide goes last
+    (the form rewrites the list). Read failure → the LAST config/homeHero read on this
+    device (AsyncStorage `home.heroState`) — an unpublished banner never comes back because
+    of the network; all published only if nothing was ever read. Cached like config/home
+    (`heroState`, cleared by admin saves). A banner removed from the code → its stored
+    state is ignored; a new one → published, last.
   - **No repeats:** `pickSections()` (`lib/homeData.ts`, pure) builds New arrivals → Free
     this weekend → Rent again (exempt) → most-rented ranking (exempt, true top 3) → Under X
     → Why buy it? in display order: unseen products first, reuse only to reach a section's

@@ -1,82 +1,26 @@
 import React from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
-import { Text } from '@/components/AppText';
-import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import { SHADES } from '@/constants/brandShades';
-import { HOME_COPY } from '@/constants/homeCopy';
 import InsetCarousel from '@/components/home/InsetCarousel';
-import { slideTarget, type HomeSlide } from '@/lib/homeSlides';
-import PressScale from '@/components/PressScale';
-import { openCategory } from '@/lib/navigation';
+import AdminSlideCard from '@/components/home/AdminSlideCard';
+import type { HomeSlide } from '@/lib/homeSlides';
 
-// Admin-managed Home slides (hero carousel / mid-page banner): photo full-bleed in the
-// rounded 16px-margin card, a subtle dark overlay ONLY when there's text, amber button
-// when there's a label and a link; a tap anywhere follows the link. `showDraft` (admin
-// preview) marks unpublished slides. `compact` = the 140px Home hero band: smaller text,
-// title ≤ 2 lines, subtitle 1 line, dots drawn inside the gap below (the mid-page banner
-// keeps the full size and its dots row).
+// The mid-page banner's admin slides (Admin → Home slides, placement 'banner') in the
+// 16px-margin InsetCarousel. Each slide = the shared <AdminSlideCard> (also used by the
+// hero carousel). `showDraft` (admin preview) marks unpublished slides.
 export default function SlideCarousel({
-  slides, height, intervalMs, showDraft, compact = false,
+  slides, height, intervalMs, showDraft,
 }: {
   slides: HomeSlide[];
   height: number;
   intervalMs: number;
   showDraft?: boolean;
-  compact?: boolean;
 }) {
-  const router = useRouter();
   return (
     <InsetCarousel
       height={height}
       intervalMs={intervalMs}
-      dotsInGap={compact}
-      slides={slides.map(slide => {
-        const target = slideTarget(slide.link);
-        const go = () => {
-          if (!target) return;
-          if (slide.link.kind === 'category') openCategory(router, slide.link.id); // → Explore with that category
-          else if (target) router.push(target as never);
-        };
-        const hasText = !!(slide.title || slide.subtitle);
-        return (
-          <Pressable key={slide.id} style={s.slide} onPress={go} disabled={!target}>
-            {slide.imageUrl && (
-              <Image source={{ uri: slide.imageUrl }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={250} />
-            )}
-            {hasText && <View style={s.overlay} />}
-            {showDraft && !slide.published && (
-              <View style={s.draft}><Text style={s.draftText}>{HOME_COPY.adminDraft}</Text></View>
-            )}
-            <View style={[s.content, compact && s.contentCompact]}>
-              {!!slide.title && <Text style={[s.title, compact && s.titleCompact]} numberOfLines={2}>{slide.title}</Text>}
-              {!!slide.subtitle && <Text style={[s.sub, compact && s.subCompact]} numberOfLines={compact ? 1 : 2}>{slide.subtitle}</Text>}
-              {!!slide.ctaLabel && target && (
-                <PressScale style={[s.cta, compact && s.ctaCompact]} onPress={go} activeOpacity={0.85}>
-                  <Text style={s.ctaText}>{slide.ctaLabel}</Text>
-                </PressScale>
-              )}
-            </View>
-          </Pressable>
-        );
-      })}
+      slides={slides.map(slide => (
+        <AdminSlideCard key={slide.id} slide={slide} showDraft={showDraft} style={{ flex: 1 }} />
+      ))}
     />
   );
 }
-
-const s = StyleSheet.create({
-  slide: { flex: 1, overflow: 'hidden', backgroundColor: SHADES.carbon },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.35)' },
-  content: { flex: 1, justifyContent: 'flex-end', padding: 18, gap: 4 },
-  title: { fontSize: 22, fontWeight: '800', color: SHADES.white, letterSpacing: -0.4, lineHeight: 26 },
-  sub: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 18 },
-  cta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12, marginTop: 8 },
-  ctaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },
-  // Hero band (140px): 2-line title + 1-line subtitle + button fit.
-  contentCompact: { padding: 14, gap: 2 },
-  titleCompact: { fontSize: 18, lineHeight: 22, letterSpacing: -0.3 },
-  subCompact: { fontSize: 12, lineHeight: 16 },
-  ctaCompact: { paddingHorizontal: 14, paddingVertical: 7, marginTop: 6 },
-  draft: { position: 'absolute', top: 12, left: 12, backgroundColor: SHADES.amberLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  draftText: { fontSize: 11, fontWeight: '800', color: SHADES.amberDeep },
-});

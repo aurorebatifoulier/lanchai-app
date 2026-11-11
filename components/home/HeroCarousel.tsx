@@ -1,7 +1,9 @@
-// Home hero marketing banners (constants/homeBanners.ts) — shown when no Admin → Home
-// slide is published for the hero placement. 16px gutter, one 16:9 card at a time (radius
-// 20, cream fallback), snapping per card; no overlay / gradient / text shadow (the photos
-// keep an empty zone for the text). 'light' = text centred-left on a bright photo, solid
+// Home hero carousel: admin hero slides + built-in marketing banners in ONE admin order
+// (lib/heroItems.ts — the Home passes the visible items, null while loading = a cream
+// placeholder of the same size). 16px gutter, one 16:9 card at a time (radius 20, cream
+// fallback), snapping per card. Admin slides = the shared <AdminSlideCard> in the same
+// frame (photo cover, their own text layout). Built-in banners: no overlay / gradient /
+// text shadow (the photos keep an empty zone for the text). 'light' = text centred-left on a bright photo, solid
 // amber pill; 'dark' = text bottom-left, amber text link (subtitle across the whole 78%).
 // Fit: the text block is MEASURED and steps down until it fits the card — title 20 →
 // title 17 → subtitle 12 → (last resort, e.g. large system font) subtitle hidden. The
@@ -20,8 +22,12 @@ import { Feather } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/AppText';
 import { useReducedMotion } from '@/constants/motion';
-import { HOME_BANNERS, type HomeBanner } from '@/constants/homeBanners';
+import { HOME_COPY } from '@/constants/homeCopy';
+import { SHADES } from '@/constants/brandShades';
+import type { HomeBanner } from '@/constants/homeBanners';
+import type { HeroEntry } from '@/lib/heroItems';
 import { openAppRoute } from '@/lib/navigation';
+import AdminSlideCard from '@/components/home/AdminSlideCard';
 
 const SIDE = 16;
 const ADVANCE_MS = 5000;
@@ -44,14 +50,19 @@ const C = {
   dotIdle: '#D6D0C4',
 };
 
-export default function HeroCarousel({ banners = HOME_BANNERS }: { banners?: HomeBanner[] }) {
+export default function HeroCarousel({ items, showDraft }: {
+  items: HeroEntry<HomeBanner>[] | null;
+  /** Admin preview: unpublished items are marked "Draft". */
+  showDraft?: boolean;
+}) {
   const router = useRouter();
   const reduce = useReducedMotion();
   const { width: screenW } = useWindowDimensions();
   const width = screenW - SIDE * 2;
   const height = Math.round((width * 9) / 16);
   const small = width < SMALL_CARD;
-  const count = banners.length;
+  const list = items ?? [];
+  const count = list.length;
 
   const scrollRef = useRef<ScrollView>(null);
   const index = useRef(0);
@@ -88,10 +99,21 @@ export default function HeroCarousel({ banners = HOME_BANNERS }: { banners?: Hom
     return () => { focused.current = false; stop(); };
   }, [schedule, stop]));
   useEffect(() => stop, [stop]);
+  // The list changed (data loaded, admin preview toggled): back to the first card.
+  const listKey = list.map(e => e.key).join('|');
+  useEffect(() => {
+    if (index.current === 0) return;
+    index.current = 0;
+    setActive(0);
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+  }, [listKey]);
 
   const onTouchStart = useCallback(() => { touching.current = true; stop(); }, [stop]);
   const onTouchEnd = useCallback(() => { touching.current = false; schedule(); }, [schedule]);
 
+  if (items === null) {
+    return <View style={[s.card, s.placeholder, { width, height }]} />;
+  }
   if (count === 0) return null;
   return (
     <View>
@@ -113,23 +135,26 @@ export default function HeroCarousel({ banners = HOME_BANNERS }: { banners?: Hom
             if (!touching.current) schedule();
           }}
         >
-          {banners.map(b => (
+          {list.map(e => (e.kind === 'slide' ? (
+            <AdminSlideCard key={e.key} slide={e.slide} showDraft={showDraft} style={[s.card, s.slideCard, { width, height }]} />
+          ) : (
             <BannerCard
-              key={`${b.id}-${width}`}
-              banner={b}
+              key={`${e.key}-${width}`}
+              banner={e.banner}
               width={width}
               height={height}
               small={small}
-              onPress={() => openAppRoute(router, b.ctaHref)}
+              draft={!!showDraft && !e.published}
+              onPress={() => openAppRoute(router, e.banner.ctaHref)}
             />
-          ))}
+          )))}
         </ScrollView>
       </View>
       {count > 1 && (
         <View style={s.dots}>
-          {banners.map((b, i) => (
+          {list.map((e, i) => (
             <Dot
-              key={b.id}
+              key={e.key}
               active={i === active}
               reduce={reduce}
               label={`Show banner ${i + 1} of ${count}`}
@@ -142,8 +167,8 @@ export default function HeroCarousel({ banners = HOME_BANNERS }: { banners?: Hom
   );
 }
 
-function BannerCard({ banner: b, width, height, small, onPress }: {
-  banner: HomeBanner; width: number; height: number; small: boolean; onPress: () => void;
+function BannerCard({ banner: b, width, height, small, draft, onPress }: {
+  banner: HomeBanner; width: number; height: number; small: boolean; draft: boolean; onPress: () => void;
 }) {
   const dark = b.variant === 'dark';
   // 0 = title 20 · 1 = title 17 · 2 = + subtitle 12 · 3 = subtitle hidden.
@@ -174,6 +199,7 @@ function BannerCard({ banner: b, width, height, small, onPress }: {
         contentPosition={b.focalPoint}
         accessible={false}
       />
+      {draft && <View style={s.draft}><Text style={s.draftText}>{HOME_COPY.adminDraft}</Text></View>}
       <View style={dark ? s.darkBlock : s.lightBlock} pointerEvents="none">
         <View style={!fits && s.hidden} onLayout={e => onContentLayout(e.nativeEvent.layout.height)}>
         <View style={s.eyebrowRow}>
@@ -245,6 +271,11 @@ function Dot({ active, reduce, label, onPress }: { active: boolean; reduce: bool
 const s = StyleSheet.create({
   // Rounded clip on the wrapper (never on the expo-image itself — Android).
   card: { borderRadius: 20, overflow: 'hidden', backgroundColor: C.cream },
+  // Admin slide: dark frame behind its photo (AdminSlideCard's own background).
+  slideCard: { backgroundColor: C.carbon },
+  placeholder: { alignSelf: 'center', marginBottom: 14 },
+  draft: { position: 'absolute', top: 12, right: 12, backgroundColor: SHADES.amberLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  draftText: { fontSize: 11, fontWeight: '800', color: SHADES.amberDeep },
   pressed: { opacity: 0.9 },
 
   lightBlock: { position: 'absolute', left: 20, top: 0, bottom: 0, maxWidth: '55%', justifyContent: 'center' },

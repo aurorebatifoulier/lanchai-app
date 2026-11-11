@@ -51,9 +51,12 @@ import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
 import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/utils/availability';
 import { useMyLoyalty } from '@/lib/loyaltyUi';
-import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
+import { getPublishedCollections, getAllCollections, isCollectionActive, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
 import HeroCarousel from '@/components/home/HeroCarousel';
+import { HOME_BANNERS } from '@/constants/homeBanners';
+import { mergeHeroList, visibleHeroItems, type HeroState } from '@/lib/heroItems';
+import { getHeroState } from '@/lib/homeHero';
 import SlideCarousel from '@/components/home/SlideCarousel';
 import BagButton from '@/components/home/BagButton';
 import { getPublishedSlides, getAllSlides, type HomeSlide } from '@/lib/homeSlides';
@@ -82,9 +85,6 @@ const PREVIEW_KEY = 'home.adminPreviewAll';
 const CONTENT_PAD_TOP = 8;
 const COMPACT_ON = 24;
 const COMPACT_OFF = 16;
-// Hero carousel: a band, not a block (was 190). Admin hero photos are cropped 9:4, which
-// fits this height on a phone with almost no extra crop.
-const HERO_HEIGHT = 140;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -100,6 +100,9 @@ export default function HomeScreen() {
   const [allCollections, setAllCollections] = useState<CollectionDoc[]>([]);
   const [slides, setSlides] = useState<HomeSlide[]>([]);
   const [allSlides, setAllSlides] = useState<HomeSlide[]>([]);
+  // config/homeHero (built-in banners' published / order); null until slides + state are in.
+  const [heroState, setHeroState] = useState<HeroState | null>(null);
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const [previewAll, setPreviewAll] = useState(false);
   const [homeQuery, setHomeQuery] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
@@ -165,8 +168,12 @@ export default function HomeScreen() {
         .then(setOccupancy, () => setOccupancy(null))
         .finally(() => setReady(r => ({ ...r, occupancy: true }))),
       cached('homeConfig', HOME_TTL.config, getHomeConfig, force).then(c => setBudgetLak(c.budgetThresholdLak)),
-      // Failure → no admin slides → the built-in ones (the Home never looks broken).
-      cached('slides:published', HOME_TTL.config, getPublishedSlides, force).then(setSlides, () => setSlides([])),
+      // Hero = admin slides + built-in banners (lib/heroItems.ts). Slides failure → none;
+      // heroState failure → the last value read on this device (lib/homeHero.ts).
+      Promise.allSettled([
+        cached('slides:published', HOME_TTL.config, getPublishedSlides, force).then(setSlides, () => setSlides([])),
+        cached('heroState', HOME_TTL.config, getHeroState, force).then(setHeroState, () => setHeroState(null)),
+      ]).then(() => setHeroLoaded(true)),
     ]);
   }, [user]);
 
@@ -302,9 +309,15 @@ export default function HomeScreen() {
   const budgetShown = picked.budget.length >= 2 ? picked.budget
     : preview ? [...bookableByPopularity(products, userTier ?? null)].sort((a, b) => a.pricePerDay - b.pricePerDay).slice(0, 4) : [];
 
-  // Admin slides per placement (preview: drafts too); none → the built-in slides.
+  // Admin slides per placement (preview: drafts too). Hero: admin slides + built-in
+  // banners in the admin order, never empty (lib/heroItems.ts).
   const slideSource = preview ? allSlides : slides;
-  const heroSlides = useMemo(() => slideSource.filter(x => x.placement === 'hero'), [slideSource]);
+  const heroItems = useMemo(
+    () => (heroLoaded
+      ? visibleHeroItems(mergeHeroList(slideSource, heroState, HOME_BANNERS), { preview, isActive: isCollectionActive }).items
+      : null),
+    [heroLoaded, slideSource, heroState, preview],
+  );
   const bannerSlides = useMemo(() => slideSource.filter(x => x.placement === 'banner'), [slideSource]);
 
   // Categories: all on one row (≤ 6) sized to the width; horizontal scroll from 7.
@@ -422,12 +435,9 @@ export default function HomeScreen() {
             {search}
           </View>
 
-          {/* A published Admin → Home hero slide wins; otherwise the marketing banners
-              (constants/homeBanners.ts) — their dots sit under the card, so no 4px pad. */}
-          <View style={[styles.heroWrap, heroSlides.length === 0 && styles.heroWrapBanners]}>
-            {heroSlides.length > 0
-              ? <SlideCarousel slides={heroSlides} height={HERO_HEIGHT} intervalMs={10000} showDraft={preview} compact />
-              : <HeroCarousel />}
+          {/* Admin hero slides + built-in banners, one order (Admin → Home slides). */}
+          <View style={styles.heroWrap}>
+            <HeroCarousel items={heroItems} showDraft={preview} />
           </View>
 
           <View style={styles.content}>
@@ -680,12 +690,8 @@ const styles = StyleSheet.create({
   },
   searchWrapCompact: { paddingVertical: 4 },
   searchWrapPinned: { borderBottomColor: SHADES.border },
-  // paddingBottom 4 = the empty line-box space under the category labels (12px text in a
-  // 16px line), so hero → "Categories" matches labels → "New arrivals" EDGE to edge.
-  heroWrap: { marginTop: 8, paddingBottom: 4 },
-  // Built-in banners (HeroCarousel): card → dots 8 + 6, then the 12px "Categories" margin
-  // = ~26px card → title.
-  heroWrapBanners: { paddingBottom: 0 },
+  // Hero card → dots 8 + 6, then the 12px "Categories" margin = ~26px card → title.
+  heroWrap: { marginTop: 8 },
   whyRent: { marginTop: 24 },
 
   catRow: { flexDirection: 'row' },
