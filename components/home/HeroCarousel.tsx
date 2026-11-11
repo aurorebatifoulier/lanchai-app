@@ -1,12 +1,14 @@
 // Home hero carousel: admin hero slides + built-in marketing banners in ONE admin order
 // (lib/heroItems.ts — the Home passes the visible items, null while loading = a cream
-// placeholder of the same size). 16px gutter, one 16:9 card at a time (radius 20, cream
+// placeholder of the same size). 16px gutter, one 1.9:1 card at a time (radius 20, cream
 // fallback), snapping per card. Admin slides = the shared <AdminSlideCard> in the same
 // frame (photo cover, their own text layout). Built-in banners: no overlay / gradient /
 // text shadow (the photos keep an empty zone for the text). 'light' = text centred-left on
 // a bright photo, small amber pill; 'dark' = text bottom-left, amber text link. Text zone =
 // the banner's `textWidth` (default 0.45 light / 0.58 dark) of the card width, from its
-// left edge. Type: eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each.
+// left edge. Type: eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each; gaps
+// eyebrow → title 8, title → subtitle 6, subtitle → pill 14 (never reduced to fit). Dark:
+// the CTA link (11px, 1px underline) sits bottom-RIGHT, aligned with the text block bottom.
 // Fit: the block height and the title / subtitle line counts are MEASURED and the type
 // steps down until it fits — title 18 → 16 → 14 while it needs > 2 lines; subtitle hidden
 // ONLY if the block is still taller than the card (last resort, e.g. large system font);
@@ -34,6 +36,7 @@ import AdminSlideCard from '@/components/home/AdminSlideCard';
 
 const SIDE = 16;
 const ADVANCE_MS = 5000;
+const HERO_RATIO = 1.9;
 const SMALL_CARD = 300;
 // Free space kept around the light block (top + bottom) / above the dark block.
 const LIGHT_PAD = 8;
@@ -66,7 +69,8 @@ export default function HeroCarousel({ items, showDraft }: {
   const reduce = useReducedMotion();
   const { width: screenW } = useWindowDimensions();
   const width = screenW - SIDE * 2;
-  const height = Math.round((width * 9) / 16);
+  // 1.9:1 (≈173px on a 328px card) — admin slides use the same frame.
+  const height = Math.round(width / HERO_RATIO);
   const small = width < SMALL_CARD;
   const list = items ?? [];
   const count = list.length;
@@ -207,6 +211,11 @@ function BannerCard({ banner: b, width, height, small, draft, onPress }: {
     const t = setTimeout(() => setFits(true), 400);
     return () => clearTimeout(t);
   }, [level]);
+  // Dev only: which fit step each banner ended on (Metro log) — to tune `textWidth`.
+  useEffect(() => {
+    if (!fits || !__DEV__) return;
+    console.log(`[hero fit] ${b.id} @${width}px: title ${TITLE_STEPS[titleStep].fontSize}px${subHidden ? ', subtitle HIDDEN' : ''}`);
+  }, [fits, b.id, width, titleStep, subHidden]);
   const lines = fits ? MAX_LINES : undefined;
   return (
     <Pressable
@@ -254,18 +263,21 @@ function BannerCard({ banner: b, width, height, small, draft, onPress }: {
               {b.subtitle}
             </Text>
           )}
-          {dark ? (
-            <View style={s.link}>
-              <Text style={s.linkText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
-              <Feather name="arrow-right" size={12} color={C.amber} />
-            </View>
-          ) : (
+          {!dark && (
             <View style={s.pill}>
               <Text style={s.pillText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
             </View>
           )}
         </View>
       </View>
+      {/* Dark: the CTA link sits in the bottom-right corner, bottom aligned with the text
+          block (the whole card is the touch target). */}
+      {dark && (
+        <View style={[s.link, !fits && s.hidden]} pointerEvents="none">
+          <Text style={s.linkText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
+          <Feather name="arrow-right" size={12} color={C.amber} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -314,21 +326,21 @@ const s = StyleSheet.create({
   darkBlock: { position: 'absolute', left: TEXT_LEFT, bottom: DARK_BOTTOM },
   hidden: { opacity: 0 },
 
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
   eyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
   title: { fontWeight: '700', letterSpacing: -0.3 },
-  sub: { fontSize: 12, lineHeight: 16, marginTop: 4 },
+  sub: { fontSize: 12, lineHeight: 16, marginTop: 6 },
 
   pill: {
-    alignSelf: 'flex-start', marginTop: 8, height: 30, paddingHorizontal: 12, borderRadius: 8,
+    alignSelf: 'flex-start', marginTop: 14, height: 30, paddingHorizontal: 12, borderRadius: 8,
     backgroundColor: C.amber, justifyContent: 'center',
   },
   pillText: { fontSize: 12, fontWeight: '600', color: C.carbon },
   link: {
-    alignSelf: 'flex-start', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingBottom: 2, borderBottomWidth: 1.5, borderBottomColor: C.amber,
+    position: 'absolute', right: TEXT_LEFT, bottom: DARK_BOTTOM, flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingBottom: 1, borderBottomWidth: 1, borderBottomColor: C.amber,
   },
-  linkText: { fontSize: 12, fontWeight: '600', color: C.amber },
+  linkText: { fontSize: 11, lineHeight: 14, fontWeight: '600', color: C.amber },
 
   // Dots 8px under the card (paddingTop of each tap area), centred.
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-start' },

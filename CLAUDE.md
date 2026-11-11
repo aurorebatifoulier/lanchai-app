@@ -930,19 +930,21 @@ a snapshot indefinitely).
   689a1c2, f28a49a))
   → hero `<HeroCarousel>` (`components/home/HeroCarousel.tsx`) = admin hero slides AND
   the built-in marketing banners in ONE admin order (see "Home hero" below); built-in
-  content ONLY in `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 16:9 cards radius 20,
+  content ONLY in `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 1.9:1 cards (`HERO_RATIO`, ≈173px on 328) radius 20,
   'light' = text centred-left + small amber pill / 'dark' = bottom-left + amber text link,
   no overlay / gradient / shadow; text zone = per-banner `textWidth` (fraction of the card
   width from its left edge, default 0.45 light / 0.58 dark — tune it so text never covers
-  the photo's subject); eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each; MEASURED
+  the photo's subject); eyebrow 12, title 18/21, subtitle 12/16, ≤ 2 lines each, gaps 8 / 6 / 14 before the
+  pill (never reduced to fit); dark CTA link 11px bottom-RIGHT (right 20, bottom 18); MEASURED
   fit: title 18 → 16 → 14 while > 2 lines, subtitle hidden only if the block is still too
-  tall (last resort, e.g. big system font; always hidden under 300px of card width); expo-image
+  tall (last resort, e.g. big system font; always hidden under 300px of card width; dev
+  builds log the step per banner: `[hero fit]` in Metro); expo-image
   `contentPosition` = focalPoint, radius + overflow on the WRAPPER View, never the image;
   auto-advance 5s looping, paused while touched + 5s after, stopped when Home isn't focused
   (useFocusEffect) and with reduce motion; dots 8px under the card (RN Animated width, no
   Reanimated), tappable; whole card = button via `openAppRoute`, which adds a fresh `t` to
   `/explore?…` links so Explore re-applies `q` / opens the request sheet for `ask=1`;
-  admin slides = the shared `<AdminSlideCard>` in the same 16:9 frame; cream placeholder of
+  admin slides = the shared `<AdminSlideCard>` in the same 1.9:1 frame; cream placeholder of
   the same size while loading) → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7; hero card → dots 8 + 6, then a 12px top
