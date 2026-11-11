@@ -437,16 +437,12 @@ export default function HomeScreen() {
               </View>
             )}
 
-            {isGuest && (
-              <View style={{ marginTop: 14 }}><GuestInviteBanner /></View>
-            )}
+            {/* Blocks between the hero and "Categories": each margin sits ON the visible
+                card (never on a wrapper), so a block that renders nothing leaves no gap. */}
+            {isGuest && <GuestInviteBanner style={styles.topBlock} />}
 
-            {(pickup || preview) && (
-              <View style={{ marginTop: 14 }}>
-                <NextPickupCard rental={pickup} />
-                {preview && !pickup && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPickupExample}</Text>}
-              </View>
-            )}
+            {(pickup || preview) && <NextPickupCard rental={pickup} style={styles.topBlock} />}
+            {preview && !pickup && <Text style={[UI.small, styles.adminNote]}>{HOME_COPY.adminPickupExample}</Text>}
 
             {/* Categories — same circles as the My Account stickers, all on one row. The hero
                 draws its dots inside the gap (no layout space), so this title's normal 24px
@@ -732,6 +728,7 @@ const styles = StyleSheet.create({
   adminLabel: { marginTop: 24, marginBottom: 8, fontStyle: 'italic' },
 
   previewCard: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 4 },
+  topBlock: { marginTop: 14 },
   adminNote: { marginTop: 6, fontStyle: 'italic' },
   adminHint: {
     flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 24, padding: 12,

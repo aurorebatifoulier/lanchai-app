@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from '@/components/AppText';
 import { useRouter } from 'expo-router';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -27,12 +27,13 @@ function exampleMs(): number {
 
 // Carbon highlight card, same style as My Account's "LAK not spent on stuff" card.
 // `rental` null = admin preview with example data (tomorrow 10:00, tap does nothing).
-export default function NextPickupCard({ rental }: { rental: RentalDoc | null }) {
+// `style` (the Home's top margin) goes on the card itself — no wrapper margin.
+export default function NextPickupCard({ rental, style }: { rental: RentalDoc | null; style?: StyleProp<ViewStyle> }) {
   const router = useRouter();
   const ms = rental ? rental.pickupAt.toMillis() : exampleMs();
   return (
     <PressScale
-      style={[UI.card, s.card]}
+      style={[UI.card, s.card, style]}
       onPress={() => { if (rental) router.push(`/rentals/${rental.id}`); }}
       disabled={!rental}
       activeOpacity={0.85}

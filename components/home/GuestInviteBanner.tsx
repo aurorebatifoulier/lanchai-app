@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from '@/components/AppText';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -15,7 +15,9 @@ const KEY = 'home.guestInviteBannerDismissed';
 
 // Home, guests only: "Sign up with an invite code and get X% off your first rental."
 // Tap → sign-up with the invite-code field open. Dismissal per device (AsyncStorage).
-export default function GuestInviteBanner() {
+// `style` (e.g. the Home's top margin) goes on the card itself, so a hidden banner (dismissed,
+// or no welcome %) leaves NO empty margin behind.
+export default function GuestInviteBanner({ style }: { style?: StyleProp<ViewStyle> }) {
   const router = useRouter();
   const config = useLoyaltyConfig();
   const pct = referralWelcomePercent(config);
@@ -27,7 +29,7 @@ export default function GuestInviteBanner() {
   const dismiss = () => { setHidden(true); AsyncStorage.setItem(KEY, '1').catch(() => {}); };
   return (
     <PressScale
-      style={[UI.card, s.card]}
+      style={[UI.card, s.card, style]}
       onPress={() => router.push({ pathname: '/login', params: { mode: 'signup', invite: '1' } } as never)}
     >
       <View style={s.icon}><Feather name="gift" size={16} color={SHADES.amberDeep} /></View>

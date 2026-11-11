@@ -935,7 +935,9 @@ a snapshot indefinitely).
   below it (`InsetCarousel dotsInGap`, no layout space; no dots with one slide), so the
   title's normal 24px margin + the hero wrapper's 4px bottom padding (= the empty line-box
   space under the category labels) = the same visible edge-to-edge gap as labels → New
-  arrivals) → New arrivals rail →
+  arrivals; the blocks that may sit between hero and title — admin toggle, guest invite
+  banner, next pick-up — carry their 14px margin ON the visible card, never on a wrapper,
+  so a block that renders nothing leaves no gap) → New arrivals rail →
   `<RentReturnRepeat>` (new renters only: no returned rental; dotted bee trail) →
   `<WhyRentSection>` ("Spend less / Live lighter" — right under it for new renters, same
   place after New arrivals for returning ones) → "Got
