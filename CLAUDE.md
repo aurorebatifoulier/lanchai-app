@@ -933,7 +933,9 @@ a snapshot indefinitely).
   marketing banners `<HeroCarousel>` (`components/home/HeroCarousel.tsx`, data ONLY in
   `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 16:9 cards radius 20,
   'light' = text centred-left + amber pill / 'dark' = bottom-left + amber text link, no
-  overlay / gradient / shadow, subtitle hidden under 340px of card width; expo-image
+  overlay / gradient / shadow; text block MEASURED and stepped down until it fits (title 20 →
+  17 → subtitle 12 → subtitle hidden only as a last resort, e.g. big system font; always
+  hidden under 300px of card width — 328px cards on 360px phones keep it); expo-image
   `contentPosition` = focalPoint, radius + overflow on the WRAPPER View, never the image;
   auto-advance 5s looping, paused while touched + 5s after, stopped when Home isn't focused
   (useFocusEffect) and with reduce motion; dots 8px under the card (RN Animated width, no

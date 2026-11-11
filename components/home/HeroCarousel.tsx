@@ -2,8 +2,10 @@
 // slide is published for the hero placement. 16px gutter, one 16:9 card at a time (radius
 // 20, cream fallback), snapping per card; no overlay / gradient / text shadow (the photos
 // keep an empty zone for the text). 'light' = text centred-left on a bright photo, solid
-// amber pill; 'dark' = text bottom-left, amber text link. Under 340px of card width the
-// subtitle is hidden so nothing overflows.
+// amber pill; 'dark' = text bottom-left, amber text link (subtitle across the whole 78%).
+// Fit: the text block is MEASURED and steps down until it fits the card — title 20 →
+// title 17 → subtitle 12 → (last resort, e.g. large system font) subtitle hidden. The
+// subtitle is always hidden under 300px of card width. Text is invisible until it fits.
 // Auto-advance every 5s (looping), paused while touched and for 5s after release, only
 // while the Home is focused (useFocusEffect), never with reduce motion. Dots 8px under the
 // card, tappable. The whole card is the button (opens ctaHref through openAppRoute, like
@@ -23,7 +25,12 @@ import { openAppRoute } from '@/lib/navigation';
 
 const SIDE = 16;
 const ADVANCE_MS = 5000;
-const SMALL_CARD = 340;
+const SMALL_CARD = 300;
+// Free space kept around the light block (top + bottom) / above the dark block.
+const LIGHT_PAD = 8;
+const DARK_TOP = 12;
+const DARK_BOTTOM = 18;
+const LAST_LEVEL = 3;
 // Fixed-height card: system font size is honoured, but capped lower than the app's 1.3.
 const FONT_CAP = 1.15;
 
@@ -108,7 +115,7 @@ export default function HeroCarousel({ banners = HOME_BANNERS }: { banners?: Hom
         >
           {banners.map(b => (
             <BannerCard
-              key={b.id}
+              key={`${b.id}-${width}`}
               banner={b}
               width={width}
               height={height}
@@ -139,6 +146,20 @@ function BannerCard({ banner: b, width, height, small, onPress }: {
   banner: HomeBanner; width: number; height: number; small: boolean; onPress: () => void;
 }) {
   const dark = b.variant === 'dark';
+  // 0 = title 20 · 1 = title 17 · 2 = + subtitle 12 · 3 = subtitle hidden.
+  const [level, setLevel] = useState(small ? LAST_LEVEL : 0);
+  const [fits, setFits] = useState(false);
+  const avail = dark ? height - DARK_TOP - DARK_BOTTOM : height - LIGHT_PAD * 2;
+  const onContentLayout = (h: number) => {
+    if (h > avail && level < LAST_LEVEL) setLevel(level + 1);
+    else setFits(true);
+  };
+  // Safety net: never leave the text invisible if a step didn't trigger a new layout.
+  useEffect(() => {
+    const t = setTimeout(() => setFits(true), 400);
+    return () => clearTimeout(t);
+  }, [level]);
+  const showSub = level < LAST_LEVEL;
   return (
     <Pressable
       onPress={onPress}
@@ -154,6 +175,7 @@ function BannerCard({ banner: b, width, height, small, onPress }: {
         accessible={false}
       />
       <View style={dark ? s.darkBlock : s.lightBlock} pointerEvents="none">
+        <View style={!fits && s.hidden} onLayout={e => onContentLayout(e.nativeEvent.layout.height)}>
         <View style={s.eyebrowRow}>
           <Hexagon />
           <Text style={[s.eyebrow, { color: dark ? C.darkMuted : C.lightEyebrow }]} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>
@@ -161,7 +183,7 @@ function BannerCard({ banner: b, width, height, small, onPress }: {
           </Text>
         </View>
         <Text
-          style={[s.title, { color: dark ? C.cream : C.carbon }]}
+          style={[s.title, level >= 1 && s.titleTight, { color: dark ? C.cream : C.carbon }]}
           numberOfLines={dark ? 3 : 4}
           adjustsFontSizeToFit
           minimumFontScale={0.8}
@@ -169,8 +191,8 @@ function BannerCard({ banner: b, width, height, small, onPress }: {
         >
           {b.title}
         </Text>
-        {!small && (
-          <Text style={[s.sub, { color: dark ? C.darkMuted : C.lightSub }]} numberOfLines={2} maxFontSizeMultiplier={FONT_CAP}>
+        {showSub && (
+          <Text style={[s.sub, level >= 2 && s.subTight, { color: dark ? C.darkMuted : C.lightSub }]} numberOfLines={dark ? 2 : 4} maxFontSizeMultiplier={FONT_CAP}>
             {b.subtitle}
           </Text>
         )}
@@ -184,6 +206,7 @@ function BannerCard({ banner: b, width, height, small, onPress }: {
             <Text style={s.pillText} numberOfLines={1} maxFontSizeMultiplier={FONT_CAP}>{b.ctaLabel}</Text>
           </View>
         )}
+        </View>
       </View>
     </Pressable>
   );
@@ -225,20 +248,23 @@ const s = StyleSheet.create({
   pressed: { opacity: 0.9 },
 
   lightBlock: { position: 'absolute', left: 20, top: 0, bottom: 0, maxWidth: '55%', justifyContent: 'center' },
-  darkBlock: { position: 'absolute', left: 20, bottom: 18, maxWidth: '78%' },
+  darkBlock: { position: 'absolute', left: 20, bottom: DARK_BOTTOM, maxWidth: '78%' },
+  hidden: { opacity: 0 },
 
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   eyebrow: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
-  title: { fontSize: 22, lineHeight: 25, fontWeight: '700', letterSpacing: -0.3 },
-  sub: { fontSize: 13, lineHeight: 18, marginTop: 6 },
+  title: { fontSize: 20, lineHeight: 23, fontWeight: '700', letterSpacing: -0.3 },
+  titleTight: { fontSize: 17, lineHeight: 20 },
+  sub: { fontSize: 13, lineHeight: 17, marginTop: 4 },
+  subTight: { fontSize: 12, lineHeight: 16 },
 
   pill: {
-    alignSelf: 'flex-start', marginTop: 12, height: 34, paddingHorizontal: 14, borderRadius: 10,
+    alignSelf: 'flex-start', marginTop: 8, height: 34, paddingHorizontal: 14, borderRadius: 10,
     backgroundColor: C.amber, justifyContent: 'center',
   },
   pillText: { fontSize: 13, fontWeight: '600', color: C.carbon },
   link: {
-    alignSelf: 'flex-start', marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingBottom: 2, borderBottomWidth: 2, borderBottomColor: C.amber,
   },
   linkText: { fontSize: 13, fontWeight: '600', color: C.amber },
