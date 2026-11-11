@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ import { useLoyaltyConfig, depositPercentFor } from '@/lib/loyalty';
 import type { Product } from '@/lib/mockData';
 import { getEffectiveRate, billableDaysFromDates, depositForLine, fmtReservationLabel } from '@/utils/pricing';
 import { toLak } from '@/utils/currency';
-import { fetchOccupancy } from '@/utils/availability';
+import { fetchOccupancy, effectiveStock } from '@/utils/availability';
 import { freeForWindow } from '@/lib/exploreWindows';
 import { productThumb } from '@/utils/productImage';
 import { packDiscount } from '@/functions/src/shared/packs';
@@ -32,6 +32,7 @@ import { packDiscount } from '@/functions/src/shared/packs';
 
 type Win = { pickupAt: Date; returnAt: Date };
 const n = (v: number) => Math.round(v).toLocaleString('en-US');
+const SIDE = 16;
 
 export default function PackScreen({ pack, products, profile }: {
   pack: CollectionDoc;
@@ -47,6 +48,9 @@ export default function PackScreen({ pack, products, profile }: {
   const depositPct = depositPercentFor(profile?.customerType as never, profile?.loyaltyTier as never, loyaltyConfig);
   const pct = toPack(pack).discountPct;
   const shade = shadeOf(pack);
+  // Hero: the content width (16px margins, like the cards below), 1.9:1, cover.
+  const { width: screenW } = useWindowDimensions();
+  const heroW = screenW - SIDE * 2;
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [win, setWin] = useState<Win | null>(null);
@@ -79,7 +83,12 @@ export default function PackScreen({ pack, products, profile }: {
     })), Date.now());
     return r.ok ? total - r.total : total;
   }, [priced, win, pack, rows, total]);
-  const deposit = rows.every(r => r.deposit != null) ? rows.reduce((s, r) => s + (r.deposit ?? 0), 0) : null;
+
+  // Calendar: a day is free for the pack only if EVERY item has its full quantity free.
+  const calendarItems = useMemo(() => rows.map(r => ({
+    productId: r.product.id, qty: r.qty,
+    totalStock: r.product.available === false ? 0 : effectiveStock(r.product),
+  })), [rows]);
 
   const pickDates = () => requireAccount({ action: 'book', itemName: pack.title, run: () => setPickerOpen(true) });
 
@@ -98,6 +107,13 @@ export default function PackScreen({ pack, products, profile }: {
 
   const availableRows = free ? rows.filter(r => (free[r.product.id] ?? 0) >= r.qty) : [];
   const allFree = !!free && availableRows.length === rows.length;
+  const missingCount = free ? rows.length - availableRows.length : 0;
+  // What will really be added: every item (pack price) — or, when one isn't free, the
+  // available ones only at their normal price, with their own deposit.
+  const shown = free && !allFree ? availableRows : rows;
+  const shownTotal = shown.reduce((s, r) => s + (r.subtotal ?? 0), 0);
+  const deposit = shown.every(r => r.deposit != null) ? shown.reduce((s, r) => s + (r.deposit ?? 0), 0) : null;
+  const showPackPrice = packTotal != null && packTotal < total && (!free || allFree);
 
   const add = async (list: typeof rows) => {
     if (!user || !win || adding || list.length === 0) return;
@@ -115,9 +131,9 @@ export default function PackScreen({ pack, products, profile }: {
 
   return (
     <ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
-      <View style={s.hero}>
+      <View style={[s.hero, { width: heroW, height: Math.round(heroW / 1.9) }]}>
         {pack.imageUrl
-          ? <Image source={{ uri: pack.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" accessible={false} />
+          ? <Image source={{ uri: pack.imageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" contentPosition="center" accessible={false} />
           : <View style={[StyleSheet.absoluteFill, s.heroIcon, { backgroundColor: shade.bg }]}>
               <MaterialCommunityIcons name={pack.icon} size={44} color={shade.fg} />
             </View>}
@@ -155,14 +171,20 @@ export default function PackScreen({ pack, products, profile }: {
       <SectionTitle>{win ? P.forDates : P.total}</SectionTitle>
       <View style={[UI.card, UI.cardPadded, { gap: 8 }]}>
         {win && <Text style={UI.small}>{`${fmtReservationLabel(win.pickupAt)} → ${fmtReservationLabel(win.returnAt)}`}</Text>}
+        {free && !allFree && shown.length > 0 && (
+          <Text style={UI.small}>{P.addingOnly(shown.length, rows.length)}</Text>
+        )}
         <View style={s.line}>
           <Text style={UI.body}>{win ? P.total : P.totalPerDay}</Text>
-          <Text style={[UI.body, packTotal != null && packTotal < total && s.struck]}>{priced ? `${n(total)} LAK` : '—'}</Text>
+          <Text style={[UI.body, showPackPrice && s.struck]}>{priced ? `${n(shownTotal)} LAK` : '—'}</Text>
         </View>
-        {packTotal != null && packTotal < total && (
+        {free && !allFree && (
+          <Text style={[UI.small, { color: SHADES.amberText }]}>{P.noPackPrice(missingCount)}</Text>
+        )}
+        {showPackPrice && (
           <View style={s.line}>
             <Text style={UI.title}>{win ? P.packPrice(pct) : P.packPricePerDay(pct)}</Text>
-            <Text style={UI.title}>{`${n(packTotal)} LAK`}</Text>
+            <Text style={UI.title}>{`${n(packTotal!)} LAK`}</Text>
           </View>
         )}
         <View style={s.line}>
@@ -205,6 +227,7 @@ export default function PackScreen({ pack, products, profile }: {
       <DateRangePicker
         visible={pickerOpen}
         productId=""
+        packItems={calendarItems}
         totalStock={0}
         initialPickupAt={win?.pickupAt ?? null}
         initialReturnAt={win?.returnAt ?? null}
@@ -217,7 +240,7 @@ export default function PackScreen({ pack, products, profile }: {
 
 const s = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 32 },
-  hero: { aspectRatio: 1.9, borderRadius: 20, overflow: 'hidden', backgroundColor: SHADES.carbonLight, marginBottom: 14 },
+  hero: { alignSelf: 'center', borderRadius: 20, overflow: 'hidden', backgroundColor: SHADES.carbonLight, marginBottom: 14 },
   heroIcon: { alignItems: 'center', justifyContent: 'center' },
   chip: { position: 'absolute', top: 12, left: 12, backgroundColor: SHADES.amber, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   chipText: { fontSize: 12, fontWeight: '700', color: SHADES.carbon },

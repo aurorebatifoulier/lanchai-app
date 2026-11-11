@@ -53,6 +53,9 @@ import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/uti
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, isCollectionActive, isPackVisible, type CollectionDoc } from '@/lib/collections';
 import { PACK_COPY } from '@/constants/packCopy';
+import { productThumb } from '@/utils/productImage';
+import { getMinPrice } from '@/utils/pricing';
+import { toLak } from '@/utils/currency';
 import WhyRentSection from '@/components/WhyRentSection';
 import HeroCarousel from '@/components/home/HeroCarousel';
 import { HOME_BANNERS } from '@/constants/homeBanners';
@@ -262,6 +265,26 @@ export default function HomeScreen() {
     () => collections.filter(c => isPackVisible(c, products, userTier ?? null)),
     [collections, products, userTier],
   );
+  // Pack tiles: the pack photo, else its first item's; "{n} items · from {pack price} LAK/day"
+  // (each item's lowest daily rate × qty, minus the pack %).
+  const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
+  const packPhoto = useCallback((c: CollectionDoc) => {
+    if (c.imageUrl) return c.imageUrl;
+    const first = c.items.map(it => productById.get(it.productId)).find(Boolean);
+    return first ? productThumb(first) : null;
+  }, [productById]);
+  const packLine = useCallback((c: CollectionDoc) => {
+    const units = c.items.reduce((sum, it) => sum + it.qty, 0);
+    if (exchangeRate == null) return null;
+    let perDay = 0;
+    for (const it of c.items) {
+      const p = productById.get(it.productId);
+      const min = p ? getMinPrice(p) : null;
+      if (min == null) return null;
+      perDay += toLak(min, exchangeRate) * it.qty;
+    }
+    return PACK_COPY.tileLine(units, Math.round(perDay * (1 - c.packDiscountPct / 100)).toLocaleString('en-US'));
+  }, [productById, exchangeRate]);
   const pickup = useMemo(() => nextPickup(reservations), [reservations]);
   const returnedCount = useMemo(() => reservations.filter(r => r.status === 'returned').length, [reservations]);
   const rentAgain = useMemo(() => rentAgainRows(reservations, products), [reservations, products]);
@@ -507,6 +530,8 @@ export default function HomeScreen() {
                   title={PACK_COPY.homeTitle}
                   collections={preview ? allCollections.filter(c => c.isPack) : visiblePacks}
                   badge={c => (c.packDiscountPct > 0 ? PACK_COPY.chip(c.packDiscountPct) : null)}
+                  photo={packPhoto}
+                  line={packLine}
                 />
               )}
             </HomeSection>

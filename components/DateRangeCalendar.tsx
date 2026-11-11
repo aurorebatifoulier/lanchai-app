@@ -28,9 +28,16 @@ const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 // ── Component ───────────────────────────────────────────────────────────────
 
+/** A pack item: the day is free only if this product has `qty` units free (whole day). */
+export interface PackCalendarItem { productId: string; totalStock: number; qty: number }
+
 export interface DateRangeCalendarProps {
-  /** '' = no product (pack dates): no availability marks. */
+  /** '' = no product (pack dates — see packItems). */
   productId: string;
+  /** Pack mode: a day is unavailable as soon as ONE item hasn't its full quantity free
+   *  (same occupancy + computeMonthAvailability as the product calendar); a range can't
+   *  span such a day. */
+  packItems?: PackCalendarItem[];
   totalStock: number;
   startDate: Date | null;
   endDate: Date | null;
@@ -45,6 +52,7 @@ export interface DateRangeCalendarProps {
 
 export default function DateRangeCalendar({
   productId,
+  packItems,
   totalStock,
   startDate,
   endDate,
@@ -59,6 +67,8 @@ export default function DateRangeCalendar({
   const [calMonth, setCalMonth] = useState(() => (startDate ?? today).getMonth());
 
   const [occupancy, setOccupancy]         = useState<OccupancyRecord[] | null>(null);
+  const [packOcc, setPackOcc]             = useState<OccupancyRecord[][] | null>(null);
+  const packKey = (packItems ?? []).map(i => `${i.productId}:${i.qty}:${i.totalStock}`).join('|');
   const [loadingAvail, setLoadingAvail]   = useState(true);
   const [availError, setAvailError]       = useState(false);
 
@@ -66,8 +76,16 @@ export default function DateRangeCalendar({
   // this same in-memory data via computeMonthAvailability, no re-fetch per month.
   useEffect(() => {
     let cancelled = false;
-    // No product (a pack's dates — each item's availability is checked after): plain
-    // calendar, no per-day marks.
+    // Pack: every item's occupancy (same fetch as a product), combined per day below.
+    if (packItems && packItems.length > 0) {
+      setLoadingAvail(true);
+      setAvailError(false);
+      Promise.all(packItems.map(i => fetchOccupancy(i.productId).catch(() => { if (!cancelled) setAvailError(true); return [] as OccupancyRecord[]; })))
+        .then(list => { if (!cancelled) setPackOcc(list); })
+        .finally(() => { if (!cancelled) setLoadingAvail(false); });
+      return () => { cancelled = true; };
+    }
+    // No product and no pack items: plain calendar, no per-day marks.
     if (!productId) { setOccupancy(null); setLoadingAvail(false); setAvailError(false); return; }
     setLoadingAvail(true);
     setAvailError(false);
@@ -81,12 +99,41 @@ export default function DateRangeCalendar({
       })
       .finally(() => { if (!cancelled) setLoadingAvail(false); });
     return () => { cancelled = true; };
-  }, [productId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, packKey]);
 
   const monthAvailability = useMemo(() => {
+    if (packItems && packItems.length > 0) {
+      if (!packOcc) return {};
+      // Packs of the full quantity free that day = the smallest over the items.
+      const maps = packItems.map((it, i) => computeMonthAvailability(packOcc[i] ?? [], calYear, calMonth, it.totalStock));
+      const out: Record<string, number> = {};
+      for (const key of Object.keys(maps[0] ?? {})) {
+        out[key] = Math.min(...packItems.map((it, i) => Math.floor((maps[i][key] ?? 0) / Math.max(1, it.qty))));
+      }
+      return out;
+    }
     if (!occupancy) return {};
     return computeMonthAvailability(occupancy, calYear, calMonth, totalStock);
-  }, [occupancy, calYear, calMonth, totalStock]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occupancy, packOcc, packKey, calYear, calMonth, totalStock]);
+
+  // Pack mode: is there a fully booked day strictly between a and b? (a < b)
+  const blockedBetween = (a: Date, b: Date): boolean => {
+    if (!packItems?.length || !packOcc) return false;
+    const months = new Map<string, Record<string, number>[]>(); // per month, per item
+    const d = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 1);
+    while (d < b) {
+      const mk = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!months.has(mk)) {
+        months.set(mk, packItems.map((it, i) => computeMonthAvailability(packOcc[i] ?? [], d.getFullYear(), d.getMonth(), it.totalStock)));
+      }
+      const key = localDateKey(d.getFullYear(), d.getMonth(), d.getDate());
+      if (packItems.some((it, i) => (months.get(mk)![i][key] ?? 0) < it.qty)) return true;
+      d.setDate(d.getDate() + 1);
+    }
+    return false;
+  };
 
   const weeks = useMemo(() => chunkIntoWeeks(buildCalendarDays(calYear, calMonth)), [calYear, calMonth]);
 
@@ -106,6 +153,9 @@ export default function DateRangeCalendar({
     } else if (day.date < startDate!) {
       onChangeRange(day.date, null);
     } else if (sameDay(day.date, startDate!)) {
+      onChangeRange(day.date, null);
+    } else if (blockedBetween(startDate!, day.date)) {
+      // A pack range can't span a day where an item isn't free: start over from here.
       onChangeRange(day.date, null);
     } else {
       onChangeRange(startDate, day.date);

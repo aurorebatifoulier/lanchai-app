@@ -14,7 +14,7 @@ import { SHADES } from '@/constants/brandShades';
 import { useShopInfo, getShopTimeSlots } from '@/lib/shop';
 import { useLinkedReturnTime } from '@/hooks/useLinkedReturnTime';
 import { getAvailableTimeSlots } from '@/utils/timeSlots';
-import DateRangeCalendar from '@/components/DateRangeCalendar';
+import DateRangeCalendar, { type PackCalendarItem } from '@/components/DateRangeCalendar';
 import PressScale from '@/components/PressScale';
 import { atVteSlot, vteDayToken, vteHHMM } from '@/lib/vteTime';
 
@@ -37,6 +37,8 @@ function fmtFieldDate(d: Date): string {
 export interface DateRangePickerProps {
   visible: boolean;
   productId: string;
+  /** Pack dates: per-day availability of EVERY item at its quantity (DateRangeCalendar). */
+  packItems?: PackCalendarItem[];
   totalStock: number;
   initialPickupAt?: Date | null;
   initialReturnAt?: Date | null;
@@ -47,6 +49,7 @@ export interface DateRangePickerProps {
 export default function DateRangePicker({
   visible,
   productId,
+  packItems,
   totalStock,
   initialPickupAt = null,
   initialReturnAt = null,
@@ -113,6 +116,7 @@ export default function DateRangePicker({
       </View>
       <DateRangeCalendar
         productId={productId}
+        packItems={packItems}
         totalStock={totalStock}
         startDate={startDate}
         endDate={endDate}
