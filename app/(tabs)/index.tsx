@@ -28,7 +28,6 @@ import { TYPE, SIZES } from '@/constants/typography';
 import BrandSearchBar from '@/components/BrandSearchBar';
 import { useReducedMotion } from '@/constants/motion';
 import ProductRailCard from '@/components/ProductRailCard';
-import InsetCarousel from '@/components/home/InsetCarousel';
 import NextPickupCard, { nextPickup } from '@/components/home/NextPickupCard';
 import GuestInviteBanner from '@/components/home/GuestInviteBanner';
 import RentReturnRepeat from '@/components/home/RentReturnRepeat';
@@ -54,7 +53,7 @@ import { fetchAllOccupancy, gridAvailability, type OccupancyRecord } from '@/uti
 import { useMyLoyalty } from '@/lib/loyaltyUi';
 import { getPublishedCollections, getAllCollections, type CollectionDoc } from '@/lib/collections';
 import WhyRentSection from '@/components/WhyRentSection';
-import { HERO_BUILT_IN } from '@/components/home/builtInSlides';
+import HeroCarousel from '@/components/home/HeroCarousel';
 import SlideCarousel from '@/components/home/SlideCarousel';
 import BagButton from '@/components/home/BagButton';
 import { getPublishedSlides, getAllSlides, type HomeSlide } from '@/lib/homeSlides';
@@ -65,11 +64,10 @@ import { CATEGORIES, type Product } from '@/lib/mockData';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { cached, clearHomeCache, HOME_TTL } from '@/lib/homeCache';
 import { DEFAULT_REFERRAL_REWARD_POINTS, referralWelcomePercent } from '@/lib/loyalty';
-import PressScale from '@/components/PressScale';
 import { useQuickAdd } from '@/components/quickadd/QuickAddProvider';
 import { getProductAccessState } from '@/utils/productAccess';
 import { AccountBanners } from '@/components/auth/AccountBanners';
-import { openCategory, openAppRoute } from '@/lib/navigation';
+import { openCategory } from '@/lib/navigation';
 
 // Home (validated mockup) — the My Account design language: white cards with a thin
 // border, radius 18, section titles, palette icon circles, a carbon highlight card.
@@ -424,7 +422,9 @@ export default function HomeScreen() {
             {search}
           </View>
 
-          <View style={styles.heroWrap}>
+          {/* A published Admin → Home hero slide wins; otherwise the marketing banners
+              (constants/homeBanners.ts) — their dots sit under the card, so no 4px pad. */}
+          <View style={[styles.heroWrap, heroSlides.length === 0 && styles.heroWrapBanners]}>
             {heroSlides.length > 0
               ? <SlideCarousel slides={heroSlides} height={HERO_HEIGHT} intervalMs={10000} showDraft={preview} compact />
               : <HeroCarousel />}
@@ -598,32 +598,6 @@ function AdminHint() {
   );
 }
 
-function HeroCarousel() {
-  const router = useRouter();
-  return (
-    <InsetCarousel
-      height={HERO_HEIGHT}
-      intervalMs={10000}
-      dotsInGap
-      slides={HERO_BUILT_IN.map((slide, i) => (
-        <View key={i} style={[styles.slide, { backgroundColor: slide.tint }]}>
-          {slide.image != null && (
-            <Image source={slide.image} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-          )}
-          <View style={styles.slideOverlay} />
-          <View style={styles.slideContent}>
-            <Text style={styles.slideTitle} numberOfLines={2}>{slide.title}</Text>
-            <Text style={styles.slideSub} numberOfLines={1}>{slide.subtitle}</Text>
-            <PressScale style={styles.slideCta} onPress={() => openAppRoute(router, slide.route)} activeOpacity={0.85}>
-              <Text style={styles.slideCtaText}>{slide.cta}</Text>
-            </PressScale>
-          </View>
-        </View>
-      ))}
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -695,16 +669,6 @@ const styles = StyleSheet.create({
   },
   content: { paddingHorizontal: 16 },
 
-  // Hero slides (inside InsetCarousel)
-  slide: { flex: 1, overflow: 'hidden' },
-  slideOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.35)' },
-  // Sized for the 140px band: 2-line title + 1-line subtitle + button fit with room.
-  slideContent: { flex: 1, justifyContent: 'flex-end', padding: 14 },
-  slideTitle: { fontSize: 18, fontWeight: '800', color: SHADES.white, letterSpacing: -0.3, lineHeight: 22, marginBottom: 2 },
-  slideSub: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.85)', lineHeight: 16, marginBottom: 8 },
-  slideCta: { alignSelf: 'flex-start', backgroundColor: SHADES.amber, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 12 },
-  slideCtaText: { fontSize: 13, fontWeight: '800', color: SHADES.carbon },
-
   // Rails bleed to the screen edges, content stays on the 16px gutter.
   railScroll: { marginHorizontal: -16 },
   rail: { paddingHorizontal: 16, gap: 12 },
@@ -719,6 +683,9 @@ const styles = StyleSheet.create({
   // paddingBottom 4 = the empty line-box space under the category labels (12px text in a
   // 16px line), so hero → "Categories" matches labels → "New arrivals" EDGE to edge.
   heroWrap: { marginTop: 8, paddingBottom: 4 },
+  // Built-in banners (HeroCarousel): card → dots 8 + 6, then the 12px "Categories" margin
+  // = ~26px card → title.
+  heroWrapBanners: { paddingBottom: 0 },
   whyRent: { marginTop: 24 },
 
   catRow: { flexDirection: 'row' },

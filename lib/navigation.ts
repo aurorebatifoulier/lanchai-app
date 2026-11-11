@@ -13,9 +13,14 @@ export function openCategory(router: Router, id: string): void {
 
 export { plural } from '@/utils/plural';
 
-/** Opens an app route; a legacy `/category/{id}` link goes to Explore with that category. */
+/**
+ * Opens an app route; a legacy `/category/{id}` link goes to Explore with that category.
+ * An `/explore?…` link gets a fresh `t` token so Explore re-applies its params (`q`,
+ * `ask=1`) even when the tab is already mounted with the same ones.
+ */
 export function openAppRoute(router: Router, route: string): void {
   const m = /^\/category\/([\w-]+)$/.exec(route);
   if (m) openCategory(router, m[1]);
+  else if (/^\/explore\?/.test(route)) router.push(`${route}&t=${Date.now()}` as never);
   else router.push(route as never);
 }

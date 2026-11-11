@@ -115,8 +115,9 @@ export default function ExploreScreen() {
   // category + t (lib/navigation openCategory): every category entry point of the app lands
   // here with that category preselected — re-applied whenever `t` changes (Explore is a tab,
   // already mounted).
-  const { q: initialQuery, maxPrice, from, to, category: categoryParam, t: categoryToken } =
-    useLocalSearchParams<{ q?: string; maxPrice?: string; from?: string; to?: string; category?: string; t?: string }>();
+  // ask=1 (+ t): Home "Can't find it? Ask us." banner → opens the request sheet once per token.
+  const { q: initialQuery, maxPrice, from, to, category: categoryParam, t: categoryToken, ask: askParam } =
+    useLocalSearchParams<{ q?: string; maxPrice?: string; from?: string; to?: string; category?: string; t?: string; ask?: string }>();
 
   // Data
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -195,9 +196,10 @@ export default function ExploreScreen() {
     }, [CURRENT_USER])
   );
 
+  // Re-applied when `t` changes too (same ?q= link opened again — lib/navigation openAppRoute).
   useEffect(() => {
     if (initialQuery) setSearchQuery(initialQuery as string);
-  }, [initialQuery]);
+  }, [initialQuery, categoryToken]);
 
   // Category entry point: select it, clear every other filter, back to the top.
   const appliedToken = useRef<string | null>(null);
@@ -269,6 +271,16 @@ export default function ExploreScreen() {
   }, [searchQuery, requireAccount, activeCategory]);
 
   const closeRequest = useCallback(() => setRequestVisible(false), []);
+
+  // ?ask=1 (Home banner): the same request sheet, once per `t` token (guests: sign-in first).
+  const appliedAsk = useRef<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    if (askParam !== '1') return;
+    const token = categoryToken ?? '';
+    if (appliedAsk.current === token) return;
+    appliedAsk.current = token;
+    openRequest();
+  }, [askParam, categoryToken, openRequest]));
 
   const handleSubmitRequest = useCallback(async () => {
     if (!requestText.trim() || requestBusy) return;

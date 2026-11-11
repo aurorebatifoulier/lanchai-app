@@ -928,8 +928,18 @@ a snapshot indefinitely).
   Reanimated version (Reanimated.ScrollView, then useScrollOffset + animated styles)
   crashed on reload in Expo Go — "set the key `current` … frozen" (reverted c07bdb4,
   689a1c2, f28a49a))
-  → hero `InsetCarousel` (140px band — `HERO_HEIGHT`; built-in and admin hero slides use
-  compact text: title ≤ 2 lines 18/22, subtitle 1 line) → `<NextPickupCard>` (nearest
+  → hero: a published admin hero slide → `SlideCarousel` in `InsetCarousel` (140px band —
+  `HERO_HEIGHT`, compact text: title ≤ 2 lines 18/22, subtitle 1 line); otherwise the
+  marketing banners `<HeroCarousel>` (`components/home/HeroCarousel.tsx`, data ONLY in
+  `constants/homeBanners.ts` — 6 photos `assets/images/banners/`, 16:9 cards radius 20,
+  'light' = text centred-left + amber pill / 'dark' = bottom-left + amber text link, no
+  overlay / gradient / shadow, subtitle hidden under 340px of card width; expo-image
+  `contentPosition` = focalPoint, radius + overflow on the WRAPPER View, never the image;
+  auto-advance 5s looping, paused while touched + 5s after, stopped when Home isn't focused
+  (useFocusEffect) and with reduce motion; dots 8px under the card (RN Animated width, no
+  Reanimated), tappable; whole card = button via `openAppRoute`, which adds a fresh `t` to
+  `/explore?…` links so Explore re-applies `q` / opens the request sheet for `ask=1`;
+  `heroWrapBanners` drops the 4px pad → ~26px card → "Categories") → `<NextPickupCard>` (nearest
   `pending_payment`/`confirmed` line whose pick-up day isn't over) → categories (all on
   one row up to 6, circles ≤ 52px; scroll from 7; the hero draws its dots INSIDE the gap
   below it (`InsetCarousel dotsInGap`, no layout space; no dots with one slide), so the
@@ -974,8 +984,9 @@ a snapshot indefinitely).
     (category, collection, product, Explore `q` / `maxPrice`, none), optional dates,
     order, published. Renters read published ones only (rule + equality query).
     `<SlideCarousel>`: overlay only with text, button only with label + link. No published
-    active slide for a placement (or a read error) → the built-in slides
-    (`components/home/builtInSlides.ts` HERO_BUILT_IN, `WhyRentSection` WHY_RENT_SLIDES).
+    active slide for a placement (or a read error) → the built-in content (hero: the
+    `HOME_BANNERS` marketing banners; banner: `WhyRentSection` WHY_RENT_SLIDES).
+    `components/home/builtInSlides.ts` HERO_BUILT_IN now only seeds "Create example drafts".
   - **No repeats:** `pickSections()` (`lib/homeData.ts`, pure) builds New arrivals → Free
     this weekend → Rent again (exempt) → most-rented ranking (exempt, true top 3) → Under X
     → Why buy it? in display order: unseen products first, reuse only to reach a section's
