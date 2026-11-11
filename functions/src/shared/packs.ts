@@ -120,6 +120,14 @@ export function packDiscount(p: Pack, lines: PackLine[], nowMs: number): PackRes
   return { ok: true, total, perLine };
 }
 
+/** Pack price of these rental amounts (every item, one window): the sum minus the pack
+ *  discount, rounded like packDiscount — the pack page's "Pack price per day" (1-day
+ *  amounts) and the Home pack tile use it. */
+export function packPrice(subtotals: number[], pct: number): number {
+  const base = subtotals.reduce((s, v) => s + v, 0);
+  return base - Math.round((base * clampPackPct(pct)) / 100);
+}
+
 /** The best complete pack for these lines (largest discount), or null. */
 export function bestPackFor(packs: Pack[], lines: PackLine[], nowMs: number): { pack: Pack; total: number; perLine: number[] } | null {
   let best: { pack: Pack; total: number; perLine: number[] } | null = null;

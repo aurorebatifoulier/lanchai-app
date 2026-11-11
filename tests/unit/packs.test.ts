@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  packOf, packDiscount, bestPackFor, isPackActive, packCancelImpact, clampPackPct,
+  packOf, packDiscount, packPrice, bestPackFor, isPackActive, packCancelImpact, clampPackPct,
   type Pack, type PackLine, type OrderLineForPack,
 } from '../../functions/src/shared/packs';
 import { discountOf, orderDiscountOf } from '../../functions/src/shared/promo';
@@ -67,6 +67,14 @@ test('percent clamped to 0–30, default 5; duplicate items merged', () => {
   assert.deepEqual(p.items, [{ productId: 'a', qty: 3 }]);
   assert.deepEqual(packDiscount(pack({ packDiscountPct: 0 }), [line('mic', 2, 100_000), line('speaker', 1, 200_000)], NOW),
     { ok: false, error: 'no-discount' });
+});
+
+test('packPrice = the sum minus packDiscount (pack page per day = Home tile)', () => {
+  const lines = [line('mic', 2, 100_000), line('speaker', 1, 200_000)];
+  const r = packDiscount(pack(), lines, NOW);
+  assert.ok(r.ok);
+  if (r.ok) assert.equal(packPrice(lines.map(l => l.subtotal), 10), 300_000 - r.total);
+  assert.equal(packPrice([33_333], 5), 33_333 - 1_667);
 });
 
 test('best complete pack is chosen when several match', () => {

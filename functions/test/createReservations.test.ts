@@ -132,6 +132,13 @@ describe('access + stock', () => {
     const all = await db().collection('reservations').where('productId', '==', 'tent').get();
     assert.equal(all.size, 1);
   });
+  test('a range spanning a day with no free unit is refused; the days before still book', async () => {
+    // Last tent booked for days 5 → 6; a 2 → 8 range crosses it.
+    await book(UID.B, [line('tent', 1, 1, { pickupAtMs: vteSlot(5, '10:00'), returnAtMs: vteSlot(6, '10:00') })]);
+    await rejects(book(UID.A, [line('tent', 6)]), 'failed-precondition', 'slot-unavailable');
+    const ok = await book(UID.A, [line('tent', 1)]); // 2 → 3, before it (buffer included)
+    assert.equal(ok.reservationIds.length, 1);
+  });
   test('quantity above stock refused', async () => {
     await rejects(book(UID.A, [line('kayak', 1, 4)]), 'failed-precondition', 'slot-unavailable');
   });

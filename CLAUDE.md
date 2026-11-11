@@ -1388,7 +1388,9 @@ a snapshot indefinitely).
     (× qty, LAK / day), total, struck total → pack price, deposit (plain sum), "Book this
     pack" (guest gate) → `DateRangePicker` in PACK mode (`packItems`: a day is unavailable —
     same style, not selectable — as soon as one item hasn't its full qty free, from each
-    item's `fetchOccupancy` + `computeMonthAvailability`; a range can't span such a day) →
+    item's `fetchOccupancy` + `computeMonthAvailability`; a range can't span such a day —
+    same rule in the single-product calendar; createReservations already refuses an
+    overlap with no free unit, `slot-unavailable`) →
     each item's `freeForWindow` for the exact times → "Add pack to bag" (same dates +
     quantities) or "Add the n available items". Summary: struck total + "Pack price (−x%)"
     ONLY when every item is free; otherwise the available items' real total + their
@@ -1396,7 +1398,8 @@ a snapshot indefinitely).
     (16px margins), 1.9:1, cover. Bag: best pack line in "Your total" (to pay reduced)
     + a hint for an almost-complete pack. Home "Packs" right above "Got plans?" (`CollectionTiles`
     photo tiles: pack photo, else its first item's, cover, title / subtitle / "{n} items ·
-    from {pack price} LAK/day" (each item's lowest daily rate × qty − %) on a WHITE band —
+    {pack price} LAK/day" (= the pack page's "Pack price per day": 1-day rate × qty,
+    shared `packPrice`) on a WHITE band —
     no gradient —, "−5%" chip; packs never in Got plans; hidden when none). Admin →
     Collections: Packs / Collections sections, "Pack · 5%", "Hidden: n item(s)…";
     collection form "This is a pack" (qty steppers, %, 16:9 photo). Copy:

@@ -28,7 +28,7 @@ export const PACK_COPY = {
     ? 'No pack price: one item isn’t free on these dates.'
     : `No pack price: ${n} items aren’t free on these dates.`),
   addingOnly: (n: number, of: number) => `Adding ${n} of ${of} items, at their normal price.`,
-  tileLine: (items: number, perDay: string) => `${items} ${items === 1 ? 'item' : 'items'} · from ${perDay} LAK/day`,
+  tileLine: (items: number, perDay: string) => `${items} ${items === 1 ? 'item' : 'items'} · ${perDay} LAK/day`,
   noneFree: 'None of these items is free on these dates. Try other dates.',
   addError: 'Couldn’t add the items to your bag — try again.',
   unavailable: 'This pack isn’t available right now.',

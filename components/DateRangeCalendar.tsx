@@ -102,34 +102,38 @@ export default function DateRangeCalendar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, packKey]);
 
-  const monthAvailability = useMemo(() => {
+
+  // Units (pack: whole packs) free on every day of one month — the same figures as the
+  // grid (product: its occupancy; pack: the smallest over the items at their quantity).
+  const monthFree = (year: number, month: number): Record<string, number> | null => {
     if (packItems && packItems.length > 0) {
-      if (!packOcc) return {};
-      // Packs of the full quantity free that day = the smallest over the items.
-      const maps = packItems.map((it, i) => computeMonthAvailability(packOcc[i] ?? [], calYear, calMonth, it.totalStock));
+      if (!packOcc) return null;
+      const maps = packItems.map((it, i) => computeMonthAvailability(packOcc[i] ?? [], year, month, it.totalStock));
       const out: Record<string, number> = {};
       for (const key of Object.keys(maps[0] ?? {})) {
         out[key] = Math.min(...packItems.map((it, i) => Math.floor((maps[i][key] ?? 0) / Math.max(1, it.qty))));
       }
       return out;
     }
-    if (!occupancy) return {};
-    return computeMonthAvailability(occupancy, calYear, calMonth, totalStock);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [occupancy, packOcc, packKey, calYear, calMonth, totalStock]);
+    return occupancy ? computeMonthAvailability(occupancy, year, month, totalStock) : null;
+  };
 
-  // Pack mode: is there a fully booked day strictly between a and b? (a < b)
+  const monthAvailability = useMemo(
+    () => monthFree(calYear, calMonth) ?? {},
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [occupancy, packOcc, packKey, calYear, calMonth, totalStock],
+  );
+
+  // A range can't span a day with nothing free (product AND pack calendars): is there one
+  // strictly between a and b (a < b)? The end day itself is already not selectable.
   const blockedBetween = (a: Date, b: Date): boolean => {
-    if (!packItems?.length || !packOcc) return false;
-    const months = new Map<string, Record<string, number>[]>(); // per month, per item
+    const months = new Map<string, Record<string, number> | null>();
     const d = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 1);
     while (d < b) {
       const mk = `${d.getFullYear()}-${d.getMonth()}`;
-      if (!months.has(mk)) {
-        months.set(mk, packItems.map((it, i) => computeMonthAvailability(packOcc[i] ?? [], d.getFullYear(), d.getMonth(), it.totalStock)));
-      }
-      const key = localDateKey(d.getFullYear(), d.getMonth(), d.getDate());
-      if (packItems.some((it, i) => (months.get(mk)![i][key] ?? 0) < it.qty)) return true;
+      if (!months.has(mk)) months.set(mk, monthFree(d.getFullYear(), d.getMonth()));
+      const map = months.get(mk);
+      if (map && (map[localDateKey(d.getFullYear(), d.getMonth(), d.getDate())] ?? 1) <= 0) return true;
       d.setDate(d.getDate() + 1);
     }
     return false;
@@ -155,7 +159,7 @@ export default function DateRangeCalendar({
     } else if (sameDay(day.date, startDate!)) {
       onChangeRange(day.date, null);
     } else if (blockedBetween(startDate!, day.date)) {
-      // A pack range can't span a day where an item isn't free: start over from here.
+      // A range can't span a day with nothing free: start over from the tapped day.
       onChangeRange(day.date, null);
     } else {
       onChangeRange(startDate, day.date);
