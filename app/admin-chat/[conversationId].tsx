@@ -253,8 +253,9 @@ export default function AdminChatScreen() {
           </View>
         ) : null}
 
-        {/* Saved replies — one tap inserts the text (Admin → Saved replies). */}
-        {!!savedReplies?.length && (
+        {/* Saved replies — one tap inserts the text; the last chip opens the saved
+            replies screen (no longer on the admin dashboard). */}
+        {savedReplies != null && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.savedRow} contentContainerStyle={styles.savedRowContent} keyboardShouldPersistTaps="handled">
             {savedReplies.map(r => (
               <TouchableOpacity key={r.id} style={styles.savedChip} activeOpacity={0.8}
@@ -262,6 +263,12 @@ export default function AdminChatScreen() {
                 <Text style={styles.savedChipText} numberOfLines={1}>{r.text}</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity style={[styles.savedChip, styles.savedEditChip]} activeOpacity={0.8}
+              accessibilityRole="button"
+              onPress={() => router.push('/admin/saved-replies')}>
+              <Feather name={savedReplies.length ? 'edit-2' : 'plus'} size={13} color={SHADES.carbon} />
+              <Text style={styles.savedChipText}>{savedReplies.length ? 'Edit replies' : 'Add saved replies'}</Text>
+            </TouchableOpacity>
           </ScrollView>
         )}
 
@@ -353,6 +360,7 @@ const styles = StyleSheet.create({
   savedRowContent: { gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
   savedChip: { maxWidth: 220, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: SHADES.border, backgroundColor: SHADES.cream },
   savedChipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  savedEditChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: SHADES.white },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: SHADES.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 10, maxHeight: '80%' },
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: SHADES.border, marginBottom: 14 },

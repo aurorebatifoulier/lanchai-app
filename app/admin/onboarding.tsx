@@ -23,7 +23,8 @@ const SLIDE_NAMES = ['Slide 1 · The idea', 'Slide 2 · How it works', 'Slide 3 
 // Admin → Onboarding ("living cards"): per slide the photo slots (2 / 3 / 1, cropped 4:5,
 // saved ~1080 px JPEG 0.7), the title ([brackets] = highlighted words), the sub-line and
 // the sticker texts. Empty = the default (shown as placeholder). Shown once per device.
-export default function AdminOnboardingScreen() {
+// `embedded`: the "Onboarding" tab of Admin → App content (app/admin/app-content.tsx).
+export default function AdminOnboardingScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const screen = useScreenInsets();
   const [slides, setSlides] = useState<OnboardingSlideDoc[] | null>(null);
@@ -71,12 +72,14 @@ export default function AdminOnboardingScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={[s.root, screen.root]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[s.root, !embedded && screen.root]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar style="dark" />
-      <View style={s.header}>
-        <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>Onboarding</Text>
-      </View>
+      {!embedded && (
+        <View style={s.header}>
+          <BackButton onPress={() => router.back()} />
+          <Text style={s.headerTitle}>Onboarding</Text>
+        </View>
+      )}
       {!slides ? <ActivityIndicator color={SHADES.amber} style={{ marginTop: 40 }} /> : (
         <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]} keyboardShouldPersistTaps="handled">
           <Text style={[UI.body, { marginTop: 12 }]}>

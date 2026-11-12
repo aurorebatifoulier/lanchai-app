@@ -32,6 +32,7 @@ import { parseHHMM, buildTimeSlots } from '@/utils/timeSlots';
 import { getGraceHours, saveGraceHours } from '@/lib/latePolicy';
 import EmailSettingsSection from '@/components/EmailSettingsSection';
 import DiagnosticsSection from '@/components/admin/DiagnosticsSection';
+import ExchangeRateSection from '@/components/admin/ExchangeRateSection';
 import { getFeatureFlags, saveFeatureFlag, FEATURE_DEFAULTS, type FeatureFlags } from '@/lib/features';
 import { getRetentionConfig, saveRetentionConfig, RETENTION_DEFAULTS } from '@/lib/residency';
 
@@ -356,7 +357,7 @@ export default function AdminShopSettingsScreen() {
 
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>Shop settings</Text>
+        <Text style={s.headerTitle}>Shop and exchange rate</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -518,6 +519,13 @@ export default function AdminShopSettingsScreen() {
                 ? <ActivityIndicator size="small" color={COLORS.carbon} />
                 : <Text style={s.primaryBtnText}>Save</Text>}
             </TouchableOpacity>
+
+            {/* Exchange rates + VAT (config/pricing) — own Save buttons; also the
+                /admin/exchange-rate route on its own. */}
+            <View style={s.section}>
+              <Text style={s.sectionLabel}>Exchange rate and VAT</Text>
+              <ExchangeRateSection />
+            </View>
 
             <FeatureFlagsSection />
 

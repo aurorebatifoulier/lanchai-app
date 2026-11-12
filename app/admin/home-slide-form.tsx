@@ -155,7 +155,7 @@ export default function HomeSlideFormScreen() {
         await createSlideWithId(slideId, { ...data, order: heroList.length });
         await saveHeroOrder([...heroList, { key: `slide:${slideId}` }]).catch(() => {});
       } else await createSlideWithId(slideId, data);
-      router.replace('/admin/home-slides' as never);
+      router.replace('/admin/app-content?tab=slides' as never);
     } catch {
       setError("Couldn't save the slide. Please try again.");
       setSaving(false);

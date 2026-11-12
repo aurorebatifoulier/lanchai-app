@@ -49,7 +49,8 @@ function exampleDrafts(): HomeSlideInput[] {
 // only — no edit, no delete; state in config/homeHero) in ONE order (lib/heroItems.ts);
 // nothing published → the Home shows every built-in banner. Banner: order (↑/↓), published
 // toggle, delete (inline confirm), edit; no published slide → its built-in slides.
-export default function AdminHomeSlidesScreen() {
+// `embedded`: the "Home slides" tab of Admin → App content (app/admin/app-content.tsx).
+export default function AdminHomeSlidesScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const screen = useScreenInsets();
   const [slides, setSlides] = useState<HomeSlide[]>([]);
@@ -102,12 +103,14 @@ export default function AdminHomeSlidesScreen() {
   }, "Couldn't create the example drafts.");
 
   return (
-    <View style={[s.root, screen.root]}>
+    <View style={[s.root, !embedded && screen.root]}>
       <StatusBar style="dark" />
-      <View style={s.header}>
-        <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>Home slides</Text>
-      </View>
+      {!embedded && (
+        <View style={s.header}>
+          <BackButton onPress={() => router.back()} />
+          <Text style={s.headerTitle}>Home slides</Text>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={[UI.screenContent, { paddingTop: 16, paddingBottom: screen.contentBottom }]}>
         <Text style={UI.body}>

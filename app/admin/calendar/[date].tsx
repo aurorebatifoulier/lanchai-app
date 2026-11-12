@@ -175,11 +175,15 @@ const rr = StyleSheet.create({
 
 // ── main screen ───────────────────────────────────────────────────────────────
 
-export default function AdminCalendarDayScreen() {
-  const insets = useSafeAreaInsets();
+// `embedded` + `date`: the "Today" tab of Admin → Rentals (app/admin/rentals.tsx) — the
+// day comes from the prop (the route param is ignored), no insets / back button.
+export default function AdminCalendarDayScreen({ embedded = false, date: dateProp }: { embedded?: boolean; date?: string } = {}) {
+  const safe = useSafeAreaInsets();
+  const insets = embedded ? { top: 0, bottom: 0 } : safe;
   const router = useRouter();
   const { user, isAdmin, loading: authLoading, adminLoading } = useAuth();
-  const { date } = useLocalSearchParams<{ date: string }>();
+  const params = useLocalSearchParams<{ date: string }>();
+  const date = dateProp ?? params.date;
 
   // Memoized to stabilize object references — prevents fetchDay from being
   // recreated on every render, which would cause the useEffect to re-fire
@@ -340,7 +344,7 @@ export default function AdminCalendarDayScreen() {
 
       <View style={s.fixedTop}>
         <View style={s.header}>
-          <BackButton onPress={() => router.back()} style={{ flexShrink: 0 }} />
+          {!embedded && <BackButton onPress={() => router.back()} style={{ flexShrink: 0 }} />}
           <Text style={s.headerTitle} numberOfLines={1}>{displayDate}</Text>
         </View>
       </View>

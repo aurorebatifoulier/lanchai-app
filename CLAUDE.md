@@ -1744,6 +1744,27 @@ a snapshot indefinitely).
   `tests/unit/jobs.test.ts` FAILS if a new scheduled function isn't wrapped or listed.
   Shown in Admin → Shop settings → Diagnostics.
 
+- **Admin dashboard (2026-11-12, phase 1 = layout only).** ONE config:
+  `constants/adminSections.ts` (`ADMIN_GROUPS` order Operations / Customers / Catalogue /
+  Marketing / Settings, `ADMIN_SECTIONS` {id, title, sub, icon, route, group, minRole
+  'staff' | 'owner', badge?}, `ADMIN_TOOLS`) — every entry `minRole: 'staff'` today, NO
+  filtering yet (phase 2 = roles). `tests/unit/adminSections.test.ts` checks order and that
+  each route file exists. Top of `app/admin/index.tsx`: `<TodayPanel>` — pick-ups today /
+  returns today / late returns (red when > 0) / to check (ID checks + open claims), pure
+  `countToday()` (`lib/adminTodayCounts.ts`, same rules as the calendar day screen and
+  `lateReturnAlerts`; ID checks = `users where idOnFile == true` + `idCheckNeeded`),
+  queries in `lib/adminToday.ts` (phone-local day like Calendar; a failed query blanks only
+  its counters, "—") + amber "Scan a booking QR". Hubs reuse the EXISTING screens through
+  an `embedded` prop (no insets / back / title) inside `components/admin/AdminTabsScreen.tsx`
+  (`?tab=`, tabs mounted on first visit then kept): `/admin/rentals` (Today =
+  `calendar/[date]` with `date` prop, Calendar, All = reservations) and
+  `/admin/app-content` (Home slides, Onboarding). Shop settings shows
+  `components/admin/ExchangeRateSection.tsx` (also rendered by `/admin/exchange-rate`).
+  `/admin/tools` = Product thumbnails + Search vocabulary. Saved replies: off the dashboard,
+  "Edit replies" chip in the admin chat composer. Every old route still works on its own
+  (`/admin/calendar`, `/admin/reservations`, `/admin/home-slides`, …) — keep the
+  `embedded` default false when editing those screens.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

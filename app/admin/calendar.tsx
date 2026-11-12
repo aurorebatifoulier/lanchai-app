@@ -85,8 +85,11 @@ function buildCells(month: Date): CellData[][] {
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-export default function AdminCalendarScreen() {
-  const insets = useSafeAreaInsets();
+// `embedded`: the "Calendar" tab of Admin → Rentals (app/admin/rentals.tsx) — no insets,
+// back button or title (the host has them); the month navigation stays.
+export default function AdminCalendarScreen({ embedded = false }: { embedded?: boolean } = {}) {
+  const safe = useSafeAreaInsets();
+  const insets = embedded ? { top: 0, bottom: 0 } : safe;
   const router = useRouter();
   const { isAdmin, loading: authLoading, adminLoading } = useAuth();
 
@@ -170,9 +173,9 @@ export default function AdminCalendarScreen() {
 
       <View style={s.fixedTop}>
         <View style={s.header}>
-          <BackButton onPress={() => router.back()} />
-          <Text style={s.headerTitle}>Calendar</Text>
-          <View style={s.monthNav}>
+          {!embedded && <BackButton onPress={() => router.back()} />}
+          {!embedded && <Text style={s.headerTitle}>Calendar</Text>}
+          <View style={[s.monthNav, embedded && s.monthNavCentered]}>
             <TouchableOpacity hitSlop={5} accessibilityRole="button" accessibilityLabel="Previous month"
               style={s.navBtn}
               onPress={() => setCurrentMonth(m => addMonths(m, -1))}
@@ -314,6 +317,7 @@ const s = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 4,
   },
+  monthNavCentered: { justifyContent: 'center', gap: 12 },
   navBtn: {
     width: 34,
     height: 34,

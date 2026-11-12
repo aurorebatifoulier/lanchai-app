@@ -104,7 +104,9 @@ type AdminRenderEntry =
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
-export default function AdminReservationsScreen() {
+// `embedded`: rendered as the "All" tab of Admin → Rentals (app/admin/rentals.tsx) — no
+// insets / back / title / scan button (the host has them). The route renders as before.
+export default function AdminReservationsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
   const screen = useScreenInsets();
   const router = useRouter();
@@ -257,12 +259,12 @@ export default function AdminReservationsScreen() {
   const isEmpty = !loading && renderEntries.length === 0;
 
   return (
-    <View style={[s.root, screen.root]}>
+    <View style={[s.root, !embedded && screen.root]}>
       <StatusBar style="dark" />
 
       {/* ── Fixed top bar (header + search + chips grouped as one flex sibling) */}
       <View style={s.topBar}>
-        <View style={s.header}>
+        {!embedded && <View style={s.header}>
           <BackButton onPress={() => router.back()} />
           <Text style={s.headerTitle}>Reservations</Text>
           <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Scan a QR code"
@@ -272,7 +274,7 @@ export default function AdminReservationsScreen() {
           >
             <Feather name="maximize" size={18} color={COLORS.carbon} />
           </TouchableOpacity>
-        </View>
+        </View>}
 
         <View style={s.searchRow}>
           <View style={[s.searchWrap, { flex: 1 }]}>
