@@ -1828,6 +1828,26 @@ a snapshot indefinitely).
     **team notes** on claims (`claims/{id}/notes`, Storage `claim-staff/…`,
     `<StaffNotes>`): staff create, never renter-visible; closing / claim reply = owner.
     Staff never see list totals (reservations list) nor the ID "Decline" button.
+  - **Audit trail (step 3).** `auditLog/{id}` (append-only; `byUid` = caller, `byRole` =
+    the caller's real role, `at` = server time — firestore.rules). EVERY admin client
+    write on `reservations`, `claims`, `incidents` and a product unit count
+    (`inRepairUnits` / `lostUnits` / `pendingSettlementUnits`) must carry a NEW
+    `lastAuditId` whose entry is written in the SAME batch by the caller
+    (`auditedWrite()` rule: `existsAfter` + `getAfter(...).byUid`) — otherwise refused.
+    Client helpers: `lib/adminAudit.ts` (`addAudit(batch, action, refs, note)`,
+    `auditedWrite`, `auditedReservationUpdate`; identity cached, reset by AuthContext on
+    any admins/{uid} change). Already wired: `lib/firestore.ts` admin helpers (no-show,
+    lift hold, cancel, release, confirm payment, `submitChecklistBatch`,
+    `adjustProductStockCondition`, `addStockAdjustmentToBatch(…, auditId)`), the detail
+    `runAction` (+ `extraBatchWork(batch, auditId)`), checklist handover / return,
+    `SettlementActions`, `respondToClaim`, `closeIncident`, `<DamageReviewCard>`. A NEW
+    admin write on those collections must go through them. Server actions write their
+    own entries (`functions/src/audit.ts` `writeAudit` / `auditData`: returns, refused
+    pick-ups, ID check / photo / decline / flag, name edit, agreement signed, Team).
+    `<HistoryCard>` on the reservation detail (auditLog by `reservationId` + the renter's
+    `id.*` entries by `renterId`, equality queries, sorted in memory). Rules tests use
+    `auditedUpdate()` (`tests/rules/env.ts`). Test-data cleanup wipes `auditLog`,
+    `incidents` and Storage `incidents/`, `claim-staff/`.
 
 ## Security follow-ups
 

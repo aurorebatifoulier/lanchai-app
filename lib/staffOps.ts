@@ -1,12 +1,13 @@
 import { httpsCallable } from 'firebase/functions';
 import {
-  addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where,
+  addDoc, collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp, setDoc, where,
   type Timestamp,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { db, functions, storage } from './firebase';
 import { auth } from './auth';
+import { auditedWrite } from './adminAudit';
 import type { ChecklistRating } from '@/functions/src/shared/returnCharges';
 
 // Staff counter operations (functions/src/returns.ts) + internal incidents and claim
@@ -133,9 +134,13 @@ export function watchIncidents(onChange: (list: Incident[]) => void, filter?: { 
 }
 
 export async function closeIncident(id: string, outcome: string): Promise<void> {
-  await updateDoc(doc(db, 'incidents', id), {
+  // Owner decision, audited (lastAuditId + auditLog entry in one batch — firestore.rules).
+  const snap = await getDoc(doc(db, 'incidents', id));
+  await auditedWrite(doc(db, 'incidents', id), {
     status: 'closed', outcome: outcome.trim().slice(0, 2000), closedAt: serverTimestamp(), closedBy: myAdminName(),
-  });
+  }, 'incident.closed', {
+    incidentId: id, reservationId: snap.get('reservationId') ?? undefined, renterId: snap.get('renterId') ?? undefined,
+  }, outcome.trim().slice(0, 200));
 }
 
 // ── Notes (incident or claim) ─────────────────────────────────────────────────

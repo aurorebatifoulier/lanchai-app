@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { requireRole } from './adminAuth';
+import { writeAudit } from './audit';
 import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -128,7 +129,8 @@ export const submitIdentityDocument = onCall({ region: REGION }, async request =
 // Ties the check to the CURRENT document version (idCheckedVersion); idCheckedAt/By
 // stay as history. Clears firstRentalIdCheck on the renter's upcoming pick-ups.
 export const recordIdCheck = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  const adminUid = (await requireRole(request, 'staff')).uid;
+  const caller = await requireRole(request, 'staff');
+  const adminUid = caller.uid;
   const d = (request.data ?? {}) as {
     renterId?: unknown; matchesPerson?: unknown; nameMatches?: unknown;
     counterPhoto?: { docType?: unknown; files?: unknown };
@@ -166,6 +168,7 @@ export const recordIdCheck = onCall({ region: REGION, secrets: [BREVO_API_KEY] }
     await sendAccountEmail(renterId, (shop, r) => idVerifiedEmail(shop, { firstName: r.firstName, idRetentionMonths }), 'id-verified');
   }
   logger.info('[identity] checked in person', { renterId, version: identity!.version, by: adminUid });
+  await writeAudit(caller, { action: 'id.checked', renterId, note: `version ${identity!.version}${d.counterPhoto ? ' · photo taken at the counter' : ''}` });
   return { ok: true };
 });
 
@@ -177,7 +180,8 @@ export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_
   const d = (request.data ?? {}) as {
     renterId?: unknown; action?: unknown; docType?: unknown; files?: unknown; reason?: unknown; text?: unknown;
   };
-  const adminUid = (await requireRole(request, d.action === 'reject' ? 'owner' : 'staff')).uid;
+  const caller = await requireRole(request, d.action === 'reject' ? 'owner' : 'staff');
+  const adminUid = caller.uid;
   const renterId = typeof d.renterId === 'string' ? d.renterId : '';
   if (!renterId) fail('invalid-request', 'Missing renter.', 'invalid-argument');
   const db = admin.firestore();
@@ -216,6 +220,7 @@ export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_
   }
   await syncFirstRentalIdFlags(renterId);
   logger.info('[identity] admin action', { renterId, action: d.action, by: adminUid });
+  await writeAudit(caller, { action: d.action === 'reject' ? 'id.declined' : 'id.photo-added', renterId, note: d.action === 'reject' ? String(d.reason ?? '') : String(d.docType ?? '') });
   return { ok: true };
 });
 
@@ -226,7 +231,8 @@ export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_
 //   nameEditedAt/By (internal), Auth displayName, and renterName on upcoming pick-ups.
 // Renters can't change their own name once an ID has been checked (firestore.rules).
 export const adminRenterProfile = onCall({ region: REGION }, async request => {
-  const adminUid = (await requireRole(request, 'staff')).uid;
+  const caller = await requireRole(request, 'staff');
+  const adminUid = caller.uid;
   const d = (request.data ?? {}) as { renterId?: unknown; action?: unknown; firstName?: unknown; lastName?: unknown };
   const renterId = typeof d.renterId === 'string' ? d.renterId : '';
   if (!renterId) fail('invalid-request', 'Missing renter.', 'invalid-argument');
@@ -255,6 +261,7 @@ export const adminRenterProfile = onCall({ region: REGION }, async request => {
     }
     if (n > 0) await batch.commit();
     logger.info('[identity] renter name edited', { renterId, by: adminUid });
+    await writeAudit(caller, { action: 'renter.name-edited', renterId, note: `${firstName} ${lastName}` });
   } else if (d.action !== 'get') {
     fail('invalid-request', 'Unknown action.', 'invalid-argument');
   }

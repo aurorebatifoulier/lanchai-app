@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { serverTimestamp } from 'firebase/firestore';
+import { auditedReservationUpdate } from '@/lib/adminAudit';
 import { COLORS } from '@/constants/Colors';
 import type { RentalDoc } from '@/lib/firestore';
 import { sendNotif } from '@/lib/notifications';
@@ -55,10 +55,11 @@ export function SettlementActions({
     setActionError(null);
     setConfirmAction(null);
     try {
-      await updateDoc(doc(db, 'reservations', reservation.id), {
-        ...firestoreUpdates,
-        updatedAt: serverTimestamp(),
-      });
+      // Audited (lastAuditId + auditLog entry in one batch — firestore.rules).
+      await auditedReservationUpdate(reservation, firestoreUpdates,
+        firestoreUpdates.depositReturned ? 'settle.deposit-returned'
+          : firestoreUpdates.outstandingSettled ? 'settle.balance-paid'
+          : firestoreUpdates.outstandingWrittenOff ? 'settle.written-off' : 'settle.update');
       onSettled(localUpdates);
       onSuccess?.();
     } catch (err: any) {
@@ -67,7 +68,7 @@ export function SettlementActions({
     } finally {
       setActioning(false);
     }
-  }, [reservation.id, actioning, onSettled, setActioning, setActionError, setConfirmAction]);
+  }, [reservation, actioning, onSettled, setActioning, setActionError, setConfirmAction]);
 
   if (reservation.status !== 'returned') return null;
 

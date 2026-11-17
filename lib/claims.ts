@@ -4,7 +4,6 @@ import {
   doc,
   getDoc,
   addDoc,
-  updateDoc,
   query,
   where,
   Timestamp,
@@ -12,6 +11,7 @@ import {
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
+import { auditedWrite } from './adminAudit';
 
 export type ClaimType = 'damage_not_caused' | 'missing_accessory' | 'not_as_described' | 'other';
 export type ClaimStatus = 'open' | 'in_review' | 'resolved' | 'rejected';
@@ -161,11 +161,16 @@ export async function respondToClaim(
   params: { status: ClaimStatus; adminResponse: string; adminRespondedBy: string },
 ): Promise<void> {
   const { status, adminResponse, adminRespondedBy } = params;
-  await updateDoc(doc(db, 'claims', id), {
+  // Audited (auditLog entry + lastAuditId in one batch — firestore.rules).
+  const claimSnap = await getDoc(doc(db, 'claims', id));
+  await auditedWrite(doc(db, 'claims', id), {
     status,
     adminResponse,
     adminRespondedAt: Timestamp.now(),
     adminRespondedBy,
-    updatedAt: Timestamp.now(),
-  });
+  }, `claim.${status}`, {
+    claimId: id,
+    reservationId: claimSnap.get('reservationId') ?? undefined,
+    renterId: claimSnap.get('userId') ?? undefined,
+  }, adminResponse.slice(0, 200));
 }

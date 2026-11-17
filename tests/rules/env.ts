@@ -12,7 +12,7 @@ import {
   initializeTestEnvironment, assertFails, assertSucceeds,
   type RulesTestEnvironment, type RulesTestContext,
 } from '@firebase/rules-unit-testing';
-import { doc, setDoc, setLogLevel, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, setLogLevel, Timestamp, collection, writeBatch, serverTimestamp, type Firestore } from 'firebase/firestore';
 import { ref, uploadBytes } from 'firebase/storage';
 
 setLogLevel('silent'); // expected PERMISSION_DENIED errors would flood the output
@@ -189,4 +189,23 @@ export const reseed = (withStorage = false) => seed(withStorage);
 /** For server-only collections with NO rule block: must be denied (not counted). */
 export async function noRule(p: Promise<unknown>): Promise<void> {
   await assertFails(p);
+}
+
+/**
+ * An admin write paired with its auditLog entry in the SAME batch (lib/adminAudit.ts) —
+ * what firestore.rules requires on reservations / claims / incidents / unit counts.
+ * `entry` overrides the audit fields (to test a forged byUid / byRole).
+ */
+export function auditedUpdate(
+  ctxDb: unknown, uid: string, role: 'owner' | 'staff', path: string,
+  data: Record<string, unknown>, entry: Record<string, unknown> = {},
+): Promise<void> {
+  // The rules-unit-testing context returns the compat Firestore type; the modular
+  // functions accept it at runtime (same as every other test here).
+  const db = ctxDb as Firestore;
+  const batch = writeBatch(db);
+  const a = doc(collection(db, 'auditLog'));
+  batch.set(a, { action: 'test', byUid: uid, byName: 'Tester', byRole: role, at: serverTimestamp(), ...entry });
+  batch.update(doc(db, path), { ...data, lastAuditId: a.id });
+  return batch.commit();
 }

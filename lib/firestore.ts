@@ -20,6 +20,7 @@ import {
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { db, functions } from './firebase';
+import { addAudit } from './adminAudit';
 import { auth } from './auth';
 import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
@@ -115,8 +116,11 @@ export function addStockAdjustmentToBatch(
   reason: string,
   adminName: string,
   reservationId?: string,
+  /** auditLog entry of this batch (lib/adminAudit.ts addAudit) — required by
+   *  firestore.rules on every change of a unit count. */
+  auditId?: string,
 ): void {
-  batch.update(doc(db, 'products', productId), { [field]: increment(delta) });
+  batch.update(doc(db, 'products', productId), { [field]: increment(delta), ...(auditId ? { lastAuditId: auditId } : {}) });
   const adjustmentRef = doc(collection(db, 'products', productId, 'stockAdjustments'));
   batch.set(adjustmentRef, {
     field,
@@ -139,13 +143,14 @@ export function addReturnStockToBatch(
   r: ReturnStockInput,
   adminName: string,
   reservationId: string,
+  auditId?: string,
 ): void {
   const { lostUnits, pendingUnits } = returnStockMoves(r);
   if (lostUnits > 0) {
-    addStockAdjustmentToBatch(batch, productId, 'lostUnits', lostUnits, 'Return checklist rated item unusable', adminName, reservationId);
+    addStockAdjustmentToBatch(batch, productId, 'lostUnits', lostUnits, 'Return checklist rated item unusable', adminName, reservationId, auditId);
   }
   if (pendingUnits > 0) {
-    addStockAdjustmentToBatch(batch, productId, 'pendingSettlementUnits', pendingUnits, 'Returned — pending deposit settlement', adminName, reservationId);
+    addStockAdjustmentToBatch(batch, productId, 'pendingSettlementUnits', pendingUnits, 'Returned — pending deposit settlement', adminName, reservationId, auditId);
   }
 }
 
@@ -160,7 +165,8 @@ export async function adjustProductStockCondition(
   adminName: string,
 ): Promise<void> {
   const batch = writeBatch(db);
-  addStockAdjustmentToBatch(batch, productId, field, delta, reason, adminName);
+  const auditId = await addAudit(batch, `stock.${field}`, { productId }, `${delta > 0 ? '+' : ''}${delta} · ${reason}`);
+  addStockAdjustmentToBatch(batch, productId, field, delta, reason, adminName, undefined, auditId);
   await batch.commit();
 }
 
@@ -545,7 +551,9 @@ export async function adminMarkNoShow(ids: string[], adminUid: string, adminName
   if (ids.length === 0) return;
   const batch = writeBatch(db);
   for (const id of ids) {
+    const auditId = await addAudit(batch, 'status.no_show', { reservationId: id });
     batch.update(doc(db, 'reservations', id), {
+      lastAuditId:  auditId,
       status:       'no_show',
       noShowAt:     serverTimestamp(),
       noShowBy:     adminUid,
@@ -570,7 +578,9 @@ export async function adminLiftNoShowHold(renterId: string, adminUid: string, ad
   if (open.length === 0) return 0;
   const batch = writeBatch(db);
   for (const d of open) {
+    const auditId = await addAudit(batch, 'noshow.hold-lifted', { reservationId: d.id, renterId });
     batch.update(d.ref, {
+      lastAuditId:            auditId,
       noShowHoldLiftedAt:     serverTimestamp(),
       noShowHoldLiftedBy:     adminUid,
       noShowHoldLiftedByName: adminName,
@@ -594,7 +604,9 @@ export async function adminCancelReservations(
   if (ids.length === 0) return;
   const batch = writeBatch(db);
   for (const id of ids) {
+    const auditId = await addAudit(batch, 'status.cancelled', { reservationId: id }, [reason, reasonText.trim()].filter(Boolean).join(' · '));
     batch.update(doc(db, 'reservations', id), {
+      lastAuditId:      auditId,
       status:           'cancelled',
       cancelledAt:      serverTimestamp(),
       cancelledBy:      'admin',
@@ -616,7 +628,10 @@ export async function adminCancelReservations(
 // This does NOT resolve any deposit/charge — the caller's UI must make that clear.
 // Throws on Firestore error — caller must handle.
 export async function releaseReservation(id: string, adminName: string): Promise<void> {
-  await updateDoc(doc(db, 'reservations', id), {
+  const batch = writeBatch(db);
+  const auditId = await addAudit(batch, 'status.released', { reservationId: id });
+  batch.update(doc(db, 'reservations', id), {
+    lastAuditId: auditId,
     status:      'cancelled',
     cancelledAt: serverTimestamp(),
     cancelledBy: 'admin_release',
@@ -624,6 +639,7 @@ export async function releaseReservation(id: string, adminName: string): Promise
     releasedAt:  serverTimestamp(),
     updatedAt:   serverTimestamp(),
   });
+  await batch.commit();
 }
 
 // Confirms payment for multiple reservations sharing an order in one batch — used by
@@ -631,12 +647,14 @@ export async function releaseReservation(id: string, adminName: string): Promise
 export async function confirmReservationsPayment(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const batch = writeBatch(db);
-  ids.forEach(id =>
+  for (const id of ids) {
+    const auditId = await addAudit(batch, 'status.confirmed', { reservationId: id }, 'Payment received');
     batch.update(doc(db, 'reservations', id), {
-      status:    'confirmed',
-      updatedAt: serverTimestamp(),
-    }),
-  );
+      status:      'confirmed',
+      lastAuditId: auditId,
+      updatedAt:   serverTimestamp(),
+    });
+  }
   await batch.commit();
 }
 
@@ -701,9 +719,12 @@ export async function submitChecklistBatch(
 ): Promise<void> {
   if (items.length === 0) return;
   const batch = writeBatch(db);
-  items.forEach(({ id, type, checklistData, charge, productId, quantity, adminName, pickupAt }) => {
+  for (const { id, type, checklistData, charge, productId, quantity, adminName, pickupAt } of items) {
     const isHandover = type === 'handover';
+    const auditId = await addAudit(batch, isHandover ? 'status.active' : 'status.returned', { reservationId: id, productId },
+      isHandover ? 'Handover checklist' : 'Return checklist');
     batch.update(doc(db, 'reservations', id), {
+      lastAuditId: auditId,
       [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
       status: isHandover ? 'active' : 'returned',
       ...(isHandover ? earlyHandoverFields(pickupAt) : { returnedAt: serverTimestamp(), stockReleasedAt: null }),
@@ -718,9 +739,9 @@ export async function submitChecklistBatch(
     // buffer has elapsed. A checklist-rated 'unusable' item is a true write-off, so it
     // goes straight to lostUnits instead, mirroring "Report lost/stolen".
     if (!isHandover) {
-      addReturnStockToBatch(batch, productId, { quantity, chargeSeverity: charge?.chargeSeverity, chargeUnits: charge?.chargeUnits }, adminName, id);
+      addReturnStockToBatch(batch, productId, { quantity, chargeSeverity: charge?.chargeSeverity, chargeUnits: charge?.chargeUnits }, adminName, id, auditId);
     }
-  });
+  }
   await batch.commit();
 }
 

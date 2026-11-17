@@ -21,7 +21,7 @@ export const WIPE_COLLECTIONS = [
   'identityChecks', 'residencyRequests', 'rentalAgreements', 'docDeletionLog',
   'promoGrants', 'promoAttempts', 'referrals', 'inviteCodes',
   'recentViews', 'availabilityWatches', 'categoryWatches', 'authEmailLimits',
-  'broadcasts', 'adminTasks',
+  'broadcasts', 'adminTasks', 'incidents', 'auditLog',
 ] as const;
 
 /** Kept as they are (listed so the dry run says so). */
@@ -30,7 +30,7 @@ export const KEEP_COLLECTIONS = ['products', 'config', 'collections', 'homeSlide
 /** Storage folders deleted (non-admin profile photos are handled separately). */
 export const WIPE_STORAGE_PREFIXES = [
   'chat-images/', 'chat-videos/', 'claim-photos/', 'claim-videos/', 'businessDocs/',
-  'idDocs/', 'rentalAgreements/', 'reservations/',
+  'idDocs/', 'rentalAgreements/', 'reservations/', 'incidents/', 'claim-staff/',
 ] as const;
 
 /** Profile fields an admin keeps; every other field on users/{adminUid} is removed. */

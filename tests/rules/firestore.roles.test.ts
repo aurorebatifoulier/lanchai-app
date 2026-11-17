@@ -6,7 +6,7 @@ import { describe, test } from 'node:test';
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
-import { setupRulesEnv, as, ok, no, UID } from './env';
+import { setupRulesEnv, as, ok, no, UID, auditedUpdate } from './env';
 
 setupRulesEnv();
 const db = (p: keyof typeof as) => as[p]().firestore();
@@ -79,8 +79,8 @@ describe('catalogue, marketing, settings = owner', () => {
     await no(R, updateDoc(doc(db('staff'), 'reviews/p1/reviews/rAold'), { adminReply: 'Thanks!' }));
     const C = 'fs:claims/{claimId}';
     await ok(C, getDoc(doc(db('staff'), 'claims/cl1')));
-    await ok(C, updateDoc(doc(db('owner'), 'claims/cl1'), { status: 'in_review' }));
-    await no(C, updateDoc(doc(db('staff'), 'claims/cl1'), { status: 'resolved', adminResponse: 'ok' }));
+    await ok(C, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'claims/cl1', { status: 'in_review' }));
+    await no(C, auditedUpdate(db('staff'), UID.STAFF, 'staff', 'claims/cl1', { status: 'resolved', adminResponse: 'ok' }));
   });
 });
 
@@ -114,41 +114,50 @@ describe('staff counter writes on reservations (allow-list)', () => {
   const P = 'fs:reservations/{reservationId}';
   const at = () => serverTimestamp();
   test('confirm payment, hand over, cancel with a reason, no-show', async () => {
-    await ok(P, updateDoc(doc(db('staff'), 'reservations/sPend'), { status: 'confirmed', updatedAt: at() }));
-    await ok(P, updateDoc(doc(db('staff'), 'reservations/sConf'), {
+    const staff = (path: string, data: Record<string, unknown>) => auditedUpdate(db('staff'), UID.STAFF, 'staff', path, data);
+    await ok(P, staff('reservations/sPend', { status: 'confirmed', updatedAt: at() }));
+    await ok(P, staff('reservations/sConf', {
       status: 'active', handoverChecklist: { photos: [], depositCurrency: 'LAK', depositAmount: 500_000 }, updatedAt: at(),
     }));
-    await ok(P, updateDoc(doc(db('staff'), 'reservations/rB'), {
+    await ok(P, staff('reservations/rB', {
       status: 'cancelled', cancelledBy: 'admin', cancelReason: 'customer_request', cancelReasonText: '', cancelledAt: at(), updatedAt: at(),
     }));
-    await ok(P, updateDoc(doc(db('staff'), 'reservations/rA'), {
+    await ok(P, staff('reservations/rA', {
       status: 'no_show', noShowAt: at(), noShowBy: UID.STAFF, noShowByName: 'Sam', updatedAt: at(),
     }));
   });
   test('never a fee, waiver, deposit, settlement, price or release', async () => {
-    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { status: 'returned', lateChargeAmount: 0 }));
-    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { lateChargeWaived: true }));
-    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { depositReturned: true }));
-    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { outstandingWrittenOff: true }));
-    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { status: 'lost', chargeAmount: 1 }));
-    await no(P, updateDoc(doc(db('staff'), 'reservations/rAact'), { total: 1 }));
-    await no(P, updateDoc(doc(db('staff'), 'reservations/rAact'), { status: 'cancelled', cancelledBy: 'admin_release', cancelledAt: at() }));
+    // Even WITH a valid audit entry, these stay refused for staff.
+    const staff = (path: string, data: Record<string, unknown>) => auditedUpdate(db('staff'), UID.STAFF, 'staff', path, data);
+    await no(P, staff('reservations/sAct', { status: 'returned', lateChargeAmount: 0 }));
+    await no(P, staff('reservations/sAct', { lateChargeWaived: true }));
+    await no(P, staff('reservations/sAct', { depositReturned: true }));
+    await no(P, staff('reservations/sAct', { outstandingWrittenOff: true }));
+    await no(P, staff('reservations/sAct', { status: 'lost', chargeAmount: 1 }));
+    await no(P, staff('reservations/rAact', { total: 1 }));
+    await no(P, staff('reservations/rAact', { status: 'cancelled', cancelledBy: 'admin_release', cancelledAt: at() }));
     // Hand over + price change in the same write
-    await no(P, updateDoc(doc(db('staff'), 'reservations/rAret'), { status: 'active', total: 1 }));
+    await no(P, staff('reservations/rAret', { status: 'active', total: 1 }));
     await no(P, deleteDoc(doc(db('staff'), 'reservations/rAret')));
     await no(P, updateDoc(doc(db('staffOff'), 'reservations/rAret'), { updatedAt: at() }));
   });
   test('owner: anything (settlement, waiver, delete)', async () => {
-    await ok(P, updateDoc(doc(db('owner'), 'reservations/rAret'), { depositReturned: true, returnFinalizedAt: at() }));
-    await ok(P, updateDoc(doc(db('owner'), 'reservations/rAret'), { lateChargeWaived: true }));
+    await ok(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { depositReturned: true, returnFinalizedAt: at() }));
+    await ok(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { lateChargeWaived: true }));
   });
 });
 
 describe('stock: staff mark units in repair only', () => {
   test('products in-repair count + its audit line', async () => {
-    await ok('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { inRepairUnits: 1 }));
-    await no('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { lostUnits: 1 }));
-    await no('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { inRepairUnits: -1 }));
+    const staff = (data: Record<string, unknown>) => auditedUpdate(db('staff'), UID.STAFF, 'staff', 'products/p1', data);
+    await ok('fs:products/{productId}', staff({ inRepairUnits: 1 }));
+    await no('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { inRepairUnits: 2 })); // no audit entry
+    await no('fs:products/{productId}', staff({ lostUnits: 1 }));
+    await no('fs:products/{productId}', staff({ inRepairUnits: -1 }));
+    // Owner: a unit count needs its audit entry too; a plain catalogue edit doesn't.
+    await ok('fs:products/{productId}', auditedUpdate(db('owner'), UID.OWNER, 'owner', 'products/p1', { lostUnits: 1 }));
+    await no('fs:products/{productId}', updateDoc(doc(db('owner'), 'products/p1'), { lostUnits: 2 }));
+    await ok('fs:products/{productId}', updateDoc(doc(db('owner'), 'products/p1'), { name: 'Big tent' }));
     await ok('fs:products/{productId}/stockAdjustments/{adjustmentId}',
       addDoc(collection(db('staff'), 'products/p1/stockAdjustments'), { field: 'inRepairUnits', delta: 1, reason: 'Broken zip' }));
   });
@@ -165,8 +174,8 @@ describe('incidents + claim notes', () => {
     }));
     await no(I, addDoc(collection(db('A'), 'incidents'), { note: 'x', photos: [], status: 'open', createdBy: UID.A, createdAt: serverTimestamp() }));
     await no(I, getDoc(doc(db('A'), 'incidents/i1')));
-    await no(I, updateDoc(doc(db('staff'), 'incidents/i1'), { status: 'closed' }));
-    await ok(I, updateDoc(doc(db('owner'), 'incidents/i1'), { status: 'closed' }));
+    await no(I, auditedUpdate(db('staff'), UID.STAFF, 'staff', 'incidents/i1', { status: 'closed' }));
+    await ok(I, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'incidents/i1', { status: 'closed' }));
     const N = 'fs:incidents/{incidentId}/notes/{noteId}';
     await ok(N, addDoc(collection(db('staff'), 'incidents/i1/notes'), { text: 'Renter agrees', byUid: UID.STAFF, byName: 'Sam', at: serverTimestamp() }));
     await no(N, addDoc(collection(db('staff'), 'incidents/i1/notes'), { text: 'Fake', byUid: UID.OWNER, byName: 'Olga', at: serverTimestamp() }));
@@ -176,5 +185,22 @@ describe('incidents + claim notes', () => {
     await ok(N, addDoc(collection(db('staff'), 'claims/cl1/notes'), { text: 'Photos taken', photos: [], byUid: UID.STAFF, byName: 'Sam', at: serverTimestamp() }));
     await no(N, getDocs(collection(db('A'), 'claims/cl1/notes')));
     await no(N, addDoc(collection(db('staffOff'), 'claims/cl1/notes'), { text: 'x', byUid: UID.STAFF_OFF, at: serverTimestamp() }));
+  });
+});
+
+describe('audit log', () => {
+  const A = 'fs:auditLog/{entryId}';
+  test('own entry, real role, server time; append-only; renters never', async () => {
+    await ok(A, addDoc(collection(db('staff'), 'auditLog'), { action: 'x', byUid: UID.STAFF, byName: 'Sam', byRole: 'staff', at: serverTimestamp() }));
+    await ok(A, getDocs(query(collection(db('staff'), 'auditLog'), where('reservationId', '==', 'rA'))));
+    // Forged author / role / time
+    await no(A, addDoc(collection(db('staff'), 'auditLog'), { action: 'x', byUid: UID.OWNER, byName: 'Olga', byRole: 'owner', at: serverTimestamp() }));
+    await no(A, addDoc(collection(db('staff'), 'auditLog'), { action: 'x', byUid: UID.STAFF, byName: 'Sam', byRole: 'owner', at: serverTimestamp() }));
+    await no(A, addDoc(collection(db('staffOff'), 'auditLog'), { action: 'x', byUid: UID.STAFF_OFF, byName: 'Old', byRole: 'staff', at: serverTimestamp() }));
+    await no(A, getDocs(collection(db('A'), 'auditLog')));
+  });
+  test('a write paired with someone else\'s entry is refused', async () => {
+    await no('fs:reservations/{reservationId}',
+      auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { depositReturned: false }, { byUid: UID.STAFF, byRole: 'staff' }));
   });
 });

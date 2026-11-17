@@ -5,6 +5,7 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 import { setupRulesEnv, as, ok, no, UID, env } from './env';
+import { auditedUpdate } from './env';
 
 setupRulesEnv();
 const db = (p: keyof typeof as) => as[p]().firestore();
@@ -150,7 +151,9 @@ describe('reservations/{reservationId}', () => {
     await no(R, updateDoc(doc(db('A'), 'reservations/rAact'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
     await no(R, updateDoc(doc(db('B'), 'reservations/rA'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
     await ok(R, updateDoc(doc(db('A'), 'reservations/rA'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
-    await ok(R, updateDoc(doc(db('admin'), 'reservations/rB'), { total: 250_000 }));
+    await ok(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB', { total: 250_000 }));
+    // Admin write without its audit entry → refused (firestore.rules auditedWrite)
+    await no(R, updateDoc(doc(db('admin'), 'reservations/rB'), { total: 260_000 }));
   });
   test('delete: admin only', async () => {
     await no(R, deleteDoc(doc(db('A'), 'reservations/rAret')));

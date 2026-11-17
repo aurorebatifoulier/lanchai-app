@@ -5,6 +5,7 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 import { setupRulesEnv, as, ok, no, UID } from './env';
+import { auditedUpdate } from './env';
 
 setupRulesEnv();
 const db = (p: keyof typeof as) => as[p]().firestore();
@@ -125,7 +126,8 @@ describe('claims', () => {
   });
   test('read own / admin; update + delete admin only', async () => {
     await ok(CL, getDoc(doc(db('A'), 'claims/cl1')));
-    await ok(CL, updateDoc(doc(db('admin'), 'claims/cl1'), { status: 'in_review' }));
+    await ok(CL, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'claims/cl1', { status: 'in_review' }));
+    await no(CL, updateDoc(doc(db('admin'), 'claims/cl1'), { status: 'resolved' })); // no audit entry
     await no(CL, getDoc(doc(db('B'), 'claims/cl1')));
     await no(CL, getDocs(collection(db('A'), 'claims')));
     await no(CL, updateDoc(doc(db('A'), 'claims/cl1'), { status: 'resolved' }));

@@ -60,6 +60,8 @@ import {
 } from '@/functions/src/shared/cancellation';
 import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 import { RenterIdCard } from '@/components/admin/RenterIdCard';
+import { addAudit } from '@/lib/adminAudit';
+import { HistoryCard } from '@/components/admin/HistoryCard';
 import { DamageReviewCard, PickupRefusedCard, RefusePickupBox } from '@/components/admin/OwnerReview';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -185,24 +187,23 @@ export default function AdminReservationDetailScreen() {
     // reservation update, instead of a separate non-atomic write after this one
     // resolves. Used by the "Report lost/stolen" action to also increment the product's
     // lostUnits count + write its audit log, so the two can never partially succeed.
-    extraBatchWork?: (batch: WriteBatch) => void,
+    extraBatchWork?: (batch: WriteBatch, auditId: string) => void,
   ) => {
     if (!id || actioning) return;
     setActioning(true);
     setActionError(null);
     setConfirmAction(null);
     try {
-      if (extraBatchWork) {
-        const batch = writeBatch(db);
-        batch.update(doc(db, 'reservations', id), { ...firestoreUpdates, updatedAt: serverTimestamp() });
-        extraBatchWork(batch);
-        await batch.commit();
-      } else {
-        await updateDoc(doc(db, 'reservations', id), {
-          ...firestoreUpdates,
-          updatedAt: serverTimestamp(),
-        });
-      }
+      // Every admin write carries its auditLog entry in the SAME batch (lastAuditId —
+      // firestore.rules refuses it otherwise): who, role, when, what → History card.
+      const batch = writeBatch(db);
+      const st = firestoreUpdates.status;
+      const auditId = await addAudit(batch, typeof st === 'string' ? `status.${st}` : 'reservation.update',
+        { reservationId: id, orderId: reservation?.orderId ?? null, productId: reservation?.productId, renterId: reservation?.renterId },
+        Object.keys(firestoreUpdates).filter(k => k !== 'status').slice(0, 6).join(', '));
+      batch.update(doc(db, 'reservations', id), { ...firestoreUpdates, lastAuditId: auditId, updatedAt: serverTimestamp() });
+      extraBatchWork?.(batch, auditId);
+      await batch.commit();
       setReservation(prev => prev ? { ...prev, ...localUpdates } : prev);
       onSuccess?.();
     } catch (err: any) {
@@ -211,7 +212,7 @@ export default function AdminReservationDetailScreen() {
     } finally {
       setActioning(false);
     }
-  }, [id, actioning]);
+  }, [id, actioning, reservation]);
 
   // ── Lost/stolen charge — always 100% of replacement value. Currency comes from the
   // reservation's already-locked deposit currency; 'LAK' is a defensive fallback only —
@@ -921,6 +922,9 @@ export default function AdminReservationDetailScreen() {
           </View>
         )}
 
+        {/* ── HISTORY — who did what (auditLog) ─────────────────────────── */}
+        <HistoryCard reservationId={reservation.id} renterId={reservation.renterId} />
+
         {/* ── ACTIONS ────────────────────────────────────────────────────── */}
         <View style={d.actionsCard}>
           <Text style={d.cardLabel}>Actions</Text>
@@ -1027,7 +1031,7 @@ export default function AdminReservationDetailScreen() {
                 // Defensive fallback path — a checklist wasn't the trigger here, so decide
                 // the stock bucket from whatever chargeSeverity already sits on the doc (if
                 // any), exactly like the checklist submit paths.
-                batch => addReturnStockToBatch(
+                (batch, auditId) => addReturnStockToBatch(
                   batch,
                   reservation.productId,
                   {
@@ -1037,6 +1041,7 @@ export default function AdminReservationDetailScreen() {
                   },
                   'Admin (fallback return action)',
                   id,
+                  auditId,
                 ),
               )}
             />
@@ -1110,7 +1115,7 @@ export default function AdminReservationDetailScreen() {
                   // lost now atomically increments the product's own lostUnits count
                   // (by this reservation's quantity) instead of leaving it to a
                   // separate, easily-forgotten manual edit on the product's own screen.
-                  batch => addStockAdjustmentToBatch(
+                  (batch, auditId) => addStockAdjustmentToBatch(
                     batch,
                     reservation.productId,
                     'lostUnits',
@@ -1118,6 +1123,7 @@ export default function AdminReservationDetailScreen() {
                     lostNotes.trim() ? `Reported lost/stolen — ${lostNotes.trim()}` : 'Reported lost/stolen',
                     lostStaffName.trim(),
                     id,
+                    auditId,
                   ),
                 );
               }}

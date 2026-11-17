@@ -11,6 +11,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/firebase';
 import { setSentryUser } from '@/lib/sentry';
+import { resetAdminIdentity } from '@/lib/adminAudit';
 
 type AccountType = 'btoc' | 'btob';
 type BtobStatus = 'pending_approval' | 'approved' | 'rejected';
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return onSnapshot(
       doc(db, 'admins', uid),
       snap => {
+        resetAdminIdentity(); // the audit identity (name / role) is re-read on next write
         const active = snap.exists() && snap.get('active') !== false;
         setIsAdmin(active);
         setAdminRole(active ? (snap.get('role') === 'staff' ? 'staff' : 'owner') : null);

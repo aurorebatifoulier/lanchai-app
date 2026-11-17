@@ -51,6 +51,7 @@ import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
 import { PaymentMethodChips } from '@/components/admin/PaymentMethodChips';
 import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 import { auth } from '@/lib/auth';
+import { addAudit } from '@/lib/adminAudit';
 import { useAuth } from '@/contexts/AuthContext';
 import { computeReturnCharges } from '@/functions/src/shared/returnCharges';
 import { StaffReturnPreview, staffReturnMessage } from '@/components/admin/StaffReturnPreview';
@@ -509,12 +510,18 @@ export default function ChecklistScreen() {
 
       const isHandover = type === 'handover';
       if (isHandover) {
-        await updateDoc(doc(db, 'reservations', id), {
+        const batch = writeBatch(db);
+        const auditId = await addAudit(batch, 'status.active',
+          { reservationId: id, orderId: reservation.orderId ?? null, productId: reservation.productId, renterId: reservation.renterId },
+          'Handover checklist');
+        batch.update(doc(db, 'reservations', id), {
           handoverChecklist: checklistData,
           status: 'active',
           ...earlyHandoverFields(reservation?.pickupAt),
+          lastAuditId: auditId,
           updatedAt: serverTimestamp(),
         });
+        await batch.commit();
       } else {
         // Batched with the product's stock-condition adjustment so the two can never
         // partially succeed — the item is excluded from available stock the instant
@@ -523,12 +530,21 @@ export default function ChecklistScreen() {
         // rated 'unusable' is a true write-off, so it goes straight to lostUnits
         // instead, mirroring "Report lost/stolen".
         const batch = writeBatch(db);
+        const auditId = await addAudit(batch, 'status.returned',
+          { reservationId: id, orderId: reservation.orderId ?? null, productId: reservation.productId, renterId: reservation.renterId },
+          [
+            'Return checklist',
+            chargeFields?.lateChargeAmount != null ? `late fee ${chargeFields.lateChargeAmount} ${depositCurrency}` : null,
+            chargeFields?.chargeAmount != null ? `damage ${chargeFields.chargeAmount} ${depositCurrency}` : null,
+            hasWaiver ? 'waiver' : null,
+          ].filter(Boolean).join(' · '));
         batch.update(doc(db, 'reservations', id), {
           returnChecklist: checklistData,
           status: 'returned',
           returnedAt: serverTimestamp(),
           stockReleasedAt: null,
           ...(chargeFields ?? {}),
+          lastAuditId: auditId,
           updatedAt: serverTimestamp(),
         });
         // Shared rule (shared/returnStock.ts): only the unusable units are written off.
@@ -536,7 +552,7 @@ export default function ChecklistScreen() {
           quantity: reservation.quantity,
           chargeSeverity: chargeFields?.chargeSeverity,
           chargeUnits: chargeFields?.chargeUnits,
-        }, confirmedByName.trim(), id);
+        }, confirmedByName.trim(), id, auditId);
         await batch.commit();
         // Mirrors the runAction pattern used everywhere else in this app — without this,
         // local `reservation` state stays stale (still 'active', no charge fields) right

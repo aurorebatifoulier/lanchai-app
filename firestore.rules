@@ -63,6 +63,20 @@ service cloud.firestore {
       return isAdmin() && adminDoc().data.get('role', 'owner') == 'owner';
     }
 
+    // Audit pairing: an admin write on a reservation / claim / incident / unit count must
+    // carry a NEW `lastAuditId` whose auditLog entry is written in the SAME batch, by the
+    // caller (lib/adminAudit.ts). Who / role / when / what is therefore always recorded.
+    function auditedWrite() {
+      let id = request.resource.data.get('lastAuditId', '');
+      return id is string && id != '' && id != resource.data.get('lastAuditId', '')
+        && existsAfter(/databases/$(database)/documents/auditLog/$(id))
+        && getAfter(/databases/$(database)/documents/auditLog/$(id)).data.byUid == request.auth.uid;
+    }
+    function unitCountsChange() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['inRepairUnits', 'lostUnits', 'pendingSettlementUnits']);
+    }
+
     // Staff counter writes on a reservation — an allow-list per action, with the status
     // transition pinned. NO fee, charge, waiver, deposit, settlement, price or release
     // field can ever be written by staff (the return goes through the submitReturn
@@ -147,9 +161,10 @@ service cloud.firestore {
     match /products/{productId} {
       allow read:   if isAuthed();
       allow create: if isShopOwner() && validProductCategories(request.resource.data);
-      allow update: if (isShopOwner() && validProductCategories(request.resource.data)) || (
+      allow update: if (isShopOwner() && validProductCategories(request.resource.data)
+                        && (!unitCountsChange() || auditedWrite())) || (
         // Staff: mark units in repair / back from repair — nothing else on the product.
-        isAdmin() &&
+        isAdmin() && auditedWrite() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inRepairUnits', 'updatedAt', 'lastAuditId']) &&
         request.resource.data.inRepairUnits is int && request.resource.data.inRepairUnits >= 0
       );
@@ -219,7 +234,7 @@ service cloud.firestore {
       // reservation (status → 'cancelled') — no other field may change, and the
       // values are pinned: cancelledBy must be 'renter' (no fake admin cancellation →
       // wrong email) and cancelledAt must be the server time of this write.
-      allow update: if isShopOwner() || staffReservationUpdate() || (
+      allow update: if ((isShopOwner() || staffReservationUpdate()) && auditedWrite()) || (
         isOwner(resource.data.renterId) &&
         request.resource.data.diff(resource.data)
           .affectedKeys()
@@ -722,7 +737,7 @@ service cloud.firestore {
                     && get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.productId == request.resource.data.productId;
 
       // Reply / status / outcome = owner decision (staff add notes in claims/{id}/notes).
-      allow update: if isShopOwner();
+      allow update: if isShopOwner() && auditedWrite();
 
       allow delete: if isShopOwner();
 
@@ -754,7 +769,7 @@ service cloud.firestore {
                     && request.resource.data.note is string
                     && request.resource.data.note.size() <= 2000
                     && request.resource.data.photos.size() <= 10;
-      allow update: if isShopOwner();
+      allow update: if isShopOwner() && auditedWrite();
       allow delete: if false;
 
       match /notes/{noteId} {
@@ -767,6 +782,23 @@ service cloud.firestore {
                       && (!('photos' in request.resource.data) || request.resource.data.photos.size() <= 10);
         allow update, delete: if false;
       }
+    }
+
+    // ── auditLog/{id} — who did what (admin roles) ───────────────────────────
+    // Append-only. { action, byUid, byName, byRole, at, reservationId?, orderId?,
+    // claimId?, incidentId?, productId?, renterId?, targetUid?, note? }. A client entry
+    // is always the caller's own, with the caller's real role and the server time; the
+    // reservation detail "History" card lists them (equality query on reservationId).
+    match /auditLog/{entryId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin()
+                    && request.resource.data.byUid == request.auth.uid
+                    && request.resource.data.byRole == adminDoc().data.get('role', 'owner')
+                    && request.resource.data.at == request.time
+                    && request.resource.data.action is string
+                    && request.resource.data.action.size() <= 60
+                    && (!('note' in request.resource.data) || request.resource.data.note.size() <= 500);
+      allow update, delete: if false;
     }
   }
 }

@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { requireRole } from './adminAuth';
+import { writeAudit } from './audit';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -32,7 +33,8 @@ export const finalizeRentalAgreement = onCall(
   // Firebase Auth + admin itself (a missing invoker binding shows as a bare 401/403).
   { region: REGION, secrets: [BREVO_API_KEY], memory: '512MiB', invoker: 'public' },
   async request => {
-    const adminUid = (await requireRole(request, 'staff')).uid;
+    const caller = await requireRole(request, 'staff');
+    const adminUid = caller.uid;
     const d = (request.data ?? {}) as { agreementId?: unknown; reservationIds?: unknown; method?: unknown; staffName?: unknown };
     const agreementId = typeof d.agreementId === 'string' ? d.agreementId : '';
     const method: AgreementMethod | null = d.method === 'signature' || d.method === 'paper' ? d.method : null;
@@ -92,6 +94,7 @@ export const finalizeRentalAgreement = onCall(
     }
     await batch.commit();
     logger.info('[agreement] finalized', { agreementId, orderId, method, items: ids.length, bytes: size });
+    await Promise.all(ids.map(rid => writeAudit(caller, { action: 'agreement.signed', reservationId: rid, orderId, note: `${method} · ${agreementId}` })));
 
     // Email the PDF (attachment — a Storage link would be a secret URL in an inbox).
     const orderLabel = orderId;
