@@ -58,14 +58,15 @@ export default function DiagnosticsSection() {
           />
         ) : (
           <View style={s.row}>
-            <PressScale style={[UI.btnSecondary, UI.btnCard, s.btn]} disabled={!sentryEnabled} onPress={() => { setResult(null); setConfirm('error'); }}>
+            <PressScale style={[UI.btnSecondary, UI.btnCard, s.btn, !sentryEnabled && UI.btnDisabled]} disabled={!sentryEnabled} onPress={() => { setResult(null); setConfirm('error'); }}>
               <Text style={[UI.btnSecondaryText, UI.btnCardText]}>Send test error</Text>
             </PressScale>
-            <PressScale style={[UI.btnSecondary, UI.btnCard, s.btn]} disabled={!sentryEnabled} onPress={() => { setResult(null); setConfirm('crash'); }}>
+            <PressScale style={[UI.btnSecondary, UI.btnCard, s.btn, !sentryEnabled && UI.btnDisabled]} disabled={!sentryEnabled} onPress={() => { setResult(null); setConfirm('crash'); }}>
               <Text style={[UI.btnSecondaryText, UI.btnCardText]}>Test crash</Text>
             </PressScale>
           </View>
         )}
+        {!sentryEnabled && !confirm && <Text style={UI.subtitle}>Available in an installed build, not in Expo Go.</Text>}
         {!!result && <Text style={UI.subtitle}>{result}</Text>}
       </View>
 
