@@ -12,7 +12,8 @@ import { countNewItemRequests } from '@/lib/itemRequests';
 import { fetchAdminToday, type TodayCounts } from '@/lib/adminToday';
 import TodayPanel from '@/components/admin/TodayPanel';
 import AdminCard from '@/components/admin/AdminCard';
-import { ADMIN_GROUPS, ADMIN_SECTIONS, type AdminBadge } from '@/constants/adminSections';
+import { ADMIN_GROUPS, sectionsFor, type AdminBadge } from '@/constants/adminSections';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Admin dashboard: "Today" panel, then the entries of constants/adminSections.ts group
 // by group (the ONE list — phase 2 will filter it on minRole).
@@ -20,6 +21,9 @@ import { ADMIN_GROUPS, ADMIN_SECTIONS, type AdminBadge } from '@/constants/admin
 export default function AdminHomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { adminRole } = useAuth();
+  const role = adminRole ?? 'staff';
+  const sections = sectionsFor(role);
   const [today, setToday] = useState<TodayCounts | null>(null);
   const [badges, setBadges] = useState<Partial<Record<AdminBadge, number>>>({});
 
@@ -37,15 +41,16 @@ export default function AdminHomeScreen() {
         })
         .catch(() => {});
 
-      // Verifications badge: pending business accounts + pending residency requests.
-      Promise.all([
+      // Verifications badge (owners only — staff can't open Verifications): pending
+      // business accounts + pending residency requests.
+      if (role === 'owner') Promise.all([
         getDocs(query(collection(db, 'users'), where('btobStatus', '==', 'pending_approval'))).then(x => x.size).catch(() => 0),
         getDocs(query(collection(db, 'residencyRequests'), where('status', '==', 'pending'))).then(x => x.size).catch(() => 0),
       ]).then(([btob, residency]) => setBadge('verifications', btob + residency));
 
       countNewItemRequests().then(n => setBadge('requests', n)).catch(() => {});
       return () => { alive = false; };
-    }, []),
+    }, [role]),
   );
 
   return (
@@ -62,10 +67,10 @@ export default function AdminHomeScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        <TodayPanel counts={today} />
+        <TodayPanel counts={today} role={role} />
 
         {ADMIN_GROUPS.map(g => {
-          const items = ADMIN_SECTIONS.filter(x => x.group === g.id);
+          const items = sections.filter(x => x.group === g.id);
           if (items.length === 0) return null;
           return (
             <View key={g.id}>

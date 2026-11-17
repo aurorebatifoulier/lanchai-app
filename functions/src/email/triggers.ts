@@ -1,8 +1,9 @@
 import * as admin from 'firebase-admin';
+import { requireRole } from '../adminAuth';
 import * as logger from 'firebase-functions/logger';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onCall } from 'firebase-functions/v2/https';
 import { BREVO_API_KEY, REGION } from './config';
 import { sendEmail, getEmailMode, type SendResult } from './send';
 import { claimEmail, finishEmail, type EmailField } from './claim';
@@ -424,10 +425,7 @@ export { idVerifiedEmail, idDeclinedEmail, residencyApprovedEmail, residencyReje
 export const sendTestEmails = onCall(
   { region: REGION, secrets: [BREVO_API_KEY] },
   async request => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Sign in first.');
-    const isAdmin = (await db().collection('admins').doc(uid).get()).exists;
-    if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.');
+    await requireRole(request, 'owner');
     const [shop, vat, mode, rates] = await Promise.all([getEmailShop(), getVatPercent(), getEmailMode(), getRates()]);
     const to = mode.redirectTo;
     const name = String(request.auth?.token.name ?? '').split(' ')[0] || 'there';

@@ -1,4 +1,6 @@
 import * as admin from 'firebase-admin';
+import { adminUids as activeAdminUids } from './adminAuth';
+import { requireRole } from './adminAuth';
 import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -27,10 +29,6 @@ const fail = (code: string, message: string, status: 'invalid-argument' | 'faile
   throw new HttpsError(status, message, { code });
 };
 
-async function requireAdmin(uid: string | undefined): Promise<void> {
-  if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
-  if (!(await db().collection('admins').doc(uid!).get()).exists) fail('admins-only', 'Admins only.', 'permission-denied');
-}
 
 const staffName = (token: Record<string, unknown> | undefined) => String(token?.name || token?.email || 'staff');
 
@@ -42,7 +40,7 @@ async function notify(uid: string, p: { title: string; body: string; icon: strin
 }
 
 async function notifyAdmins(p: { title: string; body: string; deepLink: string }) {
-  const admins = (await db().collection('admins').get()).docs.map(d => d.id);
+  const admins = await activeAdminUids({ role: 'owner' }); // residency = owner decision
   await Promise.all(admins.map(uid => notify(uid, { ...p, icon: 'alert', iconColor: 'amber' })));
 }
 
@@ -126,7 +124,7 @@ function parseValidUntil(v: unknown): number | null {
 // { uid, decision: 'approve', validUntil?: 'YYYY-MM-DD' }
 // { uid, decision: 'reject', reason, text?, fixable? (only for 'other') }
 export const reviewResidency = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  await requireAdmin(request.auth?.uid);
+  await requireRole(request, 'owner');
   const d = (request.data ?? {}) as {
     uid?: unknown; decision?: unknown; validUntil?: unknown; reason?: unknown; text?: unknown; fixable?: unknown;
   };
@@ -232,7 +230,7 @@ export const withdrawResidency = onCall({ region: REGION }, async request => {
 // { uid, action: 'ask' }     → stays resident for LEGACY_RESIDENT_GRACE_DAYS, asked to verify
 // { uid, action: 'tourist' } → back to tourist now
 export const adminLegacyResident = onCall({ region: REGION }, async request => {
-  await requireAdmin(request.auth?.uid);
+  await requireRole(request, 'owner');
   const d = (request.data ?? {}) as { uid?: unknown; action?: unknown };
   const uid = typeof d.uid === 'string' ? d.uid : '';
   if (!uid) fail('invalid-request', 'Missing renter.', 'invalid-argument');

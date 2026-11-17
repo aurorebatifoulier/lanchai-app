@@ -7,6 +7,7 @@ import { fns, call, rejects, UID, seedBookingWorld } from './helpers';
 const ADMIN_ONLY = [
   'finalizeRentalAgreement', 'adminGrantPromo', 'adminRevokeGrant', 'recordIdCheck', 'adminIdentityAction',
   'adminRenterProfile', 'reviewResidency', 'adminLegacyResident', 'sendTestEmails',
+  'teamList', 'teamAddMember', 'teamUpdateMember',
 ];
 const PUBLIC = ['requestPasswordReset']; // no account by design (always { ok: true }, rate-limited)
 
@@ -22,7 +23,8 @@ test('the callable list is what this suite expects (a new callable must be added
     'applyInviteCode', 'createReservations', 'deleteMyAccount', 'deleteMyIdentityDocument', 'evaluateMyCodes',
     'finalizeRentalAgreement', 'getMyInviteCode', 'recordIdCheck', 'requestEmailVerification', 'requestPasswordReset',
     'resubmitBusinessApplication', 'reviewResidency', 'savePromoCode', 'sendTestEmails', 'sendWelcomeEmail',
-    'submitIdentityDocument', 'submitResidencyRequest', 'validatePromoCode', 'withdrawResidency',
+    'submitIdentityDocument', 'submitResidencyRequest', 'teamAddMember', 'teamList', 'teamUpdateMember',
+    'validatePromoCode', 'withdrawResidency',
   ]);
 });
 

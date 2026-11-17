@@ -8,6 +8,7 @@ import { UI } from '@/components/account/ui';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import type { TodayCounts } from '@/lib/adminToday';
+import { useExchangeRate, useThbRate } from '@/lib/exchangeRate';
 
 // Admin dashboard "Today": 4 tappable counters + "Scan a booking QR".
 // `counts` null = still loading / unavailable → "—" (never a fake 0).
@@ -28,10 +29,15 @@ function Counter({ label, value, detail, danger, onPress }: {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-export default function TodayPanel({ counts }: { counts: TodayCounts | null }) {
+// Staff: "To check" = open claims only (ID reviews are an owner decision), and the
+// exchange rates read-only (they collect payments at the counter).
+export default function TodayPanel({ counts, role = 'owner' }: { counts: TodayCounts | null; role?: 'owner' | 'staff' }) {
   const router = useRouter();
+  const usd = useExchangeRate();
+  const thb = useThbRate();
+  const staff = role === 'staff';
   const today = () => router.push('/admin/rentals?tab=today');
-  const ids = counts?.idChecks ?? 0;
+  const ids = staff ? 0 : counts?.idChecks ?? 0;
   const claims = counts?.claims ?? 0;
   const toCheckDetail = [ids > 0 && plural(ids, 'ID', 'IDs'), claims > 0 && plural(claims, 'claim', 'claims')]
     .filter(Boolean).join(' · ') || undefined;
@@ -45,11 +51,17 @@ export default function TodayPanel({ counts }: { counts: TodayCounts | null }) {
       </View>
       <View style={s.grid}>
         <Counter label="Late returns" value={counts?.late ?? null} danger onPress={today} />
-        <Counter label="To check" value={counts?.toCheck ?? null} detail={toCheckDetail}
-          onPress={() => router.push(ids === 0 && claims > 0
+        <Counter label="To check" value={staff ? counts?.claims ?? null : counts?.toCheck ?? null} detail={toCheckDetail}
+          onPress={() => router.push(staff || (ids === 0 && claims > 0)
             ? '/admin/claims'
             : '/admin/verifications?tab=identity')} />
       </View>
+      {(usd != null || thb != null) && (
+        <Text style={s.rates}>
+          {[usd != null && `1 USD = ${usd.toLocaleString('en-US')} LAK`, thb != null && `1 THB = ${thb.toLocaleString('en-US')} LAK`]
+            .filter(Boolean).join(' · ')}
+        </Text>
+      )}
       <PressScale style={[UI.btnPrimary, s.scan]} onPress={() => router.push('/admin/scan')}
         accessibilityRole="button" accessibilityLabel="Scan a booking QR">
         <Feather name="maximize" size={18} color={SHADES.carbon} />
@@ -69,4 +81,5 @@ const s = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600', color: SHADES.carbon, marginTop: 2 },
   detail: { fontSize: 12, fontWeight: '500', color: SHADES.carbonMuted, marginTop: 2 },
   scan: { marginTop: 4 },
+  rates: { fontSize: 13, fontWeight: '600', color: SHADES.carbonMuted, textAlign: 'center' },
 });

@@ -45,11 +45,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Server-side exists() check — does not require the admins collection
-    // itself to grant any client read access.
+    // ── Admin roles (functions/src/adminAuth.ts applies the SAME defaults) ──
+    // admins/{uid} = { role: 'owner' | 'staff', active }. Missing role = owner, missing
+    // active = true (admins created before roles keep every right). A deactivated
+    // member (active == false) fails isAdmin() on the very next request.
+    // isAdmin()     = an ACTIVE admin, any role (staff or owner).
+    // isShopOwner() = an ACTIVE owner. (isOwner(uid) below is the doc-owner helper.)
+    function adminDoc() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
     function isAdmin() {
-      return isAuthed() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isAuthed()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && adminDoc().data.get('active', true) == true;
+    }
+    function isShopOwner() {
+      return isAdmin() && adminDoc().data.get('role', 'owner') == 'owner';
     }
 
     function isOwner(uid) {
@@ -97,7 +108,7 @@ service cloud.firestore {
     // inbox). No one can read another uid's admin doc or list the
     // collection, so admins can't be enumerated by a client.
     match /admins/{uid} {
-      allow read:  if isOwner(uid);
+      allow read:  if isOwner(uid) || isShopOwner();
       allow write: if false;
     }
 
@@ -107,9 +118,9 @@ service cloud.firestore {
     // admin/back-office only, with a valid `categories` list (validProductCategories).
     match /products/{productId} {
       allow read:   if isAuthed();
-      allow create: if isAdmin() && validProductCategories(request.resource.data);
-      allow update: if isAdmin() && validProductCategories(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if isShopOwner() && validProductCategories(request.resource.data);
+      allow update: if isShopOwner() && validProductCategories(request.resource.data);
+      allow delete: if isShopOwner();
     }
 
     // ── collections/{id} (Home "Got plans?") ─────────────────────────────
@@ -117,7 +128,7 @@ service cloud.firestore {
     // where('published','==',true)); drafts are admin-only. Admin-managed.
     match /collections/{collectionId} {
       allow read:  if (isAuthed() && resource.data.published == true) || isAdmin();
-      allow write: if isAdmin();
+      allow write: if isShopOwner();
     }
 
     // ── homeSlides/{id} (Home hero carousel + mid-page banner) ───────────
@@ -125,7 +136,7 @@ service cloud.firestore {
     // app queries where('published','==',true)); drafts are admin-only.
     match /homeSlides/{slideId} {
       allow read:  if (isAuthed() && resource.data.published == true) || isAdmin();
-      allow write: if isAdmin();
+      allow write: if isShopOwner();
     }
 
     // ── stockAdjustments ─────────────────────────────────────────────────
@@ -137,7 +148,7 @@ service cloud.firestore {
     // never be edited after the fact.
     match /products/{productId}/stockAdjustments/{adjustmentId} {
       allow read:           if isAdmin();
-      allow create:         if isAdmin();
+      allow create:         if isShopOwner();
       allow update, delete: if false;
     }
 
@@ -243,7 +254,13 @@ service cloud.firestore {
         (!('accountType' in request.resource.data) || request.resource.data.accountType in ['btoc', 'btob']) &&
         (!('btobStatus' in request.resource.data) || request.resource.data.btobStatus == 'pending_approval');
 
-      allow update: if isAdmin() || (
+      allow update: if isShopOwner() || (
+        // Staff: only the in-person phone verification at pick-up (names go through
+        // the adminRenterProfile callable).
+        isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['phoneVerified', 'updatedAt']) &&
+        request.resource.data.phoneVerified == true
+      ) || (
         isAccountOwner(userId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'firstName', 'lastName', 'displayName', 'phoneNumber', 'phone', 'phoneVerified',
@@ -307,7 +324,7 @@ service cloud.firestore {
       // the Cloud Functions (applyLoyaltyPoints, applyReviewReward) via the Admin SDK;
       // the owner (and admins) can read it. No client can ever create an entry.
       match /loyaltyHistory/{entryId} {
-        allow read:  if isOwner(userId) || isAdmin();
+        allow read:  if isOwner(userId) || isShopOwner();
         allow write: if false;
       }
     }
@@ -427,7 +444,7 @@ service cloud.firestore {
     // Written ONLY by Cloud Functions (submitResidencyRequest, reviewResidency,
     // withdrawResidency, residencyDaily). The renter reads their own; admins read all.
     match /residencyRequests/{uid} {
-      allow read:  if isOwner(uid) || isAdmin();
+      allow read:  if isOwner(uid) || isShopOwner();
       allow write: if false;
     }
 
@@ -435,7 +452,7 @@ service cloud.firestore {
     // Internal record (uid, document type, file count, reason) — never paths or content.
     // Written ONLY by Cloud Functions (retention.ts); admins read.
     match /docDeletionLog/{entryId} {
-      allow read:  if isAdmin();
+      allow read:  if isShopOwner();
       allow write: if false;
     }
 
@@ -447,7 +464,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /referrals/{referredUid} {
-      allow read:  if isAdmin();
+      allow read:  if isShopOwner();
       allow write: if false;
     }
 
@@ -458,18 +475,18 @@ service cloud.firestore {
     // deleted only while unused; afterwards it is deactivated (active: false).
     // promoAttempts/{uid} (rate limit) has no rule → denied by the catch-all.
     match /promoCodes/{code} {
-      allow read:   if isAdmin();
-      allow create: if isAdmin()
+      allow read:   if isShopOwner();
+      allow create: if isShopOwner()
                     && code.matches('^[A-Z0-9]{4,20}$')
                     && request.resource.data.code == code
                     && request.resource.data.usedCount == 0
                     && request.resource.data.discountGivenLak == 0;
-      allow update: if isAdmin()
+      allow update: if isShopOwner()
                     && !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['code', 'usedCount', 'discountGivenLak']);
-      allow delete: if isAdmin() && resource.data.usedCount == 0;
+      allow delete: if isShopOwner() && resource.data.usedCount == 0;
       match /uses/{uid} {
-        allow read:  if isAdmin();
+        allow read:  if isShopOwner();
         allow write: if false;
       }
     }
@@ -512,7 +529,7 @@ service cloud.firestore {
     // Written ONLY by Cloud Functions (functions/src/jobHealth.ts trackJob); shown to
     // staff in Admin → Shop settings → Diagnostics.
     match /jobHealth/{jobName} {
-      allow read:  if isAdmin();
+      allow read:  if isShopOwner();
       allow write: if false;
     }
 
@@ -526,7 +543,7 @@ service cloud.firestore {
     // savePromoCode, applyInviteCode, createReservations, restoreCancelledPromo,
     // promoWalletDaily). The renter reads their own; admins read all.
     match /promoGrants/{grantId} {
-      allow read:  if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow read:  if isShopOwner() || (isAuthed() && resource.data.uid == request.auth.uid);
       allow write: if false;
     }
 
@@ -550,8 +567,9 @@ service cloud.firestore {
       // config/residency) is read by the legal screens, also before sign-in.
       allow read:  if docId in ['features', 'legalPublic']
                     || (isAuthed() && !(docId in ['latePolicy', 'emailSettings', 'emailHealth', 'residency']))
-                    || isAdmin();
-      allow write: if isAdmin();
+                    || (isAdmin() && docId == 'latePolicy') // staff: late-fee preview at return
+                    || isShopOwner();
+      allow write: if isShopOwner();
     }
 
     // ── productLocks/{productId} ─────────────────────────────────────────
@@ -595,7 +613,7 @@ service cloud.firestore {
     // "allow write" covers create + update + delete in Firestore rules.
     match /broadcasts/{id} {
       allow read:  if isAuthed();
-      allow write: if isAdmin();
+      allow write: if isShopOwner();
     }
 
     // ── adminTasks ───────────────────────────────────────────────────────
@@ -643,9 +661,9 @@ service cloud.firestore {
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.productId == productId
                     && get(/databases/$(database)/documents/reservations/$(reservationId)).data.status == 'returned';
 
-      allow update: if isAdmin();
+      allow update: if isShopOwner();
 
-      allow delete: if isAdmin();
+      allow delete: if isShopOwner();
     }
 
     // ── claims ──────────────────────────────────────────────────────────────
@@ -669,9 +687,10 @@ service cloud.firestore {
                     && get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.renterId == request.auth.uid
                     && get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.productId == request.resource.data.productId;
 
-      allow update: if isAdmin();
+      // Reply / status / outcome = owner decision (staff add notes in claims/{id}/notes).
+      allow update: if isShopOwner();
 
-      allow delete: if isAdmin();
+      allow delete: if isShopOwner();
     }
 
   }

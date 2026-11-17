@@ -22,7 +22,11 @@ export const COVERAGE_DIR = path.join(ROOT, 'tests/.coverage');
 
 export let env: RulesTestEnvironment;
 
-export const UID = { A: 'renterA', B: 'renterB', BIZ: 'bizC', ADMIN: 'admin1', GUEST: 'guest1' } as const;
+export const UID = {
+  A: 'renterA', B: 'renterB', BIZ: 'bizC', ADMIN: 'admin1', GUEST: 'guest1',
+  // Admin roles: ADMIN = legacy doc (no role → owner), OWNER explicit, STAFF, STAFF_OFF deactivated.
+  OWNER: 'owner1', STAFF: 'staff1', STAFF_OFF: 'staff2',
+} as const;
 const account = { firebase: { sign_in_provider: 'password' as const } };
 
 export const as = {
@@ -32,6 +36,9 @@ export const as = {
   B: (): RulesTestContext => env.authenticatedContext(UID.B, { ...account, email: 'b@example.com' }),
   biz: (): RulesTestContext => env.authenticatedContext(UID.BIZ, account),
   admin: (): RulesTestContext => env.authenticatedContext(UID.ADMIN, account),
+  owner: (): RulesTestContext => env.authenticatedContext(UID.OWNER, account),
+  staff: (): RulesTestContext => env.authenticatedContext(UID.STAFF, account),
+  staffOff: (): RulesTestContext => env.authenticatedContext(UID.STAFF_OFF, account),
 };
 export type Persona = keyof typeof as;
 
@@ -57,6 +64,9 @@ export const T0 = Timestamp.fromMillis(Date.UTC(2026, 10, 14, 3));
 
 const SEED: Record<string, Record<string, unknown>> = {
   [`admins/${UID.ADMIN}`]: { since: T0 },
+  [`admins/${UID.OWNER}`]: { role: 'owner', active: true, name: 'Olga' },
+  [`admins/${UID.STAFF}`]: { role: 'staff', active: true, name: 'Sam' },
+  [`admins/${UID.STAFF_OFF}`]: { role: 'staff', active: false, name: 'Old staff' },
   [`users/${UID.A}`]: { firstName: 'Ann', lastName: 'A', phone: '+8562000000001', accountType: 'btoc', customerType: 'tourist', loyaltyPoints: 150, loyaltyTier: 'silver', coupons: [] },
   [`users/${UID.B}`]: { firstName: 'Bob', lastName: 'B', accountType: 'btoc', customerType: 'resident', loyaltyPoints: 10, loyaltyTier: 'bronze', idCheckedVersion: 1, idDocVersion: 1 },
   [`users/${UID.BIZ}`]: { firstName: 'Cy', accountType: 'btob', btobStatus: 'approved', customerType: 'business', btobDocumentUrl: 'https://x/doc.jpg' },

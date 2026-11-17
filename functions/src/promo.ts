@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { requireRole } from './adminAuth';
 import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -34,11 +35,6 @@ const promoError = (error: PromoError, minLak?: number) =>
   new HttpsError('failed-precondition', promoErrorText(error, minLak), { code: 'promo-invalid', promoError: error, minLak });
 const fail = (error: PromoError, minLak?: number): never => { throw promoError(error, minLak); };
 
-async function requireAdmin(uid: string | undefined): Promise<string> {
-  if (!uid) throw new HttpsError('unauthenticated', 'Please sign in again.', { code: 'unauthenticated' });
-  if (!(await db().collection('admins').doc(uid).get()).exists) throw new HttpsError('permission-denied', 'Admins only.', { code: 'admins-only' });
-  return uid;
-}
 
 const grantRefOf = (code: string, uid: string) => db().collection('promoGrants').doc(grantId(code, uid));
 const tsMs = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null);
@@ -239,7 +235,7 @@ export const savePromoCode = onCall({ region: REGION }, async request => {
 
 // { code, uids: string[], expiresAtMs?: number|null } → { granted, skipped } — admin only.
 export const adminGrantPromo = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  await requireAdmin(request.auth?.uid);
+  await requireRole(request, 'owner');
   const d = (request.data ?? {}) as { code?: unknown; uids?: unknown; expiresAtMs?: unknown };
   const code = normalizePromoCode(d.code);
   const uids = Array.isArray(d.uids) ? [...new Set(d.uids.filter((u): u is string => typeof u === 'string' && /^[A-Za-z0-9]{6,128}$/.test(u)))].slice(0, 50) : [];
@@ -263,7 +259,7 @@ export const adminGrantPromo = onCall({ region: REGION, secrets: [BREVO_API_KEY]
 
 // { code, uid } → { ok } — admin only; never a grant already used.
 export const adminRevokeGrant = onCall({ region: REGION }, async request => {
-  await requireAdmin(request.auth?.uid);
+  await requireRole(request, 'owner');
   const d = (request.data ?? {}) as { code?: unknown; uid?: unknown };
   const code = normalizePromoCode(d.code);
   const uid = typeof d.uid === 'string' ? d.uid : '';

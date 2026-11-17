@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { adminUids as activeAdminUids } from '../adminAuth';
 import { FieldValue } from 'firebase-admin/firestore';
 import * as logger from 'firebase-functions/logger';
 import {
@@ -133,9 +134,9 @@ async function alertAdminsAuthFailure(): Promise<void> {
       return true;
     });
     if (!shouldAlert) return;
-    const admins = await db.collection('admins').get();
-    await Promise.all(admins.docs.map(a =>
-      db.collection('notifications').doc(a.id).collection('items').add({
+    const owners = await activeAdminUids({ role: 'owner' });
+    await Promise.all(owners.map(ownerUid =>
+      db.collection('notifications').doc(ownerUid).collection('items').add({
         type: 'admin',
         title: 'Email sending failed',
         body: 'Email sending failed: Brevo API key expired or invalid. Update the BREVO_API_KEY secret and redeploy the functions.',

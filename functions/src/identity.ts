@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { requireRole } from './adminAuth';
 import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -105,13 +106,6 @@ export async function syncFirstRentalIdFlags(uid: string): Promise<void> {
   if (n > 0) await batch.commit();
 }
 
-async function requireAdmin(uid: string | undefined): Promise<string> {
-  if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
-  const isAdmin = (await admin.firestore().collection('admins').doc(uid!).get()).exists;
-  if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.', { code: 'admins-only' });
-  return uid!;
-}
-
 const staffName = (token: Record<string, unknown> | undefined) =>
   String(token?.name || token?.email || 'staff');
 
@@ -134,7 +128,7 @@ export const submitIdentityDocument = onCall({ region: REGION }, async request =
 // Ties the check to the CURRENT document version (idCheckedVersion); idCheckedAt/By
 // stay as history. Clears firstRentalIdCheck on the renter's upcoming pick-ups.
 export const recordIdCheck = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  const adminUid = await requireAdmin(request.auth?.uid);
+  const adminUid = (await requireRole(request, 'staff')).uid;
   const d = (request.data ?? {}) as {
     renterId?: unknown; matchesPerson?: unknown; nameMatches?: unknown;
     counterPhoto?: { docType?: unknown; files?: unknown };
@@ -179,10 +173,11 @@ export const recordIdCheck = onCall({ region: REGION, secrets: [BREVO_API_KEY] }
 // { renterId, action: 'set', docType, files } | { renterId, action: 'reject', reason, text? }
 // A decline blocks new bookings until a new document is sent (createReservations).
 export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
-  const adminUid = await requireAdmin(request.auth?.uid);
+  // Counter photo (set): staff. Declining an ID blocks the renter's bookings: owner only.
   const d = (request.data ?? {}) as {
     renterId?: unknown; action?: unknown; docType?: unknown; files?: unknown; reason?: unknown; text?: unknown;
   };
+  const adminUid = (await requireRole(request, d.action === 'reject' ? 'owner' : 'staff')).uid;
   const renterId = typeof d.renterId === 'string' ? d.renterId : '';
   if (!renterId) fail('invalid-request', 'Missing renter.', 'invalid-argument');
   const db = admin.firestore();
@@ -231,7 +226,7 @@ export const adminIdentityAction = onCall({ region: REGION, secrets: [BREVO_API_
 //   nameEditedAt/By (internal), Auth displayName, and renterName on upcoming pick-ups.
 // Renters can't change their own name once an ID has been checked (firestore.rules).
 export const adminRenterProfile = onCall({ region: REGION }, async request => {
-  const adminUid = await requireAdmin(request.auth?.uid);
+  const adminUid = (await requireRole(request, 'staff')).uid;
   const d = (request.data ?? {}) as { renterId?: unknown; action?: unknown; firstName?: unknown; lastName?: unknown };
   const renterId = typeof d.renterId === 'string' ? d.renterId : '';
   if (!renterId) fail('invalid-request', 'Missing renter.', 'invalid-argument');

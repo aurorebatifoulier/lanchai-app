@@ -1774,6 +1774,33 @@ a snapshot indefinitely).
   (`/admin/calendar`, `/admin/reservations`, `/admin/home-slides`, …) — keep the
   `embedded` default false when editing those screens.
 
+- **Admin roles (phase 2, 2026-11-17) — owner vs staff, enforced SERVER-SIDE.**
+  `admins/{uid}` = `{ role: 'owner' | 'staff', active, name, email, addedAt/By }`; missing
+  role = **owner**, missing active = **true** (pre-roles admins kept every right, no data
+  migration). Same defaults in the 3 places: `firestore.rules` (`isAdmin()` = ACTIVE admin
+  any role, `isShopOwner()` = active owner — `isOwner(uid)` stays the doc-owner helper),
+  `storage.rules` (same two helpers via `firestore.get`), and
+  `functions/src/adminAuth.ts` (`requireRole(request, 'staff' | 'owner')` in EVERY admin
+  callable — details.code `admins-only` / `owner-only`; `adminUids({ role? })` for alert
+  fan-outs = active admins only; `isActiveOwner()` = booking exemptions in
+  `createReservations` / `syncBookingHold`, staff book like renters). A deactivated member
+  fails every rule / callable on the next request. `admins` is never client-writable:
+  Admin → Team (`app/admin/team.tsx`, `lib/team.ts`) uses the owner-only callables
+  `teamList` / `teamAddMember` (existing account, by email) / `teamUpdateMember` (role,
+  active, name) in `functions/src/team.ts` — always ≥ 1 active owner, no self-demotion.
+  App: `useAuth()` → `adminRole`, `isShopOwner`; `constants/adminSections.ts` →
+  `sectionsFor(role)` (dashboard) and `ADMIN_ROUTE_ROLES` (EVERY admin route; missing =
+  owner) used by the guard in `app/admin/_layout.tsx` (staff on an owner route → `/admin`);
+  `tests/unit/adminSections.test.ts` fails while a file under `app/admin` isn't listed.
+  Staff = rentals (pick-up, return, checklist, photos, signature, no-show, cancel with a
+  reason), ID check at pick-up (photo + record, never decline), claims (notes / photos,
+  no decision), stock (view, in repair), products read-only, chat + saved replies, item
+  requests, exchange rate read-only (Today panel). Everything else — fee reduction /
+  waiver, settlement, catalogue, packs, app content, promo, loyalty, broadcast, reviews,
+  shop settings, tools, team, verifications, totals — is owner-only. Server-side audit
+  entries: `functions/src/audit.ts` (`auditLog`). Rules tests:
+  `tests/rules/firestore.roles.test.ts` (+ storage), functions: `functions/test/roles.test.ts`.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

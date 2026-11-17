@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { adminUids as activeAdminUids, isActiveOwner } from './adminAuth';
 import * as logger from 'firebase-functions/logger';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
@@ -66,6 +67,9 @@ export * from './itemRequests';
 // Pack price removed from the rest of a pack when one of its items is cancelled.
 export * from './packs';
 
+// Admin roles: Team screen callables (owner only — functions/src/team.ts).
+export * from './team';
+
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -86,8 +90,7 @@ export const lateReturnAlerts = onSchedule(
       .where('status', '==', 'active')
       .get();
 
-    const adminSnap = await db.collection('admins').get();
-    const adminUids = adminSnap.docs.map(d => d.id);
+    const adminUids = await activeAdminUids();
     const graceHours = await getGraceHours();
 
     // Late emails go out ONE per order and run (planLateEmails, lateAlerts.ts) — the
@@ -258,10 +261,10 @@ export const syncBookingHold = onDocumentWritten(
     const [graceHours, snap, adminDoc] = await Promise.all([
       getGraceHours(),
       db.collection('reservations').where('renterId', '==', renterId).get(),
-      db.collection('admins').doc(renterId).get(),
+      isActiveOwner(renterId),
     ]);
-    // Admins are never blocked from booking.
-    if (adminDoc.exists) {
+    // Owners are never blocked from booking (staff book like renters).
+    if (adminDoc) {
       await holdRef.delete().catch(() => {});
       return;
     }
@@ -503,7 +506,7 @@ async function sendFirstRentalIdAlerts(docs: admin.firestore.QueryDocumentSnapsh
     pending.set(key, g);
   }
   if (pending.size === 0) return;
-  const adminUids = (await db.collection('admins').get()).docs.map(a => a.id);
+  const adminUids = await activeAdminUids();
   for (const { docs: group, marker } of pending.values()) {
     const first = group[0];
     const when = `${marker === 'idCheckAlertMorningAt' ? 'today' : 'tomorrow'} at ${vteTime(first.get('pickupAt').toMillis())}`;
@@ -541,7 +544,7 @@ export const missedPickupAlerts = onSchedule(
       const key = d.get('orderId') ?? d.id;
       groups.set(key, [...(groups.get(key) ?? []), d]);
     }
-    const adminUids = (await db.collection('admins').get()).docs.map(a => a.id);
+    const adminUids = await activeAdminUids();
     for (const [orderId, docs] of groups) {
       const first = docs[0];
       const names = docs.map(d => d.get('productName') ?? 'item').join(', ');
@@ -878,8 +881,7 @@ export const notifyBtobSignup = onDocumentWritten(
     if (before?.accountType === 'btob') return; // already notified on the original signup
     if (after.accountType !== 'btob') return;    // not a BtoB signup
 
-    const adminSnap = await db.collection('admins').get();
-    const adminUids = adminSnap.docs.map(d => d.id);
+    const adminUids = await activeAdminUids({ role: 'owner' }); // owners approve business accounts
     if (adminUids.length === 0) return;
 
     await sendAdminNotifs(adminUids, {
@@ -903,8 +905,7 @@ export const notifyClaimFiled = onDocumentWritten(
   async event => {
     if (!event.data?.after.exists || event.data.before.exists) return; // creation only
 
-    const adminSnap = await db.collection('admins').get();
-    const adminUids = adminSnap.docs.map(d => d.id);
+    const adminUids = await activeAdminUids();
     if (adminUids.length === 0) return;
 
     await sendAdminNotifs(adminUids, {

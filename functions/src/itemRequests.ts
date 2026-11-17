@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { adminUids as activeAdminUids } from './adminAuth';
 import * as logger from 'firebase-functions/logger';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -20,7 +21,7 @@ export const onItemRequestCreated = onDocumentCreated(
   async event => {
     const r = event.data?.data();
     if (!r) return;
-    const admins = (await db().collection('admins').get()).docs.map(d => d.id);
+    const admins = await activeAdminUids();
     const who = String(r.renterName || 'A renter');
     await Promise.all(admins.map(uid => db().collection('notifications').doc(uid).collection('items').add({
       type: 'rental', icon: 'package', iconColor: 'amber',

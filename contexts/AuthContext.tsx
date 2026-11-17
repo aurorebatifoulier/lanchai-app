@@ -24,7 +24,12 @@ interface AuthContextValue {
   /** Signed in with a real account (email / Google) — not a guest. */
   hasAccount: boolean;
   loading: boolean;
+  /** An ACTIVE admin (staff or owner) — admins/{uid} exists and active != false. */
   isAdmin: boolean;
+  /** Admin role (missing role = owner, like firestore.rules); null when not an admin. */
+  adminRole: AdminRole | null;
+  /** Active owner: every admin right (staff = counter operations only). */
+  isShopOwner: boolean;
   adminLoading: boolean;
   // BtoB account gate — accountType/btobStatus undefined = existing/BtoC user, never
   // gated. Reactive (live onSnapshot, not a one-shot fetch) so an admin's approval
@@ -48,6 +53,8 @@ export function isProfileComplete(data: Record<string, unknown> | undefined): bo
   return !!phone && !!name;
 }
 
+export type AdminRole = 'owner' | 'staff';
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -58,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [anon, setAnon] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
   // adminLoading stays true from the moment a user is confirmed until the
   // admins/{uid} snapshot resolves. Setting it in the same synchronous
   // onAuthStateChanged callback as setUser ensures the gate never sees
@@ -121,12 +129,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!uid || anon) {
       setIsAdmin(false);
+      setAdminRole(null);
       return;
     }
+    // Live: a role change or a deactivation (Admin → Team) applies at once.
     return onSnapshot(
       doc(db, 'admins', uid),
-      snap => { setIsAdmin(snap.exists()); setAdminLoading(false); },
-      () => { setIsAdmin(false); setAdminLoading(false); },
+      snap => {
+        const active = snap.exists() && snap.get('active') !== false;
+        setIsAdmin(active);
+        setAdminRole(active ? (snap.get('role') === 'staff' ? 'staff' : 'owner') : null);
+        setAdminLoading(false);
+      },
+      () => { setIsAdmin(false); setAdminRole(null); setAdminLoading(false); },
     );
   }, [uid, anon]);
 
@@ -163,6 +178,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasAccount: !!user && !isGuest,
     loading,
     isAdmin,
+    adminRole,
+    isShopOwner: adminRole === 'owner',
     adminLoading,
     accountType,
     btobStatus,

@@ -150,3 +150,23 @@ describe('everything else', () => {
     await no(B, put('A', `uploads/${UID.A}/x.jpg`));
   });
 });
+
+describe('admin roles (owner vs staff vs deactivated)', () => {
+  test('catalogue / app-content photos: owner only', async () => {
+    await ok('st:products/{productId}/{imageId}', put('owner', 'products/p1/o1.jpg'));
+    await no('st:products/{productId}/{imageId}', put('staff', 'products/p1/s1.jpg'));
+    await no('st:homeSlides/{slideId}/{fileName}', put('staff', 'homeSlides/h1/s1.jpg'));
+    await no('st:collections/{collectionId}/{fileName}', put('staff', 'collections/k1/s1.jpg'));
+    await no('st:onboarding/{slot}/{fileName}', put('staff', 'onboarding/s1p1/s1.jpg'));
+  });
+  test('business documents: owner reads, staff does not', async () => {
+    await ok('st:businessDocs/{uid}/{fileName}', read('owner', `businessDocs/${UID.BIZ}/1.jpg`));
+    await no('st:businessDocs/{uid}/{fileName}', read('staff', `businessDocs/${UID.BIZ}/1.jpg`));
+  });
+  test('counter evidence: staff read, deactivated staff refused', async () => {
+    await ok('st:reservations/{reservationId}/{checklistType}/{fileName}', read('staff', 'reservations/rA/handover/1.jpg'));
+    await no('st:reservations/{reservationId}/{checklistType}/{fileName}', read('staffOff', 'reservations/rA/handover/1.jpg'));
+    await ok('st:idDocs/{uid}/{fileName}', read('staff', `idDocs/${UID.A}/id_1_1.jpg`));
+    await no('st:idDocs/{uid}/{fileName}', read('staffOff', `idDocs/${UID.A}/id_1_1.jpg`));
+  });
+});

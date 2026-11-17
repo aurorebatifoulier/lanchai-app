@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { requireRole } from './adminAuth';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -25,20 +26,13 @@ const fail = (code: string, message: string, status: 'invalid-argument' | 'faile
   throw new HttpsError(status, message, { code });
 };
 
-async function requireAdmin(uid: string | undefined): Promise<string> {
-  if (!uid) fail('unauthenticated', 'Please sign in again.', 'unauthenticated');
-  const isAdmin = (await admin.firestore().collection('admins').doc(uid!).get()).exists;
-  if (!isAdmin) throw new HttpsError('permission-denied', 'Admins only.', { code: 'admins-only' });
-  return uid!;
-}
-
 // { agreementId, reservationIds, method, staffName? } → { agreementId, signedAtMs, emailed }
 export const finalizeRentalAgreement = onCall(
   // invoker 'public': Cloud Run lets every request reach the function, which then checks
   // Firebase Auth + admin itself (a missing invoker binding shows as a bare 401/403).
   { region: REGION, secrets: [BREVO_API_KEY], memory: '512MiB', invoker: 'public' },
   async request => {
-    const adminUid = await requireAdmin(request.auth?.uid);
+    const adminUid = (await requireRole(request, 'staff')).uid;
     const d = (request.data ?? {}) as { agreementId?: unknown; reservationIds?: unknown; method?: unknown; staffName?: unknown };
     const agreementId = typeof d.agreementId === 'string' ? d.agreementId : '';
     const method: AgreementMethod | null = d.method === 'signature' || d.method === 'paper' ? d.method : null;

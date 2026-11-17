@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { adminUids as activeAdminUids } from './adminAuth';
 import * as logger from 'firebase-functions/logger';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -33,7 +34,7 @@ async function notifyOnMyWay(renterId: string, reservationId: string): Promise<v
     return { renterName: String(r.renterName ?? 'A renter'), productName: String(r.productName ?? 'their rental') };
   });
   if (!claimed) return;
-  const admins = (await db().collection('admins').get()).docs.map(d => d.id);
+  const admins = await activeAdminUids();
   await Promise.all(admins.map(uid => db().collection('notifications').doc(uid).collection('items').add({
     type: 'rental', icon: 'navigation', iconColor: 'amber',
     title: `${claimed.renterName} is on the way`,

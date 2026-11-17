@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { adminUids as activeAdminUids } from './adminAuth';
 import { accountUid } from './authGuard';
 import * as logger from 'firebase-functions/logger';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
@@ -122,9 +123,10 @@ export const resubmitBusinessApplication = onCall({ region: REGION }, async requ
     emailBtobApproved: FieldValue.delete(),
   });
 
-  const admins = await db.collection('admins').get();
-  await Promise.all(admins.docs.map(a =>
-    db.collection('notifications').doc(a.id).collection('items').add({
+  // Owners decide business accounts.
+  const owners = await activeAdminUids({ role: 'owner' });
+  await Promise.all(owners.map(ownerUid =>
+    db.collection('notifications').doc(ownerUid).collection('items').add({
       type: 'account',
       title: 'Business account resubmitted',
       body: `${companyName} updated their application after a rejection — ready for review.`,

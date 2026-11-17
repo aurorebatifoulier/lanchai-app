@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { isActiveOwner } from './adminAuth';
 import { accountUid } from './authGuard';
 import { FieldValue } from 'firebase-admin/firestore';
 import * as logger from 'firebase-functions/logger';
@@ -113,7 +114,7 @@ export const createReservations = onCall({ region: REGION }, async request => {
   // ── Account checks ──────────────────────────────────────────────────────────
   const [userSnap, adminSnap, holdSnap, pricingSnap, loyaltySnap, shopSnap, identitySnap] = await Promise.all([
     db.collection('users').doc(uid).get(),
-    db.collection('admins').doc(uid).get(),
+    isActiveOwner(uid),
     db.collection('bookingHolds').doc(uid).get(),
     db.collection('config').doc('pricing').get(),
     db.collection('config').doc('loyalty').get(),
@@ -121,7 +122,8 @@ export const createReservations = onCall({ region: REGION }, async request => {
     db.collection('identityChecks').doc(uid).get(),
   ]);
   const profile = userSnap.data() ?? {};
-  const isAdmin = adminSnap.exists;
+  // Booking exemptions (holds, tier, ID) are for active OWNERS only — staff book like renters.
+  const isAdmin = adminSnap;
   if (!profile.phoneNumber && !profile.phone) fail('phone-required', 'A phone number is required to book.');
   if (profile.accountType === 'btob' && profile.btobStatus !== 'approved') {
     fail('account-pending', 'Your business account is not approved yet.');
