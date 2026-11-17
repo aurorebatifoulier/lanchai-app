@@ -15,6 +15,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { useAuth } from '@/contexts/AuthContext';
 import { CATEGORY_CONFIG, categoriesOf, categoryLabel } from '@/functions/src/shared/categories';
 import { useExchangeRate } from '@/lib/exchangeRate';
 import { formatLak } from '@/utils/currency';
@@ -59,6 +60,8 @@ export default function AdminProductsScreen() {
   // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
   const screen = useScreenInsets();
   const router  = useRouter();
+  // Staff: read only — no new product, rows open the stock view instead of the form.
+  const { isShopOwner } = useAuth();
   const exchangeRate = useExchangeRate();
 
   const [rows,       setRows]       = useState<ProductRow[]>([]);
@@ -112,13 +115,15 @@ export default function AdminProductsScreen() {
         <View style={s.header}>
           <BackButton onPress={() => router.back()} />
           <Text style={s.headerTitle}>Products</Text>
-          <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Add a product"
-            style={s.addBtn}
-            onPress={() => router.push('/admin/product-form')}
-            activeOpacity={0.82}
-          >
-            <Feather name="plus" size={18} color={COLORS.carbon} />
-          </TouchableOpacity>
+          {isShopOwner ? (
+            <TouchableOpacity hitSlop={4} accessibilityRole="button" accessibilityLabel="Add a product"
+              style={s.addBtn}
+              onPress={() => router.push('/admin/product-form')}
+              activeOpacity={0.82}
+            >
+              <Feather name="plus" size={18} color={COLORS.carbon} />
+            </TouchableOpacity>
+          ) : <View style={{ width: 40 }} />}
         </View>
 
         <View style={s.searchWrap}>
@@ -210,7 +215,7 @@ export default function AdminProductsScreen() {
                 {index > 0 && <View style={s.sep} />}
                 <TouchableOpacity
                   style={s.row}
-                  onPress={() => router.push(`/admin/product-form?id=${item.id}`)}
+                  onPress={() => router.push(isShopOwner ? `/admin/product-form?id=${item.id}` : `/admin/inventory/${item.id}`)}
                   activeOpacity={0.75}
                 >
                   <View style={s.rowMain}>

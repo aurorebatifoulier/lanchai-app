@@ -11,6 +11,7 @@ import BackButton from '@/components/BackButton';
 import { countNewItemRequests } from '@/lib/itemRequests';
 import { fetchAdminToday, type TodayCounts } from '@/lib/adminToday';
 import TodayPanel from '@/components/admin/TodayPanel';
+import OwnerInbox from '@/components/admin/OwnerInbox';
 import AdminCard from '@/components/admin/AdminCard';
 import { ADMIN_GROUPS, sectionsFor, type AdminBadge } from '@/constants/adminSections';
 import { useAuth } from '@/contexts/AuthContext';
@@ -67,6 +68,7 @@ export default function AdminHomeScreen() {
         contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
+        {role === 'owner' && <OwnerInbox />}
         <TodayPanel counts={today} role={role} />
 
         {ADMIN_GROUPS.map(g => {

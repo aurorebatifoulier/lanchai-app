@@ -17,6 +17,8 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { getProduct, releaseReservation } from '@/lib/firestore';
+import { useAuth } from '@/contexts/AuthContext';
+import { RepairStockCard } from '@/components/admin/RepairStockCard';
 import type { Product } from '@/lib/mockData';
 import {
   effectiveStock,
@@ -43,6 +45,8 @@ interface ProductReservation extends OccupancyRecord {
 
 export default function AdminInventoryProductScreen() {
   const insets = useSafeAreaInsets();
+  // Staff: view + "in repair" only (no product edit, no force-release).
+  const { isShopOwner } = useAuth();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -182,14 +186,23 @@ export default function AdminInventoryProductScreen() {
           <StatChip label="Lost" value={product.lostUnits ?? 0} />
         </View>
 
-        <TouchableOpacity
-          style={s.editLink}
-          onPress={() => router.push(`/admin/product-form?id=${product.id}`)}
-          activeOpacity={0.75}
-        >
-          <Feather name="edit-2" size={13} color={COLORS.fg2} />
-          <Text style={s.editLinkText}>Edit product / adjust stock condition</Text>
-        </TouchableOpacity>
+        <RepairStockCard
+          productId={product.id}
+          inRepair={product.inRepairUnits ?? 0}
+          bookable={eff}
+          onChanged={n => setProduct(p => (p ? { ...p, inRepairUnits: n } : p))}
+        />
+
+        {isShopOwner && (
+          <TouchableOpacity
+            style={s.editLink}
+            onPress={() => router.push(`/admin/product-form?id=${product.id}`)}
+            activeOpacity={0.75}
+          >
+            <Feather name="edit-2" size={13} color={COLORS.fg2} />
+            <Text style={s.editLinkText}>Edit product / adjust stock condition</Text>
+          </TouchableOpacity>
+        )}
 
         {/* ── Calendar ── */}
         <View style={s.calNav}>
@@ -270,7 +283,7 @@ export default function AdminInventoryProductScreen() {
                   >
                     <Text style={s.smallLinkText}>View</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
+                  {isShopOwner && <TouchableOpacity
                     style={[s.smallLink, s.releaseLink]}
                     onPress={() => {
                       setReleaseTarget(r);
@@ -280,7 +293,7 @@ export default function AdminInventoryProductScreen() {
                     activeOpacity={0.75}
                   >
                     <Text style={[s.smallLinkText, s.releaseLinkText]}>Release</Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
                 </View>
               ))
             )}

@@ -22,6 +22,12 @@ export interface OutgoingEmail {
    * access link to the test inbox. The link is never logged.
    */
   security?: boolean;
+  /**
+   * Internal alert to an OWNER (damage to review, flagged ID, refused pick-up): always
+   * delivered to the owner's own address, even in test mode — test mode only exists to
+   * keep renters from receiving emails before launch; owners must never miss these.
+   */
+  ownerAlert?: boolean;
   /** Small files (e.g. a .ics calendar invite), content base64-encoded. */
   attachments?: { name: string; content: string }[];
 }
@@ -55,7 +61,7 @@ export async function sendEmail(email: OutgoingEmail, mode?: EmailMode): Promise
   if (!email.to.email || !EMAIL_RE.test(email.to.email)) return 'no_recipient';
 
   const m = mode ?? await getEmailMode();
-  const redirected = !m.live && !email.bypassRedirect && !email.security;
+  const redirected = !m.live && !email.bypassRedirect && !email.security && !email.ownerAlert;
   const to = redirected ? { email: m.redirectTo, name: 'LANCHAI test inbox' } : email.to;
   const subject = redirected ? `[test → ${email.to.email}] ${email.subject}` : email.subject;
 

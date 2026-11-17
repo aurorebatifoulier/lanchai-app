@@ -7,7 +7,7 @@ import { fns, call, rejects, UID, seedBookingWorld } from './helpers';
 const ADMIN_ONLY = [
   'finalizeRentalAgreement', 'adminGrantPromo', 'adminRevokeGrant', 'recordIdCheck', 'adminIdentityAction',
   'adminRenterProfile', 'reviewResidency', 'adminLegacyResident', 'sendTestEmails',
-  'teamList', 'teamAddMember', 'teamUpdateMember',
+  'teamList', 'teamAddMember', 'teamUpdateMember', 'submitReturn', 'refusePickup', 'resolveOwnerAlert',
 ];
 const PUBLIC = ['requestPasswordReset']; // no account by design (always { ok: true }, rate-limited)
 
@@ -21,9 +21,10 @@ test('the callable list is what this suite expects (a new callable must be added
   assert.deepEqual(callables, [
     'adminGrantPromo', 'adminIdentityAction', 'adminLegacyResident', 'adminRenterProfile', 'adminRevokeGrant',
     'applyInviteCode', 'createReservations', 'deleteMyAccount', 'deleteMyIdentityDocument', 'evaluateMyCodes',
-    'finalizeRentalAgreement', 'getMyInviteCode', 'recordIdCheck', 'requestEmailVerification', 'requestPasswordReset',
-    'resubmitBusinessApplication', 'reviewResidency', 'savePromoCode', 'sendTestEmails', 'sendWelcomeEmail',
-    'submitIdentityDocument', 'submitResidencyRequest', 'teamAddMember', 'teamList', 'teamUpdateMember',
+    'finalizeRentalAgreement', 'getMyInviteCode', 'recordIdCheck', 'refusePickup', 'requestEmailVerification',
+    'requestPasswordReset', 'resolveOwnerAlert', 'resubmitBusinessApplication', 'reviewResidency', 'savePromoCode',
+    'sendTestEmails', 'sendWelcomeEmail',
+    'submitIdentityDocument', 'submitResidencyRequest', 'submitReturn', 'teamAddMember', 'teamList', 'teamUpdateMember',
     'validatePromoCode', 'withdrawResidency',
   ]);
 });

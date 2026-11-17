@@ -15,6 +15,7 @@ import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/fire
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { useAuth } from '@/contexts/AuthContext';
 import { confirmReservationsPayment, earlyHandoverPrompt, type ReservationStatus } from '@/lib/firestore';
 import { overdueSeverity, overdueChipColors } from '@/utils/overdue';
 import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
@@ -107,6 +108,8 @@ type AdminRenderEntry =
 // `embedded`: rendered as the "All" tab of Admin → Rentals (app/admin/rentals.tsx) — no
 // insets / back / title / scan button (the host has them). The route renders as before.
 export default function AdminReservationsScreen({ embedded = false }: { embedded?: boolean } = {}) {
+  // Staff never see totals in the list (one booking's amount is on its own detail).
+  const { isShopOwner } = useAuth();
   // Top + bottom insets: the list stops above the Android 3-button / gesture bar.
   const screen = useScreenInsets();
   const router = useRouter();
@@ -370,7 +373,7 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
                           Renter: {entry.renterName}
                         </Text>
                         <Text style={s.rowPrice}>
-                          {groupTotal.toLocaleString('en-US')} LAK total
+                          {isShopOwner ? `${groupTotal.toLocaleString('en-US')} LAK total` : ''}
                         </Text>
                         {entry.rows.some(showsFirstRentalIdCheck) && (
                           <FirstRentalIdChip atCounter={entry.rows.some(r => r.idCheckAtCounter)} />
@@ -485,7 +488,7 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
                               Pickup: {row.pickupLabel}
                             </Text>
                             <Text style={s.rowPrice}>
-                              {row.total.toLocaleString('en-US')} LAK
+                              {isShopOwner ? `${row.total.toLocaleString('en-US')} LAK` : ''}
                             </Text>
                             {showsFirstRentalIdCheck(row) && <FirstRentalIdChip atCounter={row.idCheckAtCounter} />}
                           </View>
@@ -536,7 +539,7 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
                       Pickup: {entry.row.pickupLabel}
                     </Text>
                     <Text style={s.rowPrice}>
-                      {entry.row.total.toLocaleString('en-US')} LAK
+                      {isShopOwner ? `${entry.row.total.toLocaleString('en-US')} LAK` : ''}
                     </Text>
                     {showsFirstRentalIdCheck(entry.row) && <FirstRentalIdChip atCounter={entry.row.idCheckAtCounter} />}
                   </View>

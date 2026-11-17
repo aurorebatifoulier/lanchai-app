@@ -260,6 +260,24 @@ export interface RentalDoc {
   orderId?: string;  // set during multi-item checkout (Step 3); absent on single-item bookings until migrated
   createdAt: Timestamp;
   handoverChecklist?: ChecklistData;
+  /** Admin roles: a staff return with damage (or a charge that couldn't be computed) —
+   *  the deposit is held until an owner confirms / reduces / waives (submitReturn). */
+  chargeReviewPending?: boolean;
+  chargeReviewRequestedAt?: Timestamp;
+  chargeReviewedAt?: Timestamp;
+  chargeReviewedBy?: string;
+  /** Damage suggestion before an owner reduced it. */
+  damageChargeSuggested?: number;
+  /** Who recorded the return (submitReturn). */
+  returnedBy?: { uid: string; name: string; role: 'owner' | 'staff' };
+  /** Staff refused the pick-up (item not handed over) — open until an owner closes it. */
+  pickupRefusedAt?: Timestamp;
+  pickupRefusedReason?: string;
+  pickupRefusedByName?: string;
+  pickupRefusedOpen?: boolean;
+  pickupRefusedResolvedBy?: string;
+  /** Last auditLog entry paired with an admin write (firestore.rules). */
+  lastAuditId?: string;
   returnChecklist?: ChecklistData;
   couponApplied?: { id: string; percent: number; discountAmount: number };
   /** Promo code on this line (createReservations — server-computed share of the order discount). */

@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +27,9 @@ import { MultiCurrencyAmount } from '@/components/MultiCurrencyAmount';
 import { useExchangeRate, useThbRate } from '@/lib/exchangeRate';
 import { lakToUsd, lakToThb } from '@/utils/currency';
 import { getChainItemDraft, clearChainDrafts } from '@/lib/checklistChainDraft';
+import { useAuth } from '@/contexts/AuthContext';
+import { submitStaffReturn, type ReturnResult } from '@/lib/staffOps';
+import { staffReturnMessage } from '@/components/admin/StaffReturnPreview';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 import { AgreementSection, initialAgreementState, type AgreementState } from '@/components/admin/AgreementSection';
 import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
@@ -71,6 +75,13 @@ export default function ChecklistSummaryScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  // Admin roles: a STAFF return of the whole order goes through submitReturn — the server
+  // decides every amount (late fee, damage → owner review). Staff only confirm whether a
+  // balance above the deposit was paid.
+  const { isShopOwner } = useAuth();
+  const staffReturn = type === 'return' && !isShopOwner;
+  const [balanceCollected, setBalanceCollected] = useState(false);
+  const [staffResults, setStaffResults] = useState<ReturnResult[] | null>(null);
 
   const title = type === 'handover' ? 'Handover — deposit & confirmation' : 'Return — deposit & confirmation';
 
@@ -176,6 +187,23 @@ export default function ChecklistSummaryScreen() {
       }
     }
     try {
+      if (staffReturn) {
+        const results = await submitStaffReturn(reservations.map(r => {
+          const draft = getChainItemDraft(r.id)!;
+          return {
+            reservationId: r.id,
+            categories: draft.categories,
+            photos: draft.photos,
+            clientConfirmedByName: clientConfirmedByName.trim(),
+            clientConfirmed,
+            chargeUnits: draft.chargeUnits ?? 1,
+          };
+        }), balanceCollected);
+        clearChainDrafts(idList);
+        setStaffResults(results);
+        setSubmitted(true);
+        return;
+      }
       const decimals = depositCurrency === 'LAK' ? 0 : 2;
       const proratedAmounts = prorateDeposit(reservations, calculatedTotalDepositAmount, decimals);
       const confirmedAt = serverTimestamp();
@@ -300,6 +328,7 @@ export default function ChecklistSummaryScreen() {
   }, [
     reservations, canSubmit, depositCurrency, calculatedTotalDepositAmount, type, idCheck,
     confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerifiedList, idList, rentalPaymentMethod,
+    staffReturn, balanceCollected,
   ]);
 
   // ── Loading / error states ────────────────────────────────────────────────────
@@ -347,6 +376,32 @@ export default function ChecklistSummaryScreen() {
   }
 
   // ── Submitted — confirmation view ─────────────────────────────────────────────
+
+  if (submitted && staffResults) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={[styles.center, { gap: 10, paddingHorizontal: 24 }]}>
+          <Feather name="check-circle" size={48} color={COLORS.success} />
+          <Text style={styles.stateTitle}>{`${plural(staffResults.length, 'item')} returned`}</Text>
+          {staffResults.map(res => {
+            const r = reservations.find(x => x.id === res.reservationId);
+            return (
+              <Text key={res.reservationId} style={{ textAlign: 'center', color: COLORS.carbon }}>
+                {`${r?.productName ?? 'Item'}: ${staffReturnMessage(res).body}`}
+              </Text>
+            );
+          })}
+          <TouchableOpacity
+            style={[styles.submitBtn, { paddingHorizontal: 28, alignSelf: 'center', marginTop: 12 }]}
+            onPress={() => router.replace('/admin/reservations')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.submitBtnText}>Back to reservations</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (submitted) {
     return (
@@ -492,6 +547,17 @@ export default function ChecklistSummaryScreen() {
             state={agreement}
             onState={setAgreement}
           />
+        )}
+
+        {staffReturn && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
+            <Text style={{ flex: 1, color: COLORS.carbon }}>If a late fee is more than the deposit: the renter paid the balance</Text>
+            <Switch value={balanceCollected} onValueChange={setBalanceCollected}
+              trackColor={{ false: COLORS.softGray200, true: COLORS.amber }} thumbColor={COLORS.white} />
+          </View>
+        )}
+        {staffReturn && (
+          <Text style={{ color: COLORS.fg3, marginTop: 6 }}>Fees are set by the shop rules; damage goes to an owner and the deposit is kept.</Text>
         )}
 
         {submitError && (

@@ -170,3 +170,20 @@ describe('admin roles (owner vs staff vs deactivated)', () => {
     await no('st:idDocs/{uid}/{fileName}', read('staffOff', `idDocs/${UID.A}/id_1_1.jpg`));
   });
 });
+
+describe('incident / claim evidence (staff + owner)', () => {
+  for (const [block, base] of [
+    ['st:incidents/{incidentId}/{fileName}', 'incidents/i1'],
+    ['st:claim-staff/{claimId}/{fileName}', 'claim-staff/cl1'],
+  ] as const) {
+    test(`${base}: admins read + create once; renters never; no overwrite / delete`, async () => {
+      await ok(block, read('staff', `${base}/1.jpg`));
+      await ok(block, put('staff', `${base}/2.jpg`));
+      await no(block, put('staff', `${base}/1.jpg`));          // overwrite
+      await no(block, del('owner', `${base}/1.jpg`));
+      await no(block, read('A', `${base}/1.jpg`));
+      await no(block, put('staffOff', `${base}/3.jpg`));
+      await no(block, put('staff', `${base}/4.pdf`, 'application/pdf'));
+    });
+  }
+});

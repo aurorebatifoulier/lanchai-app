@@ -1374,3 +1374,25 @@ export function categoryArrivalEmail(shop: EmailShop, ctx: {
     shop,
   );
 }
+
+// ── Owner alert (internal): damage to review, ID flagged, pick-up refused ─────────
+// Sent to the OWNERS' own addresses (sendEmail ownerAlert — never redirected).
+export function ownerAlertEmail(shop: EmailShop, ctx: {
+  title: string; body: string; reservationId?: string; by: string;
+}): Rendered {
+  return build(
+    `[LANCHAI team] ${ctx.title}`,
+    ctx.body,
+    ctx.title,
+    [
+      {
+        type: 'hero',
+        pill: 'Needs an owner',
+        title: ctx.title,
+        sub: `${ctx.body} Reported by ${ctx.by}.`,
+        ...(ctx.reservationId ? { primary: { label: 'Open the booking', url: appLink(`admin/reservations/${ctx.reservationId}`) } } : {}),
+      },
+    ],
+    shop,
+  );
+}

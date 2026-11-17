@@ -274,6 +274,27 @@ service firebase.storage {
       allow delete:         if isShopOwner();
     }
 
+    // ── Incident / claim evidence added by staff or owners ─────────────────
+    // incidents/{incidentId}/… (internal incident on a booking) and claim-staff/{claimId}/…
+    // (notes on a renter's claim): admin read, admin create ONCE (no overwrite — evidence),
+    // images < 10 MB, never deleted from the client.
+    match /incidents/{incidentId}/{fileName} {
+      allow read:   if isAdmin();
+      allow create: if resource == null
+                    && isAdmin()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+    match /claim-staff/{claimId}/{fileName} {
+      allow read:   if isAdmin();
+      allow create: if resource == null
+                    && isAdmin()
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
     // Default deny for everything else
     match /{allPaths=**} {
       allow read, write: if false;

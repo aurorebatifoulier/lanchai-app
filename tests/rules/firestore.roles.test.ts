@@ -4,7 +4,7 @@
 // member is refused everywhere.
 import { describe, test } from 'node:test';
 import {
-  doc, getDoc, setDoc, updateDoc, getDocs, addDoc, collection, query, where,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, addDoc, collection, query, where, serverTimestamp,
 } from 'firebase/firestore';
 import { setupRulesEnv, as, ok, no, UID } from './env';
 
@@ -107,5 +107,74 @@ describe('counter work = staff', () => {
     await no(P, updateDoc(doc(db('staff'), `users/${UID.A}`), { loyaltyPoints: 9999 }));
     await no(P, updateDoc(doc(db('staff'), `users/${UID.A}`), { phoneVerified: false }));
     await no(P, updateDoc(doc(db('staffOff'), `users/${UID.A}`), { phoneVerified: true }));
+  });
+});
+
+describe('staff counter writes on reservations (allow-list)', () => {
+  const P = 'fs:reservations/{reservationId}';
+  const at = () => serverTimestamp();
+  test('confirm payment, hand over, cancel with a reason, no-show', async () => {
+    await ok(P, updateDoc(doc(db('staff'), 'reservations/sPend'), { status: 'confirmed', updatedAt: at() }));
+    await ok(P, updateDoc(doc(db('staff'), 'reservations/sConf'), {
+      status: 'active', handoverChecklist: { photos: [], depositCurrency: 'LAK', depositAmount: 500_000 }, updatedAt: at(),
+    }));
+    await ok(P, updateDoc(doc(db('staff'), 'reservations/rB'), {
+      status: 'cancelled', cancelledBy: 'admin', cancelReason: 'customer_request', cancelReasonText: '', cancelledAt: at(), updatedAt: at(),
+    }));
+    await ok(P, updateDoc(doc(db('staff'), 'reservations/rA'), {
+      status: 'no_show', noShowAt: at(), noShowBy: UID.STAFF, noShowByName: 'Sam', updatedAt: at(),
+    }));
+  });
+  test('never a fee, waiver, deposit, settlement, price or release', async () => {
+    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { status: 'returned', lateChargeAmount: 0 }));
+    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { lateChargeWaived: true }));
+    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { depositReturned: true }));
+    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { outstandingWrittenOff: true }));
+    await no(P, updateDoc(doc(db('staff'), 'reservations/sAct'), { status: 'lost', chargeAmount: 1 }));
+    await no(P, updateDoc(doc(db('staff'), 'reservations/rAact'), { total: 1 }));
+    await no(P, updateDoc(doc(db('staff'), 'reservations/rAact'), { status: 'cancelled', cancelledBy: 'admin_release', cancelledAt: at() }));
+    // Hand over + price change in the same write
+    await no(P, updateDoc(doc(db('staff'), 'reservations/rAret'), { status: 'active', total: 1 }));
+    await no(P, deleteDoc(doc(db('staff'), 'reservations/rAret')));
+    await no(P, updateDoc(doc(db('staffOff'), 'reservations/rAret'), { updatedAt: at() }));
+  });
+  test('owner: anything (settlement, waiver, delete)', async () => {
+    await ok(P, updateDoc(doc(db('owner'), 'reservations/rAret'), { depositReturned: true, returnFinalizedAt: at() }));
+    await ok(P, updateDoc(doc(db('owner'), 'reservations/rAret'), { lateChargeWaived: true }));
+  });
+});
+
+describe('stock: staff mark units in repair only', () => {
+  test('products in-repair count + its audit line', async () => {
+    await ok('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { inRepairUnits: 1 }));
+    await no('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { lostUnits: 1 }));
+    await no('fs:products/{productId}', updateDoc(doc(db('staff'), 'products/p1'), { inRepairUnits: -1 }));
+    await ok('fs:products/{productId}/stockAdjustments/{adjustmentId}',
+      addDoc(collection(db('staff'), 'products/p1/stockAdjustments'), { field: 'inRepairUnits', delta: 1, reason: 'Broken zip' }));
+  });
+});
+
+describe('incidents + claim notes', () => {
+  test('staff open an incident and add notes; closing = owner', async () => {
+    const I = 'fs:incidents/{incidentId}';
+    await ok(I, addDoc(collection(db('staff'), 'incidents'), {
+      reservationId: 'sAct', renterId: UID.A, productId: 'p1', note: 'Tear on the side', photos: [], status: 'open', createdBy: UID.STAFF, createdAt: serverTimestamp(),
+    }));
+    await no(I, addDoc(collection(db('staff'), 'incidents'), {
+      reservationId: 'sAct', note: 'x', photos: [], status: 'closed', createdBy: UID.STAFF, createdAt: serverTimestamp(),
+    }));
+    await no(I, addDoc(collection(db('A'), 'incidents'), { note: 'x', photos: [], status: 'open', createdBy: UID.A, createdAt: serverTimestamp() }));
+    await no(I, getDoc(doc(db('A'), 'incidents/i1')));
+    await no(I, updateDoc(doc(db('staff'), 'incidents/i1'), { status: 'closed' }));
+    await ok(I, updateDoc(doc(db('owner'), 'incidents/i1'), { status: 'closed' }));
+    const N = 'fs:incidents/{incidentId}/notes/{noteId}';
+    await ok(N, addDoc(collection(db('staff'), 'incidents/i1/notes'), { text: 'Renter agrees', byUid: UID.STAFF, byName: 'Sam', at: serverTimestamp() }));
+    await no(N, addDoc(collection(db('staff'), 'incidents/i1/notes'), { text: 'Fake', byUid: UID.OWNER, byName: 'Olga', at: serverTimestamp() }));
+  });
+  test('claim notes: staff add, renters never see them', async () => {
+    const N = 'fs:claims/{claimId}/notes/{noteId}';
+    await ok(N, addDoc(collection(db('staff'), 'claims/cl1/notes'), { text: 'Photos taken', photos: [], byUid: UID.STAFF, byName: 'Sam', at: serverTimestamp() }));
+    await no(N, getDocs(collection(db('A'), 'claims/cl1/notes')));
+    await no(N, addDoc(collection(db('staffOff'), 'claims/cl1/notes'), { text: 'x', byUid: UID.STAFF_OFF, at: serverTimestamp() }));
   });
 });

@@ -51,6 +51,10 @@ import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
 import { PaymentMethodChips } from '@/components/admin/PaymentMethodChips';
 import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 import { auth } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
+import { computeReturnCharges } from '@/functions/src/shared/returnCharges';
+import { StaffReturnPreview, staffReturnMessage } from '@/components/admin/StaffReturnPreview';
+import { submitStaffReturn, type ReturnResult } from '@/lib/staffOps';
 
 type ChecklistType = 'handover' | 'return';
 type DepositCurrency = 'LAK' | 'USD' | 'THB';
@@ -119,6 +123,12 @@ export default function ChecklistScreen() {
   const [submitting,       setSubmitting]       = useState(false);
   const [submitError,      setSubmitError]      = useState<string | null>(null);
   const [submitted,        setSubmitted]        = useState(false);
+  // Admin roles: a STAFF return goes through the submitReturn callable — the server
+  // decides every amount (no editable charge, no waiver here).
+  const { isShopOwner } = useAuth();
+  const staffReturn = type === 'return' && !isShopOwner;
+  const [balanceCollected, setBalanceCollected] = useState(false);
+  const [staffResult, setStaffResult] = useState<ReturnResult | null>(null);
 
   // ── Inline settlement (post-checklist return-confirmation screen) ────────────
   const [settled,             setSettled]             = useState(false);
@@ -299,6 +309,27 @@ export default function ChecklistScreen() {
   const depositAppliedToCharge = Math.min(totalCharge, calculatedDepositAmount ?? 0);
   const outstandingBalanceCalc = Math.max(0, totalCharge - (calculatedDepositAmount ?? 0));
 
+  // Staff return preview — the SAME shared computation as the server (deposit = what
+  // was received at handover).
+  const staffDeposit = reservation?.handoverChecklist?.depositAmount ?? calculatedDepositAmount ?? 0;
+  const staffCharges = staffReturn && allRated && reservation && depositCurrency
+    ? computeReturnCharges({
+        ratings: CHECKLIST_CATEGORIES.map(c => categories[c.id].rating!),
+        chargeUnits,
+        quantity: reservation.quantity,
+        retailPriceUsd: product?.retailPrice ?? null,
+        damagedChargePercent,
+        depositCurrency,
+        depositHeld: staffDeposit,
+        returnAtMs: reservation.returnAt.toMillis(),
+        nowMs: Date.now(),
+        pricePerDayLak: reservation.pricePerDay,
+        graceHours,
+        usdRate: exchangeRate,
+        thbRate,
+      })
+    : null;
+
   // First-pick-up ID double check — single handover only (a chain does it once, on the
   // consolidated summary screen). Blocking until both confirmations (+ counter photo).
   const idCheck = useIdCheck(type === 'handover' && !inChain ? reservation?.renterId : null);
@@ -330,16 +361,17 @@ export default function ChecklistScreen() {
 
   // In a chain, this screen only collects condition ratings + photos — deposit and
   // confirmation are entered once, on the consolidated summary screen after the last item.
+  // Staff returns never block on a charge: the server decides it (or an owner does).
+  const chargesOk = staffReturn || (!chargeUnresolved && !lateChargeUnresolved);
   const canSubmit = inChain
-    ? allRated && !submitting && !chargeUnresolved && !lateChargeUnresolved
+    ? allRated && !submitting && chargesOk
     : allRated &&
       depositCurrency !== null &&
       calculatedDepositAmount !== null &&
       confirmedByName.trim().length > 0 &&
       clientConfirmedByName.trim().length > 0 &&
       clientConfirmed &&
-      !chargeUnresolved &&
-      !lateChargeUnresolved &&
+      chargesOk &&
       (type !== 'handover' || idCheck.ready) &&
       (!needsAgreement || (agreement.signed && rentalPaymentMethod !== null)) &&
       !submitting;
@@ -410,6 +442,26 @@ export default function ChecklistScreen() {
           },
         ]),
       ) as ChecklistData['categories'];
+
+      if (staffReturn) {
+        if (inChain) {
+          // Condition only — the order summary sends every item to submitReturn at once.
+          setChainItemDraft(id, { categories: categoriesData, photos: photoUrls, chargeUnits });
+          setSubmitted(true);
+          return;
+        }
+        const [result] = await submitStaffReturn([{
+          reservationId: id,
+          categories: categoriesData,
+          photos: photoUrls,
+          clientConfirmedByName: clientConfirmedByName.trim(),
+          clientConfirmed,
+          chargeUnits,
+        }], balanceCollected);
+        setStaffResult(result);
+        setSubmitted(true);
+        return;
+      }
 
       // Damage charge and late-return penalty, frozen at submit time as fully separate
       // fields — they only combine into depositAppliedToCharge/outstandingBalance below,
@@ -544,6 +596,7 @@ export default function ChecklistScreen() {
     lateChargeAmount, lateChargeReason, waiverFields, hasWaiver,
     totalCharge, depositAppliedToCharge, outstandingBalanceCalc,
     confirmedByName, clientConfirmedByName, clientConfirmed, phoneVerified, idCheck, rentalPaymentMethod,
+    staffReturn, balanceCollected,
   ]);
 
   // ── Loading / error states ────────────────────────────────────────────────────
@@ -631,8 +684,28 @@ export default function ChecklistScreen() {
   // charge (if any) isn't actually written to Firestore yet at this point, it's just
   // cached in the in-memory draft until the consolidated summary screen submits.
 
+  if (submitted && staffResult) {
+    const m = staffReturnMessage(staffResult);
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView contentContainerStyle={[styles.content, { flexGrow: 1, justifyContent: 'center', paddingBottom: Math.max(insets.bottom, 24) }]}>
+          <View style={{ alignItems: 'center', gap: 12, paddingHorizontal: 24 }}>
+            <Feather name={staffResult.outcome === 'clean' || staffResult.outcome === 'late' ? 'check-circle' : 'alert-circle'}
+              size={48} color={staffResult.outcome === 'clean' || staffResult.outcome === 'late' ? COLORS.success : COLORS.amber} />
+            <Text style={styles.stateTitle}>{m.title}</Text>
+            <Text style={styles.stateSubtitle}>{m.body}</Text>
+          </View>
+          <TouchableOpacity style={[styles.submitBtn, { paddingHorizontal: 28, alignSelf: 'center', marginTop: 24 }]}
+            onPress={() => router.replace(`/admin/reservations/${id}`)} activeOpacity={0.85}>
+            <Text style={styles.submitBtnText}>Back to the booking</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (submitted) {
-    const isReturn = !inChain && type === 'return';
+    const isReturn = !inChain && type === 'return' && !staffReturn;
     const showSettlement = isReturn;
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -845,7 +918,23 @@ export default function ChecklistScreen() {
         {/* Charge assessment — return checklists only. Damage/condition charge and
             late-return penalty are independent line items, shown separately whenever
             either applies; they're never merged into one field or one number here. */}
-        {type === 'return' && allRated && (chargePercent != null || hasLatePenalty) && (
+        {staffReturn && !inChain && staffCharges && depositCurrency && (
+          <StaffReturnPreview
+            charges={staffCharges}
+            currency={depositCurrency}
+            deposit={staffDeposit}
+            quantity={reservationQty}
+            units={chargeUnits}
+            onUnits={setDamagedUnits}
+            collected={balanceCollected}
+            onCollected={setBalanceCollected}
+          />
+        )}
+        {staffReturn && inChain && staffCharges?.outcome === 'damage' && reservationQty > 1 && (
+          <UnitsStepper label={worst === 'unusable' ? 'Units unusable' : 'Units damaged'}
+            value={chargeUnits} max={reservationQty} onChange={setDamagedUnits} />
+        )}
+        {!staffReturn && type === 'return' && allRated && (chargePercent != null || hasLatePenalty) && (
           <>
             <Text style={styles.fieldLabel}>Charge assessment</Text>
 

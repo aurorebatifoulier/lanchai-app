@@ -70,6 +70,9 @@ export * from './packs';
 // Admin roles: Team screen callables (owner only — functions/src/team.ts).
 export * from './team';
 
+// Staff counter operations: return (server-computed charges), refused pick-up, owner alerts.
+export * from './returns';
+
 admin.initializeApp();
 const db = admin.firestore();
 

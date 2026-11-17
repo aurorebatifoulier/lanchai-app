@@ -21,6 +21,7 @@ import { sendNotif } from '@/lib/notifications';
 import { useAuth } from '@/contexts/AuthContext';
 import { CLAIM_STATUS_CONFIG } from '../claims';
 import { MediaViewer } from '@/components/MediaViewer';
+import { StaffNotes } from '@/components/admin/StaffNotes';
 
 const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
   damage_not_caused: "Damage not caused by renter",
@@ -35,7 +36,8 @@ export default function AdminClaimDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  // Staff: read the claim + add team notes / photos. The reply and the outcome = owner.
+  const { user, isShopOwner } = useAuth();
 
   const [claim,       setClaim]       = useState<ClaimDoc | null>(null);
   const [reservation, setReservation] = useState<RentalDoc | null>(null);
@@ -183,7 +185,10 @@ export default function AdminClaimDetailScreen() {
           </>
         )}
 
-        {/* ── Respond ── */}
+        <StaffNotes parent="claims" parentId={claim.id} />
+
+        {/* ── Respond (owner) ── */}
+        {isShopOwner && (<>
         <Text style={[s.sectionLabel, { marginTop: 12 }]}>Respond</Text>
         <View style={s.statusRow}>
           {RESPONSE_STATUS_OPTIONS.map(opt => {
@@ -229,6 +234,7 @@ export default function AdminClaimDetailScreen() {
             ? <ActivityIndicator color={COLORS.carbon} size="small" />
             : <Text style={s.submitBtnText}>Send response</Text>}
         </TouchableOpacity>
+        </>)}
       </ScrollView>
 
       <MediaViewer media={media} openIndex={viewerIndex} onClose={() => setViewerIndex(null)} />

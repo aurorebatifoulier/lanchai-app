@@ -15,6 +15,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
+import { watchIncidents, type Incident } from '@/lib/staffOps';
 import { toClaimDoc, type ClaimDoc, type ClaimType, type ClaimStatus } from '@/lib/claims';
 
 const CLAIM_TYPE_LABELS: Record<ClaimType, string> = {
@@ -60,8 +61,12 @@ export default function AdminClaimsScreen() {
     );
   }, []);
 
+  // Open internal incidents (staff / owners, never renters) — listed above the claims.
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  useEffect(() => watchIncidents(setIncidents), []);
+
   const filtered = filter === 'all' ? claims : claims.filter(c => c.status === filter);
-  const isEmpty = !loading && filtered.length === 0;
+  const isEmpty = !loading && filtered.length === 0 && incidents.length === 0;
 
   return (
     <View style={[s.root, screen.root]}>
@@ -113,8 +118,23 @@ export default function AdminClaimsScreen() {
               {filter === 'all' ? 'No claims yet.' : `No ${CLAIM_STATUS_CONFIG[filter as ClaimStatus]?.label.toLowerCase() ?? filter} claims.`}
             </Text>
           </>
-        ) : (
-          filtered.map((claim, index) => {
+        ) : (<>
+          {incidents.length > 0 && (
+            <View style={{ marginBottom: 16 }}>
+              <Text style={s.rowType}>{`Open incidents (${incidents.length})`}</Text>
+              {incidents.map(inc => (
+                <TouchableOpacity key={inc.id} style={s.row} activeOpacity={0.75}
+                  onPress={() => router.push(`/admin/incident?id=${inc.id}`)}>
+                  <View style={s.rowMain}>
+                    <Text style={s.rowDescription} numberOfLines={1}>{inc.note}</Text>
+                    <Text style={s.rowMeta} numberOfLines={1}>{`${inc.productName ?? ''} · ${inc.renterName ?? ''} · by ${inc.createdByName ?? 'staff'}`}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={15} color={COLORS.fg3} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {filtered.map((claim, index) => {
             const badge = CLAIM_STATUS_CONFIG[claim.status];
             return (
               <React.Fragment key={claim.id}>
@@ -136,8 +156,8 @@ export default function AdminClaimsScreen() {
                 </TouchableOpacity>
               </React.Fragment>
             );
-          })
-        )}
+          })}
+        </>)}
       </ScrollView>
     </View>
   );

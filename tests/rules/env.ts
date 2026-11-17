@@ -87,6 +87,11 @@ const SEED: Record<string, Record<string, unknown>> = {
   'reservations/rAret': { renterId: UID.A, productId: 'p1', status: 'returned', total: 300_000 },
   'reservations/rAact': { renterId: UID.A, productId: 'p1', status: 'active', total: 300_000 },
   'reservations/rB': { renterId: UID.B, productId: 'p1', status: 'confirmed', total: 300_000 },
+  // Staff counter actions (roles): a pending booking, a confirmed one, an active one.
+  'reservations/sPend': { renterId: UID.A, productId: 'p1', status: 'pending_payment', total: 300_000, deposit: 500_000 },
+  'reservations/sConf': { renterId: UID.A, productId: 'p1', status: 'confirmed', total: 300_000, deposit: 500_000 },
+  'reservations/sAct': { renterId: UID.A, productId: 'p1', status: 'active', total: 300_000, deposit: 500_000 },
+  'incidents/i1': { reservationId: 'sAct', renterId: UID.A, productId: 'p1', note: 'Scratch', photos: [], status: 'open', createdBy: 'staff1' },
   'reservationOccupancy/rA': { productId: 'p1', quantity: 1, status: 'confirmed' },
   'requests/q1': { text: 'Paddle board', renterId: UID.A, status: 'new' },
   [`conversations/${UID.A}`]: { renterId: UID.A, renterName: 'Ann', unreadByBusiness: 2, unreadByRenter: 1, lastSenderType: 'business' },
@@ -143,6 +148,8 @@ const FILES: Record<string, string> = {
   'homeSlides/h1/1.jpg': 'image/jpeg',
   'collections/k1/1.jpg': 'image/jpeg',
   'onboarding/s1p1/1.jpg': 'image/jpeg',
+  'incidents/i1/1.jpg': 'image/jpeg',
+  'claim-staff/cl1/1.jpg': 'image/jpeg',
   'misc/other.txt': 'text/plain',
 };
 

@@ -8,6 +8,7 @@ import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
 import { ConfirmBox } from '@/components/ConfirmBox';
 import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
+import { useAuth } from '@/contexts/AuthContext';
 import { db, storage, functions } from '@/lib/firebase';
 import {
   ID_DOC_TYPES, ID_REJECTION_REASONS, pickIdPhoto, uploadIdPhotos, type IdDocType, type IdentityRecord,
@@ -23,6 +24,9 @@ export function RenterIdCard({ renterId }: { renterId: string }) {
   const [urls, setUrls] = useState<string[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
   const [mode, setMode] = useState<'idle' | 'add' | 'reject'>('idle');
+  // Declining an ID blocks the renter's bookings: owner only (adminIdentityAction refuses
+  // staff too). Staff refuse the pick-up and flag the ID instead (reservation detail).
+  const { isShopOwner } = useAuth();
   const [docType, setDocType] = useState<IdDocType | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [reason, setReason] = useState<string | null>(null);
@@ -102,7 +106,7 @@ export function RenterIdCard({ renterId }: { renterId: string }) {
             <Feather name="camera" size={14} color={COLORS.carbon} />
             <Text style={s.btnText}>{onFile ? 'Replace photo' : 'Add ID photo'}</Text>
           </TouchableOpacity>
-          {onFile && (
+          {onFile && isShopOwner && (
             <TouchableOpacity style={s.btn} onPress={() => setMode('reject')} activeOpacity={0.8}>
               <Feather name="x-circle" size={14} color={COLORS.danger} />
               <Text style={[s.btnText, { color: COLORS.danger }]}>Decline</Text>

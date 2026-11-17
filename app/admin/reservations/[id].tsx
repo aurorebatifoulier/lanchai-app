@@ -27,6 +27,7 @@ import {
   adminMarkNoShow,
   adminLiftNoShowHold,
   getReservationsByOrderId,
+  getReservationById,
   earlyHandoverFields,
   earlyHandoverPrompt,
   type RentalDoc,
@@ -59,6 +60,8 @@ import {
 } from '@/functions/src/shared/cancellation';
 import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 import { RenterIdCard } from '@/components/admin/RenterIdCard';
+import { DamageReviewCard, PickupRefusedCard, RefusePickupBox } from '@/components/admin/OwnerReview';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +112,9 @@ export default function AdminReservationDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  // Admin roles: staff never see fee waivers, settlement, lost/stolen or the no-show hold
+  // lift (the server refuses those writes anyway — firestore.rules).
+  const { isShopOwner } = useAuth();
 
   // ── Data state ────────────────────────────────────────────────────────────
   const [reservation,   setReservation]   = useState<RentalDoc | null>(null);
@@ -128,7 +134,7 @@ export default function AdminReservationDetailScreen() {
   const [confirmUnwaive, setConfirmUnwaive] = useState<'late' | 'damage' | null>(null);
   const [confirmAction, setConfirmAction] = useState<
     'confirm_payment' | 'early_handover' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
-    | 'no_show' | 'lift_hold' | null
+    | 'no_show' | 'lift_hold' | 'refuse_pickup' | null
   >(null);
   // Admin cancellation — reason + scope (this line or the whole order)
   const [cancelReason,     setCancelReason]     = useState<CancelReason | null>(null);
@@ -737,6 +743,14 @@ export default function AdminReservationDetailScreen() {
           )}
         </View>
 
+        {/* ── OWNER DECISIONS after a staff action ──────────────────────── */}
+        {isShopOwner && (
+          <DamageReviewCard reservation={reservation}
+            onDone={u => setReservation(prev => prev ? { ...prev, ...u } : prev)} />
+        )}
+        <PickupRefusedCard reservation={reservation} owner={isShopOwner}
+          onDone={() => setReservation(prev => prev ? { ...prev, pickupRefusedOpen: false } : prev)} />
+
         {/* ── ID DOCUMENT (admin only) ──────────────────────────────────── */}
         <RenterIdCard renterId={reservation.renterId} />
 
@@ -776,7 +790,7 @@ export default function AdminReservationDetailScreen() {
         )}
 
         {/* ── WAIVED CHARGES (internal) ─────────────────────────────────── */}
-        {(reservation.lateChargeWaived || reservation.damageChargeWaived) && (() => {
+        {isShopOwner && (reservation.lateChargeWaived || reservation.damageChargeWaived) && (() => {
           const cur = reservation.chargeCurrency ?? handoverDeposit?.depositCurrency ?? 'LAK';
           const canUndo = !reservation.returnFinalizedAt;
           const entries = ([
@@ -1254,6 +1268,17 @@ export default function AdminReservationDetailScreen() {
             );
           })()}
 
+          {!actioning && confirmAction === 'refuse_pickup' && (
+            <RefusePickupBox
+              reservationIds={[reservation.id]}
+              onCancel={() => setConfirmAction(null)}
+              onDone={() => {
+                setConfirmAction(null);
+                getReservationById(reservation.id).then(r => r && setReservation(r)).catch(() => {});
+              }}
+            />
+          )}
+
           {/* ── Action buttons — shown only when no confirm is open ──── */}
           {!actioning && confirmAction === null && (
             <>
@@ -1281,7 +1306,7 @@ export default function AdminReservationDetailScreen() {
               {status === 'active' && (
                 <TouchableOpacity
                   style={d.primaryBtn}
-                  onPress={() => reservation.returnChecklist?.confirmedAt
+                  onPress={() => isShopOwner && reservation.returnChecklist?.confirmedAt
                     ? setConfirmAction('returned')
                     : router.push(`/admin/reservations/${id}/checklist?type=return`)}
                   activeOpacity={0.85}
@@ -1290,8 +1315,8 @@ export default function AdminReservationDetailScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Report lost/stolen — only while the item is out with the renter */}
-              {status === 'active' && (
+              {/* Report lost/stolen — owner only, while the item is out with the renter */}
+              {isShopOwner && status === 'active' && (
                 <TouchableOpacity
                   style={d.cancelLink}
                   onPress={() => setConfirmAction('lost')}
@@ -1304,15 +1329,34 @@ export default function AdminReservationDetailScreen() {
               {/* Settlement — deposit refund / outstanding-balance collect / write-off,
                   shared with the post-checklist return-confirmation screen so the two
                   entry points can never diverge. See components/SettlementActions.tsx. */}
-              <SettlementActions
-                reservation={reservation}
-                confirmAction={confirmAction}
-                setConfirmAction={setConfirmAction}
-                actioning={actioning}
-                setActioning={setActioning}
-                setActionError={setActionError}
-                onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
-              />
+              {isShopOwner && !reservation.chargeReviewPending && (
+                <SettlementActions
+                  reservation={reservation}
+                  confirmAction={confirmAction}
+                  setConfirmAction={setConfirmAction}
+                  actioning={actioning}
+                  setActioning={setActioning}
+                  setActionError={setActionError}
+                  onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
+                />
+              )}
+              {!isShopOwner && reservation.chargeReviewPending && (
+                <Text style={d.endStateText}>Damage charge waiting for an owner — the deposit is held.</Text>
+              )}
+
+              {/* Refuse the pick-up (staff + owner): item not handed over, owners told */}
+              {(status === 'pending_payment' || status === 'confirmed') && !reservation.pickupRefusedOpen && (
+                <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('refuse_pickup')} activeOpacity={0.7}>
+                  <Text style={d.cancelLinkText}>Refuse pick-up</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Internal incident on this booking (photos + notes, never shown to the renter) */}
+              {(status === 'active' || status === 'returned') && (
+                <TouchableOpacity style={d.cancelLink} onPress={() => router.push(`/admin/incident?reservationId=${id}`)} activeOpacity={0.7}>
+                  <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Report an incident</Text>
+                </TouchableOpacity>
+              )}
 
               {/* No-show — only once the pick-up day is over (alert, never automatic) */}
               {(status === 'pending_payment' || status === 'confirmed') && isPickupMissed(reservation.pickupAt.toMillis()) && (
@@ -1322,7 +1366,7 @@ export default function AdminReservationDetailScreen() {
               )}
 
               {/* Lift the renter's no-show hold */}
-              {renterHold?.reasons.includes('noShow') && (
+              {isShopOwner && renterHold?.reasons.includes('noShow') && (
                 <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('lift_hold')} activeOpacity={0.7}>
                   <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Lift no-show hold</Text>
                 </TouchableOpacity>

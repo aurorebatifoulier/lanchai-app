@@ -1800,6 +1800,34 @@ a snapshot indefinitely).
   shop settings, tools, team, verifications, totals — is owner-only. Server-side audit
   entries: `functions/src/audit.ts` (`auditLog`). Rules tests:
   `tests/rules/firestore.roles.test.ts` (+ storage), functions: `functions/test/roles.test.ts`.
+  - **Staff counter operations (step 2).** `reservations` update for staff =
+    `staffReservationUpdate()` allow-list in `firestore.rules`: confirm payment, hand over
+    (`handoverChecklist`, early-handover marker), cancel with a reason (`cancelledBy:
+    'admin'`, never a release), no-show — and NOTHING about fees, waivers, deposit,
+    settlement, price or lost/stolen (owner). Staff products writes = `inRepairUnits` only
+    (`<RepairStockCard>` on `/admin/inventory/[id]`). **Staff return = the `submitReturn`
+    callable** (`functions/src/returns.ts`): the server decides every amount with the ONE
+    shared `computeReturnCharges()` (`functions/src/shared/returnCharges.ts` — late fee via
+    `computeLatePenalty`, damage % × replacement value × units, deposit split; the
+    checklist preview `<StaffReturnPreview>` uses it too). Clean → deposit refunded +
+    `returnFinalizedAt`; late, no damage → fee taken, closed (or `outstandingSettled` when
+    staff confirm the balance was paid, else left open); any damage / uncomputable charge →
+    suggestion stored, `chargeReviewPending: true`, deposit held, owners alerted. Single
+    and chained returns (`checklist.tsx`, `checklist-summary.tsx`) branch on
+    `!isShopOwner`; owners keep the editable flow. Owner decides in
+    `<DamageReviewCard>` (Confirm / Reduce / Waive → then `SettlementActions`, hidden while
+    `chargeReviewPending`). `refusePickup` callable (staff): item not handed over, reason,
+    optional ID flag (`identityChecks.flaggedForReview`), `pickupRefusedOpen` until
+    `resolveOwnerAlert` (owner). **Owner alerts** (`functions/src/ownerAlerts.ts`
+    `alertOwners`): in-app notification to every active owner + email to their OWN address
+    with `sendEmail({ ownerAlert: true })` — never redirected by email test mode;
+    `/admin/reservations/{id}` is in the hosting `/open` allow-list (hosting deploy).
+    Owner dashboard `<OwnerInbox>` ("Needs you": damage reviews, refused pick-ups, flagged
+    IDs). No device push yet (FCM roadmap). Internal **incidents** (`incidents/{id}` +
+    `/notes`, Storage `incidents/…`, `app/admin/incident.tsx`, listed on Claims) and
+    **team notes** on claims (`claims/{id}/notes`, Storage `claim-staff/…`,
+    `<StaffNotes>`): staff create, never renter-visible; closing / claim reply = owner.
+    Staff never see list totals (reservations list) nor the ID "Decline" button.
 
 ## Security follow-ups
 

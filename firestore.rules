@@ -63,6 +63,34 @@ service cloud.firestore {
       return isAdmin() && adminDoc().data.get('role', 'owner') == 'owner';
     }
 
+    // Staff counter writes on a reservation — an allow-list per action, with the status
+    // transition pinned. NO fee, charge, waiver, deposit, settlement, price or release
+    // field can ever be written by staff (the return goes through the submitReturn
+    // callable, where the server decides every amount).
+    function staffReservationUpdate() {
+      let keys = request.resource.data.diff(resource.data).affectedKeys();
+      let from = resource.data.status;
+      let to = request.resource.data.get('status', from);
+      let preCheckout = from in ['pending_payment', 'confirmed'];
+      return isAdmin() && (
+        // Confirm payment received
+        (keys.hasOnly(['status', 'updatedAt', 'lastAuditId'])
+          && from == 'pending_payment' && to == 'confirmed')
+        // Hand over (checklist / "Mark as picked up"; early-handover marker)
+        || (keys.hasOnly(['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'updatedAt', 'lastAuditId'])
+          && preCheckout && to == 'active')
+        // Cancel with a reason (admin cancellation, never a release)
+        || (keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelReason', 'cancelReasonText', 'updatedAt', 'lastAuditId'])
+          && preCheckout && to == 'cancelled'
+          && request.resource.data.cancelledBy == 'admin'
+          && request.resource.data.cancelledAt == request.time)
+        // No-show (lifting the hold stays owner)
+        || (keys.hasOnly(['status', 'noShowAt', 'noShowBy', 'noShowByName', 'updatedAt', 'lastAuditId'])
+          && preCheckout && to == 'no_show'
+          && request.resource.data.noShowBy == request.auth.uid)
+      );
+    }
+
     function isOwner(uid) {
       return isAuthed() && request.auth.uid == uid;
     }
@@ -119,7 +147,12 @@ service cloud.firestore {
     match /products/{productId} {
       allow read:   if isAuthed();
       allow create: if isShopOwner() && validProductCategories(request.resource.data);
-      allow update: if isShopOwner() && validProductCategories(request.resource.data);
+      allow update: if (isShopOwner() && validProductCategories(request.resource.data)) || (
+        // Staff: mark units in repair / back from repair — nothing else on the product.
+        isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['inRepairUnits', 'updatedAt', 'lastAuditId']) &&
+        request.resource.data.inRepairUnits is int && request.resource.data.inRepairUnits >= 0
+      );
       allow delete: if isShopOwner();
     }
 
@@ -148,7 +181,8 @@ service cloud.firestore {
     // never be edited after the fact.
     match /products/{productId}/stockAdjustments/{adjustmentId} {
       allow read:           if isAdmin();
-      allow create:         if isShopOwner();
+      allow create:         if isShopOwner()
+                            || (isAdmin() && request.resource.data.field == 'inRepairUnits');
       allow update, delete: if false;
     }
 
@@ -177,7 +211,7 @@ service cloud.firestore {
       // createReservations callable (functions/src/reservations.ts), which recomputes
       // prices/deposit/coupon from server data, checks stock in a transaction, slots,
       // access tiers and bookingHolds. Admins keep their previous create rights.
-      allow create: if isAdmin() &&
+      allow create: if isShopOwner() &&
                         request.resource.data.renterId == request.auth.uid &&
                         request.resource.data.status == 'pending_payment';
 
@@ -185,7 +219,7 @@ service cloud.firestore {
       // reservation (status → 'cancelled') — no other field may change, and the
       // values are pinned: cancelledBy must be 'renter' (no fake admin cancellation →
       // wrong email) and cancelledAt must be the server time of this write.
-      allow update: if isAdmin() || (
+      allow update: if isShopOwner() || staffReservationUpdate() || (
         isOwner(resource.data.renterId) &&
         request.resource.data.diff(resource.data)
           .affectedKeys()
@@ -196,7 +230,7 @@ service cloud.firestore {
         (resource.data.status == 'pending_payment' ||
          resource.data.status == 'confirmed')
       );
-      allow delete: if isAdmin();
+      allow delete: if isShopOwner();
     }
 
     // ── reservationOccupancy ─────────────────────────────────────────────
@@ -691,7 +725,48 @@ service cloud.firestore {
       allow update: if isShopOwner();
 
       allow delete: if isShopOwner();
+
+      // Staff / owner notes and photos on a renter's claim (the decision stays owner).
+      // Append-only, author = the caller, server time.
+      match /notes/{noteId} {
+        allow read:   if isAdmin();
+        allow create: if isAdmin()
+                      && request.resource.data.byUid == request.auth.uid
+                      && request.resource.data.at == request.time
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() <= 2000
+                      && (!('photos' in request.resource.data) || request.resource.data.photos.size() <= 10);
+        allow update, delete: if false;
+      }
     }
 
+
+    // ── incidents/{id} — internal incident on a booking (staff / owner) ──────
+    // { reservationId, orderId?, renterId, productId, productName, renterName, note,
+    //   photos[], status: open|closed, createdBy, createdByName, createdAt } — never
+    // visible to renters. Staff open one and add notes; closing / any outcome = owner.
+    match /incidents/{incidentId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin()
+                    && request.resource.data.createdBy == request.auth.uid
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.status == 'open'
+                    && request.resource.data.note is string
+                    && request.resource.data.note.size() <= 2000
+                    && request.resource.data.photos.size() <= 10;
+      allow update: if isShopOwner();
+      allow delete: if false;
+
+      match /notes/{noteId} {
+        allow read:   if isAdmin();
+        allow create: if isAdmin()
+                      && request.resource.data.byUid == request.auth.uid
+                      && request.resource.data.at == request.time
+                      && request.resource.data.text is string
+                      && request.resource.data.text.size() <= 2000
+                      && (!('photos' in request.resource.data) || request.resource.data.photos.size() <= 10);
+        allow update, delete: if false;
+      }
+    }
   }
 }
