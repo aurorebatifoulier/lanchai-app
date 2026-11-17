@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { usePreventRemove } from '@react-navigation/native';
+import { ConfirmBox } from '@/components/ConfirmBox';
 import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/AppText';
 import BackButton from '@/components/BackButton';
@@ -12,16 +14,24 @@ import { COLORS } from '@/constants/Colors';
 // `embedded` mode. Initial tab from `?tab=`. A tab is mounted on its first visit, then
 // kept mounted (hidden) so switching tabs doesn't restart its listeners or lose its
 // search / filters. Fabric rule: ONE fixed sibling (header + tabs) above the content.
+// `dirty` (tab key → unsaved changes): a small dot on that tab's chip, and leaving the
+// screen (back button, Android back, swipe) asks for confirmation first.
 
 export interface AdminTab { key: string; label: string; render: () => React.ReactNode }
 
-export default function AdminTabsScreen({ title, tabs, right }: {
+export default function AdminTabsScreen({ title, tabs, right, dirty }: {
   title: string;
   tabs: AdminTab[];
   /** Optional header action (right side). */
   right?: React.ReactNode;
+  /** Tabs with unsaved changes. */
+  dirty?: Record<string, boolean>;
 }) {
   const router = useRouter();
+  const navigation = useNavigation();
+  const dirtyLabels = tabs.filter(t => dirty?.[t.key]).map(t => t.label);
+  const [pendingLeave, setPendingLeave] = useState<Parameters<typeof navigation.dispatch>[0] | null>(null);
+  usePreventRemove(dirtyLabels.length > 0, ({ data }) => setPendingLeave(data.action));
   const screen = useScreenInsets();
   const params = useLocalSearchParams<{ tab?: string }>();
   const initial = tabs.some(t => t.key === params.tab) ? params.tab! : tabs[0].key;
@@ -49,7 +59,10 @@ export default function AdminTabsScreen({ title, tabs, right }: {
               <TouchableOpacity key={t.key} onPress={() => select(t.key)} activeOpacity={0.8}
                 accessibilityRole="tab" accessibilityState={{ selected: on }}
                 style={[UI.tabChip, on ? s.tabOn : s.tabOff]}>
-                <Text style={[UI.tabChipText, { color: on ? SHADES.cream : SHADES.carbon }]}>{t.label}</Text>
+                <View style={s.tabInner}>
+                  <Text style={[UI.tabChipText, { color: on ? SHADES.cream : SHADES.carbon }]}>{t.label}</Text>
+                  {dirty?.[t.key] && <View style={s.dot} accessibilityLabel="Unsaved changes" />}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -60,6 +73,20 @@ export default function AdminTabsScreen({ title, tabs, right }: {
           <View key={t.key} style={[s.pane, t.key !== tab && s.hidden]}>{t.render()}</View>
         ) : null))}
       </View>
+      {pendingLeave && (
+        <View style={s.overlay}>
+          <View style={s.overlayCard}>
+            <ConfirmBox
+              text={`Unsaved changes in ${dirtyLabels.join(', ')}. Leave without saving?`}
+              confirmLabel="Leave"
+              cancelLabel="Stay"
+              destructive
+              onCancel={() => setPendingLeave(null)}
+              onConfirm={() => { const a = pendingLeave; setPendingLeave(null); navigation.dispatch(a); }}
+            />
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -76,4 +103,8 @@ const s = StyleSheet.create({
   content: { flex: 1 },
   pane: { flex: 1 },
   hidden: { display: 'none' },
+  tabInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: SHADES.amber },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(30,30,30,0.45)', justifyContent: 'center', padding: 24 },
+  overlayCard: { backgroundColor: COLORS.white, borderRadius: 18, padding: 8 },
 });

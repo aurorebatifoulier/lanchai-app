@@ -1760,6 +1760,15 @@ a snapshot indefinitely).
   `calendar/[date]` with `date` prop, Calendar, All = reservations) and
   `/admin/app-content` (Home slides, Onboarding). Shop settings shows
   `components/admin/ExchangeRateSection.tsx` (also rendered by `/admin/exchange-rate`).
+  **Shop settings = 5 tabs** (same `AdminTabsScreen`, `?tab=shop|hours|money|emails|advanced`,
+  e.g. `/admin/shop-settings?tab=money`): Shop (name, address, city, coordinates, payment
+  methods, WhatsApp) · Hours (hours text, slots, closed days, chat auto-reply) · Money
+  (`ExchangeRateSection` + late-return grace) · Emails · Advanced (flags, Home, retention,
+  diagnostics). Each tab has its OWN Save: the shop doc is written from that tab's values
+  + the other tabs' LAST SAVED values (`stored`) — never another tab's unsaved edits; same
+  `validate()` and payload as before; grace hours only from Money. Unsaved changes: amber
+  dot on the tab chip (`dirty` prop; sections report via `onDirtyChange`), tabs stay
+  mounted, leaving asks "Leave without saving?" (`usePreventRemove`).
   `/admin/tools` = Product thumbnails + Search vocabulary. Saved replies: off the dashboard,
   "Edit replies" chip in the admin chat composer. Every old route still works on its own
   (`/admin/calendar`, `/admin/reservations`, `/admin/home-slides`, …) — keep the

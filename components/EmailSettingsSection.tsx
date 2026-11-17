@@ -17,7 +17,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Admin → Shop settings: transactional email mode (test redirect vs live) + test-send.
 // Self-contained (own load/save) so it never interferes with the shop form above it.
-export default function EmailSettingsSection() {
+// `onDirtyChange`: true while the test inbox field differs from the saved one.
+export default function EmailSettingsSection({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const [settings, setSettings] = useState<EmailSettings | null>(null);
   const [redirectInput, setRedirectInput] = useState('');
   const [confirmLive, setConfirmLive] = useState(false);
@@ -33,6 +34,9 @@ export default function EmailSettingsSection() {
       .then(s => { setSettings(s); setRedirectInput(s.redirectAllTo); })
       .catch(() => setSettings({ live: false, redirectAllTo: '' }));
   }, []);
+
+  const dirty = !!settings && redirectInput.trim() !== settings.redirectAllTo.trim();
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const effectiveRedirect = (settings?.redirectAllTo.trim() || DEFAULT_TEST_REDIRECT);
 

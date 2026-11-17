@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DEFAULT_AUTO_REPLY } from '@/functions/src/shared/shop';
 import {
   View,
@@ -10,14 +10,11 @@ import {
   type KeyboardTypeOptions,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { doc, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
-import BackButton from '@/components/BackButton';
+import AdminTabsScreen from '@/components/admin/AdminTabsScreen';
 import { UI } from '@/components/account/ui';
 import { getHomeConfig, saveHomeConfig, DEFAULT_BUDGET_THRESHOLD_LAK, BUDGET_THRESHOLD_LIMITS } from '@/lib/homeConfig';
 import {
@@ -179,14 +176,21 @@ function FeatureFlagsSection() {
 
 // Retention of ID / residency documents (config/residency) — read by the daily
 // documentRetentionDaily job. Own Save, independent of the shop form.
-function RetentionSection() {
+function RetentionSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const [days, setDays] = useState(String(RETENTION_DEFAULTS.proofRetentionDays));
   const [months, setMonths] = useState(String(RETENTION_DEFAULTS.idRetentionMonths));
+  const [stored, setStored] = useState<{ days: string; months: string } | null>(null);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    getRetentionConfig().then(c => { setDays(String(c.proofRetentionDays)); setMonths(String(c.idRetentionMonths)); });
+    getRetentionConfig().then(c => {
+      setDays(String(c.proofRetentionDays));
+      setMonths(String(c.idRetentionMonths));
+      setStored({ days: String(c.proofRetentionDays), months: String(c.idRetentionMonths) });
+    });
   }, []);
+  const dirty = !!stored && (days !== stored.days || months !== stored.months);
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
   const save = async () => {
     const d = Number(days);
     const m = Number(months);
@@ -198,6 +202,7 @@ function RetentionSection() {
     setStatus('saving');
     try {
       await saveRetentionConfig({ proofRetentionDays: d, idRetentionMonths: m });
+      setStored({ days, months });
       setStatus('saved');
     } catch {
       setStatus('error');
@@ -232,13 +237,16 @@ function RetentionSection() {
 }
 
 // Home settings (config/home) — the "Under X LAK a day" section. Own Save.
-function HomeSection() {
+function HomeSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const [threshold, setThreshold] = useState(String(DEFAULT_BUDGET_THRESHOLD_LAK));
+  const [stored, setStored] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    getHomeConfig().then(c => setThreshold(String(c.budgetThresholdLak)));
+    getHomeConfig().then(c => { setThreshold(String(c.budgetThresholdLak)); setStored(String(c.budgetThresholdLak)); });
   }, []);
+  const dirty = stored != null && threshold !== stored;
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
   const save = async () => {
     const v = Number(threshold.replace(/[\s,]/g, ''));
     if (!Number.isInteger(v) || v < BUDGET_THRESHOLD_LIMITS.min || v > BUDGET_THRESHOLD_LIMITS.max) {
@@ -250,6 +258,7 @@ function HomeSection() {
     try {
       await saveHomeConfig({ budgetThresholdLak: v });
       setThreshold(String(v));
+      setStored(String(v));
       setStatus('saved');
     } catch {
       setStatus('error');
@@ -275,270 +284,372 @@ function HomeSection() {
   );
 }
 
-export default function AdminShopSettingsScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
+// The shop form (config/shop + config/latePolicy grace hours) is split over 3 tabs. Each
+// tab saves ONLY its own fields: the saved document is built from that tab's values +
+// the LAST SAVED values of the other tabs (`stored`) — never another tab's unsaved edits.
+// Same fields, same validate(), same written data as the single form before.
+type ShopTab = 'shop' | 'hours' | 'money';
+const TAB_FIELDS: Record<ShopTab, (keyof Form)[]> = {
+  shop: ['name', 'addressLine', 'city', 'coordinates', 'paymentMethods', 'whatsappNumber'],
+  hours: ['hours', 'openTime', 'closeTime', 'lastPickupOffsetMin', 'autoReplyText'],
+  money: ['graceHours'],
+};
+const SAVE_LABEL: Record<ShopTab, string> = {
+  shop: 'Save shop details',
+  hours: 'Save hours and slots',
+  money: 'Save late return rules',
+};
+const SAVED_TEXT: Record<ShopTab, string> = {
+  shop: 'Shop details saved.',
+  hours: 'Hours and slots saved.',
+  money: 'Late return rules saved.',
+};
+const pick = (f: Form, keys: (keyof Form)[]): Partial<Form> =>
+  Object.fromEntries(keys.map(k => [k, f[k]])) as Partial<Form>;
+const sameDays = (a: number[], b: number[]) =>
+  [...a].sort().join(',') === [...b].sort().join(',');
 
+type SectionKey = 'exchange' | 'email' | 'home' | 'retention';
+
+// Admin → Shop and exchange rate: tabs Shop · Hours · Money · Emails · Advanced
+// (`?tab=`). Tabs stay mounted (AdminTabsScreen), so unsaved edits survive a tab switch;
+// a dot marks a tab with unsaved changes and leaving asks for confirmation.
+export default function AdminShopSettingsScreen() {
   const [loading,    setLoading]    = useState(true);
   const [configured, setConfigured] = useState(false);
   const [form,       setForm]       = useState<Form>(toForm(SHOP_FALLBACK, DEFAULT_LATE_GRACE_HOURS));
-  const [saving,     setSaving]     = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
-  const [saved,      setSaved]      = useState(false);
+  /** Last saved (or loaded) values — what the other tabs contribute to a save. */
+  const [stored,     setStored]     = useState<Form>(toForm(SHOP_FALLBACK, DEFAULT_LATE_GRACE_HOURS));
+  const [saving,     setSaving]     = useState<ShopTab | null>(null);
+  const [errors,     setErrors]     = useState<Partial<Record<ShopTab, string>>>({});
+  const [savedTab,   setSavedTab]   = useState<Partial<Record<ShopTab, boolean>>>({});
   // Weekly closing days (0 = Sunday), Vientiane — the Home "Open now" line only.
   const [closedDays, setClosedDays] = useState<number[]>([]);
+  const [storedClosedDays, setStoredClosedDays] = useState<number[]>([]);
+  // Unsaved state reported by the self-contained sections.
+  const [sectionDirty, setSectionDirty] = useState<Partial<Record<SectionKey, boolean>>>({});
+  const onDirty = useMemo(() => {
+    const make = (k: SectionKey) => (d: boolean) =>
+      setSectionDirty(prev => (!!prev[k] === d ? prev : { ...prev, [k]: d }));
+    return { exchange: make('exchange'), email: make('email'), home: make('home'), retention: make('retention') };
+  }, []);
 
   useEffect(() => {
     Promise.all([getDoc(doc(db, 'config', 'shop')), getGraceHours()])
       .then(([snap, graceHours]) => {
         if (snap.exists()) setConfigured(true);
         const cd = snap.exists() ? (snap.data() as Partial<ShopInfo>).closedDays : undefined;
-        setClosedDays(Array.isArray(cd) ? cd.filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : []);
-        setForm(toForm(
+        const days = Array.isArray(cd) ? cd.filter(d => Number.isInteger(d) && d >= 0 && d <= 6) : [];
+        setClosedDays(days);
+        setStoredClosedDays(days);
+        const f = toForm(
           snap.exists() ? { ...SHOP_FALLBACK, ...(snap.data() as Partial<ShopInfo>) } : SHOP_FALLBACK,
           graceHours,
-        ));
+        );
+        setForm(f);
+        setStored(f);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  const tabOf = (key: keyof Form): ShopTab =>
+    (Object.keys(TAB_FIELDS) as ShopTab[]).find(t => TAB_FIELDS[t].includes(key)) ?? 'shop';
+
   const set = (key: keyof Form) => (value: string) => {
+    const t = tabOf(key);
     setForm(prev => ({ ...prev, [key]: value }));
-    setError(null);
-    setSaved(false);
+    setErrors(prev => ({ ...prev, [t]: undefined }));
+    setSavedTab(prev => ({ ...prev, [t]: false }));
   };
 
-  const formError = validate(form);
-  const slots = formError ? null : buildTimeSlots(form.openTime, form.closeTime, Number(form.lastPickupOffsetMin));
+  const tabDirty = (t: ShopTab) =>
+    TAB_FIELDS[t].some(k => form[k] !== stored[k]) || (t === 'hours' && !sameDays(closedDays, storedClosedDays));
 
-  const handleSave = useCallback(async () => {
-    const err = validate(form);
-    if (err) { setError(err); return; }
-    setSaving(true);
-    setError(null);
+  /** The form as it would be saved from tab `t`: its values + the others' saved values. */
+  const composedFor = (t: ShopTab): Form => ({ ...stored, ...pick(form, TAB_FIELDS[t]) });
+
+  // Slot preview: the Hours tab's values (+ the other tabs' saved ones), same rule as before.
+  const hoursForm = composedFor('hours');
+  const slots = validate(hoursForm) ? null : buildTimeSlots(hoursForm.openTime, hoursForm.closeTime, Number(hoursForm.lastPickupOffsetMin));
+
+  const handleSave = useCallback(async (t: ShopTab) => {
+    const f: Form = { ...stored, ...pick(form, TAB_FIELDS[t]) };
+    const days = t === 'hours' ? closedDays : storedClosedDays;
+    const err = validate(f);
+    if (err) { setErrors(prev => ({ ...prev, [t]: err })); return; }
+    setSaving(t);
+    setErrors(prev => ({ ...prev, [t]: undefined }));
     try {
-      await saveShopInfo({
-        name:                form.name.trim(),
-        addressLine:         form.addressLine.trim(),
-        city:                form.city.trim(),
-        hours:               form.hours.trim(),
-        openTime:            form.openTime.trim(),
-        closeTime:           form.closeTime.trim(),
-        lastPickupOffsetMin: Number(form.lastPickupOffsetMin),
-        closedDays:          [...closedDays].sort((a, b) => a - b),
-        whatsappNumber:      normalizeWhatsappNumber(form.whatsappNumber),
-        paymentMethods:      form.paymentMethods.trim(),
-        autoReplyText:       form.autoReplyText.trim() || DEFAULT_AUTO_REPLY,
-        // Exact pin for "Get directions" (app + emails, shared mapsUrl); cleared → address search.
-        ...(parseCoordinates(form.coordinates)
-          ?? ({ latitude: deleteField(), longitude: deleteField() } as unknown as { latitude: number; longitude: number })),
-      });
-      await saveGraceHours(Number(form.graceHours));
-      setForm(prev => ({ ...prev, whatsappNumber: normalizeWhatsappNumber(prev.whatsappNumber) }));
-      setConfigured(true);
-      setSaved(true);
+      if (t === 'money') {
+        await saveGraceHours(Number(f.graceHours));
+      } else {
+        await saveShopInfo({
+          name:                f.name.trim(),
+          addressLine:         f.addressLine.trim(),
+          city:                f.city.trim(),
+          hours:               f.hours.trim(),
+          openTime:            f.openTime.trim(),
+          closeTime:           f.closeTime.trim(),
+          lastPickupOffsetMin: Number(f.lastPickupOffsetMin),
+          closedDays:          [...days].sort((a, b) => a - b),
+          whatsappNumber:      normalizeWhatsappNumber(f.whatsappNumber),
+          paymentMethods:      f.paymentMethods.trim(),
+          autoReplyText:       f.autoReplyText.trim() || DEFAULT_AUTO_REPLY,
+          // Exact pin for "Get directions" (app + emails, shared mapsUrl); cleared → address search.
+          ...(parseCoordinates(f.coordinates)
+            ?? ({ latitude: deleteField(), longitude: deleteField() } as unknown as { latitude: number; longitude: number })),
+        });
+        setConfigured(true);
+      }
+      const savedPart = pick(f, TAB_FIELDS[t]);
+      if (t === 'shop') savedPart.whatsappNumber = normalizeWhatsappNumber(f.whatsappNumber);
+      setForm(prev => ({ ...prev, ...savedPart }));
+      setStored(prev => ({ ...prev, ...savedPart }));
+      if (t === 'hours') setStoredClosedDays(days);
+      setSavedTab(prev => ({ ...prev, [t]: true }));
     } catch {
-      setError('Failed to save. Please try again.');
+      setErrors(prev => ({ ...prev, [t]: 'Failed to save. Please try again.' }));
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
-  }, [form, closedDays]);
+  }, [form, stored, closedDays, storedClosedDays]);
 
   const toggleDay = (d: number) => {
     setClosedDays(prev => (prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]));
-    setError(null);
-    setSaved(false);
+    setErrors(prev => ({ ...prev, hours: undefined }));
+    setSavedTab(prev => ({ ...prev, hours: false }));
   };
 
-  return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+  const busy = saving != null;
 
-      <View style={s.header}>
-        <BackButton onPress={() => router.back()} />
-        <Text style={s.headerTitle}>Shop and exchange rate</Text>
-        <View style={{ width: 40 }} />
+  const notConfigured = !configured && (
+    <View style={s.infoBox}>
+      <Feather name="info" size={13} color={COLORS.amber} />
+      <Text style={s.infoText}>
+        Not set yet — the app is currently showing the default values below.
+        Save once to make them official.
+      </Text>
+    </View>
+  );
+
+  // Error / success + this tab's own Save button (saves this tab only).
+  const saveFooter = (t: ShopTab) => (
+    <>
+      {!!errors[t] && (
+        <View style={s.errBox}>
+          <Feather name="alert-circle" size={13} color={COLORS.danger} />
+          <Text style={s.errText}>{errors[t]}</Text>
+        </View>
+      )}
+      {savedTab[t] && (
+        <View style={s.successBox}>
+          <Feather name="check-circle" size={13} color={COLORS.success} />
+          <Text style={s.successText}>{SAVED_TEXT[t]}</Text>
+        </View>
+      )}
+      <TouchableOpacity style={s.primaryBtn} onPress={() => handleSave(t)} disabled={busy} activeOpacity={0.8}>
+        {saving === t
+          ? <ActivityIndicator size="small" color={COLORS.carbon} />
+          : <Text style={s.primaryBtnText}>{SAVE_LABEL[t]}</Text>}
+      </TouchableOpacity>
+    </>
+  );
+
+  const pane = (children: React.ReactNode, needsForm = true) => (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={[s.content, { paddingBottom: 40 }]}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      {needsForm && loading ? <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} /> : children}
+    </ScrollView>
+  );
+
+  const shopTab = pane(
+    <>
+      {notConfigured}
+      <Text style={s.sectionLabel}>Shop</Text>
+      <Field label="Shop name" value={form.name} onChangeText={set('name')} editable={!busy} />
+      <Field label="Address" value={form.addressLine} onChangeText={set('addressLine')} editable={!busy} />
+      <Field label="City" value={form.city} onChangeText={set('city')} editable={!busy} />
+      <Field
+        label="Map coordinates (Get directions)"
+        hint="Latitude, longitude — in Google Maps, long-press the shop's pin and copy the numbers shown (e.g. 17.950063, 102.622828). Empty = search by address."
+        placeholder="17.950063, 102.622828"
+        value={form.coordinates}
+        onChangeText={set('coordinates')}
+        keyboardType="numbers-and-punctuation"
+        editable={!busy}
+      />
+      <Field
+        label="Payment methods (shown in emails)"
+        hint="Listed under “What to bring” in booking emails. Keep it consistent with the Terms of service."
+        value={form.paymentMethods}
+        onChangeText={set('paymentMethods')}
+        editable={!busy}
+      />
+
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>WhatsApp</Text>
+        <Field
+          label="WhatsApp number"
+          hint="International format with country code, no “+” needed, e.g. 8562012345678. Leave empty to hide every WhatsApp button in the app."
+          placeholder="856XXXXXXXXXX"
+          value={form.whatsappNumber}
+          onChangeText={set('whatsappNumber')}
+          keyboardType="phone-pad"
+          editable={!busy}
+        />
+      </View>
+      {saveFooter('shop')}
+    </>,
+  );
+
+  const hoursTab = pane(
+    <>
+      {notConfigured}
+      <Text style={s.sectionLabel}>Opening hours</Text>
+      <Field
+        label="Opening hours (display text)"
+        hint="Shown to renters as-is, e.g. “Daily 9:00–20:00”. Keep it consistent with the times below."
+        value={form.hours}
+        onChangeText={set('hours')}
+        editable={!busy}
+      />
+
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>Pick-up and return slots</Text>
+        <View style={s.row}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Opens at"
+              placeholder="09:00"
+              value={form.openTime}
+              onChangeText={set('openTime')}
+              keyboardType="numbers-and-punctuation"
+              editable={!busy}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Closes at"
+              placeholder="20:00"
+              value={form.closeTime}
+              onChangeText={set('closeTime')}
+              keyboardType="numbers-and-punctuation"
+              editable={!busy}
+            />
+          </View>
+        </View>
+        <Field
+          label="Last pick-up before closing (minutes)"
+          placeholder="30"
+          value={form.lastPickupOffsetMin}
+          onChangeText={set('lastPickupOffsetMin')}
+          keyboardType="number-pad"
+          editable={!busy}
+        />
+        <Text style={s.preview}>
+          {slots && slots.length > 0
+            ? `Renters can pick ${slots[0]} to ${slots[slots.length - 1]}, every 30 min (${slots.length} slots).`
+            : 'Fix the times above to preview the slots.'}
+        </Text>
+        <Text style={[s.fieldLabel, { marginTop: 14 }]}>Closed days</Text>
+        <View style={s.dayRow}>
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, d) => {
+            const on = closedDays.includes(d);
+            return (
+              <TouchableOpacity
+                key={label}
+                style={[UI.choice, on && UI.choiceOn]}
+                onPress={() => toggleDay(d)}
+                disabled={busy}
+                activeOpacity={0.75}
+              >
+                <Text style={[UI.choiceText, on && UI.choiceTextOn]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={s.hint}>
+          Only drives the Home &quot;Open now / Closed today&quot; line. It does not block bookings on those days.
+        </Text>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {loading ? (
-          <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
-        ) : (
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>Chat</Text>
+        <Field
+          label="Chat auto-reply when closed"
+          hint="Sent once per closed period when a renter writes outside opening hours. {open time} becomes “9:00”, “tomorrow at 9:00” or “Monday at 9:00”."
+          value={form.autoReplyText}
+          onChangeText={set('autoReplyText')}
+          editable={!busy}
+        />
+      </View>
+      {saveFooter('hours')}
+    </>,
+  );
+
+  const moneyTab = pane(
+    <>
+      {/* Exchange rates + VAT (config/pricing) — own Save buttons; also the
+          /admin/exchange-rate route on its own. */}
+      <Text style={s.sectionLabel}>Exchange rate and VAT</Text>
+      <ExchangeRateSection onDirtyChange={onDirty.exchange} />
+
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>Late returns</Text>
+        {loading ? <ActivityIndicator color={COLORS.amber} /> : (
           <>
-            {!configured && (
-              <View style={s.infoBox}>
-                <Feather name="info" size={13} color={COLORS.amber} />
-                <Text style={s.infoText}>
-                  Not set yet — the app is currently showing the default values below.
-                  Save once to make them official.
-                </Text>
-              </View>
-            )}
-
-            <Text style={s.sectionLabel}>Shop</Text>
-            <Field label="Shop name" value={form.name} onChangeText={set('name')} editable={!saving} />
-            <Field label="Address" value={form.addressLine} onChangeText={set('addressLine')} editable={!saving} />
-            <Field label="City" value={form.city} onChangeText={set('city')} editable={!saving} />
             <Field
-              label="Opening hours (display text)"
-              hint="Shown to renters as-is, e.g. “Daily 9:00–20:00”. Keep it consistent with the times below."
-              value={form.hours}
-              onChangeText={set('hours')}
-              editable={!saving}
+              label="Grace period (hours)"
+              hint="Internal only — never shown to renters. Within this delay after the scheduled return time, no late penalty is suggested. Tiers (1 / 1.5 / 2 days) are still counted from the scheduled return time."
+              placeholder="2"
+              value={form.graceHours}
+              onChangeText={set('graceHours')}
+              keyboardType="decimal-pad"
+              editable={!busy}
             />
-            <Field
-              label="Map coordinates (Get directions)"
-              hint="Latitude, longitude — in Google Maps, long-press the shop's pin and copy the numbers shown (e.g. 17.950063, 102.622828). Empty = search by address."
-              placeholder="17.950063, 102.622828"
-              value={form.coordinates}
-              onChangeText={set('coordinates')}
-              keyboardType="numbers-and-punctuation"
-              editable={!saving}
-            />
-            <Field
-              label="Payment methods (shown in emails)"
-              hint="Listed under “What to bring” in booking emails. Keep it consistent with the Terms of service."
-              value={form.paymentMethods}
-              onChangeText={set('paymentMethods')}
-              editable={!saving}
-            />
-            <Field
-              label="Chat auto-reply when closed"
-              hint="Sent once per closed period when a renter writes outside opening hours. {open time} becomes “9:00”, “tomorrow at 9:00” or “Monday at 9:00”."
-              value={form.autoReplyText}
-              onChangeText={set('autoReplyText')}
-              editable={!saving}
-            />
-
-            <View style={s.section}>
-              <Text style={s.sectionLabel}>Pick-up and return slots</Text>
-              <View style={s.row}>
-                <View style={{ flex: 1 }}>
-                  <Field
-                    label="Opens at"
-                    placeholder="09:00"
-                    value={form.openTime}
-                    onChangeText={set('openTime')}
-                    keyboardType="numbers-and-punctuation"
-                    editable={!saving}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Field
-                    label="Closes at"
-                    placeholder="20:00"
-                    value={form.closeTime}
-                    onChangeText={set('closeTime')}
-                    keyboardType="numbers-and-punctuation"
-                    editable={!saving}
-                  />
-                </View>
-              </View>
-              <Field
-                label="Last pick-up before closing (minutes)"
-                placeholder="30"
-                value={form.lastPickupOffsetMin}
-                onChangeText={set('lastPickupOffsetMin')}
-                keyboardType="number-pad"
-                editable={!saving}
-              />
-              <Text style={s.preview}>
-                {slots && slots.length > 0
-                  ? `Renters can pick ${slots[0]} to ${slots[slots.length - 1]}, every 30 min (${slots.length} slots).`
-                  : 'Fix the times above to preview the slots.'}
-              </Text>
-              <Text style={[s.fieldLabel, { marginTop: 14 }]}>Closed days</Text>
-              <View style={s.dayRow}>
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, d) => {
-                  const on = closedDays.includes(d);
-                  return (
-                    <TouchableOpacity
-                      key={label}
-                      style={[UI.choice, on && UI.choiceOn]}
-                      onPress={() => toggleDay(d)}
-                      disabled={saving}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={[UI.choiceText, on && UI.choiceTextOn]}>{label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={s.hint}>
-                Only drives the Home &quot;Open now / Closed today&quot; line. It does not block bookings on those days.
-              </Text>
-            </View>
-
-            <View style={s.section}>
-              <Text style={s.sectionLabel}>WhatsApp</Text>
-              <Field
-                label="WhatsApp number"
-                hint="International format with country code, no “+” needed, e.g. 8562012345678. Leave empty to hide every WhatsApp button in the app."
-                placeholder="856XXXXXXXXXX"
-                value={form.whatsappNumber}
-                onChangeText={set('whatsappNumber')}
-                keyboardType="phone-pad"
-                editable={!saving}
-              />
-            </View>
-
-            <View style={s.section}>
-              <Text style={s.sectionLabel}>Late returns</Text>
-              <Field
-                label="Grace period (hours)"
-                hint="Internal only — never shown to renters. Within this delay after the scheduled return time, no late penalty is suggested. Tiers (1 / 1.5 / 2 days) are still counted from the scheduled return time."
-                placeholder="2"
-                value={form.graceHours}
-                onChangeText={set('graceHours')}
-                keyboardType="decimal-pad"
-                editable={!saving}
-              />
-            </View>
-
-            {!!error && (
-              <View style={s.errBox}>
-                <Feather name="alert-circle" size={13} color={COLORS.danger} />
-                <Text style={s.errText}>{error}</Text>
-              </View>
-            )}
-            {saved && (
-              <View style={s.successBox}>
-                <Feather name="check-circle" size={13} color={COLORS.success} />
-                <Text style={s.successText}>Shop settings saved.</Text>
-              </View>
-            )}
-
-            <TouchableOpacity style={s.primaryBtn} onPress={handleSave} disabled={saving} activeOpacity={0.8}>
-              {saving
-                ? <ActivityIndicator size="small" color={COLORS.carbon} />
-                : <Text style={s.primaryBtnText}>Save</Text>}
-            </TouchableOpacity>
-
-            {/* Exchange rates + VAT (config/pricing) — own Save buttons; also the
-                /admin/exchange-rate route on its own. */}
-            <View style={s.section}>
-              <Text style={s.sectionLabel}>Exchange rate and VAT</Text>
-              <ExchangeRateSection />
-            </View>
-
-            <FeatureFlagsSection />
-
-            <HomeSection />
-            <RetentionSection />
-
-            <EmailSettingsSection />
-
-            <DiagnosticsSection />
+            {saveFooter('money')}
           </>
         )}
-      </ScrollView>
-    </View>
+      </View>
+    </>,
+    false,
+  );
+
+  const emailsTab = pane(<EmailSettingsSection onDirtyChange={onDirty.email} />, false);
+
+  const advancedTab = pane(
+    <>
+      <FeatureFlagsSection />
+      <HomeSection onDirtyChange={onDirty.home} />
+      <RetentionSection onDirtyChange={onDirty.retention} />
+      <DiagnosticsSection />
+    </>,
+    false,
+  );
+
+  return (
+    <AdminTabsScreen
+      title="Shop and exchange rate"
+      dirty={{
+        shop: !loading && tabDirty('shop'),
+        hours: !loading && tabDirty('hours'),
+        money: (!loading && tabDirty('money')) || !!sectionDirty.exchange,
+        emails: !!sectionDirty.email,
+        advanced: !!sectionDirty.home || !!sectionDirty.retention,
+      }}
+      tabs={[
+        { key: 'shop', label: 'Shop', render: () => shopTab },
+        { key: 'hours', label: 'Hours', render: () => hoursTab },
+        { key: 'money', label: 'Money', render: () => moneyTab },
+        { key: 'emails', label: 'Emails', render: () => emailsTab },
+        { key: 'advanced', label: 'Advanced', render: () => advancedTab },
+      ]}
+    />
   );
 }
 
@@ -555,19 +666,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   retentionBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.carbon },
-  root: { flex: 1, backgroundColor: COLORS.porcelain },
-
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: COLORS.softGray200,
-  },
-  headerTitle: {
-    position: 'absolute', left: 0, right: 0, textAlign: 'center',
-    fontSize: 17, fontWeight: '800', color: COLORS.carbon, letterSpacing: -0.3,
-  },
-
-  content: { paddingHorizontal: 20, paddingTop: 24 },
+  content: { paddingHorizontal: 20, paddingTop: 20 },
 
   infoBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,

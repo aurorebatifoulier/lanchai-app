@@ -173,7 +173,8 @@ async function migrateProductsToUsd(initialRate: number): Promise<void> {
 // USD / THB exchange rates + VAT (config/pricing), each with its own Save — moved as is
 // from app/admin/exchange-rate.tsx. Rendered as a section of Admin → Shop and exchange
 // rate (shop-settings.tsx) and by the /admin/exchange-rate route (thin shell).
-export default function ExchangeRateSection() {
+// `onDirtyChange`: true while a typed rate isn't saved yet (Shop settings tab dot).
+export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
 
   const [loading, setLoading] = useState(true);
   const [config,  setConfig]  = useState<PricingConfig | null>(null);
@@ -236,6 +237,16 @@ export default function ExchangeRateSection() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // A rate input counts as unsaved while it's shown (editing, or no rate yet) and differs
+  // from the stored value.
+  const differs = (shown: boolean, input: string, stored: number | undefined) =>
+    shown && input.trim() !== (stored == null ? '' : String(stored));
+  const dirty = !loading && (
+    differs(editing || !config?.exchangeRate, rateInput, config?.exchangeRate)
+    || differs(thbEditing || config?.thbToLakRate == null, thbRateInput, config?.thbToLakRate)
+    || differs(vatEditing || config?.vatPercent == null, vatRateInput, config?.vatPercent));
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const parsedRate = parseFloat(rateInput);
   const rateValid = !isNaN(parsedRate) && parsedRate > 0;
