@@ -27,7 +27,6 @@ import {
   adminLiftNoShowHold,
   getReservationsByOrderId,
   getReservationById,
-  earlyHandoverFields,
   earlyHandoverPrompt,
   type RentalDoc,
   type ReservationStatus,
@@ -60,6 +59,7 @@ import {
 import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 import { RenterIdCard } from '@/components/admin/RenterIdCard';
 import { addAudit } from '@/lib/adminAudit';
+import { submitHandover } from '@/lib/handover';
 import { canDo, phaseOf, PHASE_LABELS, type MachineAction } from '@/functions/src/shared/reservationMachine';
 import { HistoryCard } from '@/components/admin/HistoryCard';
 import { DamageReviewCard, PickupRefusedCard, RefusePickupBox } from '@/components/admin/OwnerReview';
@@ -1016,27 +1016,31 @@ export default function AdminReservationDetailScreen() {
               text="Confirm the renter has picked up the item?"
               confirmLabel="Mark as picked up"
               onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                'handover',
-                { status: 'active', ...earlyHandoverFields(reservation.pickupAt), ...(reservation.pickupRefusedOpen ? { pickupRefusedOpen: false } : {}) },
-                { status: 'active' },
-                () => {
-                  sendNotif(reservation.renterId, {
-                    type: 'rental',
-                    icon: 'box',
-                    iconColor: 'carbon',
-                    title: 'Rental started',
-                    body: `You've picked up the ${reservation.productName}. Return by ${reservation.returnLabel}.`,
-                    deepLink: `/rentals/${id}`,
-                  });
-                  // Mark phone as verified in-person at pickup (if not already).
-                  if (!phoneVerified) {
-                    updateDoc(doc(db, 'users', reservation.renterId), { phoneVerified: true })
-                      .then(() => setRenterProfile(p => p ? { ...p, phoneVerified: true } : p))
-                      .catch(err => console.warn('[AdminReservationDetail] phoneVerified update failed:', err));
-                  }
-                },
-              )}
+              onConfirm={async () => {
+                // Server: state machine + a unit physically in the shop (submitHandover).
+                setActioning(true); setActionError(null); setConfirmAction(null);
+                try {
+                  await submitHandover([{ reservationId: reservation.id }]);
+                    sendNotif(reservation.renterId, {
+                      type: 'rental',
+                      icon: 'box',
+                      iconColor: 'carbon',
+                      title: 'Rental started',
+                      body: `You've picked up the ${reservation.productName}. Return by ${reservation.returnLabel}.`,
+                      deepLink: `/rentals/${id}`,
+                    });
+                    // Mark phone as verified in-person at pickup (if not already).
+                    if (!phoneVerified) {
+                      updateDoc(doc(db, 'users', reservation.renterId), { phoneVerified: true })
+                        .then(() => setRenterProfile(p => p ? { ...p, phoneVerified: true } : p))
+                        .catch(err => console.warn('[AdminReservationDetail] phoneVerified update failed:', err));
+                    }
+                } catch (e) {
+                  setActionError((e as Error).message);
+                } finally {
+                  setActioning(false);
+                }
+              }}
             />
           )}
           {/* D6: no return without a checklist — "Mark as returned" opens the checklist. */}

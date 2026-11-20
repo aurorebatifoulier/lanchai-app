@@ -17,7 +17,6 @@ import BackButton from '@/components/BackButton';
 import {
   getReservationById,
   getUserProfile,
-  submitChecklistBatch,
   type RentalDoc,
   type ChecklistData,
 } from '@/lib/firestore';
@@ -26,6 +25,7 @@ import { MultiCurrencyAmount } from '@/components/MultiCurrencyAmount';
 import { useExchangeRate, useThbRate, useDepositRates } from '@/lib/exchangeRate';
 import { lakToUsd, lakToThb } from '@/utils/currency';
 import { getChainItemDraft, clearChainDrafts } from '@/lib/checklistChainDraft';
+import { submitHandover, toHandoverPayload } from '@/lib/handover';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 import { AgreementSection, initialAgreementState, type AgreementState } from '@/components/admin/AgreementSection';
 import { conditionLines, type HandoverInfo } from '@/lib/rentalAgreement';
@@ -256,7 +256,8 @@ function ChecklistSummaryScreen() {
         };
       });
 
-      await submitChecklistBatch(items);
+      // Handover of the whole order → server (state machine + units physically in the shop).
+      await submitHandover(items.map(i => ({ reservationId: i.id, checklist: toHandoverPayload(i.checklistData) })));
 
       reservations.forEach((r, i) => {
         if (isHandover) {

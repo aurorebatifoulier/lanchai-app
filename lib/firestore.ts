@@ -677,10 +677,7 @@ export async function confirmReservationsPayment(ids: string[]): Promise<void> {
   await batch.commit();
 }
 
-// Writes each item's handover/return checklist and flips its status, all in one atomic
-// batch — used by the consolidated summary screen at the end of a chained multi-item
-// checklist flow, so every item transitions together or none do. Throws on Firestore
-// error — caller must handle.
+// Charge fields of a return (shape kept for the chained-checklist draft types).
 export interface ChecklistBatchChargeFields {
   // Damage/condition charge — present only when the worst rating was damaged/unusable.
   chargeAmount?: number;
@@ -692,7 +689,7 @@ export interface ChecklistBatchChargeFields {
   // independent of the damage fields above; either, neither, or both may be set.
   lateChargeAmount?: number;
   lateChargeReason?: string;
-  // Explicit staff waivers (see RentalDoc). *WaivedAt is stamped by submitChecklistBatch.
+  // Explicit staff waivers (see RentalDoc).
   lateChargeWaived?: boolean;
   lateChargeWaivedAmount?: number;
   lateChargeWaivedReason?: string;
@@ -723,48 +720,8 @@ export function earlyHandoverPrompt(pickupAtMs: number): string {
   return `This pick-up is planned for ${vteDay(pickupAtMs)}. Hand over early anyway?`;
 }
 
-export async function submitChecklistBatch(
-  items: Array<{
-    id: string;
-    type: 'handover' | 'return';
-    checklistData: ChecklistData;
-    charge?: ChecklistBatchChargeFields;
-    productId: string;
-    quantity: number;
-    adminName: string;
-    /** Planned pick-up — handover only, to record an early handover. */
-    pickupAt?: Timestamp | null;
-  }>,
-): Promise<void> {
-  if (items.length === 0) return;
-  const batch = writeBatch(db);
-  for (const { id, type, checklistData, charge, productId, quantity, adminName, pickupAt } of items) {
-    const isHandover = type === 'handover';
-    const auditId = await addAudit(batch, isHandover ? 'handover' : 'return', { reservationId: id, productId },
-      isHandover ? 'Handover checklist' : 'Return checklist');
-    batch.update(doc(db, 'reservations', id), {
-      lastAuditId: auditId,
-      lastAction: isHandover ? 'handover' : 'return',
-      ...(isHandover ? { pickupRefusedOpen: false } : {}),
-      [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
-      status: isHandover ? 'active' : 'returned',
-      ...(isHandover ? earlyHandoverFields(pickupAt) : { returnedAt: serverTimestamp(), stockReleasedAt: null }),
-      // Optional fields may be undefined (e.g. no suggested amount) — Firestore rejects those.
-      ...Object.fromEntries(Object.entries(charge ?? {}).filter(([, v]) => v !== undefined)),
-      ...(charge?.lateChargeWaived ? { lateChargeWaivedAt: serverTimestamp() } : {}),
-      ...(charge?.damageChargeWaived ? { damageChargeWaivedAt: serverTimestamp() } : {}),
-      updatedAt: serverTimestamp(),
-    });
-    // Excluded from available stock the instant it's marked returned — released only by
-    // releaseSettledStock, once the deposit/charges are closed out AND the 12h handoff
-    // buffer has elapsed. A checklist-rated 'unusable' item is a true write-off, so it
-    // goes straight to lostUnits instead, mirroring "Report lost/stolen".
-    if (!isHandover) {
-      addReturnStockToBatch(batch, productId, { quantity, chargeSeverity: charge?.chargeSeverity, chargeUnits: charge?.chargeUnits }, adminName, id, auditId);
-    }
-  }
-  await batch.commit();
-}
+// Handovers go through the submitHandover callable (lib/handover.ts) and returns through
+// the 3-step return flow (lib/returnFlow.ts) — there is no client-side batch for either.
 
 // ── User profile ─────────────────────────────────────────────────────────────
 

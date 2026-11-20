@@ -32,7 +32,7 @@ const SEED: Record<Phase, Record<string, unknown>> = {
   archived: { status: 'returned', archived: true, returnFinalizedAt: T0 },
 };
 const ROLES = [['owner', OWNER], ['staff', STAFF], ['staffOff', STAFF_OFF]] as const;
-const SERVER_ACTIONS: MachineAction[] = ['return', 'refuse_pickup', 'close_refusal'];
+const SERVER_ACTIONS: MachineAction[] = ['return', 'refuse_pickup', 'close_refusal', 'handover'];
 
 const idOf = (phase: Phase, action: string, role: string) => `x_${phase}_${action}_${role}`;
 const photo = (id: string) => `https://firebasestorage.googleapis.com/v0/b/x/o/reservations%2F${id}%2Freturn%2F1.jpg`;
@@ -63,6 +63,7 @@ function run(action: MachineAction, id: string, uid: string) {
       quote: { result: 'refund', refund: 500_000, collect: 0 },
     }, uid);
   }
+  if (action === 'handover') return call(fns.submitHandover, { items: [{ reservationId: id }] }, uid);
   if (action === 'refuse_pickup') return call(fns.refusePickup, { reservationIds: [id], reason: 'Photo does not match' }, uid);
   return call(fns.resolveOwnerAlert, { kind: 'pickup', id }, uid);
 }

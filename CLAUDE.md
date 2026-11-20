@@ -1951,6 +1951,27 @@ a snapshot indefinitely).
   (`exchangeRateUpdatedAt`, `thbToLakRateUpdatedAt`); the handover deposit step (single +
   order) shows "Rate used: 1 USD = X LAK · set {date}" (`useDepositRates()`).
 
+- **Handover = server only, with a PHYSICAL unit check (2026-11-20).** Every handover
+  (single checklist, order summary, "Mark as picked up", early handover) calls the
+  `submitHandover` callable (`functions/src/handover.ts`, `lib/handover.ts`): in ONE
+  transaction it re-reads the reservations (state machine, `handover` is server-only — the
+  generated rules refuse a client handover) and refuses `no-unit-on-hand` unless
+  `unitsOnHand(product, out)` (`shared/availability.ts`) = stock − units OUT with renters
+  (every `active` rental of the product, early handovers included, archived excluded) −
+  in repair − lost − pending settlement / cleaning ≥ the units handed over (whole order at
+  once). Why: booked dates never overlap, but an EARLY handover takes the unit out before
+  its booked pick-up — the Chicco cot (stock 1) was handed over on 29 Oct for 6 Nov, again
+  on 6 Nov for 20 Nov and on 20 Nov for 27 Nov while the previous renter still had it.
+  `submitChecklistBatch` is gone (no client handover / return batch any more).
+  **Cleaning after a return** (unchanged rule): a returned unit stays in
+  `pendingSettlementUnits` until its deposit is settled AND scheduled `returnAt` +
+  `HANDOFF_BUFFER_MS` (12 h, `functions/src/shared/availability.ts`) has passed;
+  `releaseSettledStock` (every 15 min) then puts it back — so a LATE return (returnAt long
+  past) gets no real cleaning time. `cleaningBackByMs()` gives the latest time it's back.
+  Stock screen (`/admin/inventory/[id]`): chips Stock · Out · In shop (= unitsOnHand) ·
+  In repair · Lost, live; "n unit cleaning · back in stock by HH:MM" (or "once the deposit
+  is settled"); a red line when units out exceed the stock.
+
 ## Security follow-ups
 
 **Done (phase 1):** reservations are created server-side only by the

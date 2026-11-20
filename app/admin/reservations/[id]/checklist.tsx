@@ -25,7 +25,6 @@ import {
   getUserProfile,
   getProduct,
   addReturnStockToBatch,
-  earlyHandoverFields,
   CHECKLIST_CATEGORIES,
   type RentalDoc,
   type ChecklistCategoryId,
@@ -52,6 +51,7 @@ import { PaymentMethodChips } from '@/components/admin/PaymentMethodChips';
 import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 import { auth } from '@/lib/auth';
 import { addAudit } from '@/lib/adminAudit';
+import { submitHandover, toHandoverPayload } from '@/lib/handover';
 import { useAuth } from '@/contexts/AuthContext';
 import { phaseOf, MACHINE, PHASE_LABELS, type Phase, type MachineAction } from '@/functions/src/shared/reservationMachine';
 
@@ -483,20 +483,9 @@ function ChecklistScreen() {
 
       const isHandover = type === 'handover';
       if (isHandover) {
-        const batch = writeBatch(db);
-        const auditId = await addAudit(batch, 'handover',
-          { reservationId: id, orderId: reservation.orderId ?? null, productId: reservation.productId, renterId: reservation.renterId },
-          'Handover checklist');
-        batch.update(doc(db, 'reservations', id), {
-          handoverChecklist: checklistData,
-          status: 'active',
-          ...earlyHandoverFields(reservation?.pickupAt),
-          ...(reservation.pickupRefusedOpen ? { pickupRefusedOpen: false } : {}),
-          lastAuditId: auditId,
-          lastAction: 'handover',
-          updatedAt: serverTimestamp(),
-        });
-        await batch.commit();
+        // Server: state machine + a unit must be physically in the shop (early handovers
+        // included) — refused with the reason otherwise (functions/src/handover.ts).
+        await submitHandover([{ reservationId: id, checklist: toHandoverPayload(checklistData) }]);
       } else {
         // Batched with the product's stock-condition adjustment so the two can never
         // partially succeed — the item is excluded from available stock the instant

@@ -118,7 +118,8 @@ describe('staff counter writes on reservations (allow-list)', () => {
     // Every admin write names its state-machine action (lastAction) — exhaustive
     // phase × action × role cases: tests/rules/reservationMachine.test.ts.
     await ok(P, staff('reservations/sPend', { status: 'confirmed', updatedAt: at(), lastAction: 'confirm_payment' }));
-    await ok(P, staff('reservations/sConf', {
+    // Handover = server only (submitHandover: state machine + unit physically in the shop).
+    await no(P, staff('reservations/sConf', {
       status: 'active', handoverChecklist: { photos: [], depositCurrency: 'LAK', depositAmount: 500_000 }, updatedAt: at(), lastAction: 'handover',
     }));
     await ok(P, staff('reservations/rB', {

@@ -67,3 +67,33 @@ export function getOverlappingOccupancy<T extends OccupancyRecord>(
     return occupiedFrom < newReturn && occupiedUntil > newPickup;
   });
 }
+
+/**
+ * Units PHYSICALLY in the shop right now — what a handover may give out:
+ * stock − out with renters (active rentals, early handovers included) − in repair − lost
+ * − pending settlement / cleaning. Distinct from effectiveStock(), which is the
+ * date-based booking pool (rentals out are handled there by their booked dates).
+ */
+export function unitsOnHand(product: {
+  stockLeft: number;
+  inRepairUnits?: number;
+  lostUnits?: number;
+  pendingSettlementUnits?: number;
+}, outWithRenters: number): number {
+  return Math.max(0, effectiveStock(product) - Math.max(0, outWithRenters));
+}
+
+/** releaseSettledStock (functions/src/index.ts) runs every 15 minutes. */
+export const STOCK_RELEASE_EVERY_MS = 15 * 60 * 1000;
+
+/**
+ * Cleaning time after a return: a returned unit stays out of stock
+ * (pendingSettlementUnits) until its deposit is settled AND the scheduled return time
+ * + HANDOFF_BUFFER_MS (12 h) has passed; the next releaseSettledStock run (≤ 15 min)
+ * then puts it back. Returns the latest time it will be back, or null while the
+ * deposit isn't settled.
+ */
+export function cleaningBackByMs(r: { returnAtMs: number; finalizedAtMs: number | null }): number | null {
+  if (r.finalizedAtMs == null) return null;
+  return Math.max(r.finalizedAtMs, r.returnAtMs + HANDOFF_BUFFER_MS) + STOCK_RELEASE_EVERY_MS;
+}

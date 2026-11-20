@@ -106,12 +106,6 @@ service cloud.firestore {
       return isAdmin() && (
         (a == 'confirm_payment' && role in ['owner', 'staff'] && from in ['awaiting_payment'] && to in ['confirmed']
           && keys.hasOnly(['status', 'updatedAt', 'lastAuditId', 'lastAction']))
-        || (a == 'handover' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed'] && to in ['out']
-          && keys.hasOnly(['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'pickupRefusedOpen', 'updatedAt', 'lastAuditId', 'lastAction'])
-          && request.resource.data.get('pickupRefusedOpen', false) != true)
-        || (a == 'handover' && role in ['owner'] && from in ['pickup_refused'] && to in ['out']
-          && keys.hasOnly(['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'pickupRefusedOpen', 'updatedAt', 'lastAuditId', 'lastAction'])
-          && request.resource.data.get('pickupRefusedOpen', false) != true)
         || (a == 'cancel' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed', 'pickup_refused'] && to in ['cancelled']
           && keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelReason', 'cancelReasonText', 'updatedAt', 'lastAuditId', 'lastAction'])
           && request.resource.data.cancelledBy == 'admin' && request.resource.data.cancelledAt == request.time)

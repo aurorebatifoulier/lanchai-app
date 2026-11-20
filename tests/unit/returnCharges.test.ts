@@ -103,3 +103,17 @@ test('history notes: thousands separators + currency', async () => {
   assert.equal(formatAuditNote('late fee 630000 LAK · refund 4272000 LAK'), 'late fee 630,000 LAK · refund 4,272,000 LAK');
   assert.equal(formatAuditNote('refund 43 USD · client signed'), 'refund 43 USD · client signed');
 });
+
+test('units on hand: active rentals, repair, lost and cleaning all leave the shop', async () => {
+  const { unitsOnHand, cleaningBackByMs, HANDOFF_BUFFER_MS } = await import('../../functions/src/shared/availability');
+  assert.equal(unitsOnHand({ stockLeft: 1 }, 1), 0);                         // Chicco: one unit out
+  assert.equal(unitsOnHand({ stockLeft: 1 }, 2), 0);                         // never negative
+  assert.equal(unitsOnHand({ stockLeft: 3, inRepairUnits: 1, pendingSettlementUnits: 1 }, 0), 1);
+  // Late return: settled now, scheduled return long past → back within the next run.
+  const now = Date.parse('2026-11-20T11:06:00Z');
+  assert.equal(cleaningBackByMs({ returnAtMs: Date.parse('2026-11-10T02:30:00Z'), finalizedAtMs: now }), now + 15 * 60_000);
+  // On-time return: 12 h after the scheduled return.
+  const ret = Date.parse('2026-11-21T02:00:00Z');
+  assert.equal(cleaningBackByMs({ returnAtMs: ret, finalizedAtMs: ret }), ret + HANDOFF_BUFFER_MS + 15 * 60_000);
+  assert.equal(cleaningBackByMs({ returnAtMs: ret, finalizedAtMs: null }), null);
+});

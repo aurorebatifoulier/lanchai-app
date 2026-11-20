@@ -73,6 +73,9 @@ export * from './team';
 // Staff counter operations: return (server-computed charges), refused pick-up, owner alerts.
 export * from './returns';
 
+// Every handover: state machine + physical unit check (functions/src/handover.ts).
+export * from './handover';
+
 admin.initializeApp();
 const db = admin.firestore();
 

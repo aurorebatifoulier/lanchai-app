@@ -151,9 +151,12 @@ describe('reservations/{reservationId}', () => {
     await no(R, updateDoc(doc(db('A'), 'reservations/rAact'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
     await no(R, updateDoc(doc(db('B'), 'reservations/rA'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
     await ok(R, updateDoc(doc(db('A'), 'reservations/rA'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
-    // Admins go through the state machine (legacy admin = owner): confirmed → out.
-    await ok(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB',
+    // Admins go through the state machine (legacy admin = owner). A handover is
+    // server-only now (submitHandover checks a unit is in the shop) — refused here.
+    await no(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB',
       { status: 'active', handoverChecklist: { photos: [] }, lastAction: 'handover' }));
+    await ok(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB',
+      { status: 'cancelled', cancelledBy: 'admin', cancelReason: 'customer_request', cancelReasonText: '', cancelledAt: serverTimestamp(), lastAction: 'cancel' }));
     // No action may change a price, and nothing passes without its audit entry.
     await no(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB', { total: 250_000, lastAction: 'handover' }));
     await no(R, updateDoc(doc(db('admin'), 'reservations/rB'), { status: 'cancelled', lastAction: 'cancel' }));

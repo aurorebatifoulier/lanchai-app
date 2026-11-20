@@ -28,6 +28,7 @@ import {
   OCCUPYING_STATUSES,
   type OccupancyRecord,
 } from '@/utils/availability';
+import { unitsOnHand, cleaningBackByMs } from '@/functions/src/shared/availability';
 import { buildCalendarDays, chunkIntoWeeks, sameDay, startOfDay, type CalDay } from '@/utils/calendarGrid';
 
 const MONTHS = [
@@ -98,6 +99,35 @@ export default function AdminInventoryProductScreen() {
         }));
       },
     );
+  }, [id]);
+
+  // Units physically OUT with renters (active, early handovers included) and returned
+  // units still cleaning (pending settlement) — live, from the same reservations.
+  const [outUnits, setOutUnits] = useState(0);
+  const [cleaning, setCleaning] = useState<{ id: string; units: number; backByMs: number | null }[]>([]);
+  useEffect(() => {
+    if (!id) return;
+    return onSnapshot(query(collection(db, 'reservations'), where('productId', '==', id)), snap => {
+      let out = 0;
+      const clean: { id: string; units: number; backByMs: number | null }[] = [];
+      for (const d of snap.docs) {
+        const x = d.data();
+        if (x.archived === true) continue;
+        const q = Math.max(1, Number(x.quantity ?? 1));
+        if (x.status === 'active') out += q;
+        if (x.status === 'returned' && x.stockReleasedAt == null) {
+          clean.push({
+            id: d.id, units: q,
+            backByMs: cleaningBackByMs({
+              returnAtMs: (x.returnAt as Timestamp | undefined)?.toMillis() ?? 0,
+              finalizedAtMs: (x.returnFinalizedAt as Timestamp | undefined)?.toMillis() ?? null,
+            }),
+          });
+        }
+      }
+      setOutUnits(out);
+      setCleaning(clean);
+    }, () => {});
   }, [id]);
 
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -173,6 +203,8 @@ export default function AdminInventoryProductScreen() {
   }
 
   const eff = effectiveStock(product);
+  // In the shop right now (what a handover can give out — same rule as submitHandover).
+  const onHand = unitsOnHand(product, outUnits);
 
   return (
     <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -186,20 +218,28 @@ export default function AdminInventoryProductScreen() {
       >
         <View style={s.statsRow}>
           <StatChip label="Stock" value={product.stockLeft} />
-          <StatChip label="Bookable" value={eff} />
+          <StatChip label="Out" value={outUnits} />
+          <StatChip label="In shop" value={onHand} />
           <StatChip label="In repair" value={product.inRepairUnits ?? 0} />
           <StatChip label="Lost" value={product.lostUnits ?? 0} />
         </View>
-        {(product.pendingSettlementUnits ?? 0) > 0 && (
-          <Text style={s.pendingNote}>
-            {`${product.pendingSettlementUnits} unit${product.pendingSettlementUnits === 1 ? '' : 's'} just returned — back in stock automatically once the deposit is settled (within 15 min, after the 12 h handoff buffer).`}
+        {cleaning.map(c => (
+          <Text key={c.id} style={s.pendingNote}>
+            {`${c.units} unit${c.units === 1 ? '' : 's'} cleaning · ${c.backByMs != null
+              ? `back in stock by ${new Date(c.backByMs).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${new Date(c.backByMs).toDateString() !== new Date().toDateString() ? ` on ${new Date(c.backByMs).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}`
+              : 'back in stock once the deposit is settled'}`}
+          </Text>
+        ))}
+        {outUnits > (product.stockLeft ?? 0) && (
+          <Text style={[s.pendingNote, { color: COLORS.danger }]}>
+            {`${outUnits} units out with renters for a stock of ${product.stockLeft} — check the rentals below (early handovers?).`}
           </Text>
         )}
 
         <RepairStockCard
           productId={product.id}
           inRepair={product.inRepairUnits ?? 0}
-          bookable={eff}
+          bookable={onHand}
           onChanged={n => setProduct(p => (p ? { ...p, inRepairUnits: n } : p))}
         />
 

@@ -66,9 +66,11 @@ const ARCHIVABLE: Phase[] = [
 
 export const MACHINE: Transition[] = [
   { action: 'confirm_payment', roles: ['owner', 'staff'], channel: 'client', from: ['awaiting_payment'], to: ['confirmed'] },
-  { action: 'handover', roles: ['owner', 'staff'], channel: 'client', from: PRE, to: ['out'] },
+  // Every handover goes through submitHandover (server): state machine + a unit must be
+  // PHYSICALLY in the shop (unitsOnHand) — early handovers included.
+  { action: 'handover', roles: ['owner', 'staff'], channel: 'server', from: PRE, to: ['out'] },
   // D2: after a refused pick-up, only an owner may hand over (it closes the alert).
-  { action: 'handover', roles: ['owner'], channel: 'client', from: ['pickup_refused'], to: ['out'] },
+  { action: 'handover', roles: ['owner'], channel: 'server', from: ['pickup_refused'], to: ['out'] },
   { action: 'renter_cancel', roles: ['renter'], channel: 'client', from: PRE_OR_REFUSED, to: ['cancelled'] },
   { action: 'cancel', roles: ['owner', 'staff'], channel: 'client', from: PRE_OR_REFUSED, to: ['cancelled'] },
   // D4: never on an item that is out.
