@@ -1,5 +1,6 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from './firebase';
+import { adminErrorMessage } from './adminErrors';
 
 // Admin → Team (owner only) — thin wrappers over functions/src/team.ts. admins/{uid} is
 // never written from the app.
@@ -7,18 +8,12 @@ import { functions } from './firebase';
 export type AdminRole = 'owner' | 'staff';
 export interface TeamMember { uid: string; name: string; email: string; role: AdminRole; active: boolean }
 
-const message = (err: unknown, fallback: string) => {
-  const e = err as { message?: string; details?: { code?: string } };
-  // HttpsError messages from our callables are written for staff; anything else → fallback.
-  return e?.details?.code && e.message ? e.message : fallback;
-};
-
 export async function listTeam(): Promise<TeamMember[]> {
   try {
     const r = await httpsCallable(functions, 'teamList')({});
     return (r.data as { members: TeamMember[] }).members;
   } catch (err) {
-    throw new Error(message(err, 'Couldn’t load the team. Please try again.'));
+    throw new Error(adminErrorMessage(err, 'Couldn’t load the team'));
   }
 }
 
@@ -26,7 +21,7 @@ export async function addTeamMember(email: string, role: AdminRole, name?: strin
   try {
     await httpsCallable(functions, 'teamAddMember')({ email, role, name });
   } catch (err) {
-    throw new Error(message(err, 'Couldn’t add this person. Please try again.'));
+    throw new Error(adminErrorMessage(err, 'Couldn’t add this person'));
   }
 }
 
@@ -34,6 +29,6 @@ export async function updateTeamMember(uid: string, patch: { role?: AdminRole; a
   try {
     await httpsCallable(functions, 'teamUpdateMember')({ uid, ...patch });
   } catch (err) {
-    throw new Error(message(err, 'Couldn’t update this person. Please try again.'));
+    throw new Error(adminErrorMessage(err, 'Couldn’t update this person'));
   }
 }

@@ -7,17 +7,13 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { db, functions, storage } from './firebase';
 import { auth } from './auth';
+import { adminErrorMessage } from './adminErrors';
 import { auditedWrite } from './adminAudit';
 import type { ChecklistRating } from '@/functions/src/shared/returnCharges';
 
 // Staff counter operations (functions/src/returns.ts) + internal incidents and claim
 // notes (firestore.rules incidents / claims/{id}/notes). The server decides every amount
 // of a staff return; these wrappers only send the condition data.
-
-const message = (err: unknown, fallback: string) => {
-  const e = err as { message?: string; details?: { code?: string } };
-  return e?.details?.code && e.message ? e.message : fallback;
-};
 
 export interface ReturnItemPayload {
   reservationId: string;
@@ -41,7 +37,7 @@ export async function submitStaffReturn(items: ReturnItemPayload[], collectedBal
     const r = await httpsCallable(functions, 'submitReturn')({ items, collectedBalance });
     return (r.data as { results: ReturnResult[] }).results;
   } catch (err) {
-    throw new Error(message(err, 'Couldn’t record the return. Please try again.'));
+    throw new Error(adminErrorMessage(err, 'Couldn’t record the return'));
   }
 }
 
@@ -49,7 +45,7 @@ export async function refusePickup(reservationIds: string[], reason: string, fla
   try {
     await httpsCallable(functions, 'refusePickup')({ reservationIds, reason, flagId });
   } catch (err) {
-    throw new Error(message(err, 'Couldn’t record the refusal. Please try again.'));
+    throw new Error(adminErrorMessage(err, 'Couldn’t record the refusal'));
   }
 }
 
@@ -57,7 +53,7 @@ export async function resolveOwnerAlert(kind: 'pickup' | 'id', id: string, note 
   try {
     await httpsCallable(functions, 'resolveOwnerAlert')({ kind, id, note });
   } catch (err) {
-    throw new Error(message(err, 'Couldn’t update. Please try again.'));
+    throw new Error(adminErrorMessage(err, 'Couldn’t update'));
   }
 }
 

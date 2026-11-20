@@ -9,7 +9,8 @@ import { writeAudit } from './audit';
 // the only way to add a member, change a role or deactivate someone. Deactivation is
 // instant — firestore.rules / storage.rules / requireRole read `active` on every request.
 // Guard: there is always at least one ACTIVE owner, and an owner can't demote or
-// deactivate themselves.
+// deactivate themselves. invoker 'public' (like every callable): Cloud Run lets the
+// request reach the function, which checks Firebase Auth + the role itself.
 
 const REGION = 'asia-southeast1';
 const db = () => admin.firestore();
@@ -22,7 +23,7 @@ const ROLES: AdminRole[] = ['owner', 'staff'];
 export interface TeamMember { uid: string; name: string; email: string; role: AdminRole; active: boolean }
 
 // teamList() → { members } — every admin, legacy docs shown with their default role.
-export const teamList = onCall({ region: REGION }, async request => {
+export const teamList = onCall({ region: REGION, invoker: 'public' }, async request => {
   await requireRole(request, 'owner');
   const snap = await db().collection('admins').get();
   const members: TeamMember[] = await Promise.all(snap.docs.map(async d => {
@@ -40,14 +41,14 @@ export const teamList = onCall({ region: REGION }, async request => {
 });
 
 // teamAddMember({ email, role, name? }) — the person must already have an account.
-export const teamAddMember = onCall({ region: REGION }, async request => {
+export const teamAddMember = onCall({ region: REGION, invoker: 'public' }, async request => {
   const caller = await requireRole(request, 'owner');
   const d = (request.data ?? {}) as { email?: unknown; role?: unknown; name?: unknown };
   const email = typeof d.email === 'string' ? d.email.trim().toLowerCase() : '';
   if (!EMAIL_RE.test(email)) fail('invalid-email', 'Enter a valid email address.', 'invalid-argument');
   const role = ROLES.includes(d.role as AdminRole) ? (d.role as AdminRole) : fail('invalid-role', 'Choose a role.', 'invalid-argument');
   const user = await admin.auth().getUserByEmail(email).catch(() => null);
-  if (!user) fail('no-account', 'No account with this email. Ask them to sign up in the app first.', 'not-found');
+  if (!user) fail('no-account', 'No account with this email: ask them to sign up first.', 'not-found');
   if (user!.providerData.length === 0) fail('no-account', 'This is a guest session, not an account.', 'not-found');
   const ref = db().collection('admins').doc(user!.uid);
   if ((await ref.get()).exists) fail('already-member', 'This person is already in the team.');
@@ -62,7 +63,7 @@ export const teamAddMember = onCall({ region: REGION }, async request => {
 });
 
 // teamUpdateMember({ uid, role?, active?, name? })
-export const teamUpdateMember = onCall({ region: REGION }, async request => {
+export const teamUpdateMember = onCall({ region: REGION, invoker: 'public' }, async request => {
   const caller = await requireRole(request, 'owner');
   const d = (request.data ?? {}) as { uid?: unknown; role?: unknown; active?: unknown; name?: unknown };
   const uid = typeof d.uid === 'string' ? d.uid : '';

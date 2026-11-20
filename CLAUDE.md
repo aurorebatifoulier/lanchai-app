@@ -1848,6 +1848,16 @@ a snapshot indefinitely).
     `id.*` entries by `renterId`, equality queries, sorted in memory). Rules tests use
     `auditedUpdate()` (`tests/rules/env.ts`). Test-data cleanup wipes `auditLog`,
     `incidents` and Storage `incidents/`, `claim-staff/`.
+  - **Admin callable errors show the real code** — `lib/adminErrors.ts`
+    (`adminErrorMessage(err, base)` → "Couldn’t load the team (not-found)." / our server
+    message + `details.code`; `no-account` → "No account with this email: ask them to sign
+    up first."), used by `lib/team.ts` and `lib/staffOps.ts` (admin screens only).
+    `not-found` on a callable = NOT DEPLOYED. Probe any callable without auth:
+    `curl -s -w ' %{http_code}' -X POST -H 'Content-Type: application/json' -d '{"data":{}}'
+    https://asia-southeast1-lanchai-app.cloudfunctions.net/<name>` → 401 JSON
+    `UNAUTHENTICATED` = deployed + public invoker OK; 404 HTML = not deployed; 403 HTML
+    "Forbidden" = invoker missing. New callables set `invoker: 'public'` explicitly (team,
+    returns, agreements).
 
 ## Security follow-ups
 

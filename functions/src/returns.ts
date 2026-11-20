@@ -85,7 +85,7 @@ async function returnConfig() {
 export interface ReturnResult { reservationId: string; outcome: 'clean' | 'late' | 'damage' | 'review'; refund: number; outstanding: number; currency: ChargeCurrency; settled: boolean }
 
 // submitReturn({ items: [ReturnItemInput], collectedBalance?: boolean })
-export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
+export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY], invoker: 'public' }, async request => {
   const caller = await requireRole(request, 'staff');
   const d = (request.data ?? {}) as { items?: unknown; collectedBalance?: unknown };
   const rawItems = Array.isArray(d.items) ? d.items : [];
@@ -246,7 +246,7 @@ export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY] },
 });
 
 // refusePickup({ reservationIds, reason, flagId?: boolean })
-export const refusePickup = onCall({ region: REGION, secrets: [BREVO_API_KEY] }, async request => {
+export const refusePickup = onCall({ region: REGION, secrets: [BREVO_API_KEY], invoker: 'public' }, async request => {
   const caller = await requireRole(request, 'staff');
   const d = (request.data ?? {}) as { reservationIds?: unknown; reason?: unknown; flagId?: unknown };
   const ids = Array.isArray(d.reservationIds) ? [...new Set(d.reservationIds.filter((x): x is string => typeof x === 'string'))] : [];
@@ -302,7 +302,7 @@ export const refusePickup = onCall({ region: REGION, secrets: [BREVO_API_KEY] },
 });
 
 /** Owner closes a refused pick-up / flagged ID once handled (cancel, no-show, or OK). */
-export const resolveOwnerAlert = onCall({ region: REGION }, async request => {
+export const resolveOwnerAlert = onCall({ region: REGION, invoker: 'public' }, async request => {
   const caller: AdminCaller = await requireRole(request, 'owner');
   const d = (request.data ?? {}) as { kind?: unknown; id?: unknown; note?: unknown };
   const id = typeof d.id === 'string' ? d.id : '';
