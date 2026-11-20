@@ -56,6 +56,9 @@ export default function TodayPanel({ counts, role = 'owner' }: { counts: TodayCo
             ? '/admin/claims'
             : '/admin/verifications?tab=identity')} />
       </View>
+      <Counter label="Deposits to settle" value={counts?.toSettle ?? null} danger
+        detail="Returned or lost, not settled yet"
+        onPress={() => router.push('/admin/rentals?tab=all&filter=to_settle')} />
       {(usd != null || thb != null) && (
         <Text style={s.rates}>
           {[usd != null && `1 USD = ${usd.toLocaleString('en-US')} LAK`, thb != null && `1 THB = ${thb.toLocaleString('en-US')} LAK`]

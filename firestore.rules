@@ -77,33 +77,83 @@ service cloud.firestore {
         .hasAny(['inRepairUnits', 'lostUnits', 'pendingSettlementUnits']);
     }
 
-    // Staff counter writes on a reservation — an allow-list per action, with the status
-    // transition pinned. NO fee, charge, waiver, deposit, settlement, price or release
-    // field can ever be written by staff (the return goes through the submitReturn
-    // callable, where the server decides every amount).
-    function staffReservationUpdate() {
+    // Reservation state machine (approved table, 2026-11-20): the ONE source is
+    // functions/src/shared/reservationMachine.ts — the block below is generated from it.
+    // <reservationMachine:generated>
+    // GENERATED from functions/src/shared/reservationMachine.ts by `npm run rules:machine`.
+    // Do not edit by hand. Every admin client write on a reservation names its action
+    // (`lastAction`); it is allowed only from the CURRENT phase of the stored document,
+    // for the caller's role, to an allowed phase, writing only that action's fields.
+    function resPhase(d) {
+      return d.get('archived', false) == true ? 'archived'
+        : d.get('status', '') == 'pending_payment' ? (d.get('pickupRefusedOpen', false) == true ? 'pickup_refused' : 'awaiting_payment')
+        : d.get('status', '') == 'confirmed' ? (d.get('pickupRefusedOpen', false) == true ? 'pickup_refused' : 'confirmed')
+        : d.get('status', '') == 'active' ? 'out'
+        : d.get('status', '') == 'returned' ? (d.get('chargeReviewPending', false) == true ? 'return_review'
+            : d.get('returnFinalizedAt', null) != null ? 'settled'
+            : (d.get('outstandingBalance', 0) is number && d.get('outstandingBalance', 0) > 0) ? 'to_settle_balance' : 'to_settle_refund')
+        : d.get('status', '') == 'lost' ? (d.get('returnFinalizedAt', null) != null ? 'lost_settled' : 'lost_to_settle')
+        : d.get('status', '') == 'cancelled' ? 'cancelled'
+        : d.get('status', '') == 'no_show' ? (d.get('noShowHoldLiftedAt', null) != null ? 'no_show_lifted' : 'no_show_held')
+        : 'unknown';
+    }
+    function machineClientWrite() {
+      let a = request.resource.data.get('lastAction', '');
+      let from = resPhase(resource.data);
+      let to = resPhase(request.resource.data);
+      let role = adminDoc().data.get('role', 'owner');
       let keys = request.resource.data.diff(resource.data).affectedKeys();
-      let from = resource.data.status;
-      let to = request.resource.data.get('status', from);
-      let preCheckout = from in ['pending_payment', 'confirmed'];
       return isAdmin() && (
-        // Confirm payment received
-        (keys.hasOnly(['status', 'updatedAt', 'lastAuditId'])
-          && from == 'pending_payment' && to == 'confirmed')
-        // Hand over (checklist / "Mark as picked up"; early-handover marker)
-        || (keys.hasOnly(['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'updatedAt', 'lastAuditId'])
-          && preCheckout && to == 'active')
-        // Cancel with a reason (admin cancellation, never a release)
-        || (keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelReason', 'cancelReasonText', 'updatedAt', 'lastAuditId'])
-          && preCheckout && to == 'cancelled'
-          && request.resource.data.cancelledBy == 'admin'
-          && request.resource.data.cancelledAt == request.time)
-        // No-show (lifting the hold stays owner)
-        || (keys.hasOnly(['status', 'noShowAt', 'noShowBy', 'noShowByName', 'updatedAt', 'lastAuditId'])
-          && preCheckout && to == 'no_show'
+        (a == 'confirm_payment' && role in ['owner', 'staff'] && from in ['awaiting_payment'] && to in ['confirmed']
+          && keys.hasOnly(['status', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'handover' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed'] && to in ['out']
+          && keys.hasOnly(['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'pickupRefusedOpen', 'updatedAt', 'lastAuditId', 'lastAction'])
+          && request.resource.data.get('pickupRefusedOpen', false) != true)
+        || (a == 'handover' && role in ['owner'] && from in ['pickup_refused'] && to in ['out']
+          && keys.hasOnly(['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'pickupRefusedOpen', 'updatedAt', 'lastAuditId', 'lastAction'])
+          && request.resource.data.get('pickupRefusedOpen', false) != true)
+        || (a == 'cancel' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed', 'pickup_refused'] && to in ['cancelled']
+          && keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelReason', 'cancelReasonText', 'updatedAt', 'lastAuditId', 'lastAction'])
+          && request.resource.data.cancelledBy == 'admin' && request.resource.data.cancelledAt == request.time)
+        || (a == 'force_release' && role in ['owner'] && from in ['awaiting_payment', 'confirmed'] && to in ['cancelled']
+          && keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'releasedBy', 'releasedAt', 'updatedAt', 'lastAuditId', 'lastAction'])
+          && request.resource.data.cancelledBy == 'admin_release')
+        || (a == 'no_show' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed', 'pickup_refused'] && to in ['no_show_held']
+          && keys.hasOnly(['status', 'noShowAt', 'noShowBy', 'noShowByName', 'updatedAt', 'lastAuditId', 'lastAction'])
           && request.resource.data.noShowBy == request.auth.uid)
+        || (a == 'lift_no_show' && role in ['owner'] && from in ['no_show_held'] && to in ['no_show_lifted']
+          && keys.hasOnly(['noShowHoldLiftedAt', 'noShowHoldLiftedBy', 'noShowHoldLiftedByName', 'updatedAt', 'lastAuditId', 'lastAction'])
+          && request.resource.data.noShowHoldLiftedBy == request.auth.uid)
+        || (a == 'return' && role in ['owner'] && from in ['out'] && to in ['to_settle_refund', 'to_settle_balance']
+          && keys.hasOnly(['status', 'returnChecklist', 'returnedAt', 'stockReleasedAt', 'chargeAmount', 'chargeReason', 'chargeSeverity', 'chargePercent', 'chargeUnits', 'lateChargeAmount', 'lateChargeReason', 'lateChargeWaived', 'lateChargeWaivedAmount', 'lateChargeWaivedReason', 'lateChargeWaivedBy', 'lateChargeWaivedAt', 'damageChargeWaived', 'damageChargeWaivedAmount', 'damageChargeWaivedReason', 'damageChargeWaivedPercent', 'damageChargeWaivedBy', 'damageChargeWaivedAt', 'chargeCurrency', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'report_lost' && role in ['owner'] && from in ['out'] && to in ['lost_to_settle']
+          && keys.hasOnly(['status', 'chargeAmount', 'chargeCurrency', 'chargeReason', 'chargeSeverity', 'chargePercent', 'chargeUnits', 'lateChargeAmount', 'lateChargeReason', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'damage_confirm' && role in ['owner'] && from in ['return_review'] && to in ['to_settle_refund', 'to_settle_balance']
+          && keys.hasOnly(['chargeReviewPending', 'chargeReviewedAt', 'chargeReviewedBy', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'damage_reduce' && role in ['owner'] && from in ['return_review'] && to in ['to_settle_refund', 'to_settle_balance']
+          && keys.hasOnly(['chargeReviewPending', 'chargeReviewedAt', 'chargeReviewedBy', 'chargeAmount', 'damageChargeSuggested', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'damage_waive' && role in ['owner'] && from in ['return_review'] && to in ['to_settle_refund', 'to_settle_balance']
+          && keys.hasOnly(['chargeReviewPending', 'chargeReviewedAt', 'chargeReviewedBy', 'damageChargeWaived', 'damageChargeWaivedAmount', 'damageChargeWaivedReason', 'damageChargeWaivedPercent', 'damageChargeWaivedBy', 'damageChargeWaivedAt', 'chargeAmount', 'chargeReason', 'chargePercent', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'undo_waiver' && role in ['owner'] && from in ['to_settle_refund', 'to_settle_balance'] && to in ['to_settle_refund', 'to_settle_balance']
+          && keys.hasOnly(['lateChargeWaived', 'lateChargeAmount', 'lateChargeReason', 'damageChargeWaived', 'chargeAmount', 'chargeReason', 'chargePercent', 'chargeCurrency', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'refund_deposit' && role in ['owner', 'staff'] && from in ['to_settle_refund'] && to in ['settled']
+          && keys.hasOnly(['depositReturned', 'depositReturnedBy', 'depositReturnedAt', 'stockReleaseHandling', 'returnFinalizedAt', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'record_balance_paid' && role in ['owner', 'staff'] && from in ['to_settle_balance'] && to in ['settled']
+          && keys.hasOnly(['outstandingSettled', 'outstandingSettledAt', 'outstandingSettledBy', 'returnFinalizedAt', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'write_off' && role in ['owner'] && from in ['to_settle_balance'] && to in ['settled']
+          && keys.hasOnly(['outstandingWrittenOff', 'outstandingWrittenOffAt', 'outstandingWrittenOffBy', 'outstandingWrittenOffNotes', 'returnFinalizedAt', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'settle_lost' && role in ['owner'] && from in ['lost_to_settle'] && to in ['lost_settled']
+          && keys.hasOnly(['depositReturned', 'depositReturnedBy', 'depositReturnedAt', 'outstandingSettled', 'outstandingSettledAt', 'outstandingSettledBy', 'outstandingWrittenOff', 'outstandingWrittenOffAt', 'outstandingWrittenOffBy', 'outstandingWrittenOffNotes', 'returnFinalizedAt', 'updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'report_incident' && role in ['owner', 'staff'] && from in ['out', 'return_review', 'to_settle_refund', 'to_settle_balance', 'settled', 'lost_to_settle', 'lost_settled'] && to == from
+          && keys.hasOnly(['updatedAt', 'lastAuditId', 'lastAction']))
+        || (a == 'archive' && role in ['owner'] && from in ['return_review', 'to_settle_refund', 'to_settle_balance', 'settled', 'lost_to_settle', 'lost_settled', 'cancelled', 'no_show_held', 'no_show_lifted'] && to in ['archived']
+          && keys.hasOnly(['archived', 'archivedAt', 'archivedBy', 'archivedReason', 'returnFinalizedAt', 'stockReleasedAt', 'updatedAt', 'lastAuditId', 'lastAction'])
+          && request.resource.data.archived == true && request.resource.data.archivedReason is string && request.resource.data.archivedReason.size() >= 3)
+        || (a == 'release_units' && role in ['owner'] && from in ['archived'] && to in ['archived']
+          && keys.hasOnly(['unitsReleasedAt', 'unitsReleased', 'updatedAt', 'lastAuditId', 'lastAction']))
       );
     }
+    // </reservationMachine:generated>
 
     function isOwner(uid) {
       return isAuthed() && request.auth.uid == uid;
@@ -234,8 +284,11 @@ service cloud.firestore {
       // reservation (status → 'cancelled') — no other field may change, and the
       // values are pinned: cancelledBy must be 'renter' (no fake admin cancellation →
       // wrong email) and cancelledAt must be the server time of this write.
-      allow update: if ((isShopOwner() || staffReservationUpdate()) && auditedWrite()) || (
+      // Admin writes: the state machine (current phase × action × role, generated block)
+      // + the audit pairing. Renters: their own cancellation only (below).
+      allow update: if (machineClientWrite() && auditedWrite()) || (
         isOwner(resource.data.renterId) &&
+        resource.data.get('archived', false) != true &&
         request.resource.data.diff(resource.data)
           .affectedKeys()
           .hasOnly(['status', 'cancelledAt', 'cancelledBy']) &&

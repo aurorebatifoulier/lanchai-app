@@ -42,6 +42,27 @@ const LABELS: Record<string, string> = {
   'renter.name-edited': 'Renter name edited',
   'incident.closed': 'Incident closed',
   'reservation.update': 'Updated',
+  // State-machine actions (functions/src/shared/reservationMachine.ts) — audit action = lastAction.
+  confirm_payment: 'Payment confirmed',
+  handover: 'Handed over',
+  cancel: 'Cancelled',
+  force_release: 'Force-released',
+  no_show: 'Marked as no-show',
+  lift_no_show: 'No-show hold lifted',
+  refuse_pickup: 'Pick-up refused',
+  close_refusal: 'Refused pick-up closed',
+  return: 'Returned',
+  report_lost: 'Reported lost / stolen',
+  damage_confirm: 'Damage charge confirmed',
+  damage_reduce: 'Damage charge reduced',
+  damage_waive: 'Damage charge waived',
+  undo_waiver: 'Waiver undone',
+  refund_deposit: 'Deposit refunded',
+  record_balance_paid: 'Balance paid',
+  write_off: 'Balance written off',
+  settle_lost: 'Lost item settled',
+  archive: 'Archived',
+  release_units: 'Held units released',
 };
 const labelOf = (a: string) => LABELS[a] ?? (a.startsWith('claim.') ? `Claim ${a.slice(6).replace('_', ' ')}` : a.startsWith('stock.') ? 'Stock adjusted' : a);
 const when = (t?: Timestamp) => t ? t.toDate().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';

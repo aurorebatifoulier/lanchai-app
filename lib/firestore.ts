@@ -282,6 +282,16 @@ export interface RentalDoc {
   pickupRefusedByName?: string;
   pickupRefusedOpen?: boolean;
   pickupRefusedResolvedBy?: string;
+  /** State machine: archived (data fix / test booking) — read only, hidden from counters. */
+  archived?: boolean;
+  archivedAt?: Timestamp;
+  archivedBy?: string;
+  archivedReason?: string;
+  /** Data check: units an archived booking held out of stock, given back. */
+  unitsReleasedAt?: Timestamp;
+  unitsReleased?: number;
+  /** Last state-machine action written by an admin (firestore.rules). */
+  lastAction?: string;
   /** Last auditLog entry paired with an admin write (firestore.rules). */
   lastAuditId?: string;
   returnChecklist?: ChecklistData;
@@ -551,9 +561,10 @@ export async function adminMarkNoShow(ids: string[], adminUid: string, adminName
   if (ids.length === 0) return;
   const batch = writeBatch(db);
   for (const id of ids) {
-    const auditId = await addAudit(batch, 'status.no_show', { reservationId: id });
+    const auditId = await addAudit(batch, 'no_show', { reservationId: id });
     batch.update(doc(db, 'reservations', id), {
       lastAuditId:  auditId,
+      lastAction: 'no_show',
       status:       'no_show',
       noShowAt:     serverTimestamp(),
       noShowBy:     adminUid,
@@ -578,9 +589,10 @@ export async function adminLiftNoShowHold(renterId: string, adminUid: string, ad
   if (open.length === 0) return 0;
   const batch = writeBatch(db);
   for (const d of open) {
-    const auditId = await addAudit(batch, 'noshow.hold-lifted', { reservationId: d.id, renterId });
+    const auditId = await addAudit(batch, 'lift_no_show', { reservationId: d.id, renterId });
     batch.update(d.ref, {
       lastAuditId:            auditId,
+      lastAction: 'lift_no_show',
       noShowHoldLiftedAt:     serverTimestamp(),
       noShowHoldLiftedBy:     adminUid,
       noShowHoldLiftedByName: adminName,
@@ -604,9 +616,10 @@ export async function adminCancelReservations(
   if (ids.length === 0) return;
   const batch = writeBatch(db);
   for (const id of ids) {
-    const auditId = await addAudit(batch, 'status.cancelled', { reservationId: id }, [reason, reasonText.trim()].filter(Boolean).join(' · '));
+    const auditId = await addAudit(batch, 'cancel', { reservationId: id }, [reason, reasonText.trim()].filter(Boolean).join(' · '));
     batch.update(doc(db, 'reservations', id), {
       lastAuditId:      auditId,
+      lastAction: 'cancel',
       status:           'cancelled',
       cancelledAt:      serverTimestamp(),
       cancelledBy:      'admin',
@@ -629,9 +642,10 @@ export async function adminCancelReservations(
 // Throws on Firestore error — caller must handle.
 export async function releaseReservation(id: string, adminName: string): Promise<void> {
   const batch = writeBatch(db);
-  const auditId = await addAudit(batch, 'status.released', { reservationId: id });
+  const auditId = await addAudit(batch, 'force_release', { reservationId: id });
   batch.update(doc(db, 'reservations', id), {
     lastAuditId: auditId,
+    lastAction: 'force_release',
     status:      'cancelled',
     cancelledAt: serverTimestamp(),
     cancelledBy: 'admin_release',
@@ -648,10 +662,11 @@ export async function confirmReservationsPayment(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const batch = writeBatch(db);
   for (const id of ids) {
-    const auditId = await addAudit(batch, 'status.confirmed', { reservationId: id }, 'Payment received');
+    const auditId = await addAudit(batch, 'confirm_payment', { reservationId: id }, 'Payment received');
     batch.update(doc(db, 'reservations', id), {
       status:      'confirmed',
       lastAuditId: auditId,
+      lastAction: 'confirm_payment',
       updatedAt:   serverTimestamp(),
     });
   }
@@ -721,10 +736,12 @@ export async function submitChecklistBatch(
   const batch = writeBatch(db);
   for (const { id, type, checklistData, charge, productId, quantity, adminName, pickupAt } of items) {
     const isHandover = type === 'handover';
-    const auditId = await addAudit(batch, isHandover ? 'status.active' : 'status.returned', { reservationId: id, productId },
+    const auditId = await addAudit(batch, isHandover ? 'handover' : 'return', { reservationId: id, productId },
       isHandover ? 'Handover checklist' : 'Return checklist');
     batch.update(doc(db, 'reservations', id), {
       lastAuditId: auditId,
+      lastAction: isHandover ? 'handover' : 'return',
+      ...(isHandover ? { pickupRefusedOpen: false } : {}),
       [isHandover ? 'handoverChecklist' : 'returnChecklist']: checklistData,
       status: isHandover ? 'active' : 'returned',
       ...(isHandover ? earlyHandoverFields(pickupAt) : { returnedAt: serverTimestamp(), stockReleasedAt: null }),

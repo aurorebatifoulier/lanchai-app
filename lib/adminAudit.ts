@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { auth } from './auth';
+import type { MachineAction } from '@/functions/src/shared/reservationMachine';
 
 // Audit trail of admin actions (who, role, when, what) — auditLog/{id}, append-only.
 // firestore.rules pairs every admin write on reservations / claims / products with an
@@ -70,13 +71,17 @@ export async function auditedWrite(
   await batch.commit();
 }
 
-/** Audited update of a reservation (refs filled from the reservation). */
+/**
+ * Audited update of a reservation through the STATE MACHINE: `action` is a machine
+ * action (functions/src/shared/reservationMachine.ts) — written as `lastAction` and as
+ * the audit action. firestore.rules allow it only from the reservation's current phase.
+ */
 export async function auditedReservationUpdate(
   r: { id: string; orderId?: string | null; productId?: string; renterId?: string },
   fields: Record<string, unknown>,
-  action: string,
+  action: MachineAction,
   note?: string,
 ): Promise<void> {
-  await auditedWrite(doc(db, 'reservations', r.id), fields, action,
+  await auditedWrite(doc(db, 'reservations', r.id), { ...fields, lastAction: action }, action,
     { reservationId: r.id, orderId: r.orderId ?? null, productId: r.productId, renterId: r.renterId }, note);
 }

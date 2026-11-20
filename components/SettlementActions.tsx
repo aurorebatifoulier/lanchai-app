@@ -3,6 +3,8 @@ import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
 import { serverTimestamp } from 'firebase/firestore';
 import { auditedReservationUpdate } from '@/lib/adminAudit';
+import { canDo, type MachineAction } from '@/functions/src/shared/reservationMachine';
+import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/constants/Colors';
 import type { RentalDoc } from '@/lib/firestore';
 import { sendNotif } from '@/lib/notifications';
@@ -41,6 +43,8 @@ export function SettlementActions({
 }: SettlementActionsProps) {
   const [depositStaffName,     setDepositStaffName]     = useState('');
   const [stockReleaseHandling, setStockReleaseHandling]  = useState<'release' | 'repair' | null>(null);
+  const { adminRole } = useAuth();
+  const role = adminRole ?? 'staff';
   const [settleStaffName,      setSettleStaffName]      = useState('');
   const [writeOffStaffName,    setWriteOffStaffName]    = useState('');
   const [writeOffNotes,        setWriteOffNotes]        = useState('');
@@ -56,10 +60,13 @@ export function SettlementActions({
     setConfirmAction(null);
     try {
       // Audited (lastAuditId + auditLog entry in one batch — firestore.rules).
-      await auditedReservationUpdate(reservation, firestoreUpdates,
-        firestoreUpdates.depositReturned ? 'settle.deposit-returned'
-          : firestoreUpdates.outstandingSettled ? 'settle.balance-paid'
-          : firestoreUpdates.outstandingWrittenOff ? 'settle.written-off' : 'settle.update');
+      // State machine: a lost item is settled with `settle_lost` (owner); a return with
+      // refund_deposit / record_balance_paid (owner + staff, D3) or write_off (owner).
+      const action: MachineAction = reservation.status === 'lost' ? 'settle_lost'
+        : firestoreUpdates.depositReturned ? 'refund_deposit'
+        : firestoreUpdates.outstandingSettled ? 'record_balance_paid'
+        : 'write_off';
+      await auditedReservationUpdate(reservation, firestoreUpdates, action);
       onSettled(localUpdates);
       onSuccess?.();
     } catch (err: any) {
@@ -70,7 +77,12 @@ export function SettlementActions({
     }
   }, [reservation, actioning, onSettled, setActioning, setActionError, setConfirmAction]);
 
-  if (reservation.status !== 'returned') return null;
+  // Only where the state machine allows a settlement for this role (to settle after a
+  // return, or a lost item for an owner) — never during a damage review, never twice.
+  const canRefund = canDo(reservation, 'refund_deposit', role) || canDo(reservation, 'settle_lost', role);
+  const canBalance = canDo(reservation, 'record_balance_paid', role) || canDo(reservation, 'settle_lost', role);
+  const canWriteOff = canDo(reservation, 'write_off', role) || canDo(reservation, 'settle_lost', role);
+  if (!canRefund && !canBalance && !canWriteOff) return null;
 
   const depositReturned      = reservation.depositReturned ?? false;
   const outstandingBalance   = reservation.outstandingBalance ?? 0;
@@ -161,26 +173,27 @@ export function SettlementActions({
 
     return (
       <>
-        <TouchableOpacity
+        {canBalance && <TouchableOpacity
           style={s.primaryBtn}
           onPress={() => setConfirmAction('settle_outstanding')}
           activeOpacity={0.85}
         >
           <Text style={s.primaryBtnText}>Collect {fmt(outstandingBalance)} from client</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </TouchableOpacity>}
+        {canWriteOff && <TouchableOpacity
           style={s.secondaryBtn}
           onPress={() => setConfirmAction('write_off_outstanding')}
           activeOpacity={0.85}
         >
           <Text style={s.secondaryBtnText}>Write off {fmt(outstandingBalance)}</Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </>
     );
   }
 
   // ── Deposit track — clean, refund-due, or even. ─────────────────────────────────
   if (depositReturned) return null; // already resolved
+  if (!canRefund) return null;
 
   const depositLabel = refundAmount === 0
     ? 'Mark settled — deposit fully applied'

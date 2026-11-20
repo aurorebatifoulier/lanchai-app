@@ -115,15 +115,17 @@ describe('staff counter writes on reservations (allow-list)', () => {
   const at = () => serverTimestamp();
   test('confirm payment, hand over, cancel with a reason, no-show', async () => {
     const staff = (path: string, data: Record<string, unknown>) => auditedUpdate(db('staff'), UID.STAFF, 'staff', path, data);
-    await ok(P, staff('reservations/sPend', { status: 'confirmed', updatedAt: at() }));
+    // Every admin write names its state-machine action (lastAction) — exhaustive
+    // phase × action × role cases: tests/rules/reservationMachine.test.ts.
+    await ok(P, staff('reservations/sPend', { status: 'confirmed', updatedAt: at(), lastAction: 'confirm_payment' }));
     await ok(P, staff('reservations/sConf', {
-      status: 'active', handoverChecklist: { photos: [], depositCurrency: 'LAK', depositAmount: 500_000 }, updatedAt: at(),
+      status: 'active', handoverChecklist: { photos: [], depositCurrency: 'LAK', depositAmount: 500_000 }, updatedAt: at(), lastAction: 'handover',
     }));
     await ok(P, staff('reservations/rB', {
-      status: 'cancelled', cancelledBy: 'admin', cancelReason: 'customer_request', cancelReasonText: '', cancelledAt: at(), updatedAt: at(),
+      status: 'cancelled', cancelledBy: 'admin', cancelReason: 'customer_request', cancelReasonText: '', cancelledAt: at(), updatedAt: at(), lastAction: 'cancel',
     }));
     await ok(P, staff('reservations/rA', {
-      status: 'no_show', noShowAt: at(), noShowBy: UID.STAFF, noShowByName: 'Sam', updatedAt: at(),
+      status: 'no_show', noShowAt: at(), noShowBy: UID.STAFF, noShowByName: 'Sam', updatedAt: at(), lastAction: 'no_show',
     }));
   });
   test('never a fee, waiver, deposit, settlement, price or release', async () => {
@@ -141,9 +143,14 @@ describe('staff counter writes on reservations (allow-list)', () => {
     await no(P, deleteDoc(doc(db('staff'), 'reservations/rAret')));
     await no(P, updateDoc(doc(db('staffOff'), 'reservations/rAret'), { updatedAt: at() }));
   });
-  test('owner: anything (settlement, waiver, delete)', async () => {
-    await ok(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { depositReturned: true, returnFinalizedAt: at() }));
-    await ok(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { lateChargeWaived: true }));
+  test('owner: only what the state machine allows from the current phase', async () => {
+    // rAret = returned, not settled → to_settle_refund: a refund closes it…
+    await ok(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret',
+      { depositReturned: true, depositReturnedBy: 'Olga', returnFinalizedAt: at(), lastAction: 'refund_deposit' }));
+    // …and then nothing financial is possible any more (settled), not even for an owner.
+    await no(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { lateChargeWaived: true, lastAction: 'undo_waiver' }));
+    await no(P, auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret',
+      { status: 'lost', chargeAmount: 1, lastAction: 'report_lost' }));
   });
 });
 
@@ -201,6 +208,7 @@ describe('audit log', () => {
   });
   test('a write paired with someone else\'s entry is refused', async () => {
     await no('fs:reservations/{reservationId}',
-      auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAret', { depositReturned: false }, { byUid: UID.STAFF, byRole: 'staff' }));
+      auditedUpdate(db('owner'), UID.OWNER, 'owner', 'reservations/rAact',
+        { status: 'lost', chargeAmount: 1, outstandingBalance: 0, lastAction: 'report_lost' }, { byUid: UID.STAFF, byRole: 'staff' }));
   });
 });

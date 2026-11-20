@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, writeBatch, onSnapshot } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
@@ -53,6 +53,7 @@ import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement
 import { auth } from '@/lib/auth';
 import { addAudit } from '@/lib/adminAudit';
 import { useAuth } from '@/contexts/AuthContext';
+import { phaseOf, MACHINE, PHASE_LABELS, type Phase, type MachineAction } from '@/functions/src/shared/reservationMachine';
 import { computeReturnCharges } from '@/functions/src/shared/returnCharges';
 import { StaffReturnPreview, staffReturnMessage } from '@/components/admin/StaffReturnPreview';
 import { submitStaffReturn, type ReturnResult } from '@/lib/staffOps';
@@ -126,7 +127,18 @@ export default function ChecklistScreen() {
   const [submitted,        setSubmitted]        = useState(false);
   // Admin roles: a STAFF return goes through the submitReturn callable — the server
   // decides every amount (no editable charge, no waiver here).
-  const { isShopOwner } = useAuth();
+  const { isShopOwner, adminRole } = useAuth();
+  // State machine, LIVE: if the booking's phase no longer allows this checklist (already
+  // handed over / returned / cancelled — e.g. from another phone or a stale screen), the
+  // form is replaced by a notice. The rules / submitReturn refuse such a write anyway.
+  const [livePhase, setLivePhase] = useState<Phase | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    return onSnapshot(doc(db, 'reservations', id), snap => setLivePhase(snap.exists() ? phaseOf(snap.data()) : null), () => {});
+  }, [id]);
+  const machineAction: MachineAction = type === 'handover' ? 'handover' : 'return';
+  const liveBlocked = mode !== 'view' && livePhase != null
+    && !MACHINE.some(t => t.action === machineAction && t.roles.includes(adminRole ?? 'staff') && t.from.includes(livePhase));
   const staffReturn = type === 'return' && !isShopOwner;
   const [balanceCollected, setBalanceCollected] = useState(false);
   const [staffResult, setStaffResult] = useState<ReturnResult | null>(null);
@@ -511,14 +523,16 @@ export default function ChecklistScreen() {
       const isHandover = type === 'handover';
       if (isHandover) {
         const batch = writeBatch(db);
-        const auditId = await addAudit(batch, 'status.active',
+        const auditId = await addAudit(batch, 'handover',
           { reservationId: id, orderId: reservation.orderId ?? null, productId: reservation.productId, renterId: reservation.renterId },
           'Handover checklist');
         batch.update(doc(db, 'reservations', id), {
           handoverChecklist: checklistData,
           status: 'active',
           ...earlyHandoverFields(reservation?.pickupAt),
+          ...(reservation.pickupRefusedOpen ? { pickupRefusedOpen: false } : {}),
           lastAuditId: auditId,
+          lastAction: 'handover',
           updatedAt: serverTimestamp(),
         });
         await batch.commit();
@@ -530,7 +544,7 @@ export default function ChecklistScreen() {
         // rated 'unusable' is a true write-off, so it goes straight to lostUnits
         // instead, mirroring "Report lost/stolen".
         const batch = writeBatch(db);
-        const auditId = await addAudit(batch, 'status.returned',
+        const auditId = await addAudit(batch, 'return',
           { reservationId: id, orderId: reservation.orderId ?? null, productId: reservation.productId, renterId: reservation.renterId },
           [
             'Return checklist',
@@ -545,6 +559,7 @@ export default function ChecklistScreen() {
           stockReleasedAt: null,
           ...(chargeFields ?? {}),
           lastAuditId: auditId,
+          lastAction: 'return',
           updatedAt: serverTimestamp(),
         });
         // Shared rule (shared/returnStock.ts): only the unusable units are written off.
@@ -689,6 +704,21 @@ export default function ChecklistScreen() {
             </View>
           )}
         </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (!submitted && liveBlocked && livePhase) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={[styles.center, { gap: 12, paddingHorizontal: 32 }]}>
+          <Feather name="lock" size={32} color={COLORS.fg3} />
+          <Text style={styles.stateTitle}>{`Nothing to do here — this booking is now “${PHASE_LABELS[livePhase]}”.`}</Text>
+          <TouchableOpacity style={[styles.submitBtn, { paddingHorizontal: 28 }]} activeOpacity={0.85}
+            onPress={() => router.replace(`/admin/reservations/${id}`)}>
+            <Text style={styles.submitBtnText}>Open the booking</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }

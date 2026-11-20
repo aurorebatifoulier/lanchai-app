@@ -278,6 +278,8 @@ export const syncBookingHold = onDocumentWritten(
     const noShowIds: string[] = [];
     for (const d of snap.docs) {
       const r = d.data();
+      // Archived (data fix / test booking — state machine) never holds a renter.
+      if (r.archived === true) continue;
       // Admin-marked missed pick-up, until an admin lifts the hold (status stays no_show).
       if (r.status === 'no_show' && !r.noShowHoldLiftedAt) noShowIds.push(d.id);
       if (r.status === 'active' && r.returnAt) {

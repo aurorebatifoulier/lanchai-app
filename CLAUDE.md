@@ -1805,11 +1805,9 @@ a snapshot indefinitely).
   shop settings, tools, team, verifications, totals — is owner-only. Server-side audit
   entries: `functions/src/audit.ts` (`auditLog`). Rules tests:
   `tests/rules/firestore.roles.test.ts` (+ storage), functions: `functions/test/roles.test.ts`.
-  - **Staff counter operations (step 2).** `reservations` update for staff =
-    `staffReservationUpdate()` allow-list in `firestore.rules`: confirm payment, hand over
-    (`handoverChecklist`, early-handover marker), cancel with a reason (`cancelledBy:
-    'admin'`, never a release), no-show — and NOTHING about fees, waivers, deposit,
-    settlement, price or lost/stolen (owner). Staff products writes = `inRepairUnits` only
+  - **Staff counter operations (step 2).** Reservation writes for staff AND owners are
+    now governed by the **reservation state machine** (see below) — no fee, waiver,
+    deposit, settlement, price or lost/stolen write outside the allowed transitions. Staff products writes = `inRepairUnits` only
     (`<RepairStockCard>` on `/admin/inventory/[id]`). **Staff return = the `submitReturn`
     callable** (`functions/src/returns.ts`): the server decides every amount with the ONE
     shared `computeReturnCharges()` (`functions/src/shared/returnCharges.ts` — late fee via
@@ -1863,6 +1861,52 @@ a snapshot indefinitely).
     `UNAUTHENTICATED` = deployed + public invoker OK; 404 HTML = not deployed; 403 HTML
     "Forbidden" = invoker missing. New callables set `invoker: 'public'` explicitly (team,
     returns, agreements).
+
+- **Reservation state machine (2026-11-20) — THE source of truth for every admin action
+  on a booking.** `functions/src/shared/reservationMachine.ts`: `phaseOf(r)` (14 phases from
+  status + flags: awaiting_payment, confirmed, pickup_refused, out, return_review,
+  to_settle_refund, to_settle_balance, settled, lost_to_settle, lost_settled, cancelled,
+  no_show_held, no_show_lifted, archived), `MACHINE` (action × roles × channel client|server
+  × from → to; DEFAULT = FORBIDDEN), `ACTION_KEYS` (fields each client action may write),
+  `ACTION_RULE_EXTRA` (value pins), `canDo` / `allowedActions` / `transitionAllowed`,
+  `machineViolations` (data check). Approved decisions: D1 `settle_lost` (owner) — a lost
+  booking is settled too; D2 after a refused pick-up only an owner hands over (closes the
+  alert); D3 staff may `refund_deposit` / `record_balance_paid` on a DECIDED settlement,
+  never `write_off`; D4 no `force_release` on an item that is out; D5 lost → found isn't
+  built (forbidden); D6 no return without a checklist (the fallback is gone). `archive` =
+  owner, reason required, CLOSED phases only (a pending / out booking would keep
+  occupying stock — cancel or return it first), read-only afterwards except
+  `release_units`. **Rules:** the block between the `reservationMachine:generated` markers
+  of `firestore.rules` is GENERATED (`npm run rules:machine`, `utils/machineRules.ts`;
+  `tests/unit/reservationMachine.test.ts` fails while out of date): every admin client
+  write on a reservation carries `lastAction` + `lastAuditId` and is allowed only from the
+  stored doc's CURRENT phase, for the caller's role, to an allowed phase, with only that
+  action's keys (owners included — "owner can write anything" is gone). Renters: own
+  cancellation only, never an archived booking. **Callables** (`submitReturn`,
+  `refusePickup`, `resolveOwnerAlert`) re-read the reservation in a transaction and call
+  `canDo(…, 'server')`; they also write `lastAction`. **App:** every write names its action
+  (`runAction(action, …)` on the detail, `auditedReservationUpdate(r, fields, action)`,
+  `lib/firestore.ts` helpers, checklist, `SettlementActions` → refund_deposit /
+  record_balance_paid / write_off / settle_lost); buttons come from `canDo` (`can()` on the
+  detail); the detail and the checklist LISTEN LIVE (`onSnapshot`) — a stale copy in the
+  stack follows the real phase, open confirms close on a phase change, and a checklist
+  whose action is no longer allowed shows "Nothing to do here" + "Open the booking". Top of
+  the detail: "Deposit to settle · Refund now" / "Balance due · Record payment" / "Lost
+  item · to settle" (SettlementActions moved there); Today panel "Deposits to settle"
+  (status in [returned, lost] → phases, `lib/adminTodayCounts.ts`) → Rentals → All with
+  `?filter=to_settle`. Reservations list chips "To settle" and "Archived" (archived hidden
+  elsewhere — lists, Today counters, Needs you; `syncBookingHold` skips them). **Data
+  check** (`/admin/data-check`, owner, Tools; `lib/dataCheck.ts`): violations from
+  `machineViolations`, and "Release units" for ARCHIVED bookings still holding
+  `pendingSettlementUnits` (= sum of that booking's stock-log deltas on that field) with a
+  per-product before → after preview, applied in ONE audited batch (product counts + stock
+  log + the booking's `release_units`). Tests generated from the table:
+  `tests/rules/reservationMachine.test.ts` (14 phases × every client action × owner /
+  staff / deactivated staff), `functions/test/reservationMachine.test.ts` (server actions ×
+  phases × roles), completeness checks in the unit test (ReservationStatus = `STATUSES`,
+  every `lastAction` / `runAction` / `canDo` literal in the code is a table action). A NEW
+  admin action on reservations = an entry in `MACHINE` + `ACTION_KEYS`, then
+  `npm run rules:machine` and paste the rules.
 
 ## Security follow-ups
 

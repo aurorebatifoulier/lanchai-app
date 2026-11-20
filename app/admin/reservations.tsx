@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
 import { useScreenInsets } from '@/components/account/ui';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { collection, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
@@ -16,6 +16,7 @@ import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
+import { phaseOf } from '@/functions/src/shared/reservationMachine';
 import { confirmReservationsPayment, earlyHandoverPrompt, type ReservationStatus } from '@/lib/firestore';
 import { overdueSeverity, overdueChipColors } from '@/utils/overdue';
 import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
@@ -53,8 +54,12 @@ export const STATUS_CONFIG: Record<ReservationStatus, { label: string; bg: strin
 // lock (a late pick-up still goes through), until an admin marks the no-show.
 const NOT_PICKED_UP_BADGE = { label: 'Not picked up', bg: '#FDF0C4', fg: '#7A5500' };
 
-const FILTER_OPTIONS: Array<{ key: 'all' | ReservationStatus; label: string }> = [
+// 'to_settle' = the state machine's to_settle_* / lost_to_settle phases (Today panel
+// "Deposits to settle"); 'archived' = data-fix / test bookings, hidden everywhere else.
+type ListFilter = 'all' | ReservationStatus | 'to_settle' | 'archived';
+const FILTER_OPTIONS: Array<{ key: ListFilter; label: string }> = [
   { key: 'all',             label: 'All' },
+  { key: 'to_settle',       label: 'To settle' },
   { key: 'pending_payment', label: 'Pending' },
   { key: 'confirmed',       label: 'Confirmed' },
   { key: 'active',          label: 'Active' },
@@ -62,6 +67,7 @@ const FILTER_OPTIONS: Array<{ key: 'all' | ReservationStatus; label: string }> =
   { key: 'cancelled',       label: 'Cancelled' },
   { key: 'lost',            label: 'Lost/stolen' },
   { key: 'no_show',         label: 'No-show' },
+  { key: 'archived',        label: 'Archived' },
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -79,6 +85,9 @@ interface ReservationRow {
   renterName?: string;
   outstandingBalance?: number;
   outstandingSettled?: boolean;
+  archived?: boolean;
+  returnFinalizedAt?: Timestamp;
+  chargeReviewPending?: boolean;
   outstandingWrittenOff?: boolean;
   chargeCurrency?:     'LAK' | 'USD' | 'THB';
   firstRentalIdCheck?: boolean;
@@ -116,7 +125,9 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
 
   const [rows,           setRows]           = useState<ReservationRow[]>([]);
   const [loading,        setLoading]        = useState(true);
-  const [filter,         setFilter]         = useState<'all' | ReservationStatus>('all');
+  const params = useLocalSearchParams<{ filter?: string }>();
+  const [filter,         setFilter]         = useState<ListFilter>(
+    FILTER_OPTIONS.some(o => o.key === params.filter) ? params.filter as ListFilter : 'all');
   const [search,         setSearch]         = useState('');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
@@ -149,6 +160,9 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
               renterName:  data.renterName ?? undefined,
               outstandingBalance: data.outstandingBalance ?? undefined,
               outstandingSettled: data.outstandingSettled ?? undefined,
+              archived: data.archived === true,
+              returnFinalizedAt: data.returnFinalizedAt ?? undefined,
+              chargeReviewPending: data.chargeReviewPending === true,
               outstandingWrittenOff: data.outstandingWrittenOff ?? undefined,
               chargeCurrency:     data.chargeCurrency ?? undefined,
               firstRentalIdCheck: data.firstRentalIdCheck === true,
@@ -191,7 +205,16 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
 
   // ── Filter + group ────────────────────────────────────────────────────────
   const renderEntries = useMemo((): AdminRenderEntry[] => {
-    let filtered = filter === 'all' ? rows : rows.filter(r => r.status === filter);
+    let filtered = filter === 'archived'
+      ? rows.filter(r => r.archived)
+      : rows.filter(r => !r.archived).filter(r => {
+        if (filter === 'all') return true;
+        if (filter === 'to_settle') {
+          const p = phaseOf(r);
+          return p === 'to_settle_refund' || p === 'to_settle_balance' || p === 'lost_to_settle';
+        }
+        return r.status === filter;
+      });
     const q = search.trim().toLowerCase();
     if (q) {
       filtered = filtered.filter(r =>

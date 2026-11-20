@@ -8,6 +8,7 @@ import { UI } from '@/components/account/ui';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import { db } from '@/lib/firebase';
+import { phaseOf } from '@/functions/src/shared/reservationMachine';
 
 // Owner dashboard "Needs you": everything staff handed over for an owner decision —
 // damage charges to review (deposit held), refused pick-ups, IDs flagged at the counter.
@@ -30,11 +31,12 @@ export default function OwnerInbox() {
     ]).then(([damage, refused, ids]) => {
       if (!alive) return;
       const out: Item[] = [];
-      damage?.docs.forEach(d => out.push({
+      // State machine: only bookings really in that phase (archived ones never count).
+      damage?.docs.filter(d => phaseOf(d.data()) === 'return_review').forEach(d => out.push({
         key: `d${d.id}`, icon: 'alert-triangle', title: `Damage to review — ${d.get('productName') ?? 'item'}`,
         sub: `${d.get('renterName') ?? ''} · deposit held`, route: `/admin/reservations/${d.id}`,
       }));
-      refused?.docs.forEach(d => out.push({
+      refused?.docs.filter(d => phaseOf(d.data()) === 'pickup_refused').forEach(d => out.push({
         key: `r${d.id}`, icon: 'slash', title: `Pick-up refused — ${d.get('productName') ?? 'item'}`,
         sub: `“${d.get('pickupRefusedReason') ?? ''}” · ${d.get('pickupRefusedByName') ?? 'staff'}`, route: `/admin/reservations/${d.id}`,
       }));

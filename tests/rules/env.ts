@@ -209,3 +209,11 @@ export function auditedUpdate(
   batch.update(doc(db, path), { ...data, lastAuditId: a.id });
   return batch.commit();
 }
+
+/** Extra documents for one test file, written with rules disabled (call in a before()). */
+export async function seedExtra(docs: Record<string, Record<string, unknown>>): Promise<void> {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db = ctx.firestore();
+    await Promise.all(Object.entries(docs).map(([p, data]) => setDoc(doc(db, p), data)));
+  });
+}

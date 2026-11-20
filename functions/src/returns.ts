@@ -3,6 +3,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as logger from 'firebase-functions/logger';
 import { requireRole, type AdminCaller } from './adminAuth';
+import { canDo } from './shared/reservationMachine';
 import { auditData, newAuditRef, writeAudit } from './audit';
 import { alertOwners } from './ownerAlerts';
 import { BREVO_API_KEY } from './email/config';
@@ -110,7 +111,8 @@ export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY], i
       const item = items[idx];
       if (!snap.exists) fail('not-found', 'Booking not found.', 'not-found');
       const r = snap.data()!;
-      if (r.status !== 'active') fail('not-active', 'This item isn’t out on a rental (already returned?).');
+      // State machine: re-read IN the transaction — only an item that is out can be returned.
+      if (!canDo(r, 'return', caller.role, 'server')) fail('not-active', 'This item isn’t out on a rental (already returned?).');
       const hand = (r.handoverChecklist ?? {}) as { depositCurrency?: ChargeCurrency; depositAmount?: number };
       const currency: ChargeCurrency = hand.depositCurrency === 'USD' || hand.depositCurrency === 'THB' ? hand.depositCurrency : 'LAK';
       // The deposit actually received at handover (frozen); legacy fallback = conversion.
@@ -190,6 +192,7 @@ export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY], i
 
       const auditRef = newAuditRef();
       fields.lastAuditId = auditRef.id;
+      fields.lastAction = 'return';
       tx.update(snap.ref, fields);
       tx.set(auditRef, auditData(caller, {
         action: needsReview ? 'return.damage-review' : settledNow ? 'return.settled' : 'return.balance-open',
@@ -253,41 +256,46 @@ export const refusePickup = onCall({ region: REGION, secrets: [BREVO_API_KEY], i
   if (ids.length === 0 || ids.length > 20) fail('invalid-request', 'Missing booking.', 'invalid-argument');
   const reason = typeof d.reason === 'string' ? d.reason.trim().slice(0, 500) : '';
   if (reason.length < 3) fail('reason-required', 'Write why the item isn’t handed over.', 'invalid-argument');
-  const snaps = await Promise.all(ids.map(id => db().collection('reservations').doc(id).get()));
-  const renters = new Set<string>();
-  for (const s of snaps) {
-    if (!s.exists) fail('not-found', 'Booking not found.', 'not-found');
-    if (!['pending_payment', 'confirmed'].includes(s.get('status'))) fail('not-before-pickup', 'This item was already handed over or closed.');
-    renters.add(String(s.get('renterId')));
-  }
-  if (renters.size !== 1) fail('invalid-request', 'One renter at a time.', 'invalid-argument');
-  const renterId = [...renters][0];
-  const batch = db().batch();
-  for (const s of snaps) {
-    const auditRef = newAuditRef();
-    batch.update(s.ref, {
-      pickupRefusedAt: FieldValue.serverTimestamp(),
-      pickupRefusedReason: reason,
-      pickupRefusedBy: caller.uid,
-      pickupRefusedByName: caller.name,
-      pickupRefusedOpen: true,
-      lastAuditId: auditRef.id,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    batch.set(auditRef, auditData(caller, {
-      action: 'pickup.refused', reservationId: s.id, orderId: s.get('orderId'), productId: s.get('productId'), renterId, note: reason,
-    }));
-  }
-  if (d.flagId === true) {
-    batch.set(db().collection('identityChecks').doc(renterId), {
-      flaggedForReview: true,
-      flaggedAt: FieldValue.serverTimestamp(),
-      flaggedBy: caller.uid,
-      flaggedByName: caller.name,
-      flaggedReason: reason,
-    }, { merge: true });
-  }
-  await batch.commit();
+  // State machine, in a transaction: every line is re-read and must still be before
+  // pick-up (and not already refused) when the refusal is written.
+  const snaps = await db().runTransaction(async tx => {
+    const read = await Promise.all(ids.map(id => tx.get(db().collection('reservations').doc(id))));
+    const renters = new Set<string>();
+    for (const s of read) {
+      if (!s.exists) fail('not-found', 'Booking not found.', 'not-found');
+      if (!canDo(s.data()!, 'refuse_pickup', caller.role, 'server')) fail('not-before-pickup', 'This item was already handed over, refused or closed.');
+      renters.add(String(s.get('renterId')));
+    }
+    if (renters.size !== 1) fail('invalid-request', 'One renter at a time.', 'invalid-argument');
+    const renterId = [...renters][0];
+    for (const s of read) {
+      const auditRef = newAuditRef();
+      tx.update(s.ref, {
+        pickupRefusedAt: FieldValue.serverTimestamp(),
+        pickupRefusedReason: reason,
+        pickupRefusedBy: caller.uid,
+        pickupRefusedByName: caller.name,
+        pickupRefusedOpen: true,
+        lastAuditId: auditRef.id,
+        lastAction: 'refuse_pickup',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(auditRef, auditData(caller, {
+        action: 'pickup.refused', reservationId: s.id, orderId: s.get('orderId'), productId: s.get('productId'), renterId, note: reason,
+      }));
+    }
+    if (d.flagId === true) {
+      tx.set(db().collection('identityChecks').doc(renterId), {
+        flaggedForReview: true,
+        flaggedAt: FieldValue.serverTimestamp(),
+        flaggedBy: caller.uid,
+        flaggedByName: caller.name,
+        flaggedReason: reason,
+      }, { merge: true });
+    }
+    return read;
+  });
+  const renterId = String(snaps[0].get('renterId'));
   if (d.flagId === true) {
     await writeAudit(caller, { action: 'id.flagged', reservationId: ids[0], renterId, note: reason });
   }
@@ -309,7 +317,16 @@ export const resolveOwnerAlert = onCall({ region: REGION, invoker: 'public' }, a
   if (!id) fail('invalid-request', 'Missing item.', 'invalid-argument');
   const note = typeof d.note === 'string' ? d.note.trim().slice(0, 500) : '';
   if (d.kind === 'pickup') {
-    await db().collection('reservations').doc(id).update({ pickupRefusedOpen: false, pickupRefusedResolvedAt: FieldValue.serverTimestamp(), pickupRefusedResolvedBy: caller.name });
+    await db().runTransaction(async tx => {
+      const ref = db().collection('reservations').doc(id);
+      const snap = await tx.get(ref);
+      if (!snap.exists) fail('not-found', 'Booking not found.', 'not-found');
+      if (!canDo(snap.data()!, 'close_refusal', caller.role, 'server')) fail('not-allowed', 'This pick-up refusal is already closed.');
+      tx.update(ref, {
+        pickupRefusedOpen: false, pickupRefusedResolvedAt: FieldValue.serverTimestamp(), pickupRefusedResolvedBy: caller.name,
+        lastAction: 'close_refusal', updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
     await writeAudit(caller, { action: 'pickup.refusal-closed', reservationId: id, note });
   } else if (d.kind === 'id') {
     await db().collection('identityChecks').doc(id).set({ flaggedForReview: false, flagResolvedAt: FieldValue.serverTimestamp(), flagResolvedBy: caller.name }, { merge: true });

@@ -8,6 +8,7 @@ import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import type { RentalDoc } from '@/lib/firestore';
 import { auditedReservationUpdate } from '@/lib/adminAudit';
+import type { MachineAction } from '@/functions/src/shared/reservationMachine';
 import { refusePickup, resolveOwnerAlert, myAdminName } from '@/lib/staffOps';
 
 // Owner decisions after a staff action (admin roles, phase 2):
@@ -41,7 +42,7 @@ export function DamageReviewCard({ reservation: r, onDone }: {
   const by = myAdminName();
   const reviewed = { chargeReviewPending: false, chargeReviewedAt: serverTimestamp(), chargeReviewedBy: by };
 
-  const run = async (fields: Record<string, unknown>, local: Partial<RentalDoc>, action: string, note: string) => {
+  const run = async (fields: Record<string, unknown>, local: Partial<RentalDoc>, action: MachineAction, note: string) => {
     setBusy(true); setError(null);
     try {
       await auditedReservationUpdate(r, fields, action, note);
@@ -72,7 +73,7 @@ export function DamageReviewCard({ reservation: r, onDone }: {
       {busy ? <ActivityIndicator color={SHADES.amber} /> : mode === 'confirm' ? (
         <ConfirmBox text={`Charge ${fmt(suggestion ?? 0, cur)} for the damage?`} confirmLabel="Confirm charge"
           onCancel={() => setMode(null)}
-          onConfirm={() => run(reviewed, {}, 'damage.confirmed', `${suggestion} ${cur}`)} />
+          onConfirm={() => run(reviewed, {}, 'damage_confirm', `${suggestion} ${cur}`)} />
       ) : mode === 'reduce' ? (
         <ConfirmBox text={suggestion != null ? `New damage charge (less than ${fmt(suggestion, cur)}):` : 'Damage charge:'}
           confirmLabel="Save amount" confirmDisabled={!typedOk}
@@ -82,7 +83,7 @@ export function DamageReviewCard({ reservation: r, onDone }: {
               ...reviewed, chargeAmount: typed, ...split(r, typed),
               ...(suggestion != null ? { damageChargeSuggested: suggestion } : {}),
             };
-            run(fields, { chargeAmount: typed, ...split(r, typed) }, 'damage.reduced', `${suggestion ?? '—'} → ${typed} ${cur}`);
+            run(fields, { chargeAmount: typed, ...split(r, typed) }, 'damage_reduce', `${suggestion ?? '—'} → ${typed} ${cur}`);
           }}>
           <TextInput style={[UI.input, { marginTop: 8 }]} value={amount} onChangeText={setAmount}
             keyboardType="number-pad" placeholder={cur} placeholderTextColor={SHADES.carbonPlaceholder} />
@@ -100,7 +101,7 @@ export function DamageReviewCard({ reservation: r, onDone }: {
             damageChargeWaivedAt: serverTimestamp(),
             chargeAmount: deleteField(), chargeReason: deleteField(), chargePercent: deleteField(),
             ...split(r, 0),
-          }, { chargeAmount: undefined, damageChargeWaived: true, ...split(r, 0) }, 'damage.waived', `${suggestion ?? '—'} ${cur}`)} />
+          }, { chargeAmount: undefined, damageChargeWaived: true, ...split(r, 0) }, 'damage_waive', `${suggestion ?? '—'} ${cur}`)} />
       ) : (
         <View style={s.row}>
           {suggestion != null && (

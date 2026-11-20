@@ -1,5 +1,6 @@
 import { idCheckNeeded } from '../functions/src/shared/identity';
 import { isPickupMissed } from '../functions/src/shared/dates';
+import { phaseOf } from '../functions/src/shared/reservationMachine';
 
 // Admin "Today" panel — pure counting (tests/unit/adminToday.test.ts). Same rules as the
 // calendar day screen (app/admin/calendar/[date].tsx) and lateReturnAlerts:
@@ -10,9 +11,13 @@ import { isPickupMissed } from '../functions/src/shared/dates';
 //   "Check pending") + open / in-review claims.
 // Each source may be null (its query failed) → only the counters using it are null.
 
-export interface TodayLine { status: string; pickupAtMs?: number | null; returnAtMs?: number | null }
+export interface TodayLine {
+  status: string; pickupAtMs?: number | null; returnAtMs?: number | null;
+  /** State-machine fields (deposits to settle; archived bookings never count). */
+  archived?: boolean; returnFinalizedAt?: unknown; chargeReviewPending?: boolean; outstandingBalance?: number;
+}
 type N = number | null;
-export interface TodayCounts { pickups: N; returns: N; late: N; idChecks: N; claims: N; toCheck: N }
+export interface TodayCounts { pickups: N; returns: N; late: N; idChecks: N; claims: N; toCheck: N; toSettle: N }
 
 export function countToday(input: {
   dayStartMs: number;
@@ -25,18 +30,27 @@ export function countToday(input: {
   /** users with idOnFile == true. */
   idUsers: { idOnFile?: unknown; idDocVersion?: unknown; idCheckedVersion?: unknown }[] | null;
   openClaims: number | null;
+  /** Every returned / lost reservation (deposits to settle). Optional for older callers. */
+  closed?: TodayLine[] | null;
 }): TodayCounts {
   const { dayStartMs, dayEndMs, nowMs } = input;
   const inDay = (ms?: number | null) => ms != null && ms >= dayStartMs && ms < dayEndMs;
-  const pickups = input.pickupDay?.filter(r =>
+  const live = (r: TodayLine) => r.archived !== true;
+  const pickups = input.pickupDay?.filter(r => live(r) &&
     (r.status === 'pending_payment' || r.status === 'confirmed')
     && inDay(r.pickupAtMs)
     && !isPickupMissed(r.pickupAtMs ?? 0, nowMs)).length ?? null;
-  const active = input.active?.filter(r => r.status === 'active') ?? null;
+  const active = input.active?.filter(r => r.status === 'active' && live(r)) ?? null;
   const returns = active ? active.filter(r => inDay(r.returnAtMs)).length : null;
   const late = active ? active.filter(r => r.returnAtMs != null && r.returnAtMs < nowMs).length : null;
   const idChecks = input.idUsers?.filter(u => idCheckNeeded(u)).length ?? null;
   const claims = input.openClaims;
   const toCheck = idChecks == null && claims == null ? null : (idChecks ?? 0) + (claims ?? 0);
-  return { pickups, returns, late, idChecks, claims, toCheck };
+  // Deposits to settle = the state machine's to_settle_* / lost_to_settle phases.
+  const toSettle = input.closed === undefined ? null : input.closed == null ? null
+    : input.closed.filter(r => {
+      const p = phaseOf(r);
+      return p === 'to_settle_refund' || p === 'to_settle_balance' || p === 'lost_to_settle';
+    }).length;
+  return { pickups, returns, late, idChecks, claims, toCheck, toSettle };
 }

@@ -151,9 +151,12 @@ describe('reservations/{reservationId}', () => {
     await no(R, updateDoc(doc(db('A'), 'reservations/rAact'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
     await no(R, updateDoc(doc(db('B'), 'reservations/rA'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
     await ok(R, updateDoc(doc(db('A'), 'reservations/rA'), { status: 'cancelled', cancelledBy: 'renter', cancelledAt: serverTimestamp() }));
-    await ok(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB', { total: 250_000 }));
-    // Admin write without its audit entry → refused (firestore.rules auditedWrite)
-    await no(R, updateDoc(doc(db('admin'), 'reservations/rB'), { total: 260_000 }));
+    // Admins go through the state machine (legacy admin = owner): confirmed → out.
+    await ok(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB',
+      { status: 'active', handoverChecklist: { photos: [] }, lastAction: 'handover' }));
+    // No action may change a price, and nothing passes without its audit entry.
+    await no(R, auditedUpdate(db('admin'), UID.ADMIN, 'owner', 'reservations/rB', { total: 250_000, lastAction: 'handover' }));
+    await no(R, updateDoc(doc(db('admin'), 'reservations/rB'), { status: 'cancelled', lastAction: 'cancel' }));
   });
   test('delete: admin only', async () => {
     await no(R, deleteDoc(doc(db('A'), 'reservations/rAret')));

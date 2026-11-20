@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, type WriteBatch } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, type WriteBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { auth } from '@/lib/auth';
 import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
@@ -22,7 +22,6 @@ import {
   getUserProfile,
   getProduct,
   addStockAdjustmentToBatch,
-  addReturnStockToBatch,
   adminCancelReservations,
   adminMarkNoShow,
   adminLiftNoShowHold,
@@ -61,6 +60,7 @@ import {
 import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 import { RenterIdCard } from '@/components/admin/RenterIdCard';
 import { addAudit } from '@/lib/adminAudit';
+import { canDo, phaseOf, PHASE_LABELS, type MachineAction } from '@/functions/src/shared/reservationMachine';
 import { HistoryCard } from '@/components/admin/HistoryCard';
 import { DamageReviewCard, PickupRefusedCard, RefusePickupBox } from '@/components/admin/OwnerReview';
 import { useAuth } from '@/contexts/AuthContext';
@@ -116,7 +116,8 @@ export default function AdminReservationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   // Admin roles: staff never see fee waivers, settlement, lost/stolen or the no-show hold
   // lift (the server refuses those writes anyway — firestore.rules).
-  const { isShopOwner } = useAuth();
+  const { isShopOwner, adminRole } = useAuth();
+  const role = adminRole ?? 'staff';
 
   // ── Data state ────────────────────────────────────────────────────────────
   const [reservation,   setReservation]   = useState<RentalDoc | null>(null);
@@ -134,9 +135,10 @@ export default function AdminReservationDetailScreen() {
   // One confirm dialog at a time; null = buttons visible
   // Undo of a waiver made on the return checklist — allowed until returnFinalizedAt.
   const [confirmUnwaive, setConfirmUnwaive] = useState<'late' | 'damage' | null>(null);
+  const [archiveReason, setArchiveReason] = useState('');
   const [confirmAction, setConfirmAction] = useState<
-    'confirm_payment' | 'early_handover' | 'pickup' | 'returned' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
-    | 'no_show' | 'lift_hold' | 'refuse_pickup' | null
+    'confirm_payment' | 'early_handover' | 'pickup' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
+    | 'no_show' | 'lift_hold' | 'refuse_pickup' | 'archive' | null
   >(null);
   // Admin cancellation — reason + scope (this line or the whole order)
   const [cancelReason,     setCancelReason]     = useState<CancelReason | null>(null);
@@ -162,24 +164,34 @@ export default function AdminReservationDetailScreen() {
   const [verifyingPhone, setVerifyingPhone] = useState(false);
 
   // ── Load reservation ──────────────────────────────────────────────────────
+  // LIVE: the reservation is the state-machine document — any copy of this screen (even
+  // one left behind in the navigation stack) follows its real phase at once, so a stale
+  // screen can never offer an action the current status doesn't allow (the rules refuse
+  // it anyway).
+  const loadedRefs = useRef<string | null>(null);
+  const livePhase = reservation ? phaseOf(reservation) : null;
+  useEffect(() => { setConfirmAction(null); }, [livePhase]);
   useEffect(() => {
     if (!id) return;
-    getDoc(doc(db, 'reservations', id))
-      .then(snap => {
-        if (!snap.exists()) { setLoading(false); return; }
-        const r = { id: snap.id, ...snap.data() } as RentalDoc;
-        setReservation(r);
-        getProduct(r.productId).then(setProduct).catch(() => setProduct(null));
-        getUserProfile(r.renterId)
-          .then(p => { if (p) setRenterProfile(p); })
-          .catch(() => {})
-          .finally(() => setLoading(false));
-      })
-      .catch(() => setLoading(false));
+    return onSnapshot(doc(db, 'reservations', id), snap => {
+      if (!snap.exists()) { setLoading(false); return; }
+      const r = { id: snap.id, ...snap.data() } as RentalDoc;
+      setReservation(r);
+      if (loadedRefs.current === r.id) return;
+      loadedRefs.current = r.id;
+      getProduct(r.productId).then(setProduct).catch(() => setProduct(null));
+      getUserProfile(r.renterId)
+        .then(p => { if (p) setRenterProfile(p); })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, () => setLoading(false));
   }, [id]);
 
   // ── Action executor ───────────────────────────────────────────────────────
   const runAction = useCallback(async (
+    // State machine action (functions/src/shared/reservationMachine.ts) — written as
+    // `lastAction`; firestore.rules allow it only from the CURRENT phase of the doc.
+    action: MachineAction,
     firestoreUpdates: Record<string, unknown>,
     localUpdates: Partial<Omit<RentalDoc, 'id'>>,
     onSuccess?: () => void,
@@ -197,11 +209,10 @@ export default function AdminReservationDetailScreen() {
       // Every admin write carries its auditLog entry in the SAME batch (lastAuditId —
       // firestore.rules refuses it otherwise): who, role, when, what → History card.
       const batch = writeBatch(db);
-      const st = firestoreUpdates.status;
-      const auditId = await addAudit(batch, typeof st === 'string' ? `status.${st}` : 'reservation.update',
+      const auditId = await addAudit(batch, action,
         { reservationId: id, orderId: reservation?.orderId ?? null, productId: reservation?.productId, renterId: reservation?.renterId },
         Object.keys(firestoreUpdates).filter(k => k !== 'status').slice(0, 6).join(', '));
-      batch.update(doc(db, 'reservations', id), { ...firestoreUpdates, lastAuditId: auditId, updatedAt: serverTimestamp() });
+      batch.update(doc(db, 'reservations', id), { ...firestoreUpdates, lastAuditId: auditId, lastAction: action, updatedAt: serverTimestamp() });
       extraBatchWork?.(batch, auditId);
       await batch.commit();
       setReservation(prev => prev ? { ...prev, ...localUpdates } : prev);
@@ -447,6 +458,10 @@ export default function AdminReservationDetailScreen() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const status          = reservation.status as ReservationStatus;
+  // State machine: every action button below comes from the ONE table
+  // (functions/src/shared/reservationMachine.ts) — the rules enforce the same.
+  const can = (a: MachineAction) => canDo(reservation, a, role);
+  const phase = phaseOf(reservation);
   const depositReturned = reservation.depositReturned ?? false;
   const badge           = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending_payment;
   const isReturnOverdue = status === 'active' && reservation.returnAt.toMillis() < Date.now();
@@ -744,6 +759,27 @@ export default function AdminReservationDetailScreen() {
           )}
         </View>
 
+        {/* ── TO SETTLE — never forgotten: a returned / lost booking whose deposit or
+            balance isn't settled yet, at the very top (state machine phases). ── */}
+        {(phase === 'to_settle_refund' || phase === 'to_settle_balance' || phase === 'lost_to_settle') && (
+          <View style={[d.card, d.settleCard]}>
+            <Text style={d.settleTitle}>
+              {phase === 'to_settle_refund' ? 'Deposit to settle · Refund now'
+                : phase === 'to_settle_balance' ? 'Balance due · Record payment'
+                : 'Lost item · to settle'}
+            </Text>
+            <SettlementActions
+              reservation={reservation}
+              confirmAction={confirmAction === 'deposit' || confirmAction === 'settle_outstanding' || confirmAction === 'write_off_outstanding' ? confirmAction : null}
+              setConfirmAction={setConfirmAction}
+              actioning={actioning}
+              setActioning={setActioning}
+              setActionError={setActionError}
+              onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
+            />
+          </View>
+        )}
+
         {/* ── OWNER DECISIONS after a staff action ──────────────────────── */}
         {isShopOwner && (
           <DamageReviewCard reservation={reservation}
@@ -830,7 +866,7 @@ export default function AdminReservationDetailScreen() {
                   ...split,
                 };
             setConfirmUnwaive(null);
-            runAction(fields, fields);
+            runAction('undo_waiver', fields, fields);
           };
           return (
             <View style={[d.card, { marginBottom: 12 }]}>
@@ -928,6 +964,7 @@ export default function AdminReservationDetailScreen() {
         {/* ── ACTIONS ────────────────────────────────────────────────────── */}
         <View style={d.actionsCard}>
           <Text style={d.cardLabel}>Actions</Text>
+          {!!phase && <Text style={d.endStateText}>{PHASE_LABELS[phase]}</Text>}
 
           {/* Error banner */}
           {actionError && (
@@ -951,6 +988,7 @@ export default function AdminReservationDetailScreen() {
               confirmLabel="Confirm payment"
               onCancel={() => setConfirmAction(null)}
               onConfirm={() => runAction(
+                'confirm_payment',
                 { status: 'confirmed' },
                 { status: 'confirmed' },
                 () => sendNotif(reservation.renterId, {
@@ -979,7 +1017,8 @@ export default function AdminReservationDetailScreen() {
               confirmLabel="Mark as picked up"
               onCancel={() => setConfirmAction(null)}
               onConfirm={() => runAction(
-                { status: 'active', ...earlyHandoverFields(reservation.pickupAt) },
+                'handover',
+                { status: 'active', ...earlyHandoverFields(reservation.pickupAt), ...(reservation.pickupRefusedOpen ? { pickupRefusedOpen: false } : {}) },
                 { status: 'active' },
                 () => {
                   sendNotif(reservation.renterId, {
@@ -1000,63 +1039,7 @@ export default function AdminReservationDetailScreen() {
               )}
             />
           )}
-          {!actioning && confirmAction === 'returned' && (
-            <ConfirmBox
-              text="Confirm the renter has returned the item?"
-              confirmLabel="Mark as returned"
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                { status: 'returned', returnedAt: serverTimestamp(), stockReleasedAt: null },
-                { status: 'returned' },
-                () => {
-                  sendNotif(reservation.renterId, {
-                    type: 'rental',
-                    icon: 'check',
-                    iconColor: 'green',
-                    title: 'Rental completed',
-                    body: `Thanks for returning the ${reservation.productName}.`,
-                    deepLink: `/rentals/${id}`,
-                  });
-                  setTimeout(() => {
-                    sendNotif(reservation.renterId, {
-                      type: 'system',
-                      icon: 'star',
-                      iconColor: 'coral',
-                      title: 'How was your rental?',
-                      body: `Leave a review for ${reservation.productName} and help others.`,
-                      deepLink: `/review/${reservation.productId}?reservationId=${id}`,
-                    });
-                  }, 3000);
-                },
-                // Defensive fallback path — a checklist wasn't the trigger here, so decide
-                // the stock bucket from whatever chargeSeverity already sits on the doc (if
-                // any), exactly like the checklist submit paths.
-                (batch, auditId) => addReturnStockToBatch(
-                  batch,
-                  reservation.productId,
-                  {
-                    quantity: reservation.quantity,
-                    chargeSeverity: reservation.chargeSeverity,
-                    chargeUnits: reservation.chargeUnits,
-                  },
-                  'Admin (fallback return action)',
-                  id,
-                  auditId,
-                ),
-              )}
-            />
-          )}
-          {!actioning && (confirmAction === 'deposit' || confirmAction === 'settle_outstanding' || confirmAction === 'write_off_outstanding') && (
-            <SettlementActions
-              reservation={reservation}
-              confirmAction={confirmAction}
-              setConfirmAction={setConfirmAction}
-              actioning={actioning}
-              setActioning={setActioning}
-              setActionError={setActionError}
-              onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
-            />
-          )}
+          {/* D6: no return without a checklist — "Mark as returned" opens the checklist. */}
           {!actioning && confirmAction === 'lost' && (
             <ConfirmBox
               text={
@@ -1079,6 +1062,7 @@ export default function AdminReservationDetailScreen() {
                   lateChargeReason: reservation.lateChargeReason ?? 'Late return penalty',
                 } : {};
                 runAction(
+                  'report_lost',
                   {
                     status: 'lost',
                     chargeAmount: lostChargeAmount,
@@ -1274,6 +1258,26 @@ export default function AdminReservationDetailScreen() {
             );
           })()}
 
+          {!actioning && confirmAction === 'archive' && (
+            <ConfirmBox
+              text="Archive this booking? It leaves every list, counter and to-do (still visible under the Archived filter). Stock isn't moved — use Admin → Data check to release held units."
+              confirmLabel="Archive"
+              confirmDisabled={archiveReason.trim().length < 3}
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={() => runAction('archive', {
+                archived: true,
+                archivedAt: serverTimestamp(),
+                archivedBy: auth.currentUser?.displayName || auth.currentUser?.email || 'Owner',
+                archivedReason: archiveReason.trim().slice(0, 300),
+                ...(reservation.returnFinalizedAt ? {} : { returnFinalizedAt: serverTimestamp() }),
+                ...(status === 'returned' && reservation.stockReleasedAt == null ? { stockReleasedAt: serverTimestamp() } : {}),
+              }, { archived: true, archivedReason: archiveReason.trim() })}
+            >
+              <TextInput style={d.input} value={archiveReason} onChangeText={setArchiveReason}
+                placeholder="Reason (e.g. test booking)" placeholderTextColor={COLORS.fg3} />
+            </ConfirmBox>
+          )}
+
           {!actioning && confirmAction === 'refuse_pickup' && (
             <RefusePickupBox
               reservationIds={[reservation.id]}
@@ -1289,7 +1293,7 @@ export default function AdminReservationDetailScreen() {
           {!actioning && confirmAction === null && (
             <>
               {/* Linear status transitions */}
-              {status === 'pending_payment' && (
+              {can('confirm_payment') && (
                 <TouchableOpacity
                   style={d.primaryBtn}
                   onPress={() => setConfirmAction('confirm_payment')}
@@ -1298,7 +1302,7 @@ export default function AdminReservationDetailScreen() {
                   <Text style={d.primaryBtnText}>Confirm payment</Text>
                 </TouchableOpacity>
               )}
-              {status === 'confirmed' && (
+              {status === 'confirmed' && can('handover') && (
                 <TouchableOpacity
                   style={d.primaryBtn}
                   onPress={() => (isBeforePickupDay(reservation.pickupAt?.toMillis() ?? 0)
@@ -1309,20 +1313,18 @@ export default function AdminReservationDetailScreen() {
                   <Text style={d.primaryBtnText}>Mark as picked up</Text>
                 </TouchableOpacity>
               )}
-              {status === 'active' && (
+              {can('return') && (
                 <TouchableOpacity
                   style={d.primaryBtn}
-                  onPress={() => isShopOwner && reservation.returnChecklist?.confirmedAt
-                    ? setConfirmAction('returned')
-                    : router.push(`/admin/reservations/${id}/checklist?type=return`)}
+                  onPress={() => router.push(`/admin/reservations/${id}/checklist?type=return`)}
                   activeOpacity={0.85}
                 >
                   <Text style={d.primaryBtnText}>Mark as returned</Text>
                 </TouchableOpacity>
               )}
 
-              {/* Report lost/stolen — owner only, while the item is out with the renter */}
-              {isShopOwner && status === 'active' && (
+              {/* Report lost/stolen — owner only, while the item is OUT (never after a return) */}
+              {can('report_lost') && (
                 <TouchableOpacity
                   style={d.cancelLink}
                   onPress={() => setConfirmAction('lost')}
@@ -1332,54 +1334,40 @@ export default function AdminReservationDetailScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Settlement — deposit refund / outstanding-balance collect / write-off,
-                  shared with the post-checklist return-confirmation screen so the two
-                  entry points can never diverge. See components/SettlementActions.tsx. */}
-              {isShopOwner && !reservation.chargeReviewPending && (
-                <SettlementActions
-                  reservation={reservation}
-                  confirmAction={confirmAction}
-                  setConfirmAction={setConfirmAction}
-                  actioning={actioning}
-                  setActioning={setActioning}
-                  setActionError={setActionError}
-                  onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
-                />
-              )}
               {!isShopOwner && reservation.chargeReviewPending && (
                 <Text style={d.endStateText}>Damage charge waiting for an owner — the deposit is held.</Text>
               )}
 
               {/* Refuse the pick-up (staff + owner): item not handed over, owners told */}
-              {(status === 'pending_payment' || status === 'confirmed') && !reservation.pickupRefusedOpen && (
+              {can('refuse_pickup') && (
                 <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('refuse_pickup')} activeOpacity={0.7}>
                   <Text style={d.cancelLinkText}>Refuse pick-up</Text>
                 </TouchableOpacity>
               )}
 
               {/* Internal incident on this booking (photos + notes, never shown to the renter) */}
-              {(status === 'active' || status === 'returned') && (
+              {can('report_incident') && (
                 <TouchableOpacity style={d.cancelLink} onPress={() => router.push(`/admin/incident?reservationId=${id}`)} activeOpacity={0.7}>
                   <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Report an incident</Text>
                 </TouchableOpacity>
               )}
 
               {/* No-show — only once the pick-up day is over (alert, never automatic) */}
-              {(status === 'pending_payment' || status === 'confirmed') && isPickupMissed(reservation.pickupAt.toMillis()) && (
+              {can('no_show') && isPickupMissed(reservation.pickupAt.toMillis()) && (
                 <TouchableOpacity style={d.cancelLink} onPress={openNoShow} activeOpacity={0.7}>
                   <Text style={d.cancelLinkText}>Mark as no-show</Text>
                 </TouchableOpacity>
               )}
 
               {/* Lift the renter's no-show hold */}
-              {isShopOwner && renterHold?.reasons.includes('noShow') && (
+              {can('lift_no_show') && renterHold?.reasons.includes('noShow') && (
                 <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('lift_hold')} activeOpacity={0.7}>
                   <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Lift no-show hold</Text>
                 </TouchableOpacity>
               )}
 
               {/* Cancel — only before pickup */}
-              {(status === 'pending_payment' || status === 'confirmed') && (
+              {can('cancel') && (
                 <TouchableOpacity
                   style={d.cancelLink}
                   onPress={openCancel}
@@ -1387,6 +1375,19 @@ export default function AdminReservationDetailScreen() {
                 >
                   <Text style={d.cancelLinkText}>Cancel reservation</Text>
                 </TouchableOpacity>
+              )}
+
+              {/* Archive (owner, data fix) — closed bookings only, reason required */}
+              {can('archive') && (
+                <TouchableOpacity style={d.cancelLink} onPress={() => { setArchiveReason(''); setConfirmAction('archive'); }} activeOpacity={0.7}>
+                  <Text style={[d.cancelLinkText, { color: COLORS.fg3 }]}>Archive (test / data fix)</Text>
+                </TouchableOpacity>
+              )}
+              {phase === 'archived' && (
+                <View style={d.endState}>
+                  <Feather name="archive" size={15} color={COLORS.fg3} />
+                  <Text style={d.endStateText}>{`Archived${reservation.archivedReason ? ` — ${reservation.archivedReason}` : ''}. Read only.`}</Text>
+                </View>
               )}
 
               {/* End states */}
@@ -1548,6 +1549,12 @@ const d = StyleSheet.create({
   checklistLinkText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.carbon },
 
   // ── Actions card ─────────────────────────────────────────────────────────
+  settleCard: { borderWidth: 1.5, borderColor: COLORS.amber, marginBottom: 12, gap: 8 },
+  settleTitle: { fontSize: 16, fontWeight: '800', color: COLORS.carbon },
+  input: {
+    backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.softGray200, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: COLORS.carbon, marginTop: 8,
+  },
   actionsCard: {
     backgroundColor: COLORS.white, borderRadius: 12, padding: 16, gap: 10,
   },

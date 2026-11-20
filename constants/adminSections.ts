@@ -59,6 +59,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
 /** Tools screen (app/admin/tools.tsx) — same card shape. */
 export const ADMIN_TOOLS: Omit<AdminSection, 'group' | 'minRole'>[] = [
   { id: 'product-thumbs', title: 'Product thumbnails', sub: 'Check and generate the small photo copies', icon: 'image', route: '/admin/product-thumbs' },
+  { id: 'data-check', title: 'Data check', sub: 'Bookings that break the rules, units held by archived bookings', icon: 'check-square', route: '/admin/data-check' },
   { id: 'search-vocabulary', title: 'Search vocabulary', sub: 'Related words the app search understands', icon: 'search', route: '/admin/search-vocabulary' },
 ];
 
@@ -98,6 +99,7 @@ export const ADMIN_ROUTE_ROLES: Record<string, AdminRole> = {
   '/admin/business-accounts/[uid]': 'owner',
   '/admin/collection-form': 'owner',
   '/admin/collections': 'owner',
+  '/admin/data-check': 'owner',
   '/admin/exchange-rate': 'owner',
   '/admin/home-slide-form': 'owner',
   '/admin/home-slides': 'owner',
