@@ -199,6 +199,8 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
   };
 
   const handleStartChecklistChain = (checklistType: 'handover' | 'return', ids: string[]) => {
+    // A whole order's return = the 3-step return flow (one settlement for the order).
+    if (checklistType === 'return') { router.push(`/admin/return?ids=${ids.join(',')}`); return; }
     const [firstId, ...restIds] = ids;
     router.push(`/admin/reservations/${firstId}/checklist?type=${checklistType}&queue=${restIds.join(',')}&chainIds=${ids.join(',')}`);
   };

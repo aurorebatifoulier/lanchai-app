@@ -124,8 +124,6 @@ service cloud.firestore {
         || (a == 'lift_no_show' && role in ['owner'] && from in ['no_show_held'] && to in ['no_show_lifted']
           && keys.hasOnly(['noShowHoldLiftedAt', 'noShowHoldLiftedBy', 'noShowHoldLiftedByName', 'updatedAt', 'lastAuditId', 'lastAction'])
           && request.resource.data.noShowHoldLiftedBy == request.auth.uid)
-        || (a == 'return' && role in ['owner'] && from in ['out'] && to in ['to_settle_refund', 'to_settle_balance']
-          && keys.hasOnly(['status', 'returnChecklist', 'returnedAt', 'stockReleasedAt', 'chargeAmount', 'chargeReason', 'chargeSeverity', 'chargePercent', 'chargeUnits', 'lateChargeAmount', 'lateChargeReason', 'lateChargeWaived', 'lateChargeWaivedAmount', 'lateChargeWaivedReason', 'lateChargeWaivedBy', 'lateChargeWaivedAt', 'damageChargeWaived', 'damageChargeWaivedAmount', 'damageChargeWaivedReason', 'damageChargeWaivedPercent', 'damageChargeWaivedBy', 'damageChargeWaivedAt', 'chargeCurrency', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
         || (a == 'report_lost' && role in ['owner'] && from in ['out'] && to in ['lost_to_settle']
           && keys.hasOnly(['status', 'chargeAmount', 'chargeCurrency', 'chargeReason', 'chargeSeverity', 'chargePercent', 'chargeUnits', 'lateChargeAmount', 'lateChargeReason', 'depositAppliedToCharge', 'outstandingBalance', 'updatedAt', 'lastAuditId', 'lastAction']))
         || (a == 'damage_confirm' && role in ['owner'] && from in ['return_review'] && to in ['to_settle_refund', 'to_settle_balance']

@@ -24,11 +24,23 @@ async function active(id: string, returnAtMs: number, extra: Record<string, unkn
     ...extra,
   });
 }
-const item = (id: string, worst = 'good') => ({
-  reservationId: id, categories: cats(worst), photos: [photo(id)], clientConfirmedByName: 'Ann', clientConfirmed: true, chargeUnits: 1,
+const SIG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M1 1 L9 9"/></svg>';
+const item = (id: string, worst = 'good', photos = true) => ({
+  reservationId: id, categories: cats(worst), photos: photos ? [photo(id)] : [], chargeUnits: 1,
   // Anything that looks like an amount must be ignored by the server.
   chargeAmount: 1, lateChargeAmount: 0, depositReturned: true,
 });
+type Settlement = 'refund' | 'collected' | 'open' | 'review';
+/** The app flow: Settlement step (quoteReturn) → Client confirms (submitReturn). */
+async function returnFlow(uid: string, items: ReturnType<typeof item>[], pick?: (q: any) => Settlement, adjustments: Record<string, unknown> = {}) {
+  const quote = await call(fns.quoteReturn, { items, adjustments }, uid);
+  const settlement: Settlement = pick ? pick(quote) : quote.result === 'refund' ? 'refund' : quote.result === 'collect' ? 'collected' : 'review';
+  await call(fns.submitReturn, {
+    items, adjustments, settlement, clientSignatureSvg: SIG,
+    quote: { result: quote.result, refund: quote.refund, collect: quote.collect },
+  }, uid);
+  return quote;
+}
 
 beforeEach(async () => {
   await seedBookingWorld();
@@ -41,80 +53,123 @@ beforeEach(async () => {
   sentEmails.length = 0;
 });
 
-test('clean return: full deposit back, closed, renter notified', async () => {
+test('clean return: quote = full refund; confirm → settled, signed, recorded by staff', async () => {
   await active('r1', Date.now() + 5 * H);
-  const { results } = await call(fns.submitReturn, { items: [item('r1')] }, STAFF);
-  assert.equal(results[0].outcome, 'clean');
+  const q = await returnFlow(STAFF, [item('r1')]);
+  assert.equal(q.result, 'refund');
+  assert.equal(q.refund, 1_000_000);
   const r = (await db().doc('reservations/r1').get()).data()!;
   assert.equal(r.status, 'returned');
   assert.equal(r.depositReturned, true);
   assert.ok(r.returnFinalizedAt);
-  assert.equal(r.lateChargeAmount, undefined);
-  assert.equal(r.chargeAmount, undefined);
   assert.equal(r.returnChecklist.confirmedByName, 'Sam');
-  assert.equal(r.returnedBy.role, 'staff');
+  assert.equal(r.returnChecklist.confirmedByRole, 'staff');
+  assert.equal(r.returnChecklist.clientSigned, true);
+  assert.equal(r.returnChecklist.clientConfirmedByName, undefined);
   assert.equal((await db().doc('products/tent').get()).get('pendingSettlementUnits'), 1);
-  const audit = await db().collection('auditLog').where('reservationId', '==', 'r1').get();
-  assert.equal(audit.docs[0].get('byUid'), STAFF);
   assert.equal((await db().collection(`notifications/${UID.A}/items`).get()).size, 2);
 });
 
-test('late, no damage: server late fee taken from the deposit, closed; staff can’t change it', async () => {
-  await active('r2', Date.now() - 10 * H); // ]grace;24h] → 1 day = 200,000 LAK
-  const { results } = await call(fns.submitReturn, { items: [item('r2')] }, STAFF);
-  assert.equal(results[0].outcome, 'late');
-  assert.equal(results[0].refund, 800_000);
-  const r = (await db().doc('reservations/r2').get()).data()!;
-  assert.equal(r.lateChargeAmount, 200_000);
-  assert.equal(r.depositAppliedToCharge, 200_000);
-  assert.equal(r.outstandingBalance, 0);
-  assert.equal(r.depositReturned, true);
-  assert.ok(r.returnFinalizedAt);
-  assert.equal(r.lateChargeWaived, undefined);
+test('LNC-261023-KW97 case: USD deposit received = 74 (frozen), 2 late days → 31 fee, give back 43', async () => {
+  await set('config/pricing', { exchangeRate: 23_000 });
+  await active('kw', Date.now() - 100 * H, {
+    deposit: 2_941_200, pricePerDay: 350_000, handoverChecklist: { depositCurrency: 'USD', depositAmount: 74 },
+  });
+  const q = await returnFlow(STAFF, [item('kw')]);
+  assert.equal(q.currency, 'USD');
+  assert.equal(q.depositHeld, 74);            // never 2,941,200 / 23,000 ≈ 128
+  assert.equal(q.lines[0].late, 31);
+  assert.equal(q.lines[0].lateDays, 2);
+  assert.equal(q.refund, 43);
+  const r = (await db().doc('reservations/kw').get()).data()!;
+  assert.equal(r.lateChargeAmount, 31);
+  assert.equal(r.depositAppliedToCharge, 31);
+  assert.equal(r.returnChecklist.depositAmount, 74);
 });
 
-test('late beyond the deposit: balance stays open unless staff confirm it was paid', async () => {
-  await active('r3', Date.now() - 100 * H, { handoverChecklist: { depositCurrency: 'LAK', depositAmount: 100_000 } }); // 2 days = 400,000
-  await call(fns.submitReturn, { items: [item('r3')] }, STAFF);
+test('late beyond the deposit: collect → settled; or leave the balance open', async () => {
+  await active('r3', Date.now() - 100 * H, { handoverChecklist: { depositCurrency: 'LAK', depositAmount: 100_000 } });
+  const q = await returnFlow(STAFF, [item('r3')], () => 'open');
+  assert.equal(q.result, 'collect');
+  assert.equal(q.collect, 300_000);
   let r = (await db().doc('reservations/r3').get()).data()!;
   assert.equal(r.outstandingBalance, 300_000);
   assert.equal(r.returnFinalizedAt, undefined);
   await active('r4', Date.now() - 100 * H, { handoverChecklist: { depositCurrency: 'LAK', depositAmount: 100_000 } });
-  await call(fns.submitReturn, { items: [item('r4')], collectedBalance: true }, STAFF);
+  await returnFlow(STAFF, [item('r4')]);
   r = (await db().doc('reservations/r4').get()).data()!;
   assert.equal(r.outstandingSettled, true);
-  assert.equal(r.outstandingSettledBy, 'Sam');
   assert.ok(r.returnFinalizedAt);
 });
 
-test('damage: suggestion stored, deposit held, owners alerted in-app + email (test mode)', async () => {
+test('staff damage: review, deposit held, owners alerted in-app + email (test mode)', async () => {
   await active('r5', Date.now() + 5 * H);
-  const { results } = await call(fns.submitReturn, { items: [item('r5', 'damaged')] }, STAFF);
-  assert.equal(results[0].outcome, 'damage');
+  const q = await returnFlow(STAFF, [item('r5', 'damaged')]);
+  assert.equal(q.result, 'review');
   const r = (await db().doc('reservations/r5').get()).data()!;
   assert.equal(r.chargeReviewPending, true);
-  assert.equal(r.chargeAmount, 0.6 * 100 * RATE); // 60 % × 100 USD → LAK
-  assert.equal(r.chargeReason, 'Main item condition — Damaged');
-  assert.equal(r.depositReturned, undefined);
+  assert.equal(r.chargeAmount, 0.6 * 100 * RATE);
   assert.equal(r.returnFinalizedAt, undefined);
-  const inbox = await db().collection(`notifications/${OWNER}/items`).get();
-  assert.equal(inbox.size, 1);
-  assert.equal(inbox.docs[0].get('deepLink'), '/admin/reservations/r5');
-  assert.equal((await db().collection(`notifications/${STAFF}/items`).get()).size, 0);
-  // config/emailSettings is absent = TEST mode, yet the owner gets it at their own address.
+  assert.equal((await db().collection(`notifications/${OWNER}/items`).get()).size, 1);
   assert.ok(sentEmails.some(e => e.to === 'olga@example.com' && e.subject.includes('Damage to review')));
 });
 
-test('unusable unit → lost stock; refused for deactivated staff, renters, non-active items', async () => {
+test('owner decides on the Settlement step: lower the damage, waive the late fee → settled', async () => {
+  await active('o1', Date.now() - 10 * H);
+  const q = await returnFlow(OWNER, [item('o1', 'damaged')], undefined, { o1: { waiveLate: true, damageAmount: 100_000 } });
+  assert.equal(q.result, 'refund');
+  assert.equal(q.refund, 900_000);
+  const r = (await db().doc('reservations/o1').get()).data()!;
+  assert.equal(r.chargeAmount, 100_000);
+  assert.equal(r.damageChargeSuggested, 0.6 * 100 * RATE);
+  assert.equal(r.lateChargeWaived, true);
+  assert.equal(r.lateChargeAmount, undefined);
+  assert.equal(r.chargeReviewPending, undefined);
+  assert.ok(r.returnFinalizedAt);
+  // Never above the suggestion: an owner amount over it falls back to the suggestion.
+  await active('o2', Date.now() + 5 * H);
+  const q2 = await call(fns.quoteReturn, { items: [item('o2', 'damaged')], adjustments: { o2: { damageAmount: 99_999_999 } } }, OWNER);
+  assert.equal(q2.lines[0].damage, 0.6 * 100 * RATE);
+});
+
+test('refusals: staff adjustments, changed quote, missing photos / signature, mixed currencies', async () => {
+  await active('x1', Date.now() + 5 * H);
+  await rejects(call(fns.quoteReturn, { items: [item('x1')], adjustments: { x1: { waiveLate: true } } }, STAFF), 'invalid-argument', 'owner-only');
+  await rejects(call(fns.submitReturn, {
+    items: [item('x1')], settlement: 'refund', clientSignatureSvg: SIG, quote: { result: 'refund', refund: 1, collect: 0 },
+  }, STAFF), 'failed-precondition', 'quote-changed');
+  await rejects(call(fns.submitReturn, {
+    items: [item('x1', 'damaged', false)], settlement: 'review', clientSignatureSvg: SIG, quote: { result: 'review', refund: 0, collect: 0 },
+  }, STAFF), 'invalid-argument', 'photos-required');
+  await rejects(call(fns.submitReturn, {
+    items: [item('x1')], settlement: 'refund', clientSignatureSvg: '', quote: { result: 'refund', refund: 1_000_000, collect: 0 },
+  }, STAFF), 'invalid-argument', 'signature-required');
+  await active('x2', Date.now() + 5 * H, { handoverChecklist: { depositCurrency: 'USD', depositAmount: 50 } });
+  await rejects(call(fns.quoteReturn, { items: [item('x1'), item('x2')] }, STAFF), 'invalid-argument', 'mixed-currencies');
+  assert.equal((await db().doc('reservations/x1').get()).get('status'), 'active');
+});
+
+test('a whole order: one settlement, one line per item', async () => {
+  await active('m1', Date.now() + 5 * H);
+  await active('m2', Date.now() - 10 * H); // 1 day = 200,000
+  const q = await returnFlow(STAFF, [item('m1'), item('m2')]);
+  assert.equal(q.lines.length, 2);
+  assert.equal(q.depositHeld, 2_000_000);
+  assert.equal(q.charges, 200_000);
+  assert.equal(q.refund, 1_800_000);
+  for (const id of ['m1', 'm2']) assert.ok((await db().doc(`reservations/${id}`).get()).get('returnFinalizedAt'));
+});
+
+test('unusable unit → lost stock; refused for deactivated staff, renters, items not out', async () => {
   await active('r6', Date.now() + 5 * H);
-  await call(fns.submitReturn, { items: [item('r6', 'unusable')] }, STAFF);
+  await returnFlow(OWNER, [item('r6', 'unusable')]);
   assert.equal((await db().doc('products/tent').get()).get('lostUnits'), 1);
-  await rejects(call(fns.submitReturn, { items: [item('r6')] }, STAFF), 'failed-precondition', 'not-active');
+  await rejects(call(fns.quoteReturn, { items: [item('r6')] }, STAFF), 'failed-precondition', 'not-active');
   await active('r7', Date.now() + 5 * H);
-  await rejects(call(fns.submitReturn, { items: [item('r7')] }, STAFF_OFF), 'permission-denied', 'admins-only');
-  await rejects(call(fns.submitReturn, { items: [item('r7')] }, UID.A), 'permission-denied', 'admins-only');
-  await rejects(call(fns.submitReturn, { items: [{ ...item('r7'), categories: {} }] }, STAFF), 'invalid-argument', 'checklist-incomplete');
-  await rejects(call(fns.submitReturn, { items: [{ ...item('r7'), photos: ['https://evil/x.jpg'] }] }, STAFF), 'invalid-argument', 'invalid-photo');
+  await rejects(call(fns.quoteReturn, { items: [item('r7')] }, STAFF_OFF), 'permission-denied', 'admins-only');
+  await rejects(call(fns.quoteReturn, { items: [item('r7')] }, UID.A), 'permission-denied', 'admins-only');
+  await rejects(call(fns.quoteReturn, { items: [{ ...item('r7'), categories: {} }] }, STAFF), 'invalid-argument', 'checklist-incomplete');
+  await rejects(call(fns.quoteReturn, { items: [{ ...item('r7'), photos: ['https://evil/x.jpg'] }] }, STAFF), 'invalid-argument', 'invalid-photo');
 });
 
 test('refusePickup: reason recorded, ID flagged, owners alerted; owner closes it', async () => {

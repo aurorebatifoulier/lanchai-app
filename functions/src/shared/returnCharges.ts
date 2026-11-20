@@ -79,6 +79,8 @@ export interface ReturnCharges {
   /** Late fee in depositCurrency (null = not late beyond the grace period). */
   lateAmount: number | null;
   lateAmountLak: number;
+  /** Days charged (1, 1.5 or 2 — Terms §9) — "Late fee · 2 days". */
+  lateDays: number;
   hoursLate: number;
   /** A charge is due but can't be computed (missing retail value / rate). */
   unresolved: boolean;
@@ -111,7 +113,7 @@ export function computeReturnCharges(i: ReturnChargesInput): ReturnCharges {
   const outcome: ReturnOutcome = chargePercent != null ? 'damage' : late.amountLak > 0 ? 'late' : 'clean';
   return {
     outcome, worst, chargePercent, chargeUnits, damageAmount, lateAmount,
-    lateAmountLak: late.amountLak, hoursLate: late.hoursLate, unresolved,
+    lateAmountLak: late.amountLak, lateDays: late.days, hoursLate: late.hoursLate, unresolved,
     total, depositApplied, outstanding, refund: Math.max(0, held - depositApplied),
   };
 }
@@ -141,4 +143,30 @@ const RATING_TEXT: Record<ChecklistRating, string> = { good: 'Good', fair: 'Fair
 export function damageReasonText(categories: Record<string, { rating: ChecklistRating }>, worst: ChecklistRating): string {
   const id = CHECKLIST_CATEGORY_IDS.find(k => categories[k]?.rating === worst) ?? 'mainItem';
   return `${CATEGORY_LABELS[id]} — ${RATING_TEXT[worst]}`;
+}
+
+/**
+ * The deposit RECEIVED at handover, in its currency — the ONLY base for a return
+ * settlement. Frozen in `handoverChecklist.depositAmount` at handover; it is NEVER
+ * re-converted from the LAK `deposit` at today's rate (that showed "128 USD" for a
+ * deposit collected as 74 USD — LNC-261023-KW97). Legacy reservations without a frozen
+ * amount fall back to a conversion of `deposit` (LAK).
+ */
+export function depositHeldOf(
+  r: { deposit?: unknown; handoverChecklist?: { depositCurrency?: unknown; depositAmount?: unknown } | null },
+  usdRate: number | null,
+  thbRate: number | null,
+): { currency: ChargeCurrency; amount: number; frozen: boolean } {
+  const h = r.handoverChecklist ?? {};
+  const currency: ChargeCurrency = h.depositCurrency === 'USD' || h.depositCurrency === 'THB' ? h.depositCurrency : 'LAK';
+  if (typeof h.depositAmount === 'number' && h.depositAmount >= 0) return { currency, amount: h.depositAmount, frozen: true };
+  const lak = typeof r.deposit === 'number' ? r.deposit : 0;
+  return { currency, amount: lakToCurrency(lak, currency, usdRate, thbRate) ?? 0, frozen: false };
+}
+
+/** An amount in a deposit currency → LAK (display only: "≈ 989,000 LAK"). */
+export function currencyToLak(amount: number, cur: ChargeCurrency, usdRate: number | null, thbRate: number | null): number | null {
+  if (cur === 'LAK') return amount;
+  const rate = cur === 'USD' ? usdRate : thbRate;
+  return rate == null ? null : Math.round(amount * rate);
 }

@@ -205,6 +205,10 @@ export interface ChecklistData {
   confirmedAt: Timestamp;
   clientConfirmedByName: string;
   clientConfirmed: boolean;
+  /** Return flow (3 steps): role of who recorded it, and the client's signature. */
+  confirmedByRole?: 'owner' | 'staff';
+  clientSigned?: boolean;
+  clientSignatureSvg?: string;
   depositCurrency: 'LAK' | 'USD' | 'THB';
   depositAmount: number; // frozen at submit time — never recalculated later
   /** Handover only: how the rental was paid at pick-up (required since the rental agreement). */

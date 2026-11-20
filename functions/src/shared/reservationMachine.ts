@@ -77,11 +77,11 @@ export const MACHINE: Transition[] = [
   { action: 'lift_no_show', roles: ['owner'], channel: 'client', from: ['no_show_held'], to: ['no_show_lifted'] },
   { action: 'refuse_pickup', roles: ['owner', 'staff'], channel: 'server', from: PRE, to: ['pickup_refused'] },
   { action: 'close_refusal', roles: ['owner'], channel: 'server', from: ['pickup_refused'], to: PRE },
-  // Staff return: the server decides the outcome (submitReturn).
-  { action: 'return', roles: ['owner', 'staff'], channel: 'server', from: ['out'], to: ['settled', 'to_settle_balance', 'return_review'] },
-  // Owner return checklist (editable charges / waivers) → always settled afterwards.
-  // D6: there is no return without a checklist any more.
-  { action: 'return', roles: ['owner'], channel: 'client', from: ['out'], to: TO_SETTLE },
+  // The server decides the outcome (submitReturn).
+  { action: 'return', roles: ['owner', 'staff'], channel: 'server', from: ['out'],
+    to: ['settled', 'to_settle_refund', 'to_settle_balance', 'return_review'] },
+  // Every return — staff AND owner — goes through submitReturn (3-step flow, owner fee
+  // decisions passed as adjustments). There is no client-side return write any more.
   // Never after a return (the item came back).
   { action: 'report_lost', roles: ['owner'], channel: 'client', from: ['out'], to: ['lost_to_settle'] },
   { action: 'damage_confirm', roles: ['owner'], channel: 'client', from: ['return_review'], to: TO_SETTLE },

@@ -9,37 +9,12 @@ import { db, functions, storage } from './firebase';
 import { auth } from './auth';
 import { adminErrorMessage } from './adminErrors';
 import { auditedWrite } from './adminAudit';
-import type { ChecklistRating } from '@/functions/src/shared/returnCharges';
 
 // Staff counter operations (functions/src/returns.ts) + internal incidents and claim
 // notes (firestore.rules incidents / claims/{id}/notes). The server decides every amount
 // of a staff return; these wrappers only send the condition data.
 
-export interface ReturnItemPayload {
-  reservationId: string;
-  categories: Record<string, { rating: ChecklistRating; note?: string }>;
-  photos: string[];
-  clientConfirmedByName: string;
-  clientConfirmed: boolean;
-  chargeUnits: number;
-}
-export interface ReturnResult {
-  reservationId: string;
-  outcome: 'clean' | 'late' | 'damage' | 'review';
-  refund: number;
-  outstanding: number;
-  currency: 'LAK' | 'USD' | 'THB';
-  settled: boolean;
-}
-
-export async function submitStaffReturn(items: ReturnItemPayload[], collectedBalance: boolean): Promise<ReturnResult[]> {
-  try {
-    const r = await httpsCallable(functions, 'submitReturn')({ items, collectedBalance });
-    return (r.data as { results: ReturnResult[] }).results;
-  } catch (err) {
-    throw new Error(adminErrorMessage(err, 'Couldn’t record the return'));
-  }
-}
+// The return itself = lib/returnFlow.ts (3-step flow: quoteReturn / submitReturn).
 
 export async function refusePickup(reservationIds: string[], reason: string, flagId: boolean): Promise<void> {
   try {

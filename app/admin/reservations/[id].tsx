@@ -1316,7 +1316,7 @@ export default function AdminReservationDetailScreen() {
               {can('return') && (
                 <TouchableOpacity
                   style={d.primaryBtn}
-                  onPress={() => router.push(`/admin/reservations/${id}/checklist?type=return`)}
+                  onPress={() => router.push(`/admin/return?ids=${id}`)}
                   activeOpacity={0.85}
                 >
                   <Text style={d.primaryBtnText}>Mark as returned</Text>

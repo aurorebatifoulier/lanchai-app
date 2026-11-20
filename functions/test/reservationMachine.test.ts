@@ -56,10 +56,12 @@ before(async () => {
 
 function run(action: MachineAction, id: string, uid: string) {
   if (action === 'return') {
-    return call(fns.submitReturn, { items: [{
-      reservationId: id, categories: Object.fromEntries(IDS.map(k => [k, { rating: 'good' }])),
-      photos: [photo(id)], clientConfirmedByName: 'Ann', clientConfirmed: true, chargeUnits: 1,
-    }] }, uid);
+    const items = [{ reservationId: id, categories: Object.fromEntries(IDS.map(k => [k, { rating: 'good' }])), photos: [photo(id)], chargeUnits: 1 }];
+    // Clean return: the quote is a full refund of the 500,000 LAK deposit.
+    return call(fns.submitReturn, {
+      items, settlement: 'refund', clientSignatureSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      quote: { result: 'refund', refund: 500_000, collect: 0 },
+    }, uid);
   }
   if (action === 'refuse_pickup') return call(fns.refusePickup, { reservationIds: [id], reason: 'Photo does not match' }, uid);
   return call(fns.resolveOwnerAlert, { kind: 'pickup', id }, uid);

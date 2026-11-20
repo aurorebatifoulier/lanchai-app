@@ -72,3 +72,28 @@ test('category ids = the app checklist categories (lib/firestore.ts)', () => {
   const ids = [...block.matchAll(/id:\s*'([A-Za-z]+)'/g)].map(m => m[1]);
   assert.deepEqual(ids, [...CHECKLIST_CATEGORY_IDS]);
 });
+
+test('LNC-261023-KW97: deposit collected as 74 USD, 2 late days → 31 USD fee, give back 43 (never 128)', async () => {
+  const { depositHeldOf } = await import('../../functions/src/shared/returnCharges');
+  const r = { deposit: 2_941_200, handoverChecklist: { depositCurrency: 'USD', depositAmount: 74 } };
+  const held = depositHeldOf(r, 23_000, 349);
+  assert.deepEqual(held, { currency: 'USD', amount: 74, frozen: true }); // not 2,941,200 / 23,000 ≈ 128
+  const c = computeReturnCharges({
+    ratings: ['good'], chargeUnits: 1, quantity: 1, retailPriceUsd: 100, damagedChargePercent: 60,
+    depositCurrency: held.currency, depositHeld: held.amount,
+    returnAtMs: Date.parse('2026-10-31T01:30:00Z'), nowMs: Date.parse('2026-11-20T08:50:23Z'),
+    pricePerDayLak: 350_000, graceHours: 2, usdRate: 23_000, thbRate: 349,
+  });
+  assert.equal(c.outcome, 'late');
+  assert.equal(c.lateAmountLak, 700_000);
+  assert.equal(c.lateAmount, 31);
+  assert.equal(c.depositApplied, 31);
+  assert.equal(c.refund, 43);
+  assert.equal(c.outstanding, 0);
+});
+
+test('depositHeldOf: legacy reservation without a frozen amount → converted LAK deposit', async () => {
+  const { depositHeldOf } = await import('../../functions/src/shared/returnCharges');
+  assert.deepEqual(depositHeldOf({ deposit: 460_000 }, 23_000, null), { currency: 'LAK', amount: 460_000, frozen: false });
+  assert.deepEqual(depositHeldOf({ deposit: 460_000, handoverChecklist: { depositCurrency: 'USD' } }, 23_000, null), { currency: 'USD', amount: 20, frozen: false });
+});

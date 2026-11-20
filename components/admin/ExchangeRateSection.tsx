@@ -21,6 +21,8 @@ import {
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import { DEFAULT_VAT_PERCENT, type PricingConfig } from '@/lib/exchangeRate';
+import { needsRateConfirm, rateChangePct } from '@/utils/rateChange';
+import { ConfirmBox } from '@/components/ConfirmBox';
 
 // Shared read-display/edit-toggle for a single "1 X = ? LAK" rate — used for both the
 // USD "configured" state and the THB section, so the two behave identically.
@@ -275,18 +277,27 @@ export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?:
     }
   }, [parsedRate]);
 
-  const handleSaveRate = useCallback(async () => {
+  // > 10 % change from the current rate → confirm first (utils/rateChange.ts).
+  const [bigChange, setBigChange] = useState<null | { kind: 'usd' | 'thb'; from: number; to: number }>(null);
+
+  const handleSaveRate = useCallback(async (confirmed = false) => {
     setSaveError(null);
     if (!rateValid) {
       setSaveError('Enter a valid exchange rate greater than 0.');
       return;
     }
+    if (!confirmed && needsRateConfirm(config?.exchangeRate, parsedRate)) {
+      setBigChange({ kind: 'usd', from: config!.exchangeRate!, to: parsedRate });
+      return;
+    }
+    setBigChange(null);
     setSaving(true);
     try {
       // merge: true — see note on migrateProductsToUsd's setDoc above; avoids wiping
       // out thbToLakRate when only the USD rate is being updated.
       await setDoc(doc(db, 'config', 'pricing'), {
         exchangeRate: parsedRate,
+        exchangeRateUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
       setConfig(prev => ({ ...prev, exchangeRate: parsedRate }));
@@ -297,23 +308,29 @@ export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?:
     } finally {
       setSaving(false);
     }
-  }, [rateValid, parsedRate]);
+  }, [rateValid, parsedRate, config]);
 
   const parsedThbRate = parseFloat(thbRateInput);
   const thbRateValid = !isNaN(parsedThbRate) && parsedThbRate > 0;
 
-  const handleSaveThbRate = useCallback(async () => {
+  const handleSaveThbRate = useCallback(async (confirmed = false) => {
     setThbSaveError(null);
     if (!thbRateValid) {
       setThbSaveError('Enter a valid exchange rate greater than 0.');
       return;
     }
+    if (!confirmed && needsRateConfirm(config?.thbToLakRate, parsedThbRate)) {
+      setBigChange({ kind: 'thb', from: config!.thbToLakRate!, to: parsedThbRate });
+      return;
+    }
+    setBigChange(null);
     setThbSaving(true);
     try {
       // merge: true — avoids wiping out exchangeRate (USD) when only the THB rate is
       // being updated; this field is independent of the USD migration/update flow above.
       await setDoc(doc(db, 'config', 'pricing'), {
         thbToLakRate: parsedThbRate,
+        thbToLakRateUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
       // prev may be null (USD never configured yet) — still reflect the THB rate
@@ -326,7 +343,7 @@ export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?:
     } finally {
       setThbSaving(false);
     }
-  }, [thbRateValid, parsedThbRate]);
+  }, [thbRateValid, parsedThbRate, config]);
 
   const parsedVatRate = parseFloat(vatRateInput);
   const vatRateValid = !isNaN(parsedVatRate) && parsedVatRate >= 0;
@@ -355,8 +372,20 @@ export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?:
     }
   }, [vatRateValid, parsedVatRate]);
 
+  const bigPct = bigChange ? rateChangePct(bigChange.from, bigChange.to) : null;
   return (
     <View>
+      {bigChange && (
+        <View style={{ marginBottom: 12 }}>
+          <ConfirmBox
+            text={`The new rate 1 ${bigChange.kind === 'usd' ? 'USD' : 'THB'} = ${bigChange.to.toLocaleString('en-US')} LAK is ${Math.abs(Math.round(bigPct ?? 0))}% ${(bigPct ?? 0) > 0 ? 'higher' : 'lower'} than the current 1 ${bigChange.kind === 'usd' ? 'USD' : 'THB'} = ${bigChange.from.toLocaleString('en-US')} LAK. Deposits taken in ${bigChange.kind === 'usd' ? 'USD' : 'THB'} will use it. Save it anyway?`}
+            confirmLabel="Save new rate"
+            cancelLabel="Check again"
+            onCancel={() => setBigChange(null)}
+            onConfirm={() => (bigChange.kind === 'usd' ? handleSaveRate(true) : handleSaveThbRate(true))}
+          />
+        </View>
+      )}
         {loading ? (
           <ActivityIndicator color={COLORS.amber} style={{ marginTop: 40 }} />
         ) : !config?.exchangeRate ? (
@@ -442,7 +471,7 @@ export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?:
             editing={editing}
             onStartEdit={() => { setEditing(true); setSaved(false); setRateInput(String(config.exchangeRate)); }}
             onCancelEdit={() => { setEditing(false); setSaveError(null); }}
-            onSave={handleSaveRate}
+            onSave={() => handleSaveRate()}
             saving={saving}
             saveError={saveError}
             saved={saved}
@@ -462,7 +491,7 @@ export default function ExchangeRateSection({ onDirtyChange }: { onDirtyChange?:
               editing={thbEditing}
               onStartEdit={() => { setThbEditing(true); setThbSaved(false); setThbRateInput(String(config?.thbToLakRate ?? '')); }}
               onCancelEdit={() => { setThbEditing(false); setThbSaveError(null); }}
-              onSave={handleSaveThbRate}
+              onSave={() => handleSaveThbRate()}
               saving={thbSaving}
               saveError={thbSaveError}
               saved={thbSaved}

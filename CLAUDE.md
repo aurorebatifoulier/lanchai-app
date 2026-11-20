@@ -1815,9 +1815,9 @@ a snapshot indefinitely).
     checklist preview `<StaffReturnPreview>` uses it too). Clean → deposit refunded +
     `returnFinalizedAt`; late, no damage → fee taken, closed (or `outstandingSettled` when
     staff confirm the balance was paid, else left open); any damage / uncomputable charge →
-    suggestion stored, `chargeReviewPending: true`, deposit held, owners alerted. Single
-    and chained returns (`checklist.tsx`, `checklist-summary.tsx`) branch on
-    `!isShopOwner`; owners keep the editable flow. Owner decides in
+    suggestion stored, `chargeReviewPending: true`, deposit held, owners alerted. Every
+    return (staff AND owner, one item or an order) is now the 3-step flow
+    `app/admin/return.tsx` — see "Return flow" below. Owner decides in
     `<DamageReviewCard>` (Confirm / Reduce / Waive → then `SettlementActions`, hidden while
     `chargeReviewPending`). `refusePickup` callable (staff): item not handed over, reason,
     optional ID flag (`identityChecks.flaggedForReview`), `pickupRefusedOpen` until
@@ -1907,6 +1907,42 @@ a snapshot indefinitely).
   every `lastAction` / `runAction` / `canDo` literal in the code is a table action). A NEW
   admin action on reservations = an entry in `MACHINE` + `ACTION_KEYS`, then
   `npm run rules:machine` and paste the rules.
+
+- **Return flow — 3 steps (2026-11-20), staff AND owner, one item or a whole order.**
+  `app/admin/return.tsx?ids=a,b` is the ONLY return entry ("Mark as returned" on the
+  detail, "Mark all as returned" in the list; `checklist.tsx?type=return` and
+  `checklist-summary?type=return` redirect to it — those two screens are handover + read-only
+  view only now). `components/StepProgress.tsx` (reusable segmented bar: done green ✓ /
+  current amber / upcoming grey — for the handover next). 1 · Condition: checklist chips +
+  photos, NO money; a part not Good needs ≥ 1 photo (also checked server-side,
+  `photos-required`); damaged units stepper. 2 · Settlement: the server's figures
+  (`quoteReturn` callable, `lib/returnFlow.ts`) in the deposit's currency only — "Deposit
+  received", late fee "· n days", damage / None, Result — one big box (green "Give back to
+  the client · X" / red "Client pays Y more" / amber "Keep the deposit · owner reviews") +
+  ≈ LAK, lock line "Fees follow the shop rules. Only an owner can change them."; owners
+  waive / lower fees HERE (`adjustments`, never above the suggestion, `owner-only` for
+  staff); the button says what happens ("I gave back X" / "I collected Y" / "Keep deposit
+  for review", + "Client can't pay now — leave the balance open"). 3 · Client confirms:
+  summary + the client's finger signature (`SignaturePad`), "Recorded by {name} ({role})" →
+  `submitReturn` (photos uploaded only now). Nothing is written before step 3; the back
+  arrow (header + Android) goes to the previous step without losing anything; no skipping.
+  Server (`functions/src/returns.ts`): ONE `quoteFor()` used by `quoteReturn` and
+  `submitReturn` — submit recomputes it in its transaction and refuses `quote-changed`
+  (the app returns to step 2 with the new figures) or a settlement that doesn't match;
+  `mixed-currencies` for an order paid in two currencies; `signature-required`. The
+  deposit is ALWAYS `depositHeldOf(r)` (`shared/returnCharges.ts`) = what was received at
+  handover (`handoverChecklist.depositAmount` / currency), never `deposit` (LAK)
+  re-converted at today's rate — that showed "128 USD" for a deposit collected as 74 USD
+  (LNC-261023-KW97: 31 USD late fee, 43 to give back — unit + functions tests). Stored:
+  `returnChecklist.confirmedByName/Role` (server), `clientSigned` + `clientSignatureSvg`
+  (≤ 20 KB) — the free-text "Confirmed by" / "Client confirmation" fields are gone for
+  returns; `ChecklistSummary` shows "Recorded by … (Role)" / "Signed by the client" /
+  renter "Signed by you on …". State machine: `return` is SERVER-only now (no client
+  transition — rules regenerated). **Exchange rates:** Shop settings → Money asks for a
+  confirmation when a new USD / THB rate differs by > 10 % from the current one
+  (`utils/rateChange.ts`, both values shown); each rate stores its own date
+  (`exchangeRateUpdatedAt`, `thbToLakRateUpdatedAt`); the handover deposit step (single +
+  order) shows "Rate used: 1 USD = X LAK · set {date}" (`useDepositRates()`).
 
 ## Security follow-ups
 

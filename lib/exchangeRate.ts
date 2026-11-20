@@ -10,6 +10,27 @@ export interface PricingConfig {
   /** Show VAT on prices and receipts (Admin → Exchange rate & VAT). Default OFF. */
   showVat?: boolean;
   updatedAt?: Timestamp;
+  /** When each rate was last set (Shop settings → Money) — shown on the handover deposit. */
+  exchangeRateUpdatedAt?: Timestamp;
+  thbToLakRateUpdatedAt?: Timestamp;
+}
+
+/** The rate a handover deposit will use, with the date it was set (falls back to the
+ *  doc's updatedAt for rates saved before the per-rate dates existed). */
+export interface RateInfo { rate: number | null; setAt: Date | null }
+export function useDepositRates(): { USD: RateInfo; THB: RateInfo } | null {
+  const [info, setInfo] = useState<{ USD: RateInfo; THB: RateInfo } | null>(null);
+  useEffect(() => {
+    getDoc(doc(db, 'config', 'pricing')).then(snap => {
+      const d = (snap.data() ?? {}) as Partial<PricingConfig>;
+      const at = (t?: Timestamp) => (t ?? d.updatedAt)?.toDate() ?? null;
+      setInfo({
+        USD: { rate: d.exchangeRate ?? null, setAt: at(d.exchangeRateUpdatedAt) },
+        THB: { rate: d.thbToLakRate ?? null, setAt: at(d.thbToLakRateUpdatedAt) },
+      });
+    }).catch(() => setInfo(null));
+  }, []);
+  return info;
 }
 
 // Placeholder default used whenever config/pricing.vatPercent hasn't been set yet —

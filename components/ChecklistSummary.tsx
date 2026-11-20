@@ -103,7 +103,9 @@ export function ChecklistSummary({
             {showStaffName && !renter && (
               <View style={s.confirmRow}>
                 <Feather name="user" size={13} color={COLORS.fg3} />
-                <Text style={s.confirmText}>Confirmed by {checklist.confirmedByName}</Text>
+                <Text style={s.confirmText}>
+                  {`Recorded by ${checklist.confirmedByName}${checklist.confirmedByRole ? ` (${checklist.confirmedByRole === 'owner' ? 'Owner' : 'Staff'})` : ''}`}
+                </Text>
               </View>
             )}
             {!renter && (
@@ -112,22 +114,32 @@ export function ChecklistSummary({
                 <Text style={s.confirmText}>{fmtDateTime(checklist.confirmedAt)}</Text>
               </View>
             )}
+            {/* Return flow: the client SIGNS on the staff phone (clientSigned + SVG). */}
+            {(() => {
+              const ok = checklist.clientSigned === true || checklist.clientConfirmed;
+              return (
             <View style={s.confirmRow}>
               <Feather
-                name={checklist.clientConfirmed ? 'check-circle' : 'x-circle'}
+                name={ok ? 'check-circle' : 'x-circle'}
                 size={13}
-                color={checklist.clientConfirmed ? COLORS.success : COLORS.fg3}
+                color={ok ? COLORS.success : COLORS.fg3}
               />
               <Text style={s.confirmText}>
                 {renter
-                  ? (checklist.clientConfirmed
-                    ? `Confirmed by you on ${fmtDateTime(checklist.confirmedAt)}`
-                    : `Recorded on ${fmtDateTime(checklist.confirmedAt)}`)
-                  : checklist.clientConfirmed
-                    ? `Confirmed by client — ${checklist.clientConfirmedByName}`
-                    : 'Not confirmed by client'}
+                  ? (checklist.clientSigned
+                    ? `Signed by you on ${fmtDateTime(checklist.confirmedAt)}`
+                    : checklist.clientConfirmed
+                      ? `Confirmed by you on ${fmtDateTime(checklist.confirmedAt)}`
+                      : `Recorded on ${fmtDateTime(checklist.confirmedAt)}`)
+                  : checklist.clientSigned
+                    ? 'Signed by the client'
+                    : checklist.clientConfirmed
+                      ? `Confirmed by client — ${checklist.clientConfirmedByName}`
+                      : 'Not confirmed by client'}
               </Text>
             </View>
+              );
+            })()}
           </View>
         </View>
       )}
