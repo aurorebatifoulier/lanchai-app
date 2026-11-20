@@ -118,6 +118,11 @@ a snapshot indefinitely).
 - **Firestore rules:** editing `firestore.rules` locally does NOT deploy them. They
   only take effect after being manually copy-pasted into the Firebase console. Flag
   this whenever rules change.
+- **Functions deploy always compiles first:** `firebase.json` has the functions
+  `predeploy` `npm --prefix "$RESOURCE_DIR" run build` (added 2026-11-20). Before it,
+  `firebase deploy --only functions` uploaded whatever stale `functions/lib` was on disk
+  (gitignored) — the packs and roles functions stayed undeployed (404) until a manual build
+  on 2026-11-20. Never remove it; verify a new callable with the curl probe (401 = OK).
 - **Firebase region** is `asia-southeast1` — don't introduce config that assumes a
   different region.
 - **Firebase plan is Blaze (paid), not Spark.** Storage uploads and Cloud Functions
