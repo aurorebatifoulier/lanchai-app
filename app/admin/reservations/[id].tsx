@@ -436,7 +436,7 @@ export default function AdminReservationDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[d.root, { paddingTop: insets.top }]}>
+      <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         {header}
         <View style={d.centered}><ActivityIndicator color={COLORS.amber} /></View>
@@ -446,7 +446,7 @@ export default function AdminReservationDetailScreen() {
 
   if (!reservation) {
     return (
-      <View style={[d.root, { paddingTop: insets.top }]}>
+      <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         {header}
         <View style={d.centered}>
@@ -508,13 +508,13 @@ export default function AdminReservationDetailScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[d.root, { paddingTop: insets.top }]}>
+    <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       {header}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[d.scroll, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[d.scroll, { paddingBottom: 40 }]}
       >
         {/* ── First pick-up ID check reminder ──────────────────────────── */}
         {showsFirstRentalIdCheck(reservation) && (

@@ -33,6 +33,8 @@ import ExchangeRateSection from '@/components/admin/ExchangeRateSection';
 import { getFeatureFlags, saveFeatureFlag, FEATURE_DEFAULTS, type FeatureFlags } from '@/lib/features';
 import { getRetentionConfig, saveRetentionConfig, RETENTION_DEFAULTS } from '@/lib/residency';
 
+// bottom-inset: rendered inside AdminTabsScreen, whose root carries screen.root.
+
 interface Form {
   name: string;
   addressLine: string;

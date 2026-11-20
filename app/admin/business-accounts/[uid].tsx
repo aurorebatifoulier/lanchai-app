@@ -174,7 +174,7 @@ export default function AdminBusinessAccountDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[d.root, { paddingTop: insets.top }]}>
+      <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         {header}
         <View style={d.centered}><ActivityIndicator color={COLORS.amber} /></View>
@@ -184,7 +184,7 @@ export default function AdminBusinessAccountDetailScreen() {
 
   if (!account) {
     return (
-      <View style={[d.root, { paddingTop: insets.top }]}>
+      <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         {header}
         <View style={d.centered}><Text style={d.notFound}>Account not found.</Text></View>
@@ -195,13 +195,13 @@ export default function AdminBusinessAccountDetailScreen() {
   const badge = account.btobStatus ? BTOB_STATUS_CONFIG[account.btobStatus] : BTOB_STATUS_CONFIG.pending_approval;
 
   return (
-    <View style={[d.root, { paddingTop: insets.top }]}>
+    <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       {header}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[d.scroll, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[d.scroll, { paddingBottom: 40 }]}
       >
         <View style={[d.statusBadge, { backgroundColor: badge.bg, alignSelf: 'flex-start' }]}>
           <Text style={[d.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>

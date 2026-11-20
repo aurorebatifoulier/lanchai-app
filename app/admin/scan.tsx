@@ -28,6 +28,8 @@ import { STATUS_CONFIG } from '@/app/admin/reservations';
 import { StatusBar } from 'expo-status-bar';
 import { plural } from '@/lib/navigation';
 
+// bottom-inset: full-screen camera; the result sheet and the error banner add insets.bottom themselves.
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const RETICLE_SIZE = 260;

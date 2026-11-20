@@ -97,3 +97,9 @@ test('depositHeldOf: legacy reservation without a frozen amount → converted LA
   assert.deepEqual(depositHeldOf({ deposit: 460_000 }, 23_000, null), { currency: 'LAK', amount: 460_000, frozen: false });
   assert.deepEqual(depositHeldOf({ deposit: 460_000, handoverChecklist: { depositCurrency: 'USD' } }, 23_000, null), { currency: 'USD', amount: 20, frozen: false });
 });
+
+test('history notes: thousands separators + currency', async () => {
+  const { formatAuditNote } = await import('../../lib/auditNotes');
+  assert.equal(formatAuditNote('late fee 630000 LAK · refund 4272000 LAK'), 'late fee 630,000 LAK · refund 4,272,000 LAK');
+  assert.equal(formatAuditNote('refund 43 USD · client signed'), 'refund 43 USD · client signed');
+});

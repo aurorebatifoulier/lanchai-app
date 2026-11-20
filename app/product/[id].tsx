@@ -59,6 +59,8 @@ import { PICKUP_DELAY_MS, fetchAllOccupancy, gridAvailability, type OccupancyRec
 import { vteMonthKey } from '@/functions/src/shared/dates';
 import type { ProductSignal, SignalPart } from '@/lib/productSignal';
 
+// bottom-inset: the fixed bottom bar pads insets.bottom (barBottom) and the content reserves its height.
+
 // Product detail (validated mockup) — Home / Explore / My Account language. Gallery
 // scrolls away, then a compact sticky bar appears; real availability (occupancy), tier
 // cells, Why buy it?, details accordion, How it works with the renter's ACTUAL deposit

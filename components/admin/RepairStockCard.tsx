@@ -43,10 +43,10 @@ export function RepairStockCard({ productId, inRepair, bookable, onChanged }: {
           onPress={() => move(1)} activeOpacity={0.85}>
           {busy === 'in' ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={[UI.btnSecondaryText, UI.btnCardText]}>Mark 1 in repair</Text>}
         </TouchableOpacity>
-        <TouchableOpacity disabled={!!busy || inRepair < 1}
+        <TouchableOpacity disabled={!!busy || inRepair < 1} accessibilityState={{ disabled: !!busy || inRepair < 1 }}
           style={[UI.btnSecondary, UI.btnCard, s.flex, (!!busy || inRepair < 1) && UI.btnDisabled]}
           onPress={() => move(-1)} activeOpacity={0.85}>
-          {busy === 'out' ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={[UI.btnSecondaryText, UI.btnCardText]}>1 back from repair</Text>}
+          {busy === 'out' ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={[UI.btnSecondaryText, UI.btnCardText, inRepair < 1 && { color: SHADES.carbonMuted }]}>1 back from repair</Text>}
         </TouchableOpacity>
       </View>
       <Text style={UI.small}>A reason is needed to put a unit in repair.</Text>

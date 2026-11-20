@@ -589,7 +589,7 @@ export default function AdminProductFormScreen() {
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <View style={[f.root, { paddingTop: insets.top }]}>
+      <View style={[f.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         <View style={f.header}>
           <BackButton onPress={() => router.back()} />
@@ -610,7 +610,7 @@ export default function AdminProductFormScreen() {
   };
 
   return (
-    <View style={[f.root, { paddingTop: insets.top }]}>
+    <View style={[f.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
 
       {/* ── Header ────────────────────────────────────────────────────── */}
@@ -642,7 +642,7 @@ export default function AdminProductFormScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[f.scroll, { paddingBottom: insets.bottom + 40 }]}
+          contentContainerStyle={[f.scroll, { paddingBottom: 40 }]}
         >
           {/* ── Archived banner ───────────────────────────────────────── */}
           {status === 'archived' && (

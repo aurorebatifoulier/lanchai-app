@@ -55,7 +55,7 @@ export default function AdminHomeScreen() {
   );
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
 
       <View style={s.header}>
@@ -65,7 +65,7 @@ export default function AdminHomeScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.content, { paddingBottom: 32 }]}
         showsVerticalScrollIndicator={false}
       >
         {role === 'owner' && <OwnerInbox />}

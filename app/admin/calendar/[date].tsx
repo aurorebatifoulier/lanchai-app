@@ -339,7 +339,7 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
   const isEmpty = noReservations && tasks.length === 0;
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
 
       <View style={s.fixedTop}>
@@ -351,7 +351,7 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.content, { paddingBottom: 32 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={

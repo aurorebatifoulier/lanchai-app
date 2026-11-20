@@ -175,6 +175,13 @@ a snapshot indefinitely).
   (24) to its scroll content. Fixed bottom bars / sheets use `screen.bottom` themselves
   (chat input bar, ID step sheet, sticker sheet) — then the root gets no bottom inset.
   Tab screens don't use it (the tab bar already sits above the system bar).
+  **Enforced (2026-11-20):** `tests/unit/bottomInset.test.ts` fails when a stack screen
+  under `app/` (tabs excluded) renders a vertical ScrollView / FlatList without a ROOT
+  bottom inset (`screen.root`, `paddingBottom: insets.bottom` on the root, SafeAreaView
+  `edges={['top', 'bottom']}`, `screen.bottom`, `bookingBarSpace`) or puts `insets.bottom`
+  inside a `contentContainerStyle` (the list then scrolls UNDER the bar). A screen whose
+  fixed bar / camera handles it opts out with `// bottom-inset: <reason>` (scan, product,
+  admin chat, onboarding, shop settings inside AdminTabsScreen).
 - **Fabric/Android new-arch layout bug (SDK 54):** Sur Android avec la nouvelle
   architecture (Fabric renderer), une `ScrollView` ou `FlatList` avec `flex: 1` calcule
   mal l'espace disponible quand elle a **plusieurs frères directs** dans un flex column

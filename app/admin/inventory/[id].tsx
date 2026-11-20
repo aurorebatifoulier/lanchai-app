@@ -11,12 +11,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import { collection, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { ConfirmBox } from '@/components/ConfirmBox';
-import { getProduct, releaseReservation } from '@/lib/firestore';
+import { releaseReservation } from '@/lib/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { RepairStockCard } from '@/components/admin/RepairStockCard';
 import type { Product } from '@/lib/mockData';
@@ -63,9 +63,14 @@ export default function AdminInventoryProductScreen() {
   const [releasing,        setReleasing]        = useState(false);
   const [releaseError,     setReleaseError]     = useState<string | null>(null);
 
+  // LIVE product: unit counts change in the background (releaseSettledStock gives a
+  // returned unit back ~15 min after settlement + the 12 h handoff buffer).
   useEffect(() => {
     if (!id) return;
-    getProduct(id).then(p => { setProduct(p); setLoading(false); }).catch(() => setLoading(false));
+    return onSnapshot(doc(db, 'products', id), snap => {
+      setProduct(snap.exists() ? ({ id: snap.id, ...snap.data() } as Product) : null);
+      setLoading(false);
+    }, () => setLoading(false));
   }, [id]);
 
   // Live — a release fired from this same screen should disappear from the calendar
@@ -146,7 +151,7 @@ export default function AdminInventoryProductScreen() {
 
   if (loading) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} title="Loading…" />
         <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
@@ -156,7 +161,7 @@ export default function AdminInventoryProductScreen() {
 
   if (!product) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} title="Not found" />
         <View style={s.errorBox}>
@@ -170,13 +175,13 @@ export default function AdminInventoryProductScreen() {
   const eff = effectiveStock(product);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} title={product.name} />
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[s.content, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={s.statsRow}>
@@ -185,6 +190,11 @@ export default function AdminInventoryProductScreen() {
           <StatChip label="In repair" value={product.inRepairUnits ?? 0} />
           <StatChip label="Lost" value={product.lostUnits ?? 0} />
         </View>
+        {(product.pendingSettlementUnits ?? 0) > 0 && (
+          <Text style={s.pendingNote}>
+            {`${product.pendingSettlementUnits} unit${product.pendingSettlementUnits === 1 ? '' : 's'} just returned — back in stock automatically once the deposit is settled (within 15 min, after the 12 h handoff buffer).`}
+          </Text>
+        )}
 
         <RepairStockCard
           productId={product.id}
@@ -446,6 +456,7 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.warmBeige,
   },
   smallLinkText: { fontSize: 11, fontWeight: '700', color: COLORS.carbon },
+  pendingNote: { fontSize: 12, fontWeight: '500', color: COLORS.fg2, marginTop: -4, marginBottom: 12 },
   releaseLink: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
   releaseLinkText: { color: COLORS.danger },
 

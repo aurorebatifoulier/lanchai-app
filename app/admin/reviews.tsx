@@ -166,7 +166,7 @@ export default function AdminReviewsScreen() {
   }, [replyText, fetchReviews]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
 
       {/* Fixed top elements — single flex sibling to avoid Fabric/Android layout bug */}
       <View style={{ flexShrink: 0 }}>
@@ -229,7 +229,7 @@ export default function AdminReviewsScreen() {
       ) : (
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 24 }]}
+          contentContainerStyle={[s.list, { paddingBottom: 24 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={

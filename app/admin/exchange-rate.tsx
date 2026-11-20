@@ -14,7 +14,7 @@ export default function AdminExchangeRateScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -23,7 +23,7 @@ export default function AdminExchangeRateScreen() {
       </View>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[s.content, { paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

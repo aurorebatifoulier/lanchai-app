@@ -154,7 +154,7 @@ export default function AdminVerificationsScreen() {
   };
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <View style={{ flexShrink: 0 }}>
         <View style={s.header}>
@@ -178,7 +178,7 @@ export default function AdminVerificationsScreen() {
         </ScrollView>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 24 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={[s.list, { paddingBottom: 24 }]} showsVerticalScrollIndicator={false}>
         {tab === 'residency' && legacyDocs.length > 0 && (
           <View style={s.legacyCard}>
             <Text style={s.legacyTitle}>Legacy residents ({legacyDocs.length})</Text>

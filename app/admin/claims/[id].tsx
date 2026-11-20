@@ -96,7 +96,7 @@ export default function AdminClaimDetailScreen() {
 
   if (loading) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <ActivityIndicator color={COLORS.amber} style={{ marginTop: 48 }} />
@@ -106,7 +106,7 @@ export default function AdminClaimDetailScreen() {
 
   if (!claim) {
     return (
-      <View style={[s.root, { paddingTop: insets.top }]}>
+      <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <StatusBar style="dark" />
         <Header onBack={() => router.back()} />
         <View style={s.errorBox}>
@@ -124,14 +124,14 @@ export default function AdminClaimDetailScreen() {
   const media = claim.media ?? [];
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <Header onBack={() => router.back()} />
 
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[s.content, { paddingBottom: 24 }]}
       >
         <View style={s.titleRow}>
           <Text style={s.title}>{CLAIM_TYPE_LABELS[claim.type]}</Text>

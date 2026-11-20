@@ -18,6 +18,7 @@ import { UI, useScreenInsets } from '@/components/account/ui';
 import { RATING_STYLE, RATING_LABELS } from '@/components/ChecklistSummary';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
+import { TYPE } from '@/constants/typography';
 import { db, storage } from '@/lib/firebase';
 import { askCamera } from '@/lib/mediaPermissions';
 import { adminIdentity } from '@/lib/adminAudit';
@@ -173,13 +174,18 @@ export default function AdminReturnScreen() {
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  const title = ids.length > 1 ? `Return · ${ids.length} items` : `Return · ${docs[ids[0]]?.productName ?? ''}`;
+  // Header like every stack screen: back left, centered "Return" + the item(s) as a
+  // truncated subtitle (never under the back button).
+  const subtitle = ids.length > 1 ? `${ids.length} items` : docs[ids[0]]?.productName ?? '';
   return (
     <View style={[s.root, screen.root]}>
       <StatusBar style="dark" />
       <View style={s.fixed}>
         <View style={s.header}>
-          <Text style={s.title} pointerEvents="none" numberOfLines={1}>{title}</Text>
+          <View style={s.titleBlock} pointerEvents="none">
+            <Text style={s.title} numberOfLines={1}>Return</Text>
+            {!!subtitle && <Text style={s.subtitle} numberOfLines={1}>{subtitle}</Text>}
+          </View>
           <BackButton onPress={goBack} />
         </View>
         {!done && <StepProgress steps={STEPS} current={step} />}
@@ -344,11 +350,12 @@ function SettlementStep({ quote: q, owner, adjust, busy, error, onAdjust, onChoo
   const cur = q.currency;
   const [damageInput, setDamageInput] = useState<Record<string, string>>({});
   const lak = (v: number | null) => (cur !== 'LAK' && v != null ? `≈ ${v.toLocaleString('en-US')} LAK` : null);
+  // One label line, the amount alone in large type, ≈ LAK in small (non-LAK deposits).
   const box = q.result === 'refund'
-    ? { bg: '#E7F4EC', border: COLORS.success, title: `Give back to the client · ${money(q.refund, cur)}`, sub: lak(q.refundLak) }
+    ? { bg: '#E7F4EC', border: COLORS.success, label: 'Give back to the client', amount: money(q.refund, cur), sub: lak(q.refundLak) }
     : q.result === 'collect'
-      ? { bg: '#FDECEA', border: COLORS.danger, title: `Client pays ${money(q.collect, cur)} more`, sub: lak(q.collectLak) }
-      : { bg: '#FFF6DB', border: SHADES.amber, title: 'Keep the deposit · owner reviews', sub: 'Damage is reviewed by an owner before anything is refunded.' };
+      ? { bg: '#FDECEA', border: COLORS.danger, label: 'Client pays', amount: money(q.collect, cur), sub: lak(q.collectLak) }
+      : { bg: '#FFF6DB', border: SHADES.amber, label: 'Keep the deposit · owner reviews', amount: money(q.depositHeld, cur), sub: null };
   const setAdj = (id: string, patch: OwnerAdjustment) => onAdjust({ ...adjust, [id]: { ...adjust[id], ...patch } });
   return (
     <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled">
@@ -398,12 +405,13 @@ function SettlementStep({ quote: q, owner, adjust, busy, error, onAdjust, onChoo
           </View>
         ))}
         <View style={s.divider} />
-        <Row label="Result" value={q.result === 'refund' ? `Give back ${money(q.refund, cur)}`
-          : q.result === 'collect' ? `Client pays ${money(q.collect, cur)}` : 'Owner reviews'} bold />
+        <Row label="Result" value={q.result === 'refund' ? money(q.refund, cur)
+          : q.result === 'collect' ? money(q.collect, cur) : money(q.depositHeld, cur)} bold />
       </View>
 
       <View style={[s.resultBox, { backgroundColor: box.bg, borderColor: box.border }]}>
-        <Text style={s.resultTitle}>{box.title}</Text>
+        <Text style={s.resultLabel}>{box.label}</Text>
+        <Text style={s.resultAmount}>{box.amount}</Text>
         {!!box.sub && <Text style={UI.small}>{box.sub}</Text>}
       </View>
       <View style={s.lockRow}>
@@ -489,18 +497,20 @@ function ConfirmStep({ quote: q, settlement, items, ids, me, signature, setSigna
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.porcelain },
   fixed: { flexShrink: 0, backgroundColor: COLORS.porcelain },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12 },
-  title: { position: 'absolute', left: 56, right: 56, textAlign: 'center', fontSize: 17, fontWeight: '800', color: SHADES.carbon },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 10, minHeight: 64 },
+  titleBlock: { position: 'absolute', left: 76, right: 76, alignItems: 'center' },
+  title: { ...TYPE.sectionTitle, color: SHADES.carbon },
+  subtitle: { ...TYPE.secondary, color: SHADES.carbonMuted },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingHorizontal: 32 },
-  doneText: { fontSize: 17, fontWeight: '700', color: SHADES.carbon, textAlign: 'center' },
+  doneText: { ...TYPE.sectionTitle, color: SHADES.carbon, textAlign: 'center' },
   wide: { alignSelf: 'stretch' },
   card: { gap: 10, marginTop: 12 },
   itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cat: { gap: 6 },
-  catLabel: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
+  catLabel: { ...TYPE.secondary, fontWeight: '700', color: SHADES.carbon },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white },
-  chipText: { fontSize: 13, fontWeight: '600', color: SHADES.carbon },
+  chipText: { ...TYPE.tab, color: SHADES.carbon },
   note: { height: 44 },
   thumb: { width: 76, height: 76, borderRadius: 12, backgroundColor: SHADES.carbonLight },
   remove: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(30,30,30,0.7)', alignItems: 'center', justifyContent: 'center' },
@@ -508,20 +518,21 @@ const s = StyleSheet.create({
   flex: { flex: 1 },
   cta: { marginTop: 16 },
   lineBlock: { gap: 4 },
-  lineItem: { fontSize: 14, fontWeight: '700', color: SHADES.carbon },
+  lineItem: { ...TYPE.cardTitle, color: SHADES.carbon },
   rowLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  rowLabel: { fontSize: 14, color: SHADES.carbonMuted, flex: 1 },
-  rowValue: { fontSize: 14, fontWeight: '600', color: SHADES.carbon },
-  bold: { fontWeight: '800', color: SHADES.carbon },
+  rowLabel: { ...TYPE.body, color: SHADES.carbonMuted, flex: 1 },
+  rowValue: { ...TYPE.body, fontWeight: '600', color: SHADES.carbon },
+  bold: { fontWeight: '700', color: SHADES.carbon },
   divider: { height: 1, backgroundColor: COLORS.softGray200 },
   ownerBox: { gap: 8, paddingVertical: 4 },
   resultBox: { marginTop: 14, borderRadius: 18, borderWidth: 1.5, padding: 18, gap: 4 },
-  resultTitle: { fontSize: 20, fontWeight: '800', color: SHADES.carbon },
+  resultLabel: { ...TYPE.secondary, fontWeight: '600', color: SHADES.carbon },
+  resultAmount: { ...TYPE.display, color: SHADES.carbon },
   lockRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
   link: { alignSelf: 'center', paddingVertical: 12 },
   confirmRoot: { flex: 1, gap: 8, paddingBottom: 16 },
   summaryScroll: { flexGrow: 0, maxHeight: 260 },
   handRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  outcome: { fontSize: 15, fontWeight: '800', color: SHADES.carbon, marginTop: 4 },
+  outcome: { ...TYPE.cardTitle, color: SHADES.carbon, marginTop: 4 },
   padWrap: { borderRadius: 14, borderWidth: 1, borderColor: COLORS.softGray200, backgroundColor: COLORS.white, overflow: 'hidden' },
 });

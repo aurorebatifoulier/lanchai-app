@@ -16,6 +16,8 @@ import { Slide1Art, Slide2Art, Slide3Art, artGroupBottom, slide2GroupTop } from 
 import { setOnboardingComplete } from '@/lib/onboarding';
 import { useOnboardingSlides, useLowestDailyPriceLak } from '@/lib/onboardingContent';
 
+// bottom-inset: full-screen horizontal pager; the bottom bar is placed above insets.bottom.
+
 // Onboarding — "living cards" (validated mockup), shown ONCE per device (lib/onboarding.ts).
 // FIXED proportions, identical on the 3 slides (validated schema):
 //   • header (bee logo + LANCHAI, Skip on 1–2) at the top;

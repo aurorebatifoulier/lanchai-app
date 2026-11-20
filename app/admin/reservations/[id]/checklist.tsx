@@ -8,7 +8,7 @@ import {
   Image,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -95,7 +95,6 @@ function ChecklistScreen() {
   const inChain = queue !== undefined;
   const remainingQueue = queue ? queue.split(',').filter(Boolean) : [];
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const exchangeRate = useExchangeRate();
   const thbRate = useThbRate();
   // Handover deposit step: the rate a USD / THB deposit is collected at, and when it was set.
@@ -595,7 +594,7 @@ function ChecklistScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center} edges={['top']}>
+      <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
         <ActivityIndicator color={COLORS.amber} size="large" />
       </SafeAreaView>
     );
@@ -603,7 +602,7 @@ function ChecklistScreen() {
 
   if (loadError || !reservation) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
@@ -619,7 +618,7 @@ function ChecklistScreen() {
     const savedChecklist = type === 'handover' ? reservation.handoverChecklist : reservation.returnChecklist;
     if (!savedChecklist) {
       return (
-        <SafeAreaView style={styles.container} edges={['top']}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
           <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
           <View style={styles.center}>
             <Feather name="alert-circle" size={32} color={COLORS.fg3} />
@@ -629,7 +628,7 @@ function ChecklistScreen() {
       );
     }
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
           <Text style={styles.headerTitle}>{title}</Text>
@@ -637,7 +636,7 @@ function ChecklistScreen() {
         </View>
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: 24 }]}
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.productName}>{reservation.productName}</Text>
@@ -671,7 +670,7 @@ function ChecklistScreen() {
 
   if (!submitted && liveBlocked && livePhase) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={[styles.center, { gap: 12, paddingHorizontal: 32 }]}>
           <Feather name="lock" size={32} color={COLORS.fg3} />
           <Text style={styles.stateTitle}>{`Nothing to do here — this booking is now “${PHASE_LABELS[livePhase]}”.`}</Text>
@@ -695,11 +694,11 @@ function ChecklistScreen() {
     const isReturn = !inChain && type === 'return';
     const showSettlement = isReturn;
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingTop: 24, paddingBottom: Math.max(insets.bottom, 24) },
+            { paddingTop: 24, paddingBottom: 24 },
             !showSettlement && { flexGrow: 1, justifyContent: 'center' },
           ]}
           showsVerticalScrollIndicator={false}
@@ -802,7 +801,7 @@ function ChecklistScreen() {
   // ── Form ─────────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <BackButton onPress={() => router.back()} variant="bare" size={20} boxSize={44} />
         <Text style={styles.headerTitle}>{title}</Text>
@@ -811,7 +810,7 @@ function ChecklistScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) + 80 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 104 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

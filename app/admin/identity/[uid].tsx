@@ -16,14 +16,14 @@ export default function AdminIdentityScreen() {
   const router = useRouter();
   const { uid } = useLocalSearchParams<{ uid: string }>();
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
         <Text style={s.headerTitle}>ID document</Text>
         <View style={{ width: 40 }} />
       </View>
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScrollView contentContainerStyle={[s.content, { paddingBottom: 24 }]}>
         {uid ? <RenterIdCard renterId={uid} /> : null}
         <Text style={s.note}>The in-person check (two confirmations) happens in the pick-up checklist of the renter&apos;s next rental.</Text>
       </ScrollView>

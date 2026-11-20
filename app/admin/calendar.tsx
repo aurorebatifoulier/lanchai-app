@@ -168,7 +168,7 @@ export default function AdminCalendarScreen({ embedded = false }: { embedded?: b
   const rows = buildCells(currentMonth);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
 
       <View style={s.fixedTop}>
@@ -205,7 +205,7 @@ export default function AdminCalendarScreen({ embedded = false }: { embedded?: b
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[s.gridContainer, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[s.gridContainer, { paddingBottom: 24 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -257,7 +257,7 @@ export default function AdminCalendarScreen({ embedded = false }: { embedded?: b
         )}
       </ScrollView>
 
-      <View style={[s.legend, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <View style={[s.legend, { paddingBottom: 10 }]}>
         <View style={s.legendItem}>
           <View style={[s.dot, { backgroundColor: COLORS.amber }]} />
           <Text style={s.legendLabel}>Pickup</Text>

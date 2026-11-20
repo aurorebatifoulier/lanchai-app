@@ -5,6 +5,7 @@ import { Text } from '@/components/AppText';
 import { UI } from '@/components/account/ui';
 import { SHADES } from '@/constants/brandShades';
 import { db } from '@/lib/firebase';
+import { formatAuditNote } from '@/lib/auditNotes';
 
 // Reservation detail "History": every staff / owner action on this booking (auditLog,
 // written with each admin write — firestore.rules — and by the callables), plus the
@@ -94,7 +95,7 @@ export function HistoryCard({ reservationId, renterId }: { reservationId: string
           <View style={{ flex: 1 }}>
             <Text style={s.what}>{labelOf(e.action)}</Text>
             <Text style={UI.small}>{`${e.byName} · ${e.byRole === 'staff' ? 'Staff' : 'Owner'} · ${when(e.at)}`}</Text>
-            {!!e.note && <Text style={UI.small} numberOfLines={2}>{e.note}</Text>}
+            {!!e.note && <Text style={UI.small} numberOfLines={2}>{formatAuditNote(e.note)}</Text>}
           </View>
         </View>
       ))}

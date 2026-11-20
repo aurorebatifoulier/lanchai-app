@@ -159,7 +159,7 @@ export default function AdminLoyaltyScreen() {
   ]);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
 
       <View style={s.header}>
@@ -170,7 +170,7 @@ export default function AdminLoyaltyScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[s.content, { paddingBottom: 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

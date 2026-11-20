@@ -35,6 +35,8 @@ const fail = (code: string, message: string, status: 'invalid-argument' | 'faile
   throw new HttpsError(status, message, { code });
 };
 const DEFAULT_DAMAGED_PERCENT = 60;
+/** "4,272,000 LAK" — audit notes / history. */
+const fmtMoney = (n: number, cur: string) => `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${cur}`;
 const MAX_PHOTOS = 20;
 
 interface ReturnItemInput {
@@ -367,13 +369,13 @@ export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY], i
         action: 'return',
         reservationId: snap.id, orderId: r.orderId, productId: r.productId, renterId: r.renterId,
         note: [
-          l.late != null ? `late fee ${l.late} ${q.currency}` : null,
+          l.late != null ? `late fee ${fmtMoney(l.late, q.currency)}` : null,
           l.lateWaived ? 'late fee waived' : null,
-          l.damage != null ? `damage ${l.damage} ${q.currency}` : null,
+          l.damage != null ? `damage ${fmtMoney(l.damage, q.currency)}` : null,
           l.damageWaived ? 'damage waived' : null,
           l.needsReview ? 'deposit held for owner review'
-            : finalize ? (l.outstanding > 0 ? `balance ${l.outstanding} ${q.currency} collected` : `refund ${l.refund} ${q.currency}`)
-            : `balance ${l.outstanding} ${q.currency} open`,
+            : finalize ? (l.outstanding > 0 ? `balance ${fmtMoney(l.outstanding, q.currency)} collected` : `refund ${fmtMoney(l.refund, q.currency)}`)
+            : `balance ${fmtMoney(l.outstanding, q.currency)} open`,
           'client signed',
         ].filter(Boolean).join(' · '),
       }));

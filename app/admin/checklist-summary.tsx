@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -60,7 +60,6 @@ export default function ChecklistSummaryRoute() {
 function ChecklistSummaryScreen() {
   const { ids, type } = useLocalSearchParams<{ ids?: string; type: ChecklistType }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const exchangeRate = useExchangeRate();
   const thbRate = useThbRate();
   const depositRates = useDepositRates();
@@ -313,7 +312,7 @@ function ChecklistSummaryScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center} edges={['top']}>
+      <SafeAreaView style={styles.center} edges={['top', 'bottom']}>
         <ActivityIndicator color={COLORS.amber} size="large" />
       </SafeAreaView>
     );
@@ -321,7 +320,7 @@ function ChecklistSummaryScreen() {
 
   if (loadError || !reservations) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <BackButton onPress={() => router.replace('/admin/reservations')} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
@@ -333,7 +332,7 @@ function ChecklistSummaryScreen() {
 
   if (missingDraftIds.length > 0) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <BackButton onPress={() => router.replace('/admin/reservations')} variant="bare" size={20} boxSize={44} />
         <View style={styles.center}>
           <Feather name="alert-circle" size={32} color={COLORS.fg3} />
@@ -357,7 +356,7 @@ function ChecklistSummaryScreen() {
 
   if (submitted) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.center}>
           <Feather name="check-circle" size={48} color={COLORS.success} />
           <Text style={styles.stateTitle}>
@@ -380,7 +379,7 @@ function ChecklistSummaryScreen() {
   // ── Form ─────────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <BackButton onPress={() => router.replace('/admin/reservations')} variant="bare" size={20} boxSize={44} />
         <Text style={styles.headerTitle}>{title}</Text>
@@ -389,7 +388,7 @@ function ChecklistSummaryScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) + 80 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 104 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

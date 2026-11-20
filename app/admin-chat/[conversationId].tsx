@@ -25,6 +25,8 @@ import { useSavedReplies } from '@/lib/savedReplies';
 import { SHADES } from '@/constants/brandShades';
 import { useChatKeyboard } from '@/components/chat/useChatKeyboard';
 import { MediaViewer } from '@/components/MediaViewer';
+
+// bottom-inset: inverted thread above ChatInputBar, which pads insets.bottom itself.
 import {
   ChatMessage,
   getConversation,

@@ -77,7 +77,7 @@ export default function AdminResidencyScreen() {
   };
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <StatusBar style="dark" />
       <View style={s.header}>
         <BackButton onPress={() => router.back()} />
@@ -90,7 +90,7 @@ export default function AdminResidencyScreen() {
       ) : !req || !uid ? (
         <Text style={s.empty}>No request.</Text>
       ) : (
-        <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[s.content, { paddingBottom: 24 }]} keyboardShouldPersistTaps="handled">
           <Text style={s.title}>{req.path === 'lao_national' ? 'Lao national' : 'Foreign resident'}</Text>
           <Text style={s.meta}>
             {req.status === 'pending' ? 'Waiting for a decision' : `Status: ${req.status}`} · sent {fmt(req.resubmittedAt ?? req.submittedAt)}
