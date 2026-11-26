@@ -470,7 +470,7 @@ export default function AdminReservationDetailScreen() {
   // whatever currency the admin chose there — show that instead of the original LAK
   // figure. Before handover, no currency choice has been made yet, so show LAK as usual.
   // Pick-up: the checklist if none yet, else the plain confirm. Before the planned
-  // pick-up day, an inline "Hand over early anyway?" confirm comes first (no block).
+  // pick-up DAY, a note explains it is blocked (an earlier day changes the booking).
   const startHandover = () => {
     if (reservation.handoverChecklist?.confirmedAt) setConfirmAction('pickup');
     else { setConfirmAction(null); router.push(`/admin/reservations/${id}/checklist?type=handover`); }
@@ -1003,12 +1003,14 @@ export default function AdminReservationDetailScreen() {
             />
           )}
           {!actioning && confirmAction === 'early_handover' && (
+            // An earlier DAY changes the booking (new price): blocked, explained.
             <ConfirmBox
               text={earlyHandoverPrompt(reservation.pickupAt?.toMillis() ?? 0)}
-              confirmLabel="Hand over early"
-              cancelLabel="Cancel"
+              confirmLabel=""
+              cancelLabel="OK"
+              infoOnly
               onCancel={() => setConfirmAction(null)}
-              onConfirm={startHandover}
+              onConfirm={() => setConfirmAction(null)}
             />
           )}
           {!actioning && confirmAction === 'pickup' && (

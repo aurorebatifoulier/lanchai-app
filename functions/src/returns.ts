@@ -9,6 +9,7 @@ import { alertOwners } from './ownerAlerts';
 import { BREVO_API_KEY } from './email/config';
 import { sanitizeGraceHours } from './shared/latePenalty';
 import { returnStockMoves } from './shared/returnStock';
+import { cleaningHoursOf } from './shared/shop';
 import {
   computeReturnCharges, lateReasonText, damageReasonText, depositHeldOf, currencyToLak,
   CHECKLIST_CATEGORY_IDS, CHECKLIST_RATINGS, type ChargeCurrency, type ChecklistRating,
@@ -72,10 +73,11 @@ function parseItem(raw: unknown, opts: { requirePhotos: boolean }): ReturnItemIn
 }
 
 async function returnConfig() {
-  const [late, loyalty, pricing] = await Promise.all([
+  const [late, loyalty, pricing, shop] = await Promise.all([
     db().doc('config/latePolicy').get(),
     db().doc('config/loyalty').get(),
     db().doc('config/pricing').get(),
+    db().doc('config/shop').get(),
   ]);
   const pos = (v: unknown) => (typeof v === 'number' && v > 0 ? v : null);
   const pct = loyalty.get('damagedChargePercent');
@@ -84,6 +86,7 @@ async function returnConfig() {
     damagedChargePercent: typeof pct === 'number' && pct >= 0 && pct <= 100 ? pct : DEFAULT_DAMAGED_PERCENT,
     usdRate: pos(pricing.get('exchangeRate')),
     thbRate: pos(pricing.get('thbToLakRate')),
+    cleaningHours: cleaningHoursOf(shop.data()),
   };
 }
 type ReturnConfig = Awaited<ReturnType<typeof returnConfig>>;
@@ -309,6 +312,9 @@ export const submitReturn = onCall({ region: REGION, secrets: [BREVO_API_KEY], i
           clientSignatureSvg: sig,
         },
         returnedAt: FieldValue.serverTimestamp(),
+        // Cleaning time starts at the ACTUAL return (config/shop.cleaningHours, frozen
+        // here so a later setting change never moves a unit already being cleaned).
+        cleaningUntil: Timestamp.fromMillis(nowMs + cfg.cleaningHours * 3_600_000),
         stockReleasedAt: null,
         returnedBy: { uid: caller.uid, name: caller.name, role: caller.role },
         chargeCurrency: q.currency,

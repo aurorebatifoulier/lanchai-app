@@ -21,6 +21,8 @@ export interface ConfirmBoxProps {
   // destructive, which is for actions with irreversible/alarming consequences.
   muted?: boolean;
   confirmDisabled?: boolean;
+  /** Information only (an action that is blocked): just the cancel button (cancelLabel). */
+  infoOnly?: boolean;
   children?: React.ReactNode;
 }
 
@@ -33,6 +35,7 @@ export function ConfirmBox({
   destructive = false,
   muted = false,
   confirmDisabled = false,
+  infoOnly = false,
   children,
 }: ConfirmBoxProps) {
   return (
@@ -43,7 +46,7 @@ export function ConfirmBox({
         <TouchableOpacity style={cb.keepBtn} onPress={onCancel} activeOpacity={0.8}>
           <Text style={cb.keepText}>{cancelLabel}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
+        {!infoOnly && <TouchableOpacity
           style={[
             cb.confirmBtn,
             destructive && cb.confirmBtnDestructive,
@@ -61,7 +64,7 @@ export function ConfirmBox({
           ]}>
             {confirmLabel}
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </View>
     </View>
   );

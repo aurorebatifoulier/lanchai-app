@@ -70,6 +70,22 @@ test('clean return: quote = full refund; confirm → settled, signed, recorded b
   assert.equal((await db().collection(`notifications/${UID.A}/items`).get()).size, 2);
 });
 
+test('cleaning time starts at the ACTUAL return: config/shop.cleaningHours, else 3 h', async () => {
+  // Late return (planned 3 days ago): still gets its full cleaning time from now.
+  await active('c1', Date.now() - 72 * H);
+  let before = Date.now();
+  await returnFlow(STAFF, [item('c1')], q => (q.result === 'refund' ? 'refund' : 'collected'));
+  let until = (await db().doc('reservations/c1').get()).get('cleaningUntil') as Timestamp;
+  assert.ok(until.toMillis() >= before + 3 * H && until.toMillis() <= Date.now() + 3 * H);
+  await set('config/shop', { cleaningHours: 1.5 });
+  await set('products/tent', { name: 'Camping tent', retailPrice: 100, stockLeft: 1, categories: ['outdoor'] });
+  await active('c2', Date.now() + 5 * H);
+  before = Date.now();
+  await returnFlow(STAFF, [item('c2')]);
+  until = (await db().doc('reservations/c2').get()).get('cleaningUntil') as Timestamp;
+  assert.ok(until.toMillis() >= before + 1.5 * H && until.toMillis() <= Date.now() + 1.5 * H);
+});
+
 test('LNC-261023-KW97 case: USD deposit received = 74 (frozen), 2 late days → 31 fee, give back 43', async () => {
   await set('config/pricing', { exchangeRate: 23_000 });
   await active('kw', Date.now() - 100 * H, {

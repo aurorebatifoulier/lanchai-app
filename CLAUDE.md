@@ -450,13 +450,18 @@ a snapshot indefinitely).
   for history). Legal texts (Terms §8/§10, cancellation policy, FAQ "What if I can't
   make it to my pick-up?") describe it: booking released, nothing charged, new bookings
   paused until the renter contacts us.
-- **Early handover = confirm, never a block.** Before the planned pick-up DAY
-  (Vientiane, `isBeforePickupDay()` in `shared/dates.ts`), "Mark as picked up" on the
-  admin reservation detail and "Mark all as picked up" on the admin list show an inline
-  "This pick-up is planned for {date}. Hand over early anyway?" (`earlyHandoverPrompt`).
-  Every handover write (single checklist, chained `submitChecklistBatch`, plain
-  "Mark as picked up") adds `earlyHandoverFields(pickupAt)` → `earlyHandover: true` +
-  `earlyHandoverPlannedAt` (the planned pick-up) — internal, never shown to renters.
+- **Early handover (2026-11-26) — earlier DAY = blocked, earlier TIME = free.** Before the
+  planned pick-up DAY (Vientiane, `isBeforePickupDay()`), `submitHandover` refuses
+  `earlier-day` ("Picking up on an earlier day changes the booking: change the dates first
+  (new price)." = `EARLIER_DAY_HANDOVER_TEXT`, `shared/dates.ts`); the detail / list show
+  that note (`earlyHandoverPrompt`, info-only `ConfirmBox`) instead of a confirm. There is
+  no "Change dates" yet. An earlier TIME on the pick-up day is free: `pickupAt` (and
+  `pickupLabel`) move to the handover time (the occupancy mirror then blocks those hours),
+  `earlyHandoverPlannedAt` keeps the booked time — refused `booked-by-someone-else`
+  ("Booked by someone else on 12–14 Nov (name).", `vteDayRange`) when another booking needs
+  the unit in between (`earlyHandoverConflicts`, `shared/availability.ts`: booking rule,
+  buffer included, every line of the order). `earlyHandover: true` on older docs = the old
+  day-early flow.
 - **Loyalty points — server-side only, one shared rule.** Points change ONLY in Cloud
   Functions (every credit re-reads its marker — `loyaltyApplied` / `reviewRewardApplied`
   / `rentalCountApplied` — INSIDE its transaction, so a retried trigger never credits
@@ -526,7 +531,8 @@ a snapshot indefinitely).
     Cloud Function — this function doesn't solve that case.
 - **Return closeout — deposit settlement gates stock release.** Returning the deposit
   is part of validating a return: a unit does not go back into available stock until
-  the deposit/charges are closed out, on top of the existing 12h `HANDOFF_BUFFER_MS`.
+  the deposit/charges are closed out AND its cleaning time is over (see "Cleaning after a
+  return" under Handover — measured from the ACTUAL return since 2026-11-26).
   - The instant a return checklist is submitted (`app/admin/reservations/[id]/checklist.tsx`,
     `submitChecklistBatch` in `lib/firestore.ts`, and the defensive "Mark as returned"
     fallback in `app/admin/reservations/[id].tsx`), the product's `pendingSettlementUnits`
@@ -548,10 +554,8 @@ a snapshot indefinitely).
     is the mechanism, and `OCCUPYING_STATUSES`/the occupancy Cloud Function are untouched
     by this feature. A new scheduled Cloud Function, `releaseSettledStock`
     (`functions/src/index.ts`, every 15 min, same shape as `lateReturnAlerts`), decrements
-    `pendingSettlementUnits` only once **both** `returnFinalizedAt` is set **and**
-    `now >= returnAt + HANDOFF_BUFFER_MS` — releasing synchronously at settlement would
-    give a unit zero handoff buffer, since settlement now happens ~10 minutes after
-    return. For a damaged-but-returnable item, the admin's `stockReleaseHandling`
+    `pendingSettlementUnits` only once **both** `returnFinalizedAt` is set **and** the
+    cleaning time after the actual return is over (`readyToRelease`). For a damaged-but-returnable item, the admin's `stockReleaseHandling`
     choice (`'release' | 'repair'`, entered on the "Mark deposit as returned" dialog,
     only shown when `chargeSeverity === 'damaged'`) tells the cron to transfer into
     `inRepairUnits` instead of releasing. `stockReleasedAt` is the cron's own
@@ -1963,11 +1967,15 @@ a snapshot indefinitely).
   its booked pick-up — the Chicco cot (stock 1) was handed over on 29 Oct for 6 Nov, again
   on 6 Nov for 20 Nov and on 20 Nov for 27 Nov while the previous renter still had it.
   `submitChecklistBatch` is gone (no client handover / return batch any more).
-  **Cleaning after a return** (unchanged rule): a returned unit stays in
-  `pendingSettlementUnits` until its deposit is settled AND scheduled `returnAt` +
-  `HANDOFF_BUFFER_MS` (12 h, `functions/src/shared/availability.ts`) has passed;
-  `releaseSettledStock` (every 15 min) then puts it back — so a LATE return (returnAt long
-  past) gets no real cleaning time. `cleaningBackByMs()` gives the latest time it's back.
+  **Cleaning after a return (2026-11-26):** a returned unit stays in
+  `pendingSettlementUnits` until its deposit is settled AND its cleaning time — counted
+  from the ACTUAL return — is over: `config/shop.cleaningHours` (Shop settings → Hours,
+  default 3, 0–48 in half hours, `cleaningHoursOf()` in `shared/shop.ts`), frozen by
+  `submitReturn` as `reservation.cleaningUntil` (older returns: returnedAt + the current
+  setting — `cleaningEndsMs`). `releaseSettledStock` (every 15 min, `readyToRelease`) then
+  puts it back; `cleaningBackByMs()` = latest time it's back. NOT the same rule as
+  `HANDOFF_BUFFER_MS` (12 h after the PLANNED returnAt): that one is the planning gap
+  between two bookings (`computeAvailableUnits`), never used for cleaning.
   Stock screen (`/admin/inventory/[id]`): chips Stock · Out · In shop (= unitsOnHand) ·
   In repair · Lost, live; "n unit cleaning · back in stock by HH:MM" (or "once the deposit
   is settled"); a red line when units out exceed the stock.

@@ -105,15 +105,33 @@ test('history notes: thousands separators + currency', async () => {
 });
 
 test('units on hand: active rentals, repair, lost and cleaning all leave the shop', async () => {
-  const { unitsOnHand, cleaningBackByMs, HANDOFF_BUFFER_MS } = await import('../../functions/src/shared/availability');
+  const { unitsOnHand } = await import('../../functions/src/shared/availability');
   assert.equal(unitsOnHand({ stockLeft: 1 }, 1), 0);                         // Chicco: one unit out
   assert.equal(unitsOnHand({ stockLeft: 1 }, 2), 0);                         // never negative
   assert.equal(unitsOnHand({ stockLeft: 3, inRepairUnits: 1, pendingSettlementUnits: 1 }, 0), 1);
-  // Late return: settled now, scheduled return long past → back within the next run.
-  const now = Date.parse('2026-11-20T11:06:00Z');
-  assert.equal(cleaningBackByMs({ returnAtMs: Date.parse('2026-11-10T02:30:00Z'), finalizedAtMs: now }), now + 15 * 60_000);
-  // On-time return: 12 h after the scheduled return.
-  const ret = Date.parse('2026-11-21T02:00:00Z');
-  assert.equal(cleaningBackByMs({ returnAtMs: ret, finalizedAtMs: ret }), ret + HANDOFF_BUFFER_MS + 15 * 60_000);
-  assert.equal(cleaningBackByMs({ returnAtMs: ret, finalizedAtMs: null }), null);
+});
+
+test('cleaning time: from the ACTUAL return, frozen value first, then the setting', async () => {
+  const { cleaningEndsMs, readyToRelease, cleaningBackByMs } = await import('../../functions/src/shared/availability');
+  const { cleaningHoursOf } = await import('../../functions/src/shared/shop');
+  const H = 3_600_000;
+  // CGLB: planned return 10 Nov, actually returned 20 Nov 18:06 → cleaning until 21:06.
+  const planned = Date.parse('2026-11-10T02:30:00Z');
+  const returned = Date.parse('2026-11-20T11:06:00Z');
+  const ends = cleaningEndsMs({ cleaningUntilMs: returned + 3 * H, returnedAtMs: returned, returnAtMs: planned, cleaningHours: 5 });
+  assert.equal(ends, returned + 3 * H);                                       // frozen wins
+  assert.equal(cleaningEndsMs({ returnedAtMs: returned, returnAtMs: planned, cleaningHours: 3 }), returned + 3 * H);
+  assert.equal(cleaningEndsMs({ returnAtMs: planned, cleaningHours: 3 }), planned + 3 * H); // very old docs
+  assert.equal(readyToRelease({ finalizedAtMs: returned, cleaningEndsMs: ends }, returned + 2 * H), false);
+  assert.equal(readyToRelease({ finalizedAtMs: returned, cleaningEndsMs: ends }, ends), true);
+  assert.equal(readyToRelease({ finalizedAtMs: null, cleaningEndsMs: ends }, ends + 9 * H), false);
+  assert.equal(cleaningBackByMs({ cleaningEndsMs: ends, finalizedAtMs: returned }), ends + 15 * 60_000);
+  assert.equal(cleaningBackByMs({ cleaningEndsMs: ends, finalizedAtMs: ends + H }), ends + H + 15 * 60_000);
+  assert.equal(cleaningBackByMs({ cleaningEndsMs: ends, finalizedAtMs: null }), null);
+  assert.equal(cleaningHoursOf(undefined), 3);
+  assert.equal(cleaningHoursOf({ cleaningHours: 'x' }), 3);
+  assert.equal(cleaningHoursOf({ cleaningHours: -1 }), 3);
+  assert.equal(cleaningHoursOf({ cleaningHours: 99 }), 3);
+  assert.equal(cleaningHoursOf({ cleaningHours: 0 }), 0);
+  assert.equal(cleaningHoursOf({ cleaningHours: 1.5 }), 1.5);
 });

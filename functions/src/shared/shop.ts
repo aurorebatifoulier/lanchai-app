@@ -19,6 +19,19 @@ export const SHOP_DISPLAY_DEFAULTS = {
 
 export const CONTACT_EMAIL = 'contact@lanchai.la';
 
+// Cleaning time after a return (config/shop.cleaningHours, Shop settings → Hours): a
+// returned unit stays out of the shop this long after its ACTUAL return (and until its
+// deposit is settled). Distinct from HANDOFF_BUFFER_MS (shared/availability.ts), the
+// planning gap between two BOOKINGS.
+export const DEFAULT_CLEANING_HOURS = 3;
+export const MAX_CLEANING_HOURS = 48;
+
+/** config/shop.cleaningHours, or the default when missing / invalid / out of range. */
+export function cleaningHoursOf(shop: { cleaningHours?: unknown } | null | undefined): number {
+  const h = shop?.cleaningHours;
+  return typeof h === 'number' && Number.isFinite(h) && h >= 0 && h <= MAX_CLEANING_HOURS ? h : DEFAULT_CLEANING_HOURS;
+}
+
 /**
  * "Open daily 9:00–20:00" from the free-text hours ("Daily 9:00–20:00"). Only a
  * leading "Daily"/"Every" is lowercased after "Open" — never a day name like "Mon–Sat".

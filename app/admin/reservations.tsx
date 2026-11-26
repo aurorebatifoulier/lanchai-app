@@ -415,18 +415,12 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
                     {entry.bulkAction && earlyOrderId === entry.orderId && entry.bulkAction.kind !== 'confirm_payment' ? (
                       <View style={s.bulkConfirmRow}>
                         <Text style={s.bulkConfirmText}>
-                          {earlyHandoverPrompt(entry.rows[0].pickupAt?.toMillis() ?? 0)}
+                          {earlyHandoverPrompt(Math.min(...entry.rows.map(r => r.pickupAt?.toMillis() ?? 0).filter(ms => isBeforePickupDay(ms))))}
                         </Text>
                         <View style={s.bulkConfirmBtnRow}>
+                          {/* An earlier DAY changes the booking (new price): blocked, explained. */}
                           <TouchableOpacity style={s.bulkCancelBtn} onPress={() => setEarlyOrderId(null)} activeOpacity={0.75}>
-                            <Text style={s.bulkCancelBtnText}>Cancel</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={s.bulkConfirmBtn}
-                            onPress={() => { setEarlyOrderId(null); handleStartChecklistChain('handover', entry.rows.map(r => r.id)); }}
-                            activeOpacity={0.85}
-                          >
-                            <Text style={s.bulkConfirmBtnText}>Hand over early</Text>
+                            <Text style={s.bulkCancelBtnText}>OK</Text>
                           </TouchableOpacity>
                         </View>
                       </View>

@@ -28,7 +28,9 @@ import {
   OCCUPYING_STATUSES,
   type OccupancyRecord,
 } from '@/utils/availability';
-import { unitsOnHand, cleaningBackByMs } from '@/functions/src/shared/availability';
+import { unitsOnHand, cleaningBackByMs, cleaningEndsMs } from '@/functions/src/shared/availability';
+import { cleaningHoursOf } from '@/functions/src/shared/shop';
+import { useShopInfo } from '@/lib/shop';
 import { buildCalendarDays, chunkIntoWeeks, sameDay, startOfDay, type CalDay } from '@/utils/calendarGrid';
 
 const MONTHS = [
@@ -103,6 +105,7 @@ export default function AdminInventoryProductScreen() {
 
   // Units physically OUT with renters (active, early handovers included) and returned
   // units still cleaning (pending settlement) — live, from the same reservations.
+  const cleaningHours = cleaningHoursOf(useShopInfo());
   const [outUnits, setOutUnits] = useState(0);
   const [cleaning, setCleaning] = useState<{ id: string; units: number; backByMs: number | null }[]>([]);
   useEffect(() => {
@@ -119,7 +122,12 @@ export default function AdminInventoryProductScreen() {
           clean.push({
             id: d.id, units: q,
             backByMs: cleaningBackByMs({
-              returnAtMs: (x.returnAt as Timestamp | undefined)?.toMillis() ?? 0,
+              cleaningEndsMs: cleaningEndsMs({
+                cleaningUntilMs: (x.cleaningUntil as Timestamp | undefined)?.toMillis() ?? null,
+                returnedAtMs: (x.returnedAt as Timestamp | undefined)?.toMillis() ?? null,
+                returnAtMs: (x.returnAt as Timestamp | undefined)?.toMillis() ?? 0,
+                cleaningHours,
+              }),
               finalizedAtMs: (x.returnFinalizedAt as Timestamp | undefined)?.toMillis() ?? null,
             }),
           });
@@ -128,7 +136,7 @@ export default function AdminInventoryProductScreen() {
       setOutUnits(out);
       setCleaning(clean);
     }, () => {});
-  }, [id]);
+  }, [id, cleaningHours]);
 
   const today = useMemo(() => startOfDay(new Date()), []);
 

@@ -34,6 +34,8 @@ export interface ShopInfo {
   closedDays?: number[];
   /** Chat auto-reply outside opening hours ({open time} is replaced) — functions/src/chat.ts. */
   autoReplyText?: string;
+  /** Cleaning time after a return, in hours (default 3) — read through cleaningHoursOf(). */
+  cleaningHours?: number;
 }
 
 export const SHOP_FALLBACK: ShopInfo = {

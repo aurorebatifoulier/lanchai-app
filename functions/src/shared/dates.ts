@@ -57,11 +57,27 @@ export function vteMinutesOfDay(ms: number): number {
 }
 
 /**
- * True while today (Vientiane) is before the pick-up DAY — a handover now is an early
- * handover (allowed after an explicit staff confirmation, recorded on the reservation).
+ * True while today (Vientiane) is before the pick-up DAY. A handover on an earlier DAY is
+ * refused (submitHandover, EARLIER_DAY_HANDOVER_TEXT): it changes the booking and its
+ * price — the dates must be changed first. An earlier TIME on the pick-up day is fine.
  */
+export const EARLIER_DAY_HANDOVER_TEXT = 'Picking up on an earlier day changes the booking: change the dates first (new price).';
+
 export function isBeforePickupDay(pickupAtMs: number, nowMs: number = Date.now()): boolean {
   return pickupAtMs > 0 && vteEndOfDayMs(nowMs) < vteEndOfDayMs(pickupAtMs);
+}
+
+/** Vientiane day range "12–14 Nov", "30 Nov–2 Dec", "30 Dec 2026–2 Jan 2027", or "12 Nov" for one day. */
+export function vteDayRange(fromMs: number, toMs: number): string {
+  const a = local(fromMs), b = local(toMs);
+  const sameYear = a.getUTCFullYear() === b.getUTCFullYear();
+  if (sameYear && a.getUTCMonth() === b.getUTCMonth()) {
+    return a.getUTCDate() === b.getUTCDate()
+      ? `${a.getUTCDate()} ${MON[a.getUTCMonth()]}`
+      : `${a.getUTCDate()}–${b.getUTCDate()} ${MON[a.getUTCMonth()]}`;
+  }
+  if (sameYear) return `${a.getUTCDate()} ${MON[a.getUTCMonth()]}–${b.getUTCDate()} ${MON[b.getUTCMonth()]}`;
+  return `${a.getUTCDate()} ${MON[a.getUTCMonth()]} ${a.getUTCFullYear()}–${b.getUTCDate()} ${MON[b.getUTCMonth()]} ${b.getUTCFullYear()}`;
 }
 
 /** Local (Vientiane) month key "2026-10" — products.rentalsByMonth (Home podium). */

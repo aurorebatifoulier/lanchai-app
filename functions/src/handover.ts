@@ -5,8 +5,8 @@ import * as logger from 'firebase-functions/logger';
 import { requireRole } from './adminAuth';
 import { auditData, newAuditRef } from './audit';
 import { canDo } from './shared/reservationMachine';
-import { unitsOnHand } from './shared/availability';
-import { isBeforePickupDay } from './shared/dates';
+import { unitsOnHand, effectiveStock, earlyHandoverConflicts, OCCUPYING_STATUSES, type OccupancyRecord } from './shared/availability';
+import { isBeforePickupDay, vteDayRange, vteReservationLabel, EARLIER_DAY_HANDOVER_TEXT } from './shared/dates';
 import { CHECKLIST_CATEGORY_IDS, CHECKLIST_RATINGS, type ChecklistRating } from './shared/returnCharges';
 
 // submitHandover — EVERY handover (checklist, order summary, "Mark as picked up", early
@@ -16,6 +16,12 @@ import { CHECKLIST_CATEGORY_IDS, CHECKLIST_RATINGS, type ChecklistRating } from 
 // early handovers included) − in repair − lost − pending settlement / cleaning
 // (unitsOnHand). Booked dates never overlap, but an EARLY handover takes the unit out
 // before its booked pick-up, so the date calendar alone can't see it.
+//
+// Early handover (pricing rule): an EARLIER DAY is refused (`earlier-day`) — it changes
+// the booking (new price), so the dates must be changed first. An earlier TIME on the
+// pick-up day is free: pickupAt moves to the handover time (the calendar then blocks
+// those hours; earlyHandoverPlannedAt keeps the booked time), refused
+// (`booked-by-someone-else`) when another booking needs the unit in between.
 
 const REGION = 'asia-southeast1';
 const db = () => admin.firestore();
@@ -88,22 +94,34 @@ export const submitHandover = onCall({ region: REGION, invoker: 'public' }, asyn
       if (!canDo(s.data()!, 'handover', caller.role, 'server')) {
         fail('not-allowed', 'This booking can’t be handed over now (already out, closed, or the pick-up was refused).');
       }
+      const pickupMs = (s.get('pickupAt') as Timestamp | undefined)?.toMillis() ?? 0;
+      if (isBeforePickupDay(pickupMs, nowMs)) {
+        fail('earlier-day', EARLIER_DAY_HANDOVER_TEXT, 'failed-precondition', { reservationId: s.id });
+      }
       const pid = String(s.get('productId'));
       need.set(pid, (need.get(pid) ?? 0) + Math.max(1, Number(s.get('quantity') ?? 1)));
     }
-    // Physical check per product: units in the shop right now.
+    const toRecord = (x: FirebaseFirestore.DocumentSnapshot): OccupancyRecord => ({
+      reservationId: x.id,
+      pickupAt: (x.get('pickupAt') as Timestamp | undefined)?.toMillis() ?? 0,
+      returnAt: (x.get('returnAt') as Timestamp | undefined)?.toMillis() ?? 0,
+      quantity: Math.max(1, Number(x.get('quantity') ?? 1)),
+    });
     for (const [pid, units] of need) {
       const product = await tx.get(db().collection('products').doc(pid));
-      const out = await tx.get(db().collection('reservations').where('productId', '==', pid).where('status', '==', 'active'));
-      const outDocs = out.docs.filter(x => x.get('archived') !== true && !ids.includes(x.id));
-      const outUnits = outDocs.reduce((sum, x) => sum + Math.max(1, Number(x.get('quantity') ?? 1)), 0);
+      const occupying = await tx.get(db().collection('reservations').where('productId', '==', pid).where('status', 'in', OCCUPYING_STATUSES));
+      const others = occupying.docs.filter(x => x.get('archived') !== true && !ids.includes(x.id));
       const p = product.data() ?? {};
-      const onHand = unitsOnHand({
+      const stock = {
         stockLeft: Number(p.stockLeft ?? 0), inRepairUnits: p.inRepairUnits, lostUnits: p.lostUnits,
         pendingSettlementUnits: p.pendingSettlementUnits,
-      }, outUnits);
+      };
+      const name = String(p.name ?? 'This item');
+      // 1. Physical check: units in the shop right now.
+      const outDocs = others.filter(x => x.get('status') === 'active');
+      const outUnits = outDocs.reduce((sum, x) => sum + Math.max(1, Number(x.get('quantity') ?? 1)), 0);
+      const onHand = unitsOnHand(stock, outUnits);
       if (onHand < units) {
-        const name = String(p.name ?? 'This item');
         const parts = [
           outUnits > 0 ? `${outUnits} out with a renter` : null,
           (p.pendingSettlementUnits ?? 0) > 0 ? `${p.pendingSettlementUnits} cleaning after a return` : null,
@@ -115,12 +133,22 @@ export const submitHandover = onCall({ region: REGION, invoker: 'public' }, asyn
           'failed-precondition',
           { productId: pid, onHand, needed: units, outReservationIds: outDocs.map(x => x.id) });
       }
+      // 2. Earlier time today: the extra hours must be free for every line of the order.
+      const lines = snaps.filter(x => String(x.get('productId')) === pid).map(toRecord);
+      const bad = earlyHandoverConflicts({ items: lines, others: others.map(toRecord), totalStock: effectiveStock(stock), nowMs })[0];
+      if (bad) {
+        const c = bad.conflicts[0];
+        fail('booked-by-someone-else',
+          c ? `Booked by someone else on ${vteDayRange(c.pickupAt, c.returnAt)} (${name}).` : `Booked by someone else before this pick-up (${name}).`,
+          'failed-precondition',
+          { productId: pid, reservationId: bad.reservationId, conflictIds: bad.conflicts.map(x => x.reservationId) });
+      }
     }
     snaps.forEach((s, i) => {
       const r = s.data()!;
       const item = items[i];
       const pickupMs = (r.pickupAt as Timestamp | undefined)?.toMillis() ?? 0;
-      const early = pickupMs > 0 && isBeforePickupDay(pickupMs, nowMs);
+      const early = pickupMs > nowMs; // earlier time, same day (an earlier day was refused above)
       const auditRef = newAuditRef();
       tx.update(s.ref, {
         status: 'active',
@@ -132,7 +160,12 @@ export const submitHandover = onCall({ region: REGION, invoker: 'public' }, asyn
             confirmedAt: FieldValue.serverTimestamp(),
           },
         } : {}),
-        ...(early ? { earlyHandover: true, earlyHandoverPlannedAt: r.pickupAt } : {}),
+        // The calendar blocks from the real handover time; the booked time is kept.
+        ...(early ? {
+          pickupAt: Timestamp.fromMillis(nowMs),
+          pickupLabel: vteReservationLabel(nowMs),
+          earlyHandoverPlannedAt: r.pickupAt,
+        } : {}),
         pickupRefusedOpen: false,
         lastAction: 'handover',
         lastAuditId: auditRef.id,
@@ -140,7 +173,7 @@ export const submitHandover = onCall({ region: REGION, invoker: 'public' }, asyn
       });
       tx.set(auditRef, auditData(caller, {
         action: 'handover', reservationId: s.id, orderId: r.orderId, productId: r.productId, renterId: r.renterId,
-        note: [item.checklist ? 'handover checklist' : 'marked as picked up', early ? 'early handover' : null].filter(Boolean).join(' · '),
+        note: [item.checklist ? 'handover checklist' : 'marked as picked up', early ? `picked up early (planned ${vteReservationLabel(pickupMs)})` : null].filter(Boolean).join(' · '),
       }));
     });
   });

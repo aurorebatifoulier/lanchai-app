@@ -86,14 +86,56 @@ export function unitsOnHand(product: {
 /** releaseSettledStock (functions/src/index.ts) runs every 15 minutes. */
 export const STOCK_RELEASE_EVERY_MS = 15 * 60 * 1000;
 
+const HOUR_MS = 60 * 60 * 1000;
+
 /**
- * Cleaning time after a return: a returned unit stays out of stock
- * (pendingSettlementUnits) until its deposit is settled AND the scheduled return time
- * + HANDOFF_BUFFER_MS (12 h) has passed; the next releaseSettledStock run (≤ 15 min)
- * then puts it back. Returns the latest time it will be back, or null while the
- * deposit isn't settled.
+ * End of the cleaning time after a return — measured from the ACTUAL return, NOT the
+ * planned returnAt (that's HANDOFF_BUFFER_MS, the planning gap between bookings).
+ * `cleaningUntilMs` is frozen by submitReturn (actual return + config/shop.cleaningHours);
+ * older returns fall back to (returnedAt ?? planned returnAt) + the current setting.
  */
-export function cleaningBackByMs(r: { returnAtMs: number; finalizedAtMs: number | null }): number | null {
+export function cleaningEndsMs(r: {
+  cleaningUntilMs?: number | null; returnedAtMs?: number | null; returnAtMs: number; cleaningHours: number;
+}): number {
+  if (r.cleaningUntilMs != null) return r.cleaningUntilMs;
+  return (r.returnedAtMs ?? r.returnAtMs) + r.cleaningHours * HOUR_MS;
+}
+
+/** releaseSettledStock: the deposit is settled AND the cleaning time is over. */
+export function readyToRelease(r: { finalizedAtMs: number | null; cleaningEndsMs: number }, nowMs: number): boolean {
+  return r.finalizedAtMs != null && nowMs >= r.cleaningEndsMs;
+}
+
+/**
+ * Latest time a returned unit is back in stock: once the deposit is settled AND its
+ * cleaning time is over, at the next releaseSettledStock run (≤ 15 min). null while
+ * the deposit isn't settled.
+ */
+export function cleaningBackByMs(r: { cleaningEndsMs: number; finalizedAtMs: number | null }): number | null {
   if (r.finalizedAtMs == null) return null;
-  return Math.max(r.finalizedAtMs, r.returnAtMs + HANDOFF_BUFFER_MS) + STOCK_RELEASE_EVERY_MS;
+  return Math.max(r.finalizedAtMs, r.cleaningEndsMs) + STOCK_RELEASE_EVERY_MS;
+}
+
+/**
+ * Earlier-time handover on the SAME pick-up day (an earlier DAY is refused — it changes
+ * the booking): the line's pickupAt moves to now, so the extra hours [now, planned
+ * pick-up) must be free. `items` = the order's lines of ONE product being handed over;
+ * `others` = that product's other occupying bookings. Same rule as createReservations
+ * (computeAvailableUnits on the booking pool, buffer included). Returns, per line that
+ * doesn't fit, the overlapping bookings (earliest first).
+ */
+export function earlyHandoverConflicts<T extends OccupancyRecord>(input: {
+  items: OccupancyRecord[]; others: T[]; totalStock: number; nowMs: number;
+}): { reservationId: string; conflicts: T[] }[] {
+  const moved = input.items.map(i => ({ ...i, pickupAt: Math.min(i.pickupAt, input.nowMs) }));
+  const out: { reservationId: string; conflicts: T[] }[] = [];
+  for (const item of input.items) {
+    if (input.nowMs >= item.pickupAt) continue; // not early: nothing extra to block
+    const occ = [...input.others, ...moved.filter(m => m.reservationId !== item.reservationId)];
+    const from = new Date(input.nowMs), to = new Date(item.pickupAt);
+    if (computeAvailableUnits(occ, from, to, input.totalStock) >= item.quantity) continue;
+    const conflicts = getOverlappingOccupancy(input.others, from, to).sort((a, b) => a.pickupAt - b.pickupAt);
+    out.push({ reservationId: item.reservationId, conflicts });
+  }
+  return out;
 }

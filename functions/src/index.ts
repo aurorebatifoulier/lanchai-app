@@ -16,7 +16,8 @@ import {
   TIER_ORDER, TIER_LABELS, type LoyaltyChangeConfig, type LoyaltyTierKey,
 } from './shared/loyalty';
 import { isPickupMissed, vteDateStamp, vteMinutesOfDay, vteTime, vteMonthKey } from './shared/dates';
-import { HANDOFF_BUFFER_MS } from './shared/availability';
+import { cleaningEndsMs, readyToRelease } from './shared/availability';
+import { cleaningHoursOf } from './shared/shop';
 import { releaseStockMoves } from './shared/returnStock';
 import { sendLateReturnEmail } from './email/triggers';
 import { dueLateAlerts, planLateEmails, type LateAlertKey, type LateRow } from './lateAlerts';
@@ -313,21 +314,18 @@ export const syncBookingHold = onDocumentWritten(
   },
 );
 
-// HANDOFF_BUFFER_MS comes from functions/src/shared/availability.ts (shared with the app).
-
 // Releases a returned reservation's unit(s) back into the bookable pool — decrementing
-// the product's pendingSettlementUnits (see lib/types.ts) — but only once BOTH the
-// deposit/charges are closed out (returnFinalizedAt is set, by whichever of the 3
-// closing actions in app/admin/reservations/[id].tsx fired) AND the 12h handoff buffer
-// has elapsed since returnAt. Release is deliberately NOT synchronous with settlement:
-// under the immediate-refund policy settlement happens ~10 minutes after return, and
-// releasing that fast would give the unit zero handoff buffer at all. This is timing
-// logic only — no renter/admin-facing color or urgency treatment, matching the explicit
-// decision not to reintroduce the removed deposit-urgency system.
+// the product's pendingSettlementUnits — but only once BOTH the deposit/charges are
+// closed out (returnFinalizedAt) AND the cleaning time after the ACTUAL return is over
+// (reservation.cleaningUntil, frozen by submitReturn from config/shop.cleaningHours;
+// older returns: returnedAt + the current setting — shared readyToRelease /
+// cleaningEndsMs). Not the planned returnAt + HANDOFF_BUFFER_MS any more: a late return
+// used to get no cleaning time at all. Timing logic only — no urgency UI.
 export const releaseSettledStock = onSchedule(
   { schedule: 'every 15 minutes', region: 'asia-southeast1' },
   async () => trackJob('releaseSettledStock', async () => {
     const now = Date.now();
+    const cleaningHours = cleaningHoursOf((await db.doc('config/shop').get()).data());
     const snap = await db
       .collection('reservations')
       .where('status', '==', 'returned')
@@ -338,10 +336,16 @@ export const releaseSettledStock = onSchedule(
       const data = reservationDoc.data();
 
       const returnFinalizedAt: admin.firestore.Timestamp | undefined = data.returnFinalizedAt;
-      if (!returnFinalizedAt) continue; // deposit/charges not closed out yet
-
       const returnAt: admin.firestore.Timestamp | undefined = data.returnAt;
-      if (!returnAt || now < returnAt.toMillis() + HANDOFF_BUFFER_MS) continue; // buffer not elapsed yet
+      if (!returnAt) continue;
+      const ends = cleaningEndsMs({
+        cleaningUntilMs: data.cleaningUntil?.toMillis?.() ?? null,
+        returnedAtMs: data.returnedAt?.toMillis?.() ?? null,
+        returnAtMs: returnAt.toMillis(),
+        cleaningHours,
+      });
+      // Deposit not settled yet, or still cleaning.
+      if (!readyToRelease({ finalizedAtMs: returnFinalizedAt?.toMillis() ?? null, cleaningEndsMs: ends }, now)) continue;
 
       const productId: string = data.productId;
       const quantity: number = data.quantity ?? 0;

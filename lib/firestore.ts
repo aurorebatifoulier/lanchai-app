@@ -25,7 +25,7 @@ import { auth } from './auth';
 import { httpsCallable } from 'firebase/functions';
 import type { CancelReason } from '@/functions/src/shared/cancellation';
 import { Product } from './mockData';
-import { isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
+import { vteDay, EARLIER_DAY_HANDOVER_TEXT } from '@/functions/src/shared/dates';
 import { returnStockMoves, type ReturnStockInput } from '@/functions/src/shared/returnStock';
 import type { RentalPaymentMethod } from '@/functions/src/shared/rentalAgreement';
 
@@ -263,7 +263,10 @@ export interface RentalDoc {
   nonReturnAt?: Timestamp;
   // Internal: handed over before the planned pick-up day (staff confirmed it) + that plan.
   earlyHandover?: boolean;
+  /** Booked pick-up time when the item left earlier the same day (pickupAt = actual handover). */
   earlyHandoverPlannedAt?: Timestamp;
+  /** End of the cleaning time after the ACTUAL return (submitReturn: returnedAt + config/shop.cleaningHours). */
+  cleaningUntil?: Timestamp;
   currency: string;
   notes: string;
   status: ReservationStatus;
@@ -706,18 +709,11 @@ export interface ChecklistBatchChargeFields {
 }
 
 /**
- * Internal marker for a handover done before the planned pick-up day (staff confirmed
- * "Hand over early anyway?"): earlyHandover + the planned pick-up time. Never shown to
- * renters. Empty when the handover happens on / after the pick-up day.
+ * Staff-facing note when the pick-up is planned for a LATER day: handing over on an
+ * earlier day is refused (submitHandover) — it changes the booking and its price.
  */
-export function earlyHandoverFields(pickupAt: Timestamp | null | undefined): Record<string, unknown> {
-  if (!pickupAt || !isBeforePickupDay(pickupAt.toMillis())) return {};
-  return { earlyHandover: true, earlyHandoverPlannedAt: pickupAt };
-}
-
-/** Staff-facing inline warning before an early handover (detail + bulk list). */
 export function earlyHandoverPrompt(pickupAtMs: number): string {
-  return `This pick-up is planned for ${vteDay(pickupAtMs)}. Hand over early anyway?`;
+  return `This pick-up is planned for ${vteDay(pickupAtMs)}. ${EARLIER_DAY_HANDOVER_TEXT}`;
 }
 
 // Handovers go through the submitHandover callable (lib/handover.ts) and returns through

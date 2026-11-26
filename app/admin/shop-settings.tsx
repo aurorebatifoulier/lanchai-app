@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { DEFAULT_AUTO_REPLY } from '@/functions/src/shared/shop';
+import { DEFAULT_AUTO_REPLY, cleaningHoursOf, DEFAULT_CLEANING_HOURS, MAX_CLEANING_HOURS } from '@/functions/src/shared/shop';
 import {
   View,
   TouchableOpacity,
@@ -49,6 +49,8 @@ interface Form {
   /** "17.950063, 102.622828" — empty = Get directions falls back to the address search. */
   coordinates: string;
   graceHours: string;
+  /** Cleaning time after a return, in hours (config/shop.cleaningHours). */
+  cleaningHours: string;
 }
 
 /** "lat, lng" → numbers, or null when invalid. Bounds: Laos (with a margin). */
@@ -74,6 +76,7 @@ const toForm = (shop: ShopInfo, graceHours: number): Form => ({
   autoReplyText:       shop.autoReplyText ?? DEFAULT_AUTO_REPLY,
   coordinates:         shop.latitude != null && shop.longitude != null ? `${shop.latitude}, ${shop.longitude}` : '',
   graceHours:          String(graceHours),
+  cleaningHours:       String(cleaningHoursOf(shop)),
 });
 
 // Returns the first validation error, or null if the form can be saved.
@@ -94,6 +97,11 @@ function validate(f: Form): string | null {
   }
   if (f.coordinates.trim() && !parseCoordinates(f.coordinates)) {
     return 'Map coordinates must be "latitude, longitude" in Laos, e.g. 17.950063, 102.622828 (copy them from Google Maps).';
+  }
+  const cleaning = Number(f.cleaningHours);
+  if (f.cleaningHours.trim() === '' || !Number.isFinite(cleaning) || cleaning < 0 || cleaning > MAX_CLEANING_HOURS
+    || Math.round(cleaning * 2) !== cleaning * 2) {
+    return `Cleaning time must be a number of hours from 0 to ${MAX_CLEANING_HOURS}, in half hours (e.g. 3 or 1.5).`;
   }
   const grace = Number(f.graceHours);
   if (f.graceHours.trim() === '' || !Number.isFinite(grace) || grace < 0 || grace >= 24) {
@@ -293,7 +301,7 @@ function HomeSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => voi
 type ShopTab = 'shop' | 'hours' | 'money';
 const TAB_FIELDS: Record<ShopTab, (keyof Form)[]> = {
   shop: ['name', 'addressLine', 'city', 'coordinates', 'paymentMethods', 'whatsappNumber'],
-  hours: ['hours', 'openTime', 'closeTime', 'lastPickupOffsetMin', 'autoReplyText'],
+  hours: ['hours', 'openTime', 'closeTime', 'lastPickupOffsetMin', 'autoReplyText', 'cleaningHours'],
   money: ['graceHours'],
 };
 const SAVE_LABEL: Record<ShopTab, string> = {
@@ -398,6 +406,7 @@ export default function AdminShopSettingsScreen() {
           whatsappNumber:      normalizeWhatsappNumber(f.whatsappNumber),
           paymentMethods:      f.paymentMethods.trim(),
           autoReplyText:       f.autoReplyText.trim() || DEFAULT_AUTO_REPLY,
+          cleaningHours:       Number(f.cleaningHours),
           // Exact pin for "Get directions" (app + emails, shared mapsUrl); cleared → address search.
           ...(parseCoordinates(f.coordinates)
             ?? ({ latitude: deleteField(), longitude: deleteField() } as unknown as { latitude: number; longitude: number })),
@@ -578,6 +587,19 @@ export default function AdminShopSettingsScreen() {
         <Text style={s.hint}>
           Only drives the Home &quot;Open now / Closed today&quot; line. It does not block bookings on those days.
         </Text>
+      </View>
+
+      <View style={s.section}>
+        <Text style={s.sectionLabel}>After a return</Text>
+        <Field
+          label="Cleaning time after a return (hours)"
+          hint="A returned unit stays out of stock this long after it’s actually returned, and until its deposit is settled. Then it’s back in stock within 15 min."
+          placeholder={String(DEFAULT_CLEANING_HOURS)}
+          value={form.cleaningHours}
+          onChangeText={set('cleaningHours')}
+          keyboardType="decimal-pad"
+          editable={!busy}
+        />
       </View>
 
       <View style={s.section}>
