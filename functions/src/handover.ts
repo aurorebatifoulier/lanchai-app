@@ -10,7 +10,7 @@ import { unitsOnHand, effectiveStock, earlyHandoverConflicts, OCCUPYING_STATUSES
 import { isBeforePickupDay, vteDayRange, vteReservationLabel, EARLIER_DAY_HANDOVER_TEXT } from './shared/dates';
 import { CHECKLIST_CATEGORY_IDS, CHECKLIST_RATINGS, type ChecklistRating } from './shared/returnCharges';
 import {
-  buildHandoverQuote, collectFor, parsePickupPayment, rentalPaymentMethodKey, fmtMoney, paymentPartLabel,
+  buildHandoverQuote, collectFor, parsePickupPayment, rentalPaymentMethodKey, fmtMoney, paymentMethodName,
   type HandoverQuote, type Rates,
 } from './shared/handoverQuote';
 import { idCheckNeeded } from './shared/identity';
@@ -295,8 +295,8 @@ export const submitHandover = onCall({ region: REGION, invoker: 'public', secret
       tx.set(auditRef, auditData(caller, {
         action: 'handover', reservationId: s.id, orderId: r.orderId, productId: r.productId, renterId,
         note: [
-          `rental ${fmtMoney(rentalAmount, payment.rental.currency)} · ${paymentPartLabel(payment.rental)}`,
-          `deposit ${fmtMoney(depositAmount, payment.deposit.currency)} · ${paymentPartLabel(payment.deposit)}`,
+          `rental ${fmtMoney(rentalAmount, payment.rental.currency)} · ${paymentMethodName(payment.rental.method)}`,
+          `deposit ${fmtMoney(depositAmount, payment.deposit.currency)} · ${paymentMethodName(payment.deposit.method)}`,
           `agreement ${method}`,
           early ? `picked up early (planned ${vteReservationLabel(pickupMs)})` : null,
         ].filter(Boolean).join(' · '),

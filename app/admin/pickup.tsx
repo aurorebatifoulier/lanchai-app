@@ -30,7 +30,7 @@ import { quoteHandover, submitHandover, HandoverQuoteChangedError } from '@/lib/
 import { canDo, phaseOf, PHASE_LABELS } from '@/functions/src/shared/reservationMachine';
 import { isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
 import {
-  PAY_CURRENCIES, PAY_METHODS, collectFor, fmtMoney, paymentPartLabel, rentalPaymentMethodKey,
+  PAY_CURRENCIES, PAY_METHODS, collectFor, fmtMoney, paymentMethodName, rentalPaymentMethodKey,
   type HandoverQuote, type PayCurrency, type PayMethod, type PickupPayment,
 } from '@/functions/src/shared/handoverQuote';
 
@@ -164,9 +164,10 @@ export default function AdminPickupScreen() {
         }];
       })),
       paymentMethod: rentalPaymentMethodKey(pay.rental),
-      paymentLabel: pay.rental.currency === 'LAK' ? paymentPartLabel(pay.rental)
-        : `${paymentPartLabel(pay.rental)} (${fmtMoney(rent.rental, pay.rental.currency)})`,
-      depositPaymentLabel: paymentPartLabel(pay.deposit),
+      // The amounts next to these already show their currency → method only.
+      paymentLabel: pay.rental.currency === 'LAK' ? paymentMethodName(pay.rental.method)
+        : `${paymentMethodName(pay.rental.method)} (${fmtMoney(rent.rental, pay.rental.currency)})`,
+      depositPaymentLabel: paymentMethodName(pay.deposit.method),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote, pay?.rental.currency, pay?.rental.method, pay?.deposit.currency, pay?.deposit.method, items, ids]);
@@ -311,8 +312,17 @@ export default function AdminPickupScreen() {
       ) : quote && pay && due && handoverInfo ? (
         <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: screen.contentBottom }]}>
           <View style={s.handRow}>
-            <Feather name="smartphone" size={16} color={SHADES.amberText} />
-            <Text style={UI.title}>Hand the phone to the client</Text>
+            {signed ? (
+              <>
+                <Feather name="check-circle" size={16} color={COLORS.success} />
+                <Text style={UI.title}>Signed — hand the phone back to staff</Text>
+              </>
+            ) : (
+              <>
+                <Feather name="smartphone" size={16} color={SHADES.amberText} />
+                <Text style={UI.title}>Hand the phone to the client</Text>
+              </>
+            )}
           </View>
           <View style={[UI.card, UI.cardPadded, s.card]}>
             {ids.map(id => (
@@ -325,8 +335,8 @@ export default function AdminPickupScreen() {
               </View>
             ))}
             <View style={s.divider} />
-            <Row label={`Rental · ${paymentPartLabel(pay.rental)}`} value={fmtMoney(due.rental, pay.rental.currency)} />
-            <Row label={`Deposit (refundable) · ${paymentPartLabel(pay.deposit)}`} value={fmtMoney(due.deposit, pay.deposit.currency)} />
+            <Row label={`Rental · ${paymentMethodName(pay.rental.method)}`} value={fmtMoney(due.rental, pay.rental.currency)} />
+            <Row label={`Deposit (refundable) · ${paymentMethodName(pay.deposit.method)}`} value={fmtMoney(due.deposit, pay.deposit.currency)} />
           </View>
           <AgreementSection
             reservations={ids.map(id => docs[id])}
@@ -405,13 +415,13 @@ function PaymentStep({ quote: q, rentalPart, depositPart, split, setRentalPart, 
             <>
               <Text style={s.resultLabel}>Collect from the client</Text>
               <Text style={s.resultAmount}>{fmtMoney(due.rental + due.deposit, pay.rental.currency)}</Text>
-              <Text style={UI.small}>{`rental ${fmtMoney(due.rental, pay.rental.currency)} + deposit ${fmtMoney(due.deposit, pay.deposit.currency)} · ${paymentPartLabel(pay.rental)}`}</Text>
+              <Text style={UI.small}>{`rental ${fmtMoney(due.rental, pay.rental.currency)} + deposit ${fmtMoney(due.deposit, pay.deposit.currency)} · ${paymentMethodName(pay.rental.method)}`}</Text>
             </>
           ) : (
             <>
               <Text style={s.resultLabel}>Collect from the client</Text>
-              <Text style={s.resultTwo}>{`Rental · ${fmtMoney(due.rental, pay.rental.currency)} · ${paymentPartLabel(pay.rental)}`}</Text>
-              <Text style={s.resultTwo}>{`Deposit · ${fmtMoney(due.deposit, pay.deposit.currency)} · ${paymentPartLabel(pay.deposit)}`}</Text>
+              <Text style={s.resultTwo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{`Rental · ${fmtMoney(due.rental, pay.rental.currency)} · ${paymentMethodName(pay.rental.method)}`}</Text>
+              <Text style={s.resultTwo} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{`Deposit · ${fmtMoney(due.deposit, pay.deposit.currency)} · ${paymentMethodName(pay.deposit.method)}`}</Text>
             </>
           )}
         </View>

@@ -373,8 +373,17 @@ function ConfirmStep({ quote: q, settlement, items, ids, me, signature, setSigna
     <View style={s.confirmRoot}>
       <ScrollView style={s.summaryScroll} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
         <View style={s.handRow}>
-          <Feather name="smartphone" size={16} color={SHADES.amberText} />
-          <Text style={UI.title}>Hand the phone to the client</Text>
+          {signed ? (
+            <>
+              <Feather name="check-circle" size={16} color={COLORS.success} />
+              <Text style={UI.title}>Signed — hand the phone back to staff</Text>
+            </>
+          ) : (
+            <>
+              <Feather name="smartphone" size={16} color={SHADES.amberText} />
+              <Text style={UI.title}>Hand the phone to the client</Text>
+            </>
+          )}
         </View>
         <View style={[UI.card, UI.cardPadded, { gap: 6 }]}>
           {q.lines.map((l, i) => (

@@ -145,8 +145,13 @@ export function rentalPaymentMethodKey(part: { currency: PayCurrency; method: Pa
   return part.method === 'cash' ? `cash_${part.currency.toLowerCase()}` : part.method;
 }
 
-/** "Cash · LAK" / "QR · LAK" / "Bank transfer · USD" — ONE label format everywhere
- *  (staff screens, audit notes, the agreement). */
+/** "Cash" / "Bank transfer" / "QR" — next to an amount that already shows its currency
+ *  ("Rental · 2,300,000 LAK · Bank transfer"): collect box, step 4, agreement, audit notes. */
+export function paymentMethodName(method: PayMethod): string {
+  return PAY_METHODS.find(m => m.key === method)!.label;
+}
+
+/** "Cash · LAK" / "QR · LAK" / "Bank transfer · USD" — only where NO amount is shown next to it. */
 export function paymentPartLabel(part: { currency: PayCurrency; method: PayMethod }): string {
   return `${PAY_METHODS.find(m => m.key === part.method)!.label} · ${part.currency}`;
 }

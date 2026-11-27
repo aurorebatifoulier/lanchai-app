@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildHandoverQuote, collectFor, prorate, parsePickupPayment, rentalPaymentMethodKey, paymentPartLabel,
+  buildHandoverQuote, collectFor, prorate, parsePickupPayment, rentalPaymentMethodKey, paymentPartLabel, paymentMethodName,
 } from '../../functions/src/shared/handoverQuote';
 
 const rates = { USD: { rate: 23_000, setAtMs: 1 }, THB: { rate: null, setAtMs: null } };
@@ -58,4 +58,7 @@ test('rental and deposit in different currencies', () => {
   assert.equal(paymentPartLabel({ currency: 'USD', method: 'cash' }), 'Cash · USD');
   assert.equal(paymentPartLabel({ currency: 'LAK', method: 'qr' }), 'QR · LAK');
   assert.equal(paymentPartLabel({ currency: 'LAK', method: 'bank_transfer' }), 'Bank transfer · LAK');
+  assert.equal(paymentMethodName('bank_transfer'), 'Bank transfer');
+  assert.equal(paymentMethodName('cash'), 'Cash');
+  assert.equal(paymentMethodName('qr'), 'QR');
 });
