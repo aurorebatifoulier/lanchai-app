@@ -86,8 +86,7 @@ service cloud.firestore {
     // for the caller's role, to an allowed phase, writing only that action's fields.
     function resPhase(d) {
       return d.get('archived', false) == true ? 'archived'
-        : d.get('status', '') == 'pending_payment' ? (d.get('pickupRefusedOpen', false) == true ? 'pickup_refused' : 'awaiting_payment')
-        : d.get('status', '') == 'confirmed' ? (d.get('pickupRefusedOpen', false) == true ? 'pickup_refused' : 'confirmed')
+        : d.get('status', '') in ['pending_payment', 'confirmed'] ? (d.get('pickupRefusedOpen', false) == true ? 'pickup_refused' : 'booked')
         : d.get('status', '') == 'active' ? 'out'
         : d.get('status', '') == 'returned' ? (d.get('chargeReviewPending', false) == true ? 'return_review'
             : d.get('returnFinalizedAt', null) != null ? 'settled'
@@ -104,15 +103,13 @@ service cloud.firestore {
       let role = adminDoc().data.get('role', 'owner');
       let keys = request.resource.data.diff(resource.data).affectedKeys();
       return isAdmin() && (
-        (a == 'confirm_payment' && role in ['owner', 'staff'] && from in ['awaiting_payment'] && to in ['confirmed']
-          && keys.hasOnly(['status', 'updatedAt', 'lastAuditId', 'lastAction']))
-        || (a == 'cancel' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed', 'pickup_refused'] && to in ['cancelled']
+        (a == 'cancel' && role in ['owner', 'staff'] && from in ['booked', 'pickup_refused'] && to in ['cancelled']
           && keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'cancelReason', 'cancelReasonText', 'updatedAt', 'lastAuditId', 'lastAction'])
           && request.resource.data.cancelledBy == 'admin' && request.resource.data.cancelledAt == request.time)
-        || (a == 'force_release' && role in ['owner'] && from in ['awaiting_payment', 'confirmed'] && to in ['cancelled']
+        || (a == 'force_release' && role in ['owner'] && from in ['booked'] && to in ['cancelled']
           && keys.hasOnly(['status', 'cancelledAt', 'cancelledBy', 'releasedBy', 'releasedAt', 'updatedAt', 'lastAuditId', 'lastAction'])
           && request.resource.data.cancelledBy == 'admin_release')
-        || (a == 'no_show' && role in ['owner', 'staff'] && from in ['awaiting_payment', 'confirmed', 'pickup_refused'] && to in ['no_show_held']
+        || (a == 'no_show' && role in ['owner', 'staff'] && from in ['booked', 'pickup_refused'] && to in ['no_show_held']
           && keys.hasOnly(['status', 'noShowAt', 'noShowBy', 'noShowByName', 'updatedAt', 'lastAuditId', 'lastAction'])
           && request.resource.data.noShowBy == request.auth.uid)
         || (a == 'lift_no_show' && role in ['owner'] && from in ['no_show_held'] && to in ['no_show_lifted']

@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, TouchableOpacity, Image, ScrollView, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { Text } from '@/components/AppText';
 import { Feather } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
-import { httpsCallable } from 'firebase/functions';
 import { COLORS } from '@/constants/Colors';
-import { db, storage, functions } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
+import type { PickupIdCheck } from '@/lib/handover';
 import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
 import {
   ID_DOC_TYPES, idCheckNeeded, pickIdPhoto, uploadIdPhotos, type IdDocType, type IdentityRecord,
@@ -16,7 +16,8 @@ import {
 // while the renter's CURRENT document hasn't been checked in person (shared
 // idCheckNeeded — tied to the document version). Blocking: both confirmations, plus a
 // staff photo when no document is on file ("I'll show my ID at the shop").
-// perform() uploads that photo to idDocs/{renterId}/ and calls recordIdCheck.
+// Nothing is recorded here: payload() uploads the counter photo to idDocs/{renterId}/ at
+// the pick-up's last step and returns what submitHandover records in its transaction.
 
 export interface IdCheck {
   renterId: string | null;
@@ -34,10 +35,12 @@ export interface IdCheck {
   setCounterDocType: (v: IdDocType) => void;
   addCounterPhoto: () => Promise<void>;
   removeCounterPhoto: (i: number) => void;
-  /** True when the checklist may be submitted (or when no check is needed). */
+  /** True when the pick-up may go on (or when no check is needed). */
   ready: boolean;
-  /** Records the check (uploads the counter photo first). Throws a readable Error. */
-  perform: () => Promise<void>;
+  /** Document type for the agreement ("Passport"…): on file, or the counter photo's. */
+  docTypeKey: IdDocType | null;
+  /** For submitHandover: null when no check is needed. Uploads the counter photo first. */
+  payload: () => Promise<PickupIdCheck | null>;
 }
 
 export function useIdCheck(renterId: string | null | undefined): IdCheck {
@@ -52,6 +55,7 @@ export function useIdCheck(renterId: string | null | undefined): IdCheck {
 
   useEffect(() => {
     if (!renterId) { setLoading(false); return; }
+    setLoading(true); // the renter id may arrive after the first render (pick-up screen)
     let alive = true;
     Promise.all([getDoc(doc(db, 'identityChecks', renterId)), getDoc(doc(db, 'users', renterId))])
       .then(async ([idSnap, userSnap]) => {
@@ -76,22 +80,14 @@ export function useIdCheck(renterId: string | null | undefined): IdCheck {
     if (uri) setCounterPhotos(p => [...p, uri].slice(0, 6));
   }, []);
 
-  // Recorded once per screen: the rental agreement runs it BEFORE signing (so "checked
-  // on" is real), and the handover submit calls it again — that second call is a no-op.
-  const performed = useRef(false);
-  const perform = useCallback(async () => {
-    if (!needed || !renterId || performed.current) return;
-    let counterPhoto: { docType: IdDocType; files: string[] } | undefined;
-    if (!onFile) {
-      if (!counterDocType || counterPhotos.length === 0) throw new Error('Take a photo of the ID first.');
-      counterPhoto = { docType: counterDocType, files: await uploadIdPhotos(renterId, counterPhotos, 'counter') };
-    }
-    try {
-      await httpsCallable(functions, 'recordIdCheck')({ renterId, matchesPerson, nameMatches, counterPhoto });
-      performed.current = true;
-    } catch (err) {
-      throw new Error((err as { message?: string })?.message || 'Could not record the ID check. Please try again.');
-    }
+  const payload = useCallback(async (): Promise<PickupIdCheck | null> => {
+    if (!needed || !renterId) return null;
+    if (onFile) return { matchesPerson, nameMatches };
+    if (!counterDocType || counterPhotos.length === 0) throw new Error('Take a photo of the ID first.');
+    return {
+      matchesPerson, nameMatches,
+      counterPhoto: { docType: counterDocType, files: await uploadIdPhotos(renterId, counterPhotos, 'counter') },
+    };
   }, [needed, renterId, onFile, counterDocType, counterPhotos, matchesPerson, nameMatches]);
 
   return {
@@ -102,7 +98,9 @@ export function useIdCheck(renterId: string | null | undefined): IdCheck {
     setMatchesPerson, setNameMatches, setCounterDocType,
     addCounterPhoto,
     removeCounterPhoto: i => setCounterPhotos(p => p.filter((_, j) => j !== i)),
-    ready, perform,
+    ready,
+    docTypeKey: onFile ? (identity?.docType as IdDocType | undefined) ?? null : counterDocType,
+    payload,
   };
 }
 
@@ -177,7 +175,7 @@ export function IdCheckSection({ check }: { check: IdCheck }) {
       {check.renterId && <RenterNameBlock renterId={check.renterId} />}
       <Check checked={check.matchesPerson} label="The document matches the person" onPress={() => check.setMatchesPerson(!check.matchesPerson)} />
       <Check checked={check.nameMatches} label="The name matches the account" onPress={() => check.setNameMatches(!check.nameMatches)} />
-      {!check.ready && <Text style={s.required}>Required before handover.</Text>}
+      {!check.ready && <Text style={s.required}>Required before the pick-up.</Text>}
 
       <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open photo" style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)}>

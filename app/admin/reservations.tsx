@@ -17,7 +17,7 @@ import { COLORS } from '@/constants/Colors';
 import BackButton from '@/components/BackButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { phaseOf } from '@/functions/src/shared/reservationMachine';
-import { confirmReservationsPayment, earlyHandoverPrompt, type ReservationStatus } from '@/lib/firestore';
+import { earlyHandoverPrompt, type ReservationStatus } from '@/lib/firestore';
 import { overdueSeverity, overdueChipColors } from '@/utils/overdue';
 import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
 import DateFilterSheet from '@/components/DateFilterSheet';
@@ -41,8 +41,9 @@ const DATE_FIELD_OPTIONS: DateFieldOption[] = [
 // ── Status config ─────────────────────────────────────────────────────────────
 
 export const STATUS_CONFIG: Record<ReservationStatus, { label: string; bg: string; fg: string }> = {
-  pending_payment: { label: 'Pending payment', bg: '#FEF9E5',           fg: '#92400E' },
-  confirmed:       { label: 'Confirmed',       bg: '#D1FAE5',           fg: '#065F46' },
+  // One "Booked" phase (state machine): both pay at pick-up — `confirmed` is legacy.
+  pending_payment: { label: 'Booked',          bg: '#FEF9E5',           fg: '#92400E' },
+  confirmed:       { label: 'Booked',          bg: '#FEF9E5',           fg: '#92400E' },
   active:          { label: 'Active',          bg: '#2E8B57',           fg: '#FFFFFF' },
   returned:        { label: 'Returned',        bg: COLORS.softGray200,  fg: COLORS.fg3 },
   cancelled:       { label: 'Cancelled',       bg: '#FEE2E2',           fg: '#B91C1C' },
@@ -57,11 +58,10 @@ const NOT_PICKED_UP_BADGE = { label: 'Not picked up', bg: '#FDF0C4', fg: '#7A550
 // 'to_settle' = the state machine's to_settle_* / lost_to_settle phases (Today panel
 // "Deposits to settle"); 'archived' = data-fix / test bookings, hidden everywhere else.
 type ListFilter = 'all' | ReservationStatus | 'to_settle' | 'archived';
-const FILTER_OPTIONS: Array<{ key: ListFilter; label: string }> = [
+const FILTER_OPTIONS: { key: ListFilter; label: string }[] = [
   { key: 'all',             label: 'All' },
   { key: 'to_settle',       label: 'To settle' },
-  { key: 'pending_payment', label: 'Pending' },
-  { key: 'confirmed',       label: 'Confirmed' },
+  { key: 'pending_payment', label: 'Booked' }, // pending_payment + legacy confirmed
   { key: 'active',          label: 'Active' },
   { key: 'returned',        label: 'Returned' },
   { key: 'cancelled',       label: 'Cancelled' },
@@ -97,9 +97,7 @@ interface ReservationRow {
 // Bulk actions are all-or-nothing: only offered when every item in the group shares
 // both the same status AND the same pickup/return dates (not guaranteed by construction —
 // bag items can be dated independently before checkout).
-type BulkAction =
-  | { kind: 'confirm_payment' }
-  | { kind: 'checklist'; checklistType: 'handover' | 'return' };
+type BulkAction = { kind: 'pickup' } | { kind: 'return' };
 
 type AdminRenderEntry =
   | { type: 'single'; key: string; row: ReservationRow }
@@ -130,11 +128,8 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
     FILTER_OPTIONS.some(o => o.key === params.filter) ? params.filter as ListFilter : 'all');
   const [search,         setSearch]         = useState('');
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
-  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
-  // "Mark all as picked up" before the planned pick-up day → inline "Hand over early?".
+  // "Start pick-up" before the planned pick-up DAY → a note: it changes the booking.
   const [earlyOrderId, setEarlyOrderId] = useState<string | null>(null);
-  const [bulkConfirming, setBulkConfirming] = useState<string | null>(null);
-  const [bulkError, setBulkError] = useState<{ orderId: string; message: string } | null>(null);
   const [dateFilter,        setDateFilter]        = useState<DateFilterState>(DEFAULT_DATE_FILTER);
   const [pendingDateFilter, setPendingDateFilter]  = useState<DateFilterState>(DEFAULT_DATE_FILTER);
   const [dateSheetVisible,  setDateSheetVisible]   = useState(false);
@@ -185,24 +180,10 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
     });
   };
 
-  const handleConfirmPaymentForAll = async (orderId: string, ids: string[]) => {
-    setBulkConfirming(orderId);
-    setBulkError(null);
-    try {
-      await confirmReservationsPayment(ids);
-      setConfirmingOrderId(null);
-    } catch {
-      setBulkError({ orderId, message: 'Failed to confirm payment. Please try again.' });
-    } finally {
-      setBulkConfirming(null);
-    }
-  };
 
-  const handleStartChecklistChain = (checklistType: 'handover' | 'return', ids: string[]) => {
-    // A whole order's return = the 3-step return flow (one settlement for the order).
-    if (checklistType === 'return') { router.push(`/admin/return?ids=${ids.join(',')}`); return; }
-    const [firstId, ...restIds] = ids;
-    router.push(`/admin/reservations/${firstId}/checklist?type=${checklistType}&queue=${restIds.join(',')}&chainIds=${ids.join(',')}`);
+  // A whole order: the 4-step pick-up / the 3-step return (one payment / settlement).
+  const startOrderFlow = (kind: BulkAction['kind'], ids: string[]) => {
+    router.push(kind === 'pickup' ? `/admin/pickup?ids=${ids.join(',')}` : `/admin/return?ids=${ids.join(',')}`);
   };
 
   // ── Filter + group ────────────────────────────────────────────────────────
@@ -215,6 +196,7 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
           const p = phaseOf(r);
           return p === 'to_settle_refund' || p === 'to_settle_balance' || p === 'lost_to_settle';
         }
+        if (filter === 'pending_payment') return r.status === 'pending_payment' || r.status === 'confirmed';
         return r.status === filter;
       });
     const q = search.trim().toLowerCase();
@@ -244,16 +226,16 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
         entries.push({ type: 'single', key: groupRows[0].id, row: groupRows[0] });
       } else {
         const first = groupRows[0];
-        const allSameStatus = groupRows.every(r => r.status === first.status);
+        const booked = (st: string) => st === 'pending_payment' || st === 'confirmed';
+        const allSameStatus = groupRows.every(r => r.status === first.status || (booked(r.status) && booked(first.status)));
         const allSameDates = groupRows.every(r =>
           r.pickupAt?.toMillis() === first.pickupAt?.toMillis() &&
           r.returnAt?.toMillis() === first.returnAt?.toMillis(),
         );
         const bulkEligible = allSameStatus && allSameDates;
         const bulkAction: BulkAction | null = !bulkEligible ? null :
-          first.status === 'pending_payment' ? { kind: 'confirm_payment' } :
-          first.status === 'confirmed'        ? { kind: 'checklist', checklistType: 'handover' } :
-          first.status === 'active'           ? { kind: 'checklist', checklistType: 'return' } :
+          booked(first.status)      ? { kind: 'pickup' } :
+          first.status === 'active' ? { kind: 'return' } :
           null;
 
         entries.push({
@@ -412,7 +394,7 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
                     </TouchableOpacity>
 
                     {/* Bulk action — only when every item shares status AND dates */}
-                    {entry.bulkAction && earlyOrderId === entry.orderId && entry.bulkAction.kind !== 'confirm_payment' ? (
+                    {entry.bulkAction && earlyOrderId === entry.orderId && entry.bulkAction.kind === 'pickup' ? (
                       <View style={s.bulkConfirmRow}>
                         <Text style={s.bulkConfirmText}>
                           {earlyHandoverPrompt(Math.min(...entry.rows.map(r => r.pickupAt?.toMillis() ?? 0).filter(ms => isBeforePickupDay(ms))))}
@@ -425,56 +407,19 @@ export default function AdminReservationsScreen({ embedded = false }: { embedded
                         </View>
                       </View>
                     ) : entry.bulkAction && (
-                      confirmingOrderId === entry.orderId ? (
-                        <View style={s.bulkConfirmRow}>
-                          <Text style={s.bulkConfirmText}>
-                            Confirm payment for all {plural(entry.rows.length, 'item')}?
-                          </Text>
-                          <View style={s.bulkConfirmBtnRow}>
-                            <TouchableOpacity
-                              style={s.bulkCancelBtn}
-                              onPress={() => setConfirmingOrderId(null)}
-                              activeOpacity={0.75}
-                            >
-                              <Text style={s.bulkCancelBtnText}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={s.bulkConfirmBtn}
-                              onPress={() => handleConfirmPaymentForAll(entry.orderId, entry.rows.map(r => r.id))}
-                              disabled={bulkConfirming === entry.orderId}
-                              activeOpacity={0.85}
-                            >
-                              {bulkConfirming === entry.orderId
-                                ? <ActivityIndicator color={COLORS.carbon} size="small" />
-                                : <Text style={s.bulkConfirmBtnText}>Confirm payment</Text>}
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={s.bulkActionBtn}
-                          onPress={() =>
-                            entry.bulkAction!.kind === 'confirm_payment'
-                              ? setConfirmingOrderId(entry.orderId)
-                              : entry.bulkAction!.checklistType === 'handover'
-                                && entry.rows.some(r => isBeforePickupDay(r.pickupAt?.toMillis() ?? 0))
-                              ? setEarlyOrderId(entry.orderId)
-                              : handleStartChecklistChain(entry.bulkAction!.checklistType, entry.rows.map(r => r.id))
-                          }
-                          activeOpacity={0.85}
-                        >
-                          <Text style={s.bulkActionBtnText}>
-                            {entry.bulkAction.kind === 'confirm_payment'
-                              ? 'Confirm payment for all'
-                              : entry.bulkAction.checklistType === 'handover'
-                              ? 'Mark all as picked up'
-                              : 'Mark all as returned'}
-                          </Text>
-                        </TouchableOpacity>
-                      )
-                    )}
-                    {bulkError?.orderId === entry.orderId && (
-                      <Text style={s.bulkErrorText}>{bulkError.message}</Text>
+                      <TouchableOpacity
+                        style={s.bulkActionBtn}
+                        onPress={() =>
+                          entry.bulkAction!.kind === 'pickup' && entry.rows.some(r => isBeforePickupDay(r.pickupAt?.toMillis() ?? 0))
+                            ? setEarlyOrderId(entry.orderId)
+                            : startOrderFlow(entry.bulkAction!.kind, entry.rows.map(r => r.id))
+                        }
+                        activeOpacity={0.85}
+                      >
+                        <Text style={s.bulkActionBtnText}>
+                          {entry.bulkAction.kind === 'pickup' ? 'Start pick-up' : 'Mark all as returned'}
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </View>
 

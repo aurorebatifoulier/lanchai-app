@@ -13,38 +13,30 @@ import { useShopInfo } from '@/lib/shop';
 import { pickIdPhoto } from '@/lib/identity';
 import type { RentalDoc } from '@/lib/firestore';
 import {
-  agreementIdFor, buildAgreementData, fmtDepositReceived, loadRenterBlock, signAgreement, savePaperAgreement, termsForAnnex,
-  type HandoverInfo,
+  agreementIdFor, buildAgreementData, fmtDepositReceived, loadRenterBlock, termsForAnnex,
+  type HandoverInfo, type AgreementCapture,
 } from '@/lib/rentalAgreement';
-import { vteReservationLabel } from '@/functions/src/shared/dates';
+import { vteDay, vteReservationLabel } from '@/functions/src/shared/dates';
 import { AGREEMENT_COPY as A, type AgreementData } from '@/functions/src/shared/rentalAgreement';
 
-// "Rental agreement" section of the pick-up checklist (single item) and of the chained
-// order summary — BLOCKING like the ID check: the parent enables "Complete handover"
-// only once `signed`. Opens the full-screen signing view (agreement + finger signature),
-// or the paper fallback (photos of the signed form). One agreement per handover session.
+// "Rental agreement" — step 4 of the Pick-up (app/admin/pickup.tsx). The client reads the
+// agreement and signs on the full-screen view (or staff photograph the signed paper
+// form). Nothing is uploaded here: the parent keeps the capture and, on "Confirm
+// pick-up", uploads the PDF (uploadAgreement) then calls submitHandover, which records
+// it in the same transaction as the pick-up. One agreement per pick-up.
 
-export interface AgreementState { signed: boolean; label: string | null }
+/** What the parent keeps until "Confirm pick-up": the capture + the exact data signed. */
+export interface SignedAgreement { capture: AgreementCapture; data: AgreementData; terms: string; label: string }
 
-/** Already signed in this session (e.g. a handover retry): every item shares one agreement. */
-export function initialAgreementState(reservations: RentalDoc[] | null | undefined): AgreementState {
-  const first = reservations?.[0];
-  if (!first?.agreementId || !reservations!.every(r => r.agreementId === first.agreementId)) return { signed: false, label: null };
-  const when = first.agreementSignedAt?.toMillis ? vteReservationLabel(first.agreementSignedAt.toMillis()) : '';
-  return { signed: true, label: first.agreementMethod === 'paper' ? c.signedPaper(when) : c.signed(when) };
-}
-
-export function AgreementSection({ reservations, handover, ready, beforeSign, staffName, state, onState }: {
+export function AgreementSection({ reservations, handover, renterOverride, ready, signed, onSigned }: {
   reservations: RentalDoc[];
-  /** Condition (conditionLines + photo count), deposit received and payment method. */
+  /** Condition, deposit received and payment — what the client signs for. */
   handover: HandoverInfo;
-  /** ID check ready, everything rated, deposit currency + payment method chosen. */
+  /** ID checked during this pick-up: shown as checked today. */
+  renterOverride?: { idType: string | null; idCheckedToday: boolean };
   ready: boolean;
-  /** Runs before the agreement is built — records the ID check (so "checked on" is real). */
-  beforeSign: () => Promise<void>;
-  staffName: string;
-  state: AgreementState;
-  onState: (s: AgreementState) => void;
+  signed: SignedAgreement | null;
+  onSigned: (s: SignedAgreement | null) => void;
 }) {
   const shop = useShopInfo();
   const [open, setOpen] = useState(false);
@@ -54,14 +46,17 @@ export function AgreementSection({ reservations, handover, ready, beforeSign, st
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ID check first, then the agreement data (renter contact, ID type + date, items).
+  // The agreement data (renter contact, ID type + date, items, payment).
   const prepare = useCallback(async () => {
-    await beforeSign();
     const first = reservations[0];
     const [renter, terms] = await Promise.all([loadRenterBlock(first.renterId, first.renterName ?? null), termsForAnnex(shop)]);
+    if (renterOverride?.idCheckedToday) {
+      renter.idType = renterOverride.idType ?? renter.idType;
+      renter.idCheckedAtLabel = vteDay(Date.now());
+    }
     const data = buildAgreementData({ agreementId: agreementIdFor(reservations), reservations, shop, renter, handover });
     return { data, terms };
-  }, [beforeSign, reservations, shop, handover]);
+  }, [reservations, shop, handover, renterOverride]);
 
   const startSigning = async () => {
     setError(null);
@@ -75,23 +70,15 @@ export function AgreementSection({ reservations, handover, ready, beforeSign, st
     }
   };
 
-  const onSigned = (method: 'signature' | 'paper', signedAtMs: number) => {
-    const when = vteReservationLabel(signedAtMs);
-    onState({ signed: true, label: method === 'paper' ? c.signedPaper(when) : c.signed(when) });
-  };
-
-  const savePaper = async () => {
+  const keepPaper = async () => {
     if (paperPhotos.length === 0 || busy) return;
     setBusy(true);
     setError(null);
     try {
       const p = await prepare();
-      const r = await savePaperAgreement({
-        data: p.data, termsMarkdown: p.terms, photoUris: paperPhotos, staffName, reservationIds: reservations.map(x => x.id),
-      });
+      onSigned({ capture: { method: 'paper', photoUris: paperPhotos }, data: p.data, terms: p.terms, label: c.signedPaper(vteReservationLabel(Date.now())) });
       setPaperAsk(false);
       setPaperPhotos([]);
-      onSigned('paper', r.signedAtMs);
     } catch (e) {
       setError((e as Error)?.message || c.errors.generic);
     } finally {
@@ -100,13 +87,13 @@ export function AgreementSection({ reservations, handover, ready, beforeSign, st
   };
 
   return (
-    <View style={{ marginTop: 20 }}>
-      <Text style={UI.sectionTitle}>{c.section}</Text>
+    <View style={{ marginTop: 12 }}>
       <View style={[UI.card, UI.cardPadded, { gap: 10 }]}>
-        {state.signed ? (
+        <Text style={UI.title}>{c.section}</Text>
+        {signed ? (
           <>
-            <CheckLine text={state.label ?? c.signed('')} />
-            <TouchableOpacity onPress={startSigning} hitSlop={8} disabled={!ready}>
+            <CheckLine text={signed.label} />
+            <TouchableOpacity onPress={() => { onSigned(null); startSigning(); }} hitSlop={8} disabled={!ready}>
               <Text style={[UI.link, !ready && { opacity: 0.4 }]}>{c.signAgain}</Text>
             </TouchableOpacity>
           </>
@@ -128,7 +115,7 @@ export function AgreementSection({ reservations, handover, ready, beforeSign, st
             confirmLabel={busy ? c.saving : c.paperSave}
             confirmDisabled={paperPhotos.length === 0 || busy}
             onCancel={() => { setPaperAsk(false); setPaperPhotos([]); }}
-            onConfirm={savePaper}
+            onConfirm={keepPaper}
           >
             <View style={s.photos}>
               {paperPhotos.map(uri => <Image key={uri} source={{ uri }} style={s.photo} />)}
@@ -148,11 +135,8 @@ export function AgreementSection({ reservations, handover, ready, beforeSign, st
         onClose={() => setOpen(false)}
         onConfirm={async sig => {
           if (!prepared) return;
-          const r = await signAgreement({
-            data: prepared.data, termsMarkdown: prepared.terms, signature: sig, staffName, reservationIds: reservations.map(x => x.id),
-          });
+          onSigned({ capture: { method: 'signature', signature: sig }, data: prepared.data, terms: prepared.terms, label: c.signed(vteReservationLabel(Date.now())) });
           setOpen(false);
-          onSigned('signature', r.signedAtMs);
         }}
       />
     </View>

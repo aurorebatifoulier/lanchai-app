@@ -45,7 +45,7 @@ const MONTH_NAMES = [
 ];
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type DayFlags = { pickup: boolean; ret: boolean; overdue: boolean; task: boolean; pending: boolean };
+type DayFlags = { pickup: boolean; ret: boolean; overdue: boolean; task: boolean };
 
 type CellData = {
   date: Date;
@@ -110,22 +110,15 @@ export default function AdminCalendarScreen({ embedded = false }: { embedded?: b
     ]);
 
     const flags = new Map<string, DayFlags>();
-    const get = (k: string): DayFlags => flags.get(k) ?? { pickup: false, ret: false, overdue: false, task: false, pending: false };
+    const get = (k: string): DayFlags => flags.get(k) ?? { pickup: false, ret: false, overdue: false, task: false };
 
     pickupSnap.docs.forEach(d => {
       const data = d.data();
       const ts = data.pickupAt as Timestamp | undefined;
-      if (ts && data.status === 'confirmed') {
+      // One "Booked" phase: pending_payment and the legacy confirmed.
+      if (ts && (data.status === 'confirmed' || data.status === 'pending_payment')) {
         const k = toDateKey(ts.toDate());
         flags.set(k, { ...get(k), pickup: true });
-      }
-    });
-    pickupSnap.docs.forEach(d => {
-      const data = d.data();
-      const ts = data.pickupAt as Timestamp | undefined;
-      if (ts && data.status === 'pending_payment') {
-        const k = toDateKey(ts.toDate());
-        flags.set(k, { ...get(k), pending: true });
       }
     });
     returnSnap.docs.forEach(d => {
@@ -245,7 +238,6 @@ export default function AdminCalendarScreen({ embedded = false }: { embedded?: b
                         {flags?.pickup && <View style={[s.dot, { backgroundColor: COLORS.amber }]} />}
                         {flags?.overdue && <View style={[s.dot, { backgroundColor: COLORS.danger }]} />}
                         {!flags?.overdue && flags?.ret && <View style={[s.dot, { backgroundColor: COLORS.success }]} />}
-                        {flags?.pending && <View style={[s.dot, { backgroundColor: COLORS.pending }]} />}
                         {flags?.task && <View style={[s.dot, { backgroundColor: COLORS.carbon }]} />}
                       </View>
                     </TouchableOpacity>
@@ -269,10 +261,6 @@ export default function AdminCalendarScreen({ embedded = false }: { embedded?: b
         <View style={s.legendItem}>
           <View style={[s.dot, { backgroundColor: COLORS.danger }]} />
           <Text style={s.legendLabel}>Overdue</Text>
-        </View>
-        <View style={s.legendItem}>
-          <View style={[s.dot, { backgroundColor: COLORS.pending }]} />
-          <Text style={s.legendLabel}>Pending payment</Text>
         </View>
         <View style={s.legendItem}>
           <View style={[s.dot, { backgroundColor: COLORS.carbon }]} />

@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Image, BackHandler,
+  View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, BackHandler,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -14,16 +13,18 @@ import BackButton from '@/components/BackButton';
 import StepProgress from '@/components/StepProgress';
 import SignaturePad, { inkLength, toSignatureSvg, type Signature } from '@/components/SignaturePad';
 import UnitsStepper from '@/components/UnitsStepper';
+import {
+  ConditionCard, emptyCondition, conditionReady, worstCondition, conditionPayload, type ConditionState,
+} from '@/components/admin/ConditionCard';
 import { UI, useScreenInsets } from '@/components/account/ui';
-import { RATING_STYLE, RATING_LABELS } from '@/components/ChecklistSummary';
+import { RATING_LABELS } from '@/components/ChecklistSummary';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 import { TYPE } from '@/constants/typography';
 import { db, storage } from '@/lib/firebase';
-import { askCamera } from '@/lib/mediaPermissions';
 import { adminIdentity } from '@/lib/adminAudit';
 import { useAuth } from '@/contexts/AuthContext';
-import { CHECKLIST_CATEGORIES, type RentalDoc, type ChecklistRating } from '@/lib/firestore';
+import type { RentalDoc } from '@/lib/firestore';
 import { phaseOf, PHASE_LABELS } from '@/functions/src/shared/reservationMachine';
 import {
   quoteReturn, submitReturnFlow, resultSentence, money, QuoteChangedError,
@@ -41,24 +42,10 @@ import {
 // losing anything; steps can't be skipped. /admin/return?ids=a,b
 
 const STEPS = ['1 · Condition', '2 · Settlement', '3 · Client confirms'];
-const RATINGS: ChecklistRating[] = ['good', 'fair', 'damaged', 'unusable'];
-
-interface ItemState {
-  ratings: Record<string, ChecklistRating | null>;
-  notes: Record<string, string>;
-  photos: string[];   // local uris
-  units: number;
-}
-const emptyItem = (): ItemState => ({
-  ratings: Object.fromEntries(CHECKLIST_CATEGORIES.map(c => [c.id, null])),
-  notes: {}, photos: [], units: 1,
-});
-const itemComplete = (it: ItemState) => CHECKLIST_CATEGORIES.every(c => it.ratings[c.id] != null);
-const needsPhoto = (it: ItemState) => Object.values(it.ratings).some(r => r != null && r !== 'good');
-const itemReady = (it: ItemState) => itemComplete(it) && (!needsPhoto(it) || it.photos.length > 0);
-const worstOf = (it: ItemState): ChecklistRating =>
-  (Object.values(it.ratings).filter(Boolean) as ChecklistRating[])
-    .reduce<ChecklistRating>((w, r) => (RATINGS.indexOf(r) > RATINGS.indexOf(w) ? r : w), 'good');
+type ItemState = ConditionState;
+const emptyItem = emptyCondition;
+const itemReady = conditionReady;
+const worstOf = worstCondition;
 
 export default function AdminReturnScreen() {
   const router = useRouter();
@@ -107,18 +94,11 @@ export default function AdminReturnScreen() {
   const blocked = loaded && !done && !busy && ids.some(id => phaseOf(docs[id]) !== 'out');
   const allReady = ids.length > 0 && ids.every(id => items[id] && itemReady(items[id]));
 
-  const payload = (photoUrls?: Record<string, string[]>): ReturnItem[] => ids.map(id => {
-    const it = items[id];
-    return {
-      reservationId: id,
-      categories: Object.fromEntries(CHECKLIST_CATEGORIES.map(c => [c.id, {
-        rating: it.ratings[c.id] as ChecklistRating,
-        ...(it.notes[c.id]?.trim() ? { note: it.notes[c.id].trim() } : {}),
-      }])),
-      photos: photoUrls?.[id] ?? [],
-      chargeUnits: it.units,
-    };
-  });
+  const payload = (photoUrls?: Record<string, string[]>): ReturnItem[] => ids.map(id => ({
+    reservationId: id,
+    ...conditionPayload(items[id], photoUrls?.[id] ?? []),
+    chargeUnits: items[id].units,
+  }));
 
   const loadQuote = useCallback(async (adj: Record<string, OwnerAdjustment>) => {
     setBusy(true); setError(null);
@@ -241,95 +221,22 @@ function ConditionStep({ ids, docs, items, openItem, setOpenItem, setItem, ready
   setItem: (id: string, next: ItemState) => void;
   ready: boolean; busy: boolean; error: string | null; onNext: () => void; bottom: number;
 }) {
-  const addPhoto = async (id: string, camera: boolean) => {
-    if (camera && !(await askCamera()).granted) return;
-    const r = camera
-      ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
-      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, allowsMultipleSelection: true });
-    if (r.canceled) return;
-    setItem(id, { ...items[id], photos: [...items[id].photos, ...r.assets.map(a => a.uri)].slice(0, 20) });
-  };
   return (
     <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: bottom }]} keyboardShouldPersistTaps="handled">
       {ids.map((id, n) => {
         const it = items[id];
         const r = docs[id];
         if (!it || !r) return null;
-        const open = openItem === id || ids.length === 1;
         const worst = worstOf(it);
         return (
-          <View key={id} style={[UI.card, UI.cardPadded, s.card]}>
-            <TouchableOpacity onPress={() => setOpenItem(open ? null : id)} activeOpacity={0.8} style={s.itemHead}
-              disabled={ids.length === 1}>
-              <View style={{ flex: 1 }}>
-                {ids.length > 1 && <Text style={UI.small}>{`Item ${n + 1} of ${ids.length}`}</Text>}
-                <Text style={UI.title}>{`${r.productName}${r.quantity > 1 ? ` × ${r.quantity}` : ''}`}</Text>
-              </View>
-              {itemReady(it) && <Feather name="check-circle" size={18} color={COLORS.success} />}
-              {ids.length > 1 && <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.fg3} />}
-            </TouchableOpacity>
-            {open && (
-              <View style={{ gap: 12 }}>
-                {CHECKLIST_CATEGORIES.map(c => {
-                  const at = r.handoverChecklist?.categories?.[c.id];
-                  return (
-                    <View key={c.id} style={s.cat}>
-                      <Text style={s.catLabel}>{c.label}</Text>
-                      {!!at && <Text style={UI.small}>{`At pick-up: ${RATING_LABELS[at.rating]}${at.note ? ` — ${at.note}` : ''}`}</Text>}
-                      <View style={s.chips}>
-                        {RATINGS.map(rt => {
-                          const on = it.ratings[c.id] === rt;
-                          return (
-                            <TouchableOpacity key={rt} activeOpacity={0.8}
-                              style={[s.chip, on && { backgroundColor: RATING_STYLE[rt].bg, borderColor: RATING_STYLE[rt].bg }]}
-                              onPress={() => setItem(id, { ...it, ratings: { ...it.ratings, [c.id]: rt } })}>
-                              <Text style={[s.chipText, on && { color: RATING_STYLE[rt].text }]}>{RATING_LABELS[rt]}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                      {it.ratings[c.id] != null && it.ratings[c.id] !== 'good' && (
-                        <TextInput style={[UI.input, s.note]} value={it.notes[c.id] ?? ''} placeholder="What's wrong? (optional)"
-                          placeholderTextColor={SHADES.carbonPlaceholder}
-                          onChangeText={t => setItem(id, { ...it, notes: { ...it.notes, [c.id]: t } })} />
-                      )}
-                    </View>
-                  );
-                })}
-                {(worst === 'damaged' || worst === 'unusable') && r.quantity > 1 && (
-                  <UnitsStepper label={worst === 'unusable' ? 'Units unusable' : 'Units damaged'}
-                    value={it.units} max={r.quantity} onChange={n2 => setItem(id, { ...it, units: n2 })} />
-                )}
-                <Text style={s.catLabel}>{needsPhoto(it) ? 'Photos (required)' : 'Photos'}</Text>
-                {it.photos.length > 0 && (
-                  <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
-                    {it.photos.map(u => (
-                      <View key={u}>
-                        <Image source={{ uri: u }} style={s.thumb} />
-                        <TouchableOpacity style={s.remove} hitSlop={10} accessibilityRole="button" accessibilityLabel="Remove photo"
-                          onPress={() => setItem(id, { ...it, photos: it.photos.filter(x => x !== u) })}>
-                          <Feather name="x" size={14} color={COLORS.white} />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
-                <View style={s.row}>
-                  <TouchableOpacity style={[UI.btnSecondary, UI.btnCard, s.flex]} onPress={() => addPhoto(id, true)} activeOpacity={0.85}>
-                    <Feather name="camera" size={16} color={SHADES.carbon} />
-                    <Text style={[UI.btnSecondaryText, UI.btnCardText]}>Take photo</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[UI.btnSecondary, UI.btnCard, s.flex]} onPress={() => addPhoto(id, false)} activeOpacity={0.85}>
-                    <Feather name="image" size={16} color={SHADES.carbon} />
-                    <Text style={[UI.btnSecondaryText, UI.btnCardText]}>From photos</Text>
-                  </TouchableOpacity>
-                </View>
-                {needsPhoto(it) && it.photos.length === 0 && (
-                  <Text style={UI.errorText}>A part isn’t in good condition: add at least one photo.</Text>
-                )}
-              </View>
-            )}
-          </View>
+          <ConditionCard key={id} title={`${r.productName}${r.quantity > 1 ? ` × ${r.quantity}` : ''}`}
+            index={n} count={ids.length} open={openItem === id || ids.length === 1}
+            onToggle={() => setOpenItem(openItem === id ? null : id)}
+            state={it} onChange={next => setItem(id, next)} reference={r.handoverChecklist?.categories ?? null}
+            extra={(worst === 'damaged' || worst === 'unusable') && r.quantity > 1 ? (
+              <UnitsStepper label={worst === 'unusable' ? 'Units unusable' : 'Units damaged'}
+                value={it.units} max={r.quantity} onChange={n2 => setItem(id, { ...it, units: n2 })} />
+            ) : null} />
         );
       })}
       {!!error && <Text style={UI.errorText}>{error}</Text>}

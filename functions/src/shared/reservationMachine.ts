@@ -9,13 +9,13 @@
 // Default = FORBIDDEN: an action is allowed only by an explicit transition below.
 
 export type Phase =
-  | 'awaiting_payment' | 'confirmed' | 'pickup_refused' | 'out'
+  | 'booked' | 'pickup_refused' | 'out'
   | 'return_review' | 'to_settle_refund' | 'to_settle_balance' | 'settled'
   | 'lost_to_settle' | 'lost_settled' | 'cancelled' | 'no_show_held' | 'no_show_lifted'
   | 'archived';
 
 export const PHASES: Phase[] = [
-  'awaiting_payment', 'confirmed', 'pickup_refused', 'out',
+  'booked', 'pickup_refused', 'out',
   'return_review', 'to_settle_refund', 'to_settle_balance', 'settled',
   'lost_to_settle', 'lost_settled', 'cancelled', 'no_show_held', 'no_show_lifted',
   'archived',
@@ -30,14 +30,14 @@ export type MachineRole = 'owner' | 'staff' | 'renter';
 export type Channel = 'client' | 'server';
 
 export type MachineAction =
-  | 'confirm_payment' | 'handover' | 'renter_cancel' | 'cancel' | 'force_release'
+  | 'handover' | 'renter_cancel' | 'cancel' | 'force_release'
   | 'no_show' | 'lift_no_show' | 'refuse_pickup' | 'close_refusal' | 'return'
   | 'report_lost' | 'damage_confirm' | 'damage_reduce' | 'damage_waive' | 'undo_waiver'
   | 'refund_deposit' | 'record_balance_paid' | 'write_off' | 'settle_lost'
   | 'report_incident' | 'archive' | 'release_units';
 
 export const ACTIONS: MachineAction[] = [
-  'confirm_payment', 'handover', 'renter_cancel', 'cancel', 'force_release',
+  'handover', 'renter_cancel', 'cancel', 'force_release',
   'no_show', 'lift_no_show', 'refuse_pickup', 'close_refusal', 'return',
   'report_lost', 'damage_confirm', 'damage_reduce', 'damage_waive', 'undo_waiver',
   'refund_deposit', 'record_balance_paid', 'write_off', 'settle_lost',
@@ -46,6 +46,11 @@ export const ACTIONS: MachineAction[] = [
 
 /** Not built — forbidden everywhere (listed so the table says so explicitly). */
 export const NOT_BUILT = ['edit_dates', 'extend', 'found_after_lost'] as const;
+
+/** Retired (2026-11-27): payment is recorded AS PART OF the pick-up (submitHandover).
+ *  No advance is ever taken (Terms §4), so nothing needs a separate "confirm payment".
+ *  Kept only to label old audit entries; forbidden everywhere. */
+export const RETIRED = ['confirm_payment'] as const;
 
 export interface Transition {
   action: MachineAction;
@@ -56,7 +61,8 @@ export interface Transition {
   to: Phase[];
 }
 
-const PRE: Phase[] = ['awaiting_payment', 'confirmed'];
+// One "booked" phase = status pending_payment OR confirmed (legacy) — both pay at pick-up.
+const PRE: Phase[] = ['booked'];
 const PRE_OR_REFUSED: Phase[] = [...PRE, 'pickup_refused'];
 const TO_SETTLE: Phase[] = ['to_settle_refund', 'to_settle_balance'];
 const ARCHIVABLE: Phase[] = [
@@ -65,9 +71,9 @@ const ARCHIVABLE: Phase[] = [
 ];
 
 export const MACHINE: Transition[] = [
-  { action: 'confirm_payment', roles: ['owner', 'staff'], channel: 'client', from: ['awaiting_payment'], to: ['confirmed'] },
-  // Every handover goes through submitHandover (server): state machine + a unit must be
-  // PHYSICALLY in the shop (unitsOnHand) — early handovers included.
+  // Every pick-up goes through submitHandover (server, the 4-step Pick-up flow): payment,
+  // deposit, checklist, agreement and ID check in ONE transaction; a unit must be
+  // PHYSICALLY in the shop (unitsOnHand).
   { action: 'handover', roles: ['owner', 'staff'], channel: 'server', from: PRE, to: ['out'] },
   // D2: after a refused pick-up, only an owner may hand over (it closes the alert).
   { action: 'handover', roles: ['owner'], channel: 'server', from: ['pickup_refused'], to: ['out'] },
@@ -108,7 +114,6 @@ export const MACHINE: Transition[] = [
 /** Fields each client action may write on the reservation (+ COMMON_KEYS). */
 export const COMMON_KEYS = ['updatedAt', 'lastAuditId', 'lastAction'];
 export const ACTION_KEYS: Partial<Record<MachineAction, string[]>> = {
-  confirm_payment: ['status'],
   handover: ['status', 'handoverChecklist', 'earlyHandover', 'earlyHandoverPlannedAt', 'pickupRefusedOpen'],
   renter_cancel: ['status', 'cancelledAt', 'cancelledBy'],
   cancel: ['status', 'cancelledAt', 'cancelledBy', 'cancelReason', 'cancelReasonText'],
@@ -178,8 +183,8 @@ export function phaseOf(r: MachineDoc): Phase | null {
   const s = r.status;
   const finalized = r.returnFinalizedAt != null;
   switch (s) {
-    case 'pending_payment': return r.pickupRefusedOpen === true ? 'pickup_refused' : 'awaiting_payment';
-    case 'confirmed': return r.pickupRefusedOpen === true ? 'pickup_refused' : 'confirmed';
+    case 'pending_payment':
+    case 'confirmed': return r.pickupRefusedOpen === true ? 'pickup_refused' : 'booked';
     case 'active': return 'out';
     case 'returned':
       if (r.chargeReviewPending === true) return 'return_review';
@@ -213,8 +218,7 @@ export function allowedActions(r: MachineDoc, role: MachineRole): MachineAction[
 }
 
 export const PHASE_LABELS: Record<Phase, string> = {
-  awaiting_payment: 'Awaiting payment',
-  confirmed: 'Confirmed',
+  booked: 'Booked · pays at pick-up',
   pickup_refused: 'Pick-up refused',
   out: 'Out with the renter',
   return_review: 'Returned · damage to review',

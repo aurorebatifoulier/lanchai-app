@@ -5,7 +5,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { Timestamp } from 'firebase-admin/firestore';
-import { fns, call, set, UID, seedBookingWorld } from './helpers';
+import { fns, call, set, UID, seedBookingWorld, pickup } from './helpers';
 import { PHASES, canDo, type Phase, type MachineAction } from '../src/shared/reservationMachine';
 
 const OWNER = 'ownerOooo1';
@@ -16,8 +16,7 @@ const T0 = Timestamp.fromMillis(Date.UTC(2026, 10, 1));
 const IDS = ['mainItem', 'cleanliness', 'basicUsage', 'power', 'accessories', 'cables', 'protectiveCase', 'storageCase', 'other'];
 
 const SEED: Record<Phase, Record<string, unknown>> = {
-  awaiting_payment: { status: 'pending_payment' },
-  confirmed: { status: 'confirmed' },
+  booked: { status: 'pending_payment' },
   pickup_refused: { status: 'confirmed', pickupRefusedOpen: true },
   out: { status: 'active' },
   return_review: { status: 'returned', chargeReviewPending: true },
@@ -63,7 +62,7 @@ function run(action: MachineAction, id: string, uid: string) {
       quote: { result: 'refund', refund: 500_000, collect: 0 },
     }, uid);
   }
-  if (action === 'handover') return call(fns.submitHandover, { items: [{ reservationId: id }] }, uid);
+  if (action === 'handover') return pickup([id], uid);
   if (action === 'refuse_pickup') return call(fns.refusePickup, { reservationIds: [id], reason: 'Photo does not match' }, uid);
   return call(fns.resolveOwnerAlert, { kind: 'pickup', id }, uid);
 }

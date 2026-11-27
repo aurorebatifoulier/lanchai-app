@@ -59,7 +59,6 @@ import {
 import { FirstRentalIdChip, showsFirstRentalIdCheck } from '@/components/FirstRentalIdChip';
 import { RenterIdCard } from '@/components/admin/RenterIdCard';
 import { addAudit } from '@/lib/adminAudit';
-import { submitHandover } from '@/lib/handover';
 import { canDo, phaseOf, PHASE_LABELS, type MachineAction } from '@/functions/src/shared/reservationMachine';
 import { HistoryCard } from '@/components/admin/HistoryCard';
 import { DamageReviewCard, PickupRefusedCard, RefusePickupBox } from '@/components/admin/OwnerReview';
@@ -137,7 +136,7 @@ export default function AdminReservationDetailScreen() {
   const [confirmUnwaive, setConfirmUnwaive] = useState<'late' | 'damage' | null>(null);
   const [archiveReason, setArchiveReason] = useState('');
   const [confirmAction, setConfirmAction] = useState<
-    'confirm_payment' | 'early_handover' | 'pickup' | 'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
+    'deposit' | 'cancel' | 'settle_outstanding' | 'write_off_outstanding' | 'lost'
     | 'no_show' | 'lift_hold' | 'refuse_pickup' | 'archive' | null
   >(null);
   // Admin cancellation — reason + scope (this line or the whole order)
@@ -469,13 +468,6 @@ export default function AdminReservationDetailScreen() {
   // Once a handover checklist has been submitted, the deposit was actually received in
   // whatever currency the admin chose there — show that instead of the original LAK
   // figure. Before handover, no currency choice has been made yet, so show LAK as usual.
-  // Pick-up: the checklist if none yet, else the plain confirm. Before the planned
-  // pick-up DAY, a note explains it is blocked (an earlier day changes the booking).
-  const startHandover = () => {
-    if (reservation.handoverChecklist?.confirmedAt) setConfirmAction('pickup');
-    else { setConfirmAction(null); router.push(`/admin/reservations/${id}/checklist?type=handover`); }
-  };
-
   const handoverDeposit = reservation.handoverChecklist;
   const depositDisplay = (handoverDeposit?.depositCurrency && handoverDeposit?.depositAmount != null)
     ? `${handoverDeposit.depositAmount.toLocaleString('en-US')} ${handoverDeposit.depositCurrency}`
@@ -982,69 +974,6 @@ export default function AdminReservationDetailScreen() {
           )}
 
           {/* ── Confirm dialogs — only one open at a time ─────────────── */}
-          {!actioning && confirmAction === 'confirm_payment' && (
-            <ConfirmBox
-              text="Confirm that payment has been received and activate this booking?"
-              confirmLabel="Confirm payment"
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => runAction(
-                'confirm_payment',
-                { status: 'confirmed' },
-                { status: 'confirmed' },
-                () => sendNotif(reservation.renterId, {
-                  type: 'rental',
-                  icon: 'check',
-                  iconColor: 'green',
-                  title: 'Reservation confirmed',
-                  body: `Your ${reservation.productName} booking for ${reservation.pickupLabel} is confirmed.`,
-                  deepLink: `/rentals/${id}`,
-                }),
-              )}
-            />
-          )}
-          {!actioning && confirmAction === 'early_handover' && (
-            // An earlier DAY changes the booking (new price): blocked, explained.
-            <ConfirmBox
-              text={earlyHandoverPrompt(reservation.pickupAt?.toMillis() ?? 0)}
-              confirmLabel=""
-              cancelLabel="OK"
-              infoOnly
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={() => setConfirmAction(null)}
-            />
-          )}
-          {!actioning && confirmAction === 'pickup' && (
-            <ConfirmBox
-              text="Confirm the renter has picked up the item?"
-              confirmLabel="Mark as picked up"
-              onCancel={() => setConfirmAction(null)}
-              onConfirm={async () => {
-                // Server: state machine + a unit physically in the shop (submitHandover).
-                setActioning(true); setActionError(null); setConfirmAction(null);
-                try {
-                  await submitHandover([{ reservationId: reservation.id }]);
-                    sendNotif(reservation.renterId, {
-                      type: 'rental',
-                      icon: 'box',
-                      iconColor: 'carbon',
-                      title: 'Rental started',
-                      body: `You've picked up the ${reservation.productName}. Return by ${reservation.returnLabel}.`,
-                      deepLink: `/rentals/${id}`,
-                    });
-                    // Mark phone as verified in-person at pickup (if not already).
-                    if (!phoneVerified) {
-                      updateDoc(doc(db, 'users', reservation.renterId), { phoneVerified: true })
-                        .then(() => setRenterProfile(p => p ? { ...p, phoneVerified: true } : p))
-                        .catch(err => console.warn('[AdminReservationDetail] phoneVerified update failed:', err));
-                    }
-                } catch (e) {
-                  setActionError((e as Error).message);
-                } finally {
-                  setActioning(false);
-                }
-              }}
-            />
-          )}
           {/* D6: no return without a checklist — "Mark as returned" opens the checklist. */}
           {!actioning && confirmAction === 'lost' && (
             <ConfirmBox
@@ -1299,26 +1228,24 @@ export default function AdminReservationDetailScreen() {
           {!actioning && confirmAction === null && (
             <>
               {/* Linear status transitions */}
-              {can('confirm_payment') && (
-                <TouchableOpacity
-                  style={d.primaryBtn}
-                  onPress={() => setConfirmAction('confirm_payment')}
-                  activeOpacity={0.85}
-                >
-                  <Text style={d.primaryBtnText}>Confirm payment</Text>
-                </TouchableOpacity>
-              )}
-              {status === 'confirmed' && can('handover') && (
-                <TouchableOpacity
-                  style={d.primaryBtn}
-                  onPress={() => (isBeforePickupDay(reservation.pickupAt?.toMillis() ?? 0)
-                    ? setConfirmAction('early_handover')
-                    : startHandover())}
-                  activeOpacity={0.85}
-                >
-                  <Text style={d.primaryBtnText}>Mark as picked up</Text>
-                </TouchableOpacity>
-              )}
+              {/* ONE pick-up: ID → condition → payment → the client signs (app/admin/pickup.tsx).
+                  An earlier DAY changes the booking (new price): blocked, explained. */}
+              {can('handover') && (() => {
+                const earlyDay = isBeforePickupDay(reservation.pickupAt?.toMillis() ?? 0);
+                return (
+                  <>
+                    <TouchableOpacity
+                      style={[d.primaryBtn, earlyDay && { opacity: 0.45 }]}
+                      disabled={earlyDay}
+                      onPress={() => router.push(`/admin/pickup?ids=${id}`)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={d.primaryBtnText}>Start pick-up</Text>
+                    </TouchableOpacity>
+                    {earlyDay && <Text style={d.endStateText}>{earlyHandoverPrompt(reservation.pickupAt?.toMillis() ?? 0)}</Text>}
+                  </>
+                );
+              })()}
               {can('return') && (
                 <TouchableOpacity
                   style={d.primaryBtn}

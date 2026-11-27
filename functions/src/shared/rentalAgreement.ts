@@ -5,7 +5,7 @@
 // several visits. Never mentions the internal late-return grace period.
 
 /** Bumped whenever the agreement's wording or layout changes (stamped on each agreement). */
-export const AGREEMENT_TEMPLATE_VERSION = '2026-10-29.4';
+export const AGREEMENT_TEMPLATE_VERSION = '2026-11-27.5'; // .5: payment by part (rental / deposit currency + method)
 
 export type AgreementMethod = 'signature' | 'paper';
 

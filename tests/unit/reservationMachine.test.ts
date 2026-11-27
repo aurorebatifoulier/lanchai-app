@@ -6,7 +6,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import {
   phaseOf, canDo, allowedActions, machineViolations, transitionAllowed,
-  PHASES, ACTIONS, STATUSES, MACHINE, ACTION_KEYS, type Phase,
+  PHASES, ACTIONS, STATUSES, MACHINE, ACTION_KEYS, RETIRED, type Phase,
 } from '../../functions/src/shared/reservationMachine';
 import { withMachineBlock } from '../../utils/machineRules';
 
@@ -14,7 +14,8 @@ const ROOT = join(__dirname, '..', '..');
 
 test('phaseOf: every status, flag and the archived override', () => {
   const T = { toMillis: () => 1 };
-  assert.equal(phaseOf({ status: 'pending_payment' }), 'awaiting_payment');
+  assert.equal(phaseOf({ status: 'pending_payment' }), 'booked');
+  assert.equal(phaseOf({ status: 'confirmed' }), 'booked'); // legacy: one "booked" phase
   assert.equal(phaseOf({ status: 'confirmed', pickupRefusedOpen: true }), 'pickup_refused');
   assert.equal(phaseOf({ status: 'active', pickupRefusedOpen: true }), 'out'); // a stale flag never counts
   assert.equal(phaseOf({ status: 'returned', chargeReviewPending: true, returnFinalizedAt: T }), 'return_review');
@@ -27,6 +28,16 @@ test('phaseOf: every status, flag and the archived override', () => {
   assert.equal(phaseOf({ status: 'no_show', noShowHoldLiftedAt: T }), 'no_show_lifted');
   assert.equal(phaseOf({ status: 'returned', archived: true }), 'archived');
   assert.equal(phaseOf({ status: 'weird' }), null);
+});
+
+test('payment is part of the pick-up: confirm_payment is retired, handover is server-only', () => {
+  assert.ok((RETIRED as readonly string[]).includes('confirm_payment'));
+  assert.ok(!(ACTIONS as string[]).includes('confirm_payment'));
+  assert.ok(MACHINE.every(t => t.action !== 'handover' || t.channel === 'server'));
+  for (const st of ['pending_payment', 'confirmed']) {
+    assert.equal(canDo({ status: st }, 'handover', 'staff', 'server'), true);
+    assert.equal(canDo({ status: st }, 'handover', 'staff', 'client'), false);
+  }
 });
 
 test('the reported bug: no lost/stolen after a return, whatever the role', () => {

@@ -81,3 +81,43 @@ export async function seedBookingWorld() {
     await set(`identityChecks/${uid}`, idOnFile);
   }
 }
+
+// ── Pick-up (submitHandover) fixtures ────────────────────────────────────────────
+export const CHECKLIST_IDS = ['mainItem', 'cleanliness', 'basicUsage', 'power', 'accessories', 'cables', 'protectiveCase', 'storageCase', 'other'];
+export const goodChecklist = (id: string) => ({
+  categories: Object.fromEntries(CHECKLIST_IDS.map(k => [k, { rating: 'good' }])),
+  photos: [`https://firebasestorage.googleapis.com/v0/b/x/o/reservations%2F${id}%2Fhandover%2F1.jpg`],
+});
+
+/** Uploads a signed agreement PDF for this order, as the app does before submitHandover. */
+export async function uploadAgreementPdf(orderId: string, method: 'signature' | 'paper' = 'signature'): Promise<string> {
+  const agreementId = `${orderId}-${(Date.now() + Math.floor(Math.random() * 1e6)).toString(36)}`;
+  const path = `rentalAgreements/${agreementId}/${method === 'paper' ? 'paper-agreement' : 'agreement'}.pdf`;
+  await admin.storage().bucket().file(path).save(Buffer.from('%PDF-1.4 test'), { contentType: 'application/pdf' });
+  return agreementId;
+}
+
+type PayPart = { currency: 'LAK' | 'USD' | 'THB'; method: 'cash' | 'bank_transfer' | 'qr' };
+/**
+ * The app's Pick-up flow end to end: quoteHandover → PDF upload → submitHandover with
+ * the amounts the quote shows. `override` replaces any part of the payload.
+ */
+export async function pickup(ids: string[], uid: string, opts: {
+  payment?: { rental: PayPart; deposit: PayPart };
+  idCheck?: unknown;
+  override?: Record<string, unknown>;
+} = {}): Promise<AnyFn> {
+  const payment = opts.payment ?? { rental: { currency: 'LAK', method: 'cash' }, deposit: { currency: 'LAK', method: 'cash' } };
+  const q = await call(fns.quoteHandover, { ids }, uid);
+  const head = (await db().doc(`reservations/${ids[0]}`).get()).data() ?? {};
+  const agreementId = await uploadAgreementPdf(String(head.orderId ?? ids[0]));
+  return call(fns.submitHandover, {
+    items: ids.map(id => ({ reservationId: id, checklist: goodChecklist(id) })),
+    payment,
+    quote: { rental: q.currencies[payment.rental.currency]?.rental, deposit: q.currencies[payment.deposit.currency]?.deposit },
+    idCheck: opts.idCheck ?? null,
+    phoneVerified: true,
+    agreement: { id: agreementId, method: 'signature' },
+    ...(opts.override ?? {}),
+  }, uid);
+}

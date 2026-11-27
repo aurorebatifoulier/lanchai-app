@@ -107,6 +107,22 @@ export async function syncFirstRentalIdFlags(uid: string): Promise<void> {
   if (n > 0) await batch.commit();
 }
 
+/** "ID verified" email — once per document version (claimed in a transaction). */
+export async function sendIdVerifiedEmailOnce(renterId: string, version: number): Promise<void> {
+  const db = admin.firestore();
+  const idRef = db.collection('identityChecks').doc(renterId);
+  const claimed = await db.runTransaction(async tx => {
+    const snap = await tx.get(idRef);
+    if (snap.get('verifiedEmailVersion') === version) return false;
+    tx.set(idRef, { verifiedEmailVersion: version }, { merge: true });
+    return true;
+  });
+  if (claimed) {
+    const { idRetentionMonths } = await getRetentionConfig();
+    await sendAccountEmail(renterId, (shop, r) => idVerifiedEmail(shop, { firstName: r.firstName, idRetentionMonths }), 'id-verified');
+  }
+}
+
 const staffName = (token: Record<string, unknown> | undefined) =>
   String(token?.name || token?.email || 'staff');
 
@@ -155,18 +171,7 @@ export const recordIdCheck = onCall({ region: REGION, secrets: [BREVO_API_KEY] }
     idCheckedBy: staffName(request.auth?.token),
   }, { merge: true });
   await syncFirstRentalIdFlags(renterId);
-  // "ID verified" email — once per document version (claimed in a transaction).
-  const idRef = db.collection('identityChecks').doc(renterId);
-  const claimed = await db.runTransaction(async tx => {
-    const snap = await tx.get(idRef);
-    if (snap.get('verifiedEmailVersion') === identity!.version) return false;
-    tx.set(idRef, { verifiedEmailVersion: identity!.version }, { merge: true });
-    return true;
-  });
-  if (claimed) {
-    const { idRetentionMonths } = await getRetentionConfig();
-    await sendAccountEmail(renterId, (shop, r) => idVerifiedEmail(shop, { firstName: r.firstName, idRetentionMonths }), 'id-verified');
-  }
+  await sendIdVerifiedEmailOnce(renterId, identity!.version);
   logger.info('[identity] checked in person', { renterId, version: identity!.version, by: adminUid });
   await writeAudit(caller, { action: 'id.checked', renterId, note: `version ${identity!.version}${d.counterPhoto ? ' · photo taken at the counter' : ''}` });
   return { ok: true };

@@ -44,8 +44,8 @@ const LABELS: Record<string, string> = {
   'incident.closed': 'Incident closed',
   'reservation.update': 'Updated',
   // State-machine actions (functions/src/shared/reservationMachine.ts) — audit action = lastAction.
-  confirm_payment: 'Payment confirmed',
-  handover: 'Handed over',
+  confirm_payment: 'Payment confirmed', // retired 2026-11-27 (old entries only)
+  handover: 'Picked up',
   cancel: 'Cancelled',
   force_release: 'Force-released',
   no_show: 'Marked as no-show',

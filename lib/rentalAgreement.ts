@@ -26,8 +26,8 @@ import { markdownToHtml } from '@/utils/markdownHtml';
 
 // Rental agreement signed at pick-up — app side: gathers the data, renders the HTML
 // (receipt PDF style), prints it to PDF (expo-print), uploads it to
-// rentalAgreements/{agreementId}/ and calls finalizeRentalAgreement (server time,
-// SHA-256, links, email). Content model + wording: functions/src/shared/rentalAgreement.ts.
+// rentalAgreements/{agreementId}/; submitHandover then records it in the pick-up's own
+// transaction (server time, SHA-256, links, email). Content model + wording: functions/src/shared/rentalAgreement.ts.
 // Also: the paper fallback (photos → PDF), the printable blank version, and opening a
 // stored agreement (renter + admin). Never includes the ID photo or a staff name.
 
@@ -47,6 +47,8 @@ export interface HandoverInfo {
   items: Record<string, { condition: string[]; photoCount: number; depositReceived: { amount: number; currency: string } | null }>;
   /** handoverChecklist.rentalPaymentMethod key. */
   paymentMethod: string | null;
+  /** Pick-up flow: how the rental was paid, as shown ("QR", "Cash USD · 48 USD"). */
+  paymentLabel?: string | null;
 }
 
 interface RenterBlock { name: string; phone: string | null; email: string | null; idType: string | null; idCheckedAtLabel: string | null }
@@ -122,7 +124,7 @@ export function buildAgreementData(args: {
     lines,
     rentalTotal: lines.reduce((s, l) => s + l.total, 0),
     depositTotal: lines.reduce((s, l) => s + l.deposit, 0),
-    paymentMethod: paymentMethodLabel(handover?.paymentMethod),
+    paymentMethod: handover?.paymentLabel ?? paymentMethodLabel(handover?.paymentMethod),
     depositReceivedTotal,
     termsEffectiveDate: LEGAL_EFFECTIVE_DATE,
     templateVersion: AGREEMENT_TEMPLATE_VERSION,
@@ -287,19 +289,6 @@ async function uploadPdf(html: string, agreementId: string, method: AgreementMet
   }
 }
 
-async function finalize(agreementId: string, reservationIds: string[], method: AgreementMethod, staffName: string) {
-  try {
-    const r = await httpsCallable(functions, 'finalizeRentalAgreement')({ agreementId, reservationIds, method, staffName });
-    return r.data as { agreementId: string; signedAtMs: number; emailed: boolean };
-  } catch (err) {
-    // Our own HttpsErrors carry a readable message; a bare "unauthenticated" /
-    // "permission-denied" before the function runs = Cloud Run invoker permission.
-    const code = codeOf(err);
-    const msg = (err as { message?: string })?.message ?? '';
-    throw new Error(AGREEMENT_UI.errors.finalize(code, msg && msg.toLowerCase() !== code.replace(/-/g, ' ') && msg !== code ? msg : null));
-  }
-}
-
 /** The signed-in staff account, with a fresh ID token, before any write. */
 async function requireSession(): Promise<void> {
   const user = auth.currentUser;
@@ -317,37 +306,35 @@ const withFreshId = (data: AgreementData): AgreementData => {
   return { ...data, agreementId: newAgreementId(orderId, Date.now()) };
 };
 
-/** Signature on the staff device → PDF → Storage → finalizeRentalAgreement. */
-export async function signAgreement(args: {
-  data: AgreementData; termsMarkdown: string; signature: Signature; staffName: string; reservationIds: string[];
-}) {
-  await requireSession();
-  const data = withFreshId(args.data);
-  const html = buildAgreementHtml(data, {
-    signatureSvg: toSignatureSvg(args.signature),
-    signedAtLabel: vteReservationLabel(Date.now()),
-    termsMarkdown: args.termsMarkdown,
-  });
-  await uploadPdf(html, data.agreementId, 'signature');
-  return finalize(data.agreementId, args.reservationIds, 'signature', args.staffName);
-}
+/** What the client signed, kept on the device until "Confirm pick-up". */
+export type AgreementCapture =
+  | { method: 'signature'; signature: Signature }
+  | { method: 'paper'; photoUris: string[] };
 
-/** Paper fallback: the agreement text + the photographed signed pages, as one PDF. */
-export async function savePaperAgreement(args: {
-  data: AgreementData; termsMarkdown: string; photoUris: string[]; staffName: string; reservationIds: string[];
-}) {
-  const photos: string[] = [];
-  for (const uri of args.photoUris) {
-    const img = await manipulateAsync(uri, [{ resize: { width: 1400 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true });
-    if (img.base64) photos.push(`data:image/jpeg;base64,${img.base64}`);
-  }
+/**
+ * "Confirm pick-up": the agreement (signature or photographed paper pages) → PDF →
+ * Storage, under a NEW id. Not recorded yet — submitHandover checks the file and records
+ * it in the pick-up transaction. A refused pick-up leaves an unused file (create-once).
+ */
+export async function uploadAgreement(args: {
+  data: AgreementData; termsMarkdown: string; capture: AgreementCapture;
+}): Promise<{ agreementId: string; method: AgreementMethod }> {
   await requireSession();
   const data = withFreshId(args.data);
-  const html = buildAgreementHtml(data, {
-    blank: true, paperPhotos: photos, signedAtLabel: vteReservationLabel(Date.now()), termsMarkdown: args.termsMarkdown,
-  });
-  await uploadPdf(html, data.agreementId, 'paper');
-  return finalize(data.agreementId, args.reservationIds, 'paper', args.staffName);
+  const signedAtLabel = vteReservationLabel(Date.now());
+  let html: string;
+  if (args.capture.method === 'signature') {
+    html = buildAgreementHtml(data, { signatureSvg: toSignatureSvg(args.capture.signature), signedAtLabel, termsMarkdown: args.termsMarkdown });
+  } else {
+    const photos: string[] = [];
+    for (const uri of args.capture.photoUris) {
+      const img = await manipulateAsync(uri, [{ resize: { width: 1400 } }], { compress: 0.7, format: SaveFormat.JPEG, base64: true });
+      if (img.base64) photos.push(`data:image/jpeg;base64,${img.base64}`);
+    }
+    html = buildAgreementHtml(data, { blank: true, paperPhotos: photos, signedAtLabel, termsMarkdown: args.termsMarkdown });
+  }
+  await uploadPdf(html, data.agreementId, args.capture.method);
+  return { agreementId: data.agreementId, method: args.capture.method };
 }
 
 /** Printable blank version (system print dialog). */

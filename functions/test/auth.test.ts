@@ -7,7 +7,7 @@ import { fns, call, rejects, UID, seedBookingWorld } from './helpers';
 const ADMIN_ONLY = [
   'finalizeRentalAgreement', 'adminGrantPromo', 'adminRevokeGrant', 'recordIdCheck', 'adminIdentityAction',
   'adminRenterProfile', 'reviewResidency', 'adminLegacyResident', 'sendTestEmails',
-  'teamList', 'teamAddMember', 'teamUpdateMember', 'submitReturn', 'refusePickup', 'resolveOwnerAlert', 'quoteReturn', 'submitHandover',
+  'teamList', 'teamAddMember', 'teamUpdateMember', 'submitReturn', 'refusePickup', 'resolveOwnerAlert', 'quoteReturn', 'submitHandover', 'quoteHandover',
 ];
 const PUBLIC = ['requestPasswordReset']; // no account by design (always { ok: true }, rate-limited)
 
@@ -21,7 +21,7 @@ test('the callable list is what this suite expects (a new callable must be added
   assert.deepEqual(callables, [
     'adminGrantPromo', 'adminIdentityAction', 'adminLegacyResident', 'adminRenterProfile', 'adminRevokeGrant',
     'applyInviteCode', 'createReservations', 'deleteMyAccount', 'deleteMyIdentityDocument', 'evaluateMyCodes',
-    'finalizeRentalAgreement', 'getMyInviteCode', 'quoteReturn', 'recordIdCheck', 'refusePickup', 'requestEmailVerification',
+    'finalizeRentalAgreement', 'getMyInviteCode', 'quoteHandover', 'quoteReturn', 'recordIdCheck', 'refusePickup', 'requestEmailVerification',
     'requestPasswordReset', 'resolveOwnerAlert', 'resubmitBusinessApplication', 'reviewResidency', 'savePromoCode',
     'sendTestEmails', 'sendWelcomeEmail',
     'submitHandover', 'submitIdentityDocument', 'submitResidencyRequest', 'submitReturn', 'teamAddMember', 'teamList', 'teamUpdateMember',

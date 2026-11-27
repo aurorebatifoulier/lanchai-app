@@ -113,11 +113,12 @@ describe('counter work = staff', () => {
 describe('staff counter writes on reservations (allow-list)', () => {
   const P = 'fs:reservations/{reservationId}';
   const at = () => serverTimestamp();
-  test('confirm payment, hand over, cancel with a reason, no-show', async () => {
+  test('no confirm payment / client hand-over; cancel with a reason, no-show', async () => {
     const staff = (path: string, data: Record<string, unknown>) => auditedUpdate(db('staff'), UID.STAFF, 'staff', path, data);
     // Every admin write names its state-machine action (lastAction) — exhaustive
     // phase × action × role cases: tests/rules/reservationMachine.test.ts.
-    await ok(P, staff('reservations/sPend', { status: 'confirmed', updatedAt: at(), lastAction: 'confirm_payment' }));
+    // Payment is recorded as part of the pick-up (submitHandover): retired.
+    await no(P, staff('reservations/sPend', { status: 'confirmed', updatedAt: at(), lastAction: 'confirm_payment' }));
     // Handover = server only (submitHandover: state machine + unit physically in the shop).
     await no(P, staff('reservations/sConf', {
       status: 'active', handoverChecklist: { photos: [], depositCurrency: 'LAK', depositAmount: 500_000 }, updatedAt: at(), lastAction: 'handover',

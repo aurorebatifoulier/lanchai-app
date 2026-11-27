@@ -15,8 +15,7 @@ const T0 = Timestamp.fromMillis(Date.UTC(2026, 10, 1));
 const P = 'fs:reservations/{reservationId}';
 
 const SEED: Record<Phase, Record<string, unknown>> = {
-  awaiting_payment: { status: 'pending_payment' },
-  confirmed: { status: 'confirmed' },
+  booked: { status: 'pending_payment' },
   pickup_refused: { status: 'confirmed', pickupRefusedOpen: true },
   out: { status: 'active' },
   return_review: { status: 'returned', chargeReviewPending: true },
@@ -39,7 +38,6 @@ const UIDS: Record<Role, string> = { owner: UID.OWNER, staff: UID.STAFF, staffOf
 function payload(action: MachineAction, uid: string): Record<string, unknown> {
   const now = serverTimestamp();
   switch (action) {
-    case 'confirm_payment': return { status: 'confirmed' };
     case 'handover': return { status: 'active', handoverChecklist: { photos: [] }, pickupRefusedOpen: false };
     case 'cancel': return { status: 'cancelled', cancelledBy: 'admin', cancelReason: 'customer_request', cancelReasonText: '', cancelledAt: now };
     case 'force_release': return { status: 'cancelled', cancelledBy: 'admin_release', releasedBy: 'X', releasedAt: now, cancelledAt: now };
@@ -108,6 +106,15 @@ describe('state machine × rules (generated from the table)', () => {
     await no(P, auditedUpdate(owner, UID.OWNER, 'owner', 'reservations/r_out', { status: 'lost' }));
     await no(P, auditedUpdate(owner, UID.OWNER, 'owner', 'reservations/r_out', { status: 'lost', total: 0, lastAction: 'report_lost' }));
     await no(P, auditedUpdate(owner, UID.OWNER, 'owner', 'reservations/r_out', { status: 'returned', returnFinalizedAt: serverTimestamp(), lastAction: 'return' }));
+  });
+
+  test('retired: "confirm payment" and a client pick-up are refused for every role', async () => {
+    for (const role of ['owner', 'staff'] as const) {
+      const ctx = as[role]().firestore();
+      const uid = UIDS[role];
+      await no(P, auditedUpdate(ctx, uid, role, 'reservations/r_booked', { status: 'confirmed', lastAction: 'confirm_payment' }));
+      await no(P, auditedUpdate(ctx, uid, role, 'reservations/r_booked', { status: 'active', handoverChecklist: { photos: [] }, lastAction: 'handover' }));
+    }
   });
 
   test('renters: cancel only before pick-up, never an archived booking', async () => {

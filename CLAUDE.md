@@ -1851,9 +1851,9 @@ a snapshot indefinitely).
     Client helpers: `lib/adminAudit.ts` (`addAudit(batch, action, refs, note)`,
     `auditedWrite`, `auditedReservationUpdate`; identity cached, reset by AuthContext on
     any admins/{uid} change). Already wired: `lib/firestore.ts` admin helpers (no-show,
-    lift hold, cancel, release, confirm payment, `submitChecklistBatch`,
+    lift hold, cancel, release,
     `adjustProductStockCondition`, `addStockAdjustmentToBatch(…, auditId)`), the detail
-    `runAction` (+ `extraBatchWork(batch, auditId)`), checklist handover / return,
+    `runAction` (+ `extraBatchWork(batch, auditId)`),
     `SettlementActions`, `respondToClaim`, `closeIncident`, `<DamageReviewCard>`. A NEW
     admin write on those collections must go through them. Server actions write their
     own entries (`functions/src/audit.ts` `writeAudit` / `auditData`: returns, refused
@@ -1874,8 +1874,9 @@ a snapshot indefinitely).
     returns, agreements).
 
 - **Reservation state machine (2026-11-20) — THE source of truth for every admin action
-  on a booking.** `functions/src/shared/reservationMachine.ts`: `phaseOf(r)` (14 phases from
-  status + flags: awaiting_payment, confirmed, pickup_refused, out, return_review,
+  on a booking.** `functions/src/shared/reservationMachine.ts`: `phaseOf(r)` (13 phases from
+  status + flags: booked (= pending_payment OR the legacy confirmed — both pay at pick-up;
+  `confirm_payment` is RETIRED since 2026-11-27, payment is part of the pick-up), pickup_refused, out, return_review,
   to_settle_refund, to_settle_balance, settled, lost_to_settle, lost_settled, cancelled,
   no_show_held, no_show_lifted, archived), `MACHINE` (action × roles × channel client|server
   × from → to; DEFAULT = FORBIDDEN), `ACTION_KEYS` (fields each client action may write),
@@ -1912,7 +1913,7 @@ a snapshot indefinitely).
   `pendingSettlementUnits` (= sum of that booking's stock-log deltas on that field) with a
   per-product before → after preview, applied in ONE audited batch (product counts + stock
   log + the booking's `release_units`). Tests generated from the table:
-  `tests/rules/reservationMachine.test.ts` (14 phases × every client action × owner /
+  `tests/rules/reservationMachine.test.ts` (13 phases × every client action × owner /
   staff / deactivated staff), `functions/test/reservationMachine.test.ts` (server actions ×
   phases × roles), completeness checks in the unit test (ReservationStatus = `STATUSES`,
   every `lastAction` / `runAction` / `canDo` literal in the code is a table action). A NEW
@@ -1955,9 +1956,43 @@ a snapshot indefinitely).
   (`exchangeRateUpdatedAt`, `thbToLakRateUpdatedAt`); the handover deposit step (single +
   order) shows "Rate used: 1 USD = X LAK · set {date}" (`useDepositRates()`).
 
-- **Handover = server only, with a PHYSICAL unit check (2026-11-20).** Every handover
-  (single checklist, order summary, "Mark as picked up", early handover) calls the
-  `submitHandover` callable (`functions/src/handover.ts`, `lib/handover.ts`): in ONE
+- **Pick-up flow — 4 steps (2026-11-27), staff AND owner, one item or a whole order.**
+  `app/admin/pickup.tsx?ids=a,b` is the ONLY pick-up entry ("Start pick-up" on the detail —
+  with "Refuse pick-up" / "Cancel reservation" under it — and on an order in the list;
+  `checklist.tsx?type=handover` (non-view) and `checklist-summary` redirect to it; there is
+  no "Confirm payment" and no checklist-less "Mark as picked up" any more). 1 · ID
+  (`<RenterNameBlock>`, `<IdCheckSection>` / `useIdCheck().payload()` — counter photo
+  uploaded only at the end —, "Phone number checked" switch, "Refuse pick-up" =
+  `<RefusePickupBox>`) · 2 · Condition (`components/admin/ConditionCard.tsx`, SHARED with
+  the return) · 3 · Payment (`quoteHandover` callable → `buildHandoverQuote()`,
+  `functions/src/shared/handoverQuote.ts`: the FROZEN booking figures — Σ subtotal, the
+  `orderDiscountOf` line, Σ total "Rental to pay", Σ deposit — converted rounded up per
+  currency with a rate, then `prorate`d per line; currency chips LAK / USD / THB with
+  "Rate used … · set {date}", method chips Cash / Bank transfer / QR; "Pay the deposit in
+  another currency" shows a second row — the rental and the deposit may differ; ONE amber
+  box "Collect from the client · X" (or two lines "Rental · … by QR" / "Deposit · … cash"
+  + "I collected both"); nothing editable) · 4 · Client signs (summary +
+  `<AgreementSection>` in deferred mode: the signature / paper photos stay on the device)
+  → "Confirm pick-up": condition photos, counter ID photo, `uploadAgreement()` (PDF to
+  Storage, NOT recorded) then `submitHandover`. Nothing is written before step 4 (except a
+  refused pick-up); back arrow = previous step, nothing lost.
+  `submitHandover` (old payload → `update-app`) verifies the PDF (`verifyAgreementPdf`,
+  `agreements.ts`) and registers a counter ID photo BEFORE its transaction, then in ONE
+  transaction: the checks below + `quote-changed` (amounts recomputed with the same
+  `buildHandoverQuote`; the app goes back to step 3 and clears the signature) +
+  `id-check-required` when `idCheckNeeded`; writes `handoverChecklist` (deposit in ITS OWN
+  currency = what `depositHeldOf` reads, `rentalPaymentMethod` = `rentalPaymentMethodKey`),
+  `handoverPayment { rental {currency, method, amount, rate, rateSetAtMs, amountLak},
+  deposit {…}, orderTotals, collectedBy }`, `agreementId/SignedAt/Method` + the
+  `rentalAgreements/{id}` record (`agreementRecordWrites`), `users.idCheckedVersion/At/By`
+  + `phoneVerified`, audit entries. After the commit: "Rental started" notification, ID
+  flags + "ID verified" email (`sendIdVerifiedEmailOnce`), agreement email.
+  `finalizeRentalAgreement` / `recordIdCheck` stay deployed for older builds only.
+  Agreement template `.5`. Admin labels: both statuses = "Booked" (list chip + filter,
+  calendar day = one "Pick-ups" section, month = one dot); renter labels unchanged
+  ("Pending payment at pick-up", legacy "Confirmed").
+- **Handover = server only, with a PHYSICAL unit check (2026-11-20).** Every pick-up
+  calls the `submitHandover` callable (`functions/src/handover.ts`, `lib/handover.ts`): in ONE
   transaction it re-reads the reservations (state machine, `handover` is server-only — the
   generated rules refuse a client handover) and refuses `no-unit-on-hand` unless
   `unitsOnHand(product, out)` (`shared/availability.ts`) = stock − units OUT with renters

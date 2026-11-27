@@ -27,6 +27,75 @@ const fail = (code: string, message: string, status: 'invalid-argument' | 'faile
   throw new HttpsError(status, message, { code });
 };
 
+// ── Shared with submitHandover (the Pick-up flow records the agreement in its own
+// transaction) ─────────────────────────────────────────────────────────────────
+
+export interface VerifiedPdf { pdfPath: string; buf: Buffer; size: number; pdfSha256: string }
+
+/** The uploaded PDF: right place, really a PDF, not too big → SHA-256 as integrity evidence. */
+export async function verifyAgreementPdf(agreementId: string, method: AgreementMethod, orderId: string): Promise<VerifiedPdf> {
+  if (!isAgreementIdFor(agreementId, orderId)) fail('invalid-request', 'Invalid agreement.', 'invalid-argument');
+  const pdfPath = agreementPdfPath(agreementId, method);
+  const file = admin.storage().bucket().file(pdfPath);
+  const [exists] = await file.exists();
+  if (!exists) fail('missing-pdf', 'The agreement file is missing — please try again.');
+  const [meta] = await file.getMetadata();
+  const size = Number(meta.size ?? 0);
+  if (meta.contentType !== 'application/pdf' || size <= 0 || size > MAX_PDF_BYTES) fail('invalid-pdf', 'Invalid agreement file.');
+  const [buf] = await file.download();
+  return { pdfPath, buf, size, pdfSha256: createHash('sha256').update(buf).digest('hex') };
+}
+
+/** The agreement record + its admin-only staff subdocument (batch or transaction). */
+export function agreementRecordWrites(
+  w: { set: (ref: FirebaseFirestore.DocumentReference, data: FirebaseFirestore.DocumentData, opts?: FirebaseFirestore.SetOptions) => unknown },
+  a: { agreementId: string; orderId: string; renterId: string; reservationIds: string[]; method: AgreementMethod; pdf: VerifiedPdf;
+    staffUid: string; staffName: string; previous: string[] },
+): void {
+  const db = admin.firestore();
+  const ref = db.collection('rentalAgreements').doc(a.agreementId);
+  w.set(ref, {
+    orderId: a.orderId, renterId: a.renterId, reservationIds: a.reservationIds, method: a.method,
+    pdfPath: a.pdf.pdfPath, pdfSha256: a.pdf.pdfSha256, pdfBytes: a.pdf.size,
+    templateVersion: AGREEMENT_TEMPLATE_VERSION,
+    termsEffectiveDate: LEGAL_EFFECTIVE_DATE,
+    signedAt: FieldValue.serverTimestamp(),
+  });
+  w.set(ref.collection('internal').doc('audit'), {
+    staffUid: a.staffUid, staffName: a.staffName, createdAt: FieldValue.serverTimestamp(),
+  });
+  for (const p of a.previous) {
+    w.set(db.collection('rentalAgreements').doc(p), { supersededAt: FieldValue.serverTimestamp(), supersededBy: a.agreementId }, { merge: true });
+  }
+}
+
+/** Email the signed PDF as an ATTACHMENT (a Storage link would be a secret URL in an inbox). */
+export async function emailAgreement(a: {
+  agreementId: string; orderId: string; renterId: string; method: AgreementMethod; buf: Buffer; signedAtMs: number;
+  rows: { id: string; data: FirebaseFirestore.DocumentData }[];
+}): Promise<boolean> {
+  const result = await sendAccountEmail(a.renterId, (shop, recipient) => rentalAgreementEmail(shop, {
+    firstName: recipient.firstName || recipient.name || 'there',
+    orderLabel: a.orderId,
+    items: a.rows.map(r => ({
+      name: String(r.data.productName ?? ''),
+      quantity: Number(r.data.quantity ?? 1),
+      pickupLabel: String(r.data.pickupLabel ?? ''),
+      returnLabel: String(r.data.returnLabel ?? ''),
+    })),
+    signedLabel: vteReservationLabel(a.signedAtMs),
+    paper: a.method === 'paper',
+    firstReservationId: a.rows[0].id,
+    attachment: { name: `LANCHAI-agreement-${a.orderId}.pdf`, content: a.buf.toString('base64') },
+  }), 'rental-agreement');
+  const emailed = result === 'sent';
+  await admin.firestore().collection('rentalAgreements').doc(a.agreementId)
+    .set({ emailResult: String(result), ...(emailed ? { emailSentAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+  return emailed;
+}
+
+// finalizeRentalAgreement — kept for app builds older than the Pick-up flow (2026-11-27),
+// which sign the agreement BEFORE calling submitHandover. New builds don't call it.
 // { agreementId, reservationIds, method, staffName? } → { agreementId, signedAtMs, emailed }
 export const finalizeRentalAgreement = onCall(
   // invoker 'public': Cloud Run lets every request reach the function, which then checks
@@ -53,20 +122,9 @@ export const finalizeRentalAgreement = onCall(
     if (rows.some(r => !(PRE_PICKUP_STATUSES as readonly string[]).includes(r.data.status))) {
       fail('not-pre-pickup', 'The agreement is signed before the handover is completed.');
     }
-    if (!isAgreementIdFor(agreementId, orderId)) fail('invalid-request', 'Invalid agreement.', 'invalid-argument');
     const ref = db.collection('rentalAgreements').doc(agreementId);
     if ((await ref.get()).exists) fail('already-finalized', 'This agreement is already recorded.');
-
-    // The PDF: right place, really a PDF, not too big → SHA-256 as integrity evidence.
-    const pdfPath = agreementPdfPath(agreementId, method!);
-    const file = admin.storage().bucket().file(pdfPath);
-    const [exists] = await file.exists();
-    if (!exists) fail('missing-pdf', 'The agreement file is missing — please try again.');
-    const [meta] = await file.getMetadata();
-    const size = Number(meta.size ?? 0);
-    if (meta.contentType !== 'application/pdf' || size <= 0 || size > MAX_PDF_BYTES) fail('invalid-pdf', 'Invalid agreement file.');
-    const [buf] = await file.download();
-    const pdfSha256 = createHash('sha256').update(buf).digest('hex');
+    const pdf = await verifyAgreementPdf(agreementId, method!, orderId);
 
     const nowMs = Date.now();
     const staff = typeof d.staffName === 'string' && d.staffName.trim()
@@ -77,43 +135,14 @@ export const finalizeRentalAgreement = onCall(
     const previous = [...new Set(rows.map(r => r.data.agreementId as string | undefined).filter((x): x is string => !!x))];
 
     const batch = db.batch();
-    batch.set(ref, {
-      orderId, renterId, reservationIds: ids, method, pdfPath, pdfSha256, pdfBytes: size,
-      templateVersion: AGREEMENT_TEMPLATE_VERSION,
-      termsEffectiveDate: LEGAL_EFFECTIVE_DATE,
-      signedAt: FieldValue.serverTimestamp(),
-    });
-    batch.set(ref.collection('internal').doc('audit'), {
-      staffUid: adminUid, staffName: staff, createdAt: FieldValue.serverTimestamp(),
-    });
-    for (const p of previous) {
-      batch.set(db.collection('rentalAgreements').doc(p), { supersededAt: FieldValue.serverTimestamp(), supersededBy: agreementId }, { merge: true });
-    }
+    agreementRecordWrites(batch, { agreementId, orderId, renterId, reservationIds: ids, method: method!, pdf, staffUid: adminUid, staffName: staff, previous });
     for (const r of rows) {
       batch.update(r.ref, { agreementId, agreementSignedAt: FieldValue.serverTimestamp(), agreementMethod: method });
     }
     await batch.commit();
-    logger.info('[agreement] finalized', { agreementId, orderId, method, items: ids.length, bytes: size });
+    logger.info('[agreement] finalized', { agreementId, orderId, method, items: ids.length, bytes: pdf.size });
     await Promise.all(ids.map(rid => writeAudit(caller, { action: 'agreement.signed', reservationId: rid, orderId, note: `${method} · ${agreementId}` })));
-
-    // Email the PDF (attachment — a Storage link would be a secret URL in an inbox).
-    const orderLabel = orderId;
-    const result = await sendAccountEmail(renterId, (shop, recipient) => rentalAgreementEmail(shop, {
-      firstName: recipient.firstName || recipient.name || 'there',
-      orderLabel,
-      items: rows.map(r => ({
-        name: String(r.data.productName ?? ''),
-        quantity: Number(r.data.quantity ?? 1),
-        pickupLabel: String(r.data.pickupLabel ?? ''),
-        returnLabel: String(r.data.returnLabel ?? ''),
-      })),
-      signedLabel: vteReservationLabel(nowMs),
-      paper: method === 'paper',
-      firstReservationId: rows[0].id,
-      attachment: { name: `LANCHAI-agreement-${orderLabel}.pdf`, content: buf.toString('base64') },
-    }), 'rental-agreement');
-    const emailed = result === 'sent';
-    await ref.set({ emailResult: String(result), ...(emailed ? { emailSentAt: FieldValue.serverTimestamp() } : {}) }, { merge: true });
+    const emailed = await emailAgreement({ agreementId, orderId, renterId, method: method!, buf: pdf.buf, signedAtMs: nowMs, rows });
 
     return { agreementId, signedAtMs: nowMs, emailed };
   },

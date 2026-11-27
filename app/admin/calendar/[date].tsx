@@ -71,14 +71,14 @@ const sh = StyleSheet.create({
 
 function ReservationRow({ item, type, profile, onPress }: {
   item: RentalDoc;
-  type: 'pickup' | 'return' | 'overdue' | 'pending';
+  type: 'pickup' | 'return' | 'overdue';
   profile?: UserProfile;
   onPress: () => void;
 }) {
   const timeLabel = type === 'return' || type === 'overdue' ? item.returnLabel : item.pickupLabel;
   const phone = profile?.phoneNumber ?? profile?.phone ?? null;
   const verified = profile?.phoneVerified ?? false;
-  const showDeposit = type !== 'pending' && item.deposit > 0 && (type === 'pickup' || !item.depositReturned);
+  const showDeposit = item.deposit > 0 && (type === 'pickup' || !item.depositReturned);
   const overdueChip = type === 'overdue' && item.returnAt
     ? { sev: overdueSeverity(item.returnAt), label: overdueLabel(item.returnAt) }
     : null;
@@ -101,7 +101,7 @@ function ReservationRow({ item, type, profile, onPress }: {
       <View style={{ flex: 1 }}>
         <Text style={rr.product} numberOfLines={1}>{item.productName}</Text>
         {timeLabel ? <Text style={rr.timeLabel} numberOfLines={1}>{timeLabel}</Text> : null}
-        {(type === 'pickup' || type === 'pending') && showsFirstRentalIdCheck(item) && (
+        {type === 'pickup' && showsFirstRentalIdCheck(item) && (
           <FirstRentalIdChip atCounter={item.idCheckAtCounter} />
         )}
         {overdueChip ? (() => {
@@ -204,7 +204,6 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
   const isToday = date === todayKey;
   const displayDate = `${DAY_NAMES[parsedDate.getDay()]} ${parsedDate.getDate()} ${MONTH_NAMES[parsedDate.getMonth()]}`;
 
-  const [pending, setPending] = useState<RentalDoc[]>([]);
   const [pickups, setPickups] = useState<RentalDoc[]>([]);
   const [notPickedUp, setNotPickedUp] = useState<RentalDoc[]>([]);
   const [returns, setReturns] = useState<RentalDoc[]>([]);
@@ -237,8 +236,8 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
     const allReturns = returnSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as RentalDoc));
     const allTasks = taskSnap.docs.map((d: any) => ({ id: d.id, ...d.data() } as AdminTask));
 
-    const filteredPending = allPickups.filter((r: RentalDoc) => r.status === 'pending_payment');
-    const filteredPickups = allPickups.filter((r: RentalDoc) => r.status === 'confirmed');
+    // One "Booked" phase: pending_payment and the legacy confirmed both pay at pick-up.
+    const filteredPickups = allPickups.filter((r: RentalDoc) => r.status === 'pending_payment' || r.status === 'confirmed');
     const filteredReturns = allReturns.filter((r: RentalDoc) => r.status === 'active');
 
     let overdueList: RentalDoc[] = [];
@@ -251,15 +250,14 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
     // "Not picked up" (pick-up day over, still pending/confirmed) — an alert only; the
     // reservation stays fully actionable from its detail screen.
     const missed = (r: RentalDoc) => !!r.pickupAt && isPickupMissed(r.pickupAt.toMillis());
-    setNotPickedUp([...filteredPending, ...filteredPickups].filter(missed));
-    setPending(filteredPending.filter((r: RentalDoc) => !missed(r)));
+    setNotPickedUp(filteredPickups.filter(missed));
     setPickups(filteredPickups.filter((r: RentalDoc) => !missed(r)));
     setReturns(filteredReturns);
     setOverdue(overdueList);
     setTasks(allTasks);
 
     // Secondary fetch: load user profiles for all renters appearing in the day's reservations
-    const renterIds = [...new Set([...filteredPending, ...filteredPickups, ...filteredReturns, ...overdueList].map(r => r.renterId))];
+    const renterIds = [...new Set([...filteredPickups, ...filteredReturns, ...overdueList].map(r => r.renterId))];
     const profiles: Record<string, UserProfile> = {};
     await Promise.all(renterIds.map(async uid => {
       try {
@@ -335,7 +333,7 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
     setAdding(false);
   }, [newTitle, newNote, user, dayStart]);
 
-  const noReservations = notPickedUp.length === 0 && pending.length === 0 && pickups.length === 0 && returns.length === 0 && overdue.length === 0;
+  const noReservations = notPickedUp.length === 0 && pickups.length === 0 && returns.length === 0 && overdue.length === 0;
   const isEmpty = noReservations && tasks.length === 0;
 
   return (
@@ -377,23 +375,7 @@ export default function AdminCalendarDayScreen({ embedded = false, date: datePro
                   <ReservationRow
                     key={r.id}
                     item={r}
-                    type={r.status === 'pending_payment' ? 'pending' : 'pickup'}
-                    profile={renterProfiles[r.renterId]}
-                    onPress={() => router.push(`/admin/reservations/${r.id}` as any)}
-                  />
-                ))}
-              </View>
-            )}
-
-            {/* ── Awaiting payment ── */}
-            {pending.length > 0 && (
-              <View style={s.section}>
-                <SectionHeader icon="credit-card" label="Awaiting payment" color={COLORS.pending} />
-                {pending.map(r => (
-                  <ReservationRow
-                    key={r.id}
-                    item={r}
-                    type="pending"
+                    type="pickup"
                     profile={renterProfiles[r.renterId]}
                     onPress={() => router.push(`/admin/reservations/${r.id}` as any)}
                   />

@@ -88,7 +88,7 @@ export async function updateBagItemDates(
 // Applies the same pickup/return dates to several bag items at once — batched so
 // they update atomically (all-or-nothing), matching the bulk-write convention used
 // elsewhere for multi-document single-user-action writes (see
-// cancelReservations/confirmReservationsPayment in lib/firestore.ts).
+// cancelReservations in lib/firestore.ts).
 // Throws on Firestore error — caller must handle.
 export async function updateAllBagItemDates(
   uid: string,

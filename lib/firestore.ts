@@ -273,6 +273,14 @@ export interface RentalDoc {
   orderId?: string;  // set during multi-item checkout (Step 3); absent on single-item bookings until migrated
   createdAt: Timestamp;
   handoverChecklist?: ChecklistData;
+  /** Pick-up flow (submitHandover): what was collected — the rental and the deposit, each
+   *  in its own currency + method, at the rate shown (functions/src/handover.ts). */
+  handoverPayment?: {
+    rental: { currency: 'LAK' | 'USD' | 'THB'; method: 'cash' | 'bank_transfer' | 'qr'; amount: number; rate: number; rateSetAtMs: number | null; amountLak: number };
+    deposit: { currency: 'LAK' | 'USD' | 'THB'; method: 'cash' | 'bank_transfer' | 'qr'; amount: number; rate: number; rateSetAtMs: number | null; amountLak: number };
+    orderTotals: { rental: number; deposit: number };
+    collectedBy: { uid: string; name: string; role: string };
+  };
   /** Admin roles: a staff return with damage (or a charge that couldn't be computed) —
    *  the deposit is held until an owner confirms / reduces / waives (submitReturn). */
   chargeReviewPending?: boolean;
@@ -661,51 +669,6 @@ export async function releaseReservation(id: string, adminName: string): Promise
     updatedAt:   serverTimestamp(),
   });
   await batch.commit();
-}
-
-// Confirms payment for multiple reservations sharing an order in one batch — used by
-// the admin grouped bulk action. Throws on Firestore error — caller must handle.
-export async function confirmReservationsPayment(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  const batch = writeBatch(db);
-  for (const id of ids) {
-    const auditId = await addAudit(batch, 'confirm_payment', { reservationId: id }, 'Payment received');
-    batch.update(doc(db, 'reservations', id), {
-      status:      'confirmed',
-      lastAuditId: auditId,
-      lastAction: 'confirm_payment',
-      updatedAt:   serverTimestamp(),
-    });
-  }
-  await batch.commit();
-}
-
-// Charge fields of a return (shape kept for the chained-checklist draft types).
-export interface ChecklistBatchChargeFields {
-  // Damage/condition charge — present only when the worst rating was damaged/unusable.
-  chargeAmount?: number;
-  chargeReason?: string;
-  chargeSeverity?: 'damaged' | 'unusable';
-  chargePercent?: number;
-  chargeUnits?: number;
-  // Late-return penalty — present only when the reservation had a late penalty. Fully
-  // independent of the damage fields above; either, neither, or both may be set.
-  lateChargeAmount?: number;
-  lateChargeReason?: string;
-  // Explicit staff waivers (see RentalDoc).
-  lateChargeWaived?: boolean;
-  lateChargeWaivedAmount?: number;
-  lateChargeWaivedReason?: string;
-  lateChargeWaivedBy?: string;
-  damageChargeWaived?: boolean;
-  damageChargeWaivedAmount?: number;
-  damageChargeWaivedReason?: string;
-  damageChargeWaivedPercent?: number;
-  damageChargeWaivedBy?: string;
-  // Always present whenever this object is passed at all — combined across both sources.
-  chargeCurrency: 'LAK' | 'USD' | 'THB';
-  depositAppliedToCharge: number;
-  outstandingBalance: number;
 }
 
 /**

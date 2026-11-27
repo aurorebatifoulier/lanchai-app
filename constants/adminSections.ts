@@ -93,6 +93,7 @@ export const ADMIN_ROUTE_ROLES: Record<string, AdminRole> = {
   '/admin/saved-replies': 'staff',
   '/admin/incident': 'staff',
   '/admin/return': 'staff',
+  '/admin/pickup': 'staff',
   // Owner only.
   '/admin/app-content': 'owner',
   '/admin/broadcast': 'owner',
