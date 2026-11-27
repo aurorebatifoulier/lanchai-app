@@ -5,7 +5,7 @@ import { Text } from '@/components/AppText';
 import { SHADES } from '@/constants/brandShades';
 import { COLORS } from '@/constants/Colors';
 
-// Segmented progress bar for a multi-step flow (return today, handover next): one
+// Segmented progress bar for a multi-step flow (return: 3 steps, pick-up: 4): one
 // segment per step with its label under it — done = green + ✓, current = amber,
 // upcoming = grey. Purely visual: the screen owns navigation (no skipping).
 export default function StepProgress({ steps, current }: { steps: string[]; current: number }) {
@@ -19,7 +19,9 @@ export default function StepProgress({ steps, current }: { steps: string[]; curr
             <View style={[s.bar, state === 'done' ? s.done : state === 'current' ? s.current : s.upcoming]} />
             <View style={s.labelRow}>
               {state === 'done' && <Feather name="check" size={12} color={COLORS.success} />}
-              <Text style={[s.label, state === 'upcoming' && s.labelMuted, state === 'current' && s.labelCurrent]} numberOfLines={1}>
+              {/* Never overlaps: one line, shrinks to fit its segment (4 steps on a 360dp phone). */}
+              <Text style={[s.label, state === 'upcoming' && s.labelMuted, state === 'current' && s.labelCurrent]}
+                numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {label}
               </Text>
             </View>
@@ -37,8 +39,8 @@ const s = StyleSheet.create({
   done: { backgroundColor: COLORS.success },
   current: { backgroundColor: SHADES.amber },
   upcoming: { backgroundColor: SHADES.carbonLight },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  label: { fontSize: 12, fontWeight: '600', color: SHADES.carbon },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 3, minWidth: 0 },
+  label: { flexShrink: 1, fontSize: 12, fontWeight: '600', color: SHADES.carbon },
   labelCurrent: { fontWeight: '800' },
   labelMuted: { color: SHADES.carbonMuted },
 });

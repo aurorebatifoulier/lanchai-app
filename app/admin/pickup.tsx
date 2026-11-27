@@ -43,7 +43,8 @@ import {
 // Nothing is written before step 4 (except a refused pick-up). The back arrow goes to the
 // previous step without losing anything; steps can't be skipped. /admin/pickup?ids=a,b
 
-const STEPS = ['1 · ID', '2 · Condition', '3 · Payment', '4 · Client signs'];
+// Short labels: 4 segments must fit a 360dp-wide phone (StepProgress also shrinks them).
+const STEPS = ['ID', 'Condition', 'Payment', 'Signature'];
 type Part = { currency: PayCurrency; method: PayMethod | null };
 
 export default function AdminPickupScreen() {
@@ -341,7 +342,8 @@ function PaymentStep({ quote: q, rentalPart, depositPart, split, setRentalPart, 
         <Row label="Deposit (refundable)" value={lak(q.depositLak)} bold />
       </View>
 
-      <PartChips title={split ? 'Rental' : 'Rental + deposit'} q={q} part={rentalPart} onChange={setRentalPart} rateLine={rateLine(rentalPart.currency)} />
+      {/* ONE row for both by default; the deposit row only after "Pay the deposit in another currency". */}
+      <PartChips title={split ? 'Rental' : 'Currency and payment method'} q={q} part={rentalPart} onChange={setRentalPart} rateLine={rateLine(rentalPart.currency)} />
       {split ? (
         <>
           <PartChips title="Deposit" q={q} part={depositPart} onChange={setDepositPart} rateLine={rateLine(depositPart.currency)} />
@@ -417,6 +419,8 @@ function PartChips({ title, q, part, onChange, rateLine }: {
           );
         })}
       </View>
+      {/* Why "Choose how the client pays" stays disabled: point at the missing choice. */}
+      {!part.method && <Text style={s.hint}>Choose a payment method</Text>}
     </View>
   );
 }
@@ -448,6 +452,7 @@ const s = StyleSheet.create({
   dangerLink: { ...TYPE.body, fontWeight: '700', color: COLORS.danger },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   partTitle: { ...TYPE.secondary, fontWeight: '700', color: SHADES.carbon },
+  hint: { ...TYPE.small, fontWeight: '600', color: SHADES.amberText },
   lineItem: { ...TYPE.cardTitle, color: SHADES.carbon },
   rowLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   rowLabel: { ...TYPE.body, color: SHADES.carbonMuted, flex: 1 },
