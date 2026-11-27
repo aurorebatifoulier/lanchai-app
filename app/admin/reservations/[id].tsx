@@ -540,7 +540,7 @@ export default function AdminReservationDetailScreen() {
       : reservation.renterName;
 
   // ── Layout data (presentation only) ──────────────────────────────────────────
-  const dueLine = (): { label: string; sub?: string } | null => {
+  const dueLine = (): { label: string; sub?: string; late?: boolean } | null => {
     const held = handoverDeposit?.depositCurrency && handoverDeposit.depositAmount != null
       ? `${handoverDeposit.depositAmount.toLocaleString('en-US')} ${handoverDeposit.depositCurrency}` : depositDisplay;
     const cur = reservation.chargeCurrency ?? handoverDeposit?.depositCurrency ?? 'LAK';
@@ -553,7 +553,13 @@ export default function AdminReservationDetailScreen() {
         return { label: `To collect at pick-up: ${fmtLak(rent + dep)}`, sub: `rental ${fmtLak(rent)} + deposit ${fmtLak(dep)}${booked.length > 1 ? ` · ${booked.length} items` : ''}` };
       }
       case 'pickup_refused': return { label: 'Pick-up refused — nothing collected' };
-      case 'out': return { label: `Deposit held: ${held}` };
+      case 'out': {
+        // Due back + how long from now (red once late).
+        const ms = reservation.returnAt.toMillis() - Date.now();
+        const h = Math.abs(ms) / 3_600_000;
+        const span = h < 48 ? `${Math.max(1, Math.round(h))} h` : `${Math.round(h / 24)} days`;
+        return { label: `Deposit held: ${held}`, sub: `Due back ${reservation.returnLabel} · ${ms >= 0 ? `in ${span}` : `${span} late`}`, late: ms < 0 };
+      }
       case 'return_review': return { label: `Deposit held: ${held}`, sub: 'Damage to review by an owner' };
       case 'to_settle_refund': return { label: `Give back: ${giveBack.toLocaleString('en-US')} ${cur}` };
       case 'to_settle_balance': return { label: `Balance due: ${outstandingBalance.toLocaleString('en-US')} ${cur}` };
@@ -730,7 +736,7 @@ export default function AdminReservationDetailScreen() {
           {money && (
             <View style={d.moneyBox}>
               <Text style={d.moneyLabel}>{money.label}</Text>
-              {!!money.sub && <Text style={d.moneySub}>{money.sub}</Text>}
+              {!!money.sub && <Text style={[d.moneySub, money.late && d.moneyLate]}>{money.sub}</Text>}
             </View>
           )}
           {!!reservation.notes && <Text style={d.notesText} numberOfLines={3}>{`Note: ${reservation.notes}`}</Text>}
@@ -748,9 +754,14 @@ export default function AdminReservationDetailScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={d.renterAvatarName} numberOfLines={1}>{renterDisplayName ?? '—'}</Text>
-              <Text style={[d.productMeta, { color: phoneVerified ? COLORS.success : COLORS.fg3 }]} numberOfLines={1}>
-                {identityPhone ? `${identityPhone} · ${phoneVerified ? 'verified' : 'not verified'}` : 'No phone on file'}
-              </Text>
+              <View style={d.phoneLine}>
+                <Text style={[d.productMeta, { marginTop: 0, flexShrink: 1 }]} numberOfLines={1}>
+                  {identityPhone ? `${identityPhone}${phoneVerified ? '' : ' · not verified'}` : 'No phone on file'}
+                </Text>
+                {!!identityPhone && phoneVerified && (
+                  <Feather name="check-circle" size={14} color={COLORS.success} accessibilityLabel="Phone verified" />
+                )}
+              </View>
             </View>
           </TouchableOpacity>
           {!!phone && (
@@ -1434,6 +1445,8 @@ const d = StyleSheet.create({
   moneyBox: { marginTop: 12, backgroundColor: SHADES.amberLight, borderRadius: 12, padding: 12, gap: 2 },
   moneyLabel: { ...TYPE.cardTitle, color: COLORS.carbon },
   moneySub: { ...TYPE.small, color: SHADES.carbonMuted },
+  moneyLate: { color: COLORS.danger, fontWeight: '700' },
+  phoneLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
   renterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
   renterTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
   iconBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: COLORS.softGray200, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white },

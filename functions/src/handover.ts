@@ -328,7 +328,9 @@ export const submitHandover = onCall({ region: REGION, invoker: 'public', secret
     await syncFirstRentalIdFlags(renterId).catch(err => logger.error('[handover] id flags', { err: String(err) }));
     await sendIdVerifiedEmailOnce(renterId, version).catch(err => logger.error('[handover] id email', { err: String(err) }));
   }
-  await emailAgreement({ agreementId, orderId, renterId, method, buf: pdf.buf, signedAtMs: nowMs, rows })
-    .catch(err => logger.error('[handover] agreement email', { err: String(err) }));
-  return { ok: true, collected };
+  const emailed = await emailAgreement({ agreementId, orderId, renterId, method, buf: pdf.buf, signedAtMs: nowMs, rows })
+    .catch(err => { logger.error('[handover] agreement email', { err: String(err) }); return false; });
+  // For the "Picked up" screen: where the agreement went (the account's own address).
+  const email = await admin.auth().getUser(renterId).then(u => u.email ?? null).catch(() => null);
+  return { ok: true, collected, emailed, email };
 });

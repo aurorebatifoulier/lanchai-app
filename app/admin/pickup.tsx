@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, BackHandler, Switch } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -72,6 +72,7 @@ export default function AdminPickupScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [doneLines, setDoneLines] = useState<string[]>([]);
 
   // LIVE reservations — the state machine guard (another phone / a stale screen).
   useEffect(() => {
@@ -164,8 +165,8 @@ export default function AdminPickupScreen() {
       })),
       paymentMethod: rentalPaymentMethodKey(pay.rental),
       paymentLabel: pay.rental.currency === 'LAK' ? paymentPartLabel(pay.rental)
-        : `${paymentPartLabel(pay.rental)} · ${fmtMoney(rent.rental, pay.rental.currency)}`,
-      depositPaymentLabel: PAY_METHODS.find(m => m.key === pay.deposit.method)!.label.replace(/^(Cash|Bank transfer)$/, x => x.toLowerCase()),
+        : `${paymentPartLabel(pay.rental)} (${fmtMoney(rent.rental, pay.rental.currency)})`,
+      depositPaymentLabel: paymentPartLabel(pay.deposit),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote, pay?.rental.currency, pay?.rental.method, pay?.deposit.currency, pay?.deposit.method, items, ids]);
@@ -193,9 +194,15 @@ export default function AdminPickupScreen() {
         payment: pay, collect: due, idCheck: idPayload, phoneVerified: phoneChecked,
         agreement: { id: agreement.agreementId, method: agreement.method },
       });
+      const c = got.collected;
       setDone(pay.rental.currency === pay.deposit.currency
-        ? `Picked up — you collected ${fmtMoney(got.rental + got.deposit, pay.rental.currency)}.`
-        : `Picked up — you collected ${fmtMoney(got.rental, pay.rental.currency)} and ${fmtMoney(got.deposit, pay.deposit.currency)}.`);
+        ? `Picked up — you collected ${fmtMoney(c.rental + c.deposit, pay.rental.currency)}.`
+        : `Picked up — you collected ${fmtMoney(c.rental, pay.rental.currency)} and ${fmtMoney(c.deposit, pay.deposit.currency)}.`);
+      const returns = [...new Set(ids.map(i => docs[i]?.returnLabel).filter((x): x is string => !!x))];
+      setDoneLines([
+        got.emailed && got.email ? `Agreement sent to ${got.email}` : 'Agreement saved — the email couldn’t be sent.',
+        ...returns.map(l => `Return due ${l}`),
+      ]);
     } catch (e) {
       if (e instanceof HandoverQuoteChangedError) {
         if (e.quote) setQuote(e.quote);
@@ -228,6 +235,7 @@ export default function AdminPickupScreen() {
         <View style={s.center}>
           <Feather name="check-circle" size={48} color={COLORS.success} />
           <Text style={s.doneText}>{done}</Text>
+          {doneLines.map(l => <Text key={l} style={s.doneLine}>{l}</Text>)}
           <TouchableOpacity style={[UI.btnPrimary, s.wide]} activeOpacity={0.85} onPress={backToBooking}>
             <Text style={UI.btnPrimaryText}>{ids.length === 1 ? 'Back to the booking' : 'Back to rentals'}</Text>
           </TouchableOpacity>
@@ -297,7 +305,7 @@ export default function AdminPickupScreen() {
         <PaymentStep quote={quote} rentalPart={rentalPart} depositPart={depositPart} split={split}
           setRentalPart={p => { setRentalPart(p); setSigned(null); }}
           setDepositPart={p => { setDepositPart(p); setSigned(null); }}
-          setSplit={v => { setSplit(v); setSigned(null); if (v) setDepositPart({ currency: rentalPart.currency, method: null }); }}
+          setSplit={v => { setSplit(v); setSigned(null); if (v) setDepositPart({ currency: rentalPart.currency, method: rentalPart.method }); }}
           due={due} pay={pay} error={error} bottom={screen.contentBottom}
           onNext={() => { setError(null); setStep(3); }} />
       ) : quote && pay && due && handoverInfo ? (
@@ -354,6 +362,14 @@ function PaymentStep({ quote: q, rentalPart, depositPart, split, setRentalPart, 
     return `Rate used: 1 ${cur} = ${f.rate.toLocaleString('en-US')} LAK${f.rateSetAtMs ? ` · set ${vteDay(f.rateSetAtMs)}` : ''}`;
   };
   const sameCur = pay && pay.rental.currency === pay.deposit.currency;
+  const amountIn = (cur: PayCurrency, what: 'rental' | 'deposit') => {
+    const f = q.currencies[cur];
+    return f ? fmtMoney(f[what], cur) : '—';
+  };
+  const totalIn = (cur: PayCurrency) => {
+    const f = q.currencies[cur];
+    return f ? fmtMoney(f.rental + f.deposit, cur) : '—';
+  };
   return (
     <ScrollView contentContainerStyle={[UI.screenContent, { paddingBottom: bottom }]}>
       <View style={[UI.card, UI.cardPadded, s.card]}>
@@ -369,10 +385,10 @@ function PaymentStep({ quote: q, rentalPart, depositPart, split, setRentalPart, 
       </View>
 
       {/* ONE row for both by default; the deposit row only after "Pay the deposit in another currency". */}
-      <PartChips title={split ? 'Rental' : 'Currency and payment method'} q={q} part={rentalPart} onChange={setRentalPart} rateLine={rateLine(rentalPart.currency)} />
+      <PartChips title={split ? `Rental · ${amountIn(rentalPart.currency, 'rental')}` : `Rental + deposit · ${totalIn(rentalPart.currency)}`} q={q} part={rentalPart} onChange={setRentalPart} rateLine={rateLine(rentalPart.currency)} />
       {split ? (
         <>
-          <PartChips title="Deposit" q={q} part={depositPart} onChange={setDepositPart} rateLine={rateLine(depositPart.currency)} />
+          <PartChips title={`Deposit · ${amountIn(depositPart.currency, 'deposit')}`} q={q} part={depositPart} onChange={setDepositPart} rateLine={rateLine(depositPart.currency)} />
           <TouchableOpacity onPress={() => setSplit(false)} style={s.link} accessibilityRole="button">
             <Text style={UI.link}>Same currency and method for both</Text>
           </TouchableOpacity>
@@ -394,8 +410,8 @@ function PaymentStep({ quote: q, rentalPart, depositPart, split, setRentalPart, 
           ) : (
             <>
               <Text style={s.resultLabel}>Collect from the client</Text>
-              <Text style={s.resultTwo}>{`Rental · ${fmtMoney(due.rental, pay.rental.currency)} ${pay.rental.method === 'cash' ? 'cash' : `by ${paymentPartLabel(pay.rental)}`}`}</Text>
-              <Text style={s.resultTwo}>{`Deposit · ${fmtMoney(due.deposit, pay.deposit.currency)} ${pay.deposit.method === 'cash' ? 'cash' : `by ${paymentPartLabel(pay.deposit)}`}`}</Text>
+              <Text style={s.resultTwo}>{`Rental · ${fmtMoney(due.rental, pay.rental.currency)} · ${paymentPartLabel(pay.rental)}`}</Text>
+              <Text style={s.resultTwo}>{`Deposit · ${fmtMoney(due.deposit, pay.deposit.currency)} · ${paymentPartLabel(pay.deposit)}`}</Text>
             </>
           )}
         </View>
@@ -415,32 +431,42 @@ function PaymentStep({ quote: q, rentalPart, depositPart, split, setRentalPart, 
   );
 }
 
+const METHOD_ICON: Record<PayMethod, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+  cash: 'cash', bank_transfer: 'bank', qr: 'qrcode',
+};
+
+// One payment block: "Currency" = a segmented control (LAK | USD | THB, the rate used
+// right under it), "Paid by" = 3 icon tiles. Distinct looks so currency and method can't
+// be confused.
 function PartChips({ title, q, part, onChange, rateLine }: {
   title: string; q: HandoverQuote; part: Part; onChange: (p: Part) => void; rateLine: string | null;
 }) {
   return (
     <View style={[UI.card, UI.cardPadded, s.card]}>
       <Text style={s.partTitle}>{title}</Text>
-      <View style={s.chips}>
+      <Text style={s.fieldLabel}>Currency</Text>
+      <View style={s.segment} accessibilityRole="radiogroup">
         {PAY_CURRENCIES.map(cur => {
           const ok = !!q.currencies[cur];
           const on = part.currency === cur;
           return (
-            <TouchableOpacity key={cur} disabled={!ok} style={[UI.choice, on && UI.choiceOn, !ok && { opacity: 0.4 }]}
-              onPress={() => onChange({ ...part, currency: cur })} accessibilityState={{ selected: on, disabled: !ok }}>
-              <Text style={[UI.choiceText, on && UI.choiceTextOn]}>{cur}</Text>
+            <TouchableOpacity key={cur} disabled={!ok} style={[s.segItem, on && s.segItemOn, !ok && { opacity: 0.35 }]}
+              onPress={() => onChange({ ...part, currency: cur })} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: !ok }}>
+              <Text style={[s.segText, on && s.segTextOn]}>{cur}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
       {!!rateLine && <Text style={UI.small}>{rateLine}</Text>}
-      <View style={s.chips}>
+      <Text style={[s.fieldLabel, { marginTop: 4 }]}>Paid by</Text>
+      <View style={s.tiles} accessibilityRole="radiogroup">
         {PAY_METHODS.map(m => {
           const on = part.method === m.key;
           return (
-            <TouchableOpacity key={m.key} style={[UI.choice, on && UI.choiceOn]} onPress={() => onChange({ ...part, method: m.key })}
-              accessibilityState={{ selected: on }}>
-              <Text style={[UI.choiceText, on && UI.choiceTextOn]}>{m.label}</Text>
+            <TouchableOpacity key={m.key} style={[s.tile, on && s.tileOn]} onPress={() => onChange({ ...part, method: m.key })}
+              accessibilityRole="radio" accessibilityState={{ selected: on }} activeOpacity={0.8}>
+              <MaterialCommunityIcons name={METHOD_ICON[m.key]} size={24} color={on ? SHADES.amberText : SHADES.carbon} />
+              <Text style={[s.tileText, on && s.tileTextOn]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{m.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -470,6 +496,7 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, paddingHorizontal: 32 },
   doneText: { ...TYPE.sectionTitle, color: SHADES.carbon, textAlign: 'center' },
   wide: { alignSelf: 'stretch' },
+  doneLine: { ...TYPE.body, color: SHADES.carbonMuted, textAlign: 'center' },
   card: { gap: 10, marginTop: 12 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   flex: { flex: 1 },
@@ -479,6 +506,23 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   partTitle: { ...TYPE.secondary, fontWeight: '700', color: SHADES.carbon },
   hint: { ...TYPE.small, fontWeight: '600', color: SHADES.amberText },
+  fieldLabel: { ...TYPE.small, fontWeight: '600', color: SHADES.carbonMuted },
+  segment: { flexDirection: 'row', backgroundColor: SHADES.carbonLight, borderRadius: 12, padding: 3 },
+  segItem: { flex: 1, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  segItemOn: {
+    backgroundColor: COLORS.white,
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2,
+  },
+  segText: { ...TYPE.body, fontWeight: '600', color: SHADES.carbonMuted },
+  segTextOn: { color: SHADES.carbon, fontWeight: '800' },
+  tiles: { flexDirection: 'row', gap: 8 },
+  tile: {
+    flex: 1, minHeight: 72, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.softGray200,
+    backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 4,
+  },
+  tileOn: { borderColor: SHADES.amber, backgroundColor: SHADES.amberLight },
+  tileText: { ...TYPE.small, fontWeight: '600', color: SHADES.carbon },
+  tileTextOn: { color: SHADES.amberText, fontWeight: '800' },
   lineItem: { ...TYPE.cardTitle, color: SHADES.carbon },
   rowLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   rowLabel: { ...TYPE.body, color: SHADES.carbonMuted, flex: 1 },

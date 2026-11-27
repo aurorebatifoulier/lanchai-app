@@ -55,6 +55,7 @@ test('rental and deposit in different currencies', () => {
   assert.equal(parsePickupPayment({ rental: { currency: 'EUR', method: 'cash' }, deposit: pay.deposit }), null);
   assert.equal(rentalPaymentMethodKey({ currency: 'USD', method: 'cash' }), 'cash_usd');
   assert.equal(rentalPaymentMethodKey({ currency: 'LAK', method: 'qr' }), 'qr');
-  assert.equal(paymentPartLabel({ currency: 'USD', method: 'cash' }), 'Cash USD');
-  assert.equal(paymentPartLabel({ currency: 'LAK', method: 'bank_transfer' }), 'Bank transfer');
+  assert.equal(paymentPartLabel({ currency: 'USD', method: 'cash' }), 'Cash · USD');
+  assert.equal(paymentPartLabel({ currency: 'LAK', method: 'qr' }), 'QR · LAK');
+  assert.equal(paymentPartLabel({ currency: 'LAK', method: 'bank_transfer' }), 'Bank transfer · LAK');
 });

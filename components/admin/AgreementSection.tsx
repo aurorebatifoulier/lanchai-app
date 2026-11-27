@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, ActivityIndicator, Modal, TouchableOpacity, Image } from 'react-native';
 import { Text } from '@/components/AppText';
 import { Feather } from '@expo/vector-icons';
@@ -158,6 +158,10 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canConfirm = !!sig && inkLength(sig.strokes) > 40 && !!prepared && !busy;
+  // Read first: the whole agreement scrolls full height; "Sign the agreement" opens the
+  // pad (never inside the ScrollView — drawing would fight the scroll).
+  const [signing, setSigning] = useState(false);
+  useEffect(() => { if (!visible) setSigning(false); }, [visible]);
 
   const reset = () => { setSig(null); setPadKey(k => k + 1); setError(null); };
   const confirm = async () => {
@@ -167,6 +171,7 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
     try {
       await onConfirm(sig);
       reset();
+      setSigning(false);
     } catch (e) {
       setError((e as Error)?.message || c.errors.generic);
     } finally {
@@ -221,21 +226,36 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
           </ScrollView>
         )}
 
-        {/* Fixed signing panel — the pad is never inside the ScrollView. */}
-        <View style={[s.panel, { paddingBottom: screen.bottom + 12 }]}>
-          <Text style={UI.title}>{c.signHere}</Text>
-          <Text style={[UI.small, { marginBottom: 8 }]}>{c.signHint}</Text>
-          <SignaturePad key={padKey} height={170} onChange={setSig} />
-          {!!error && <Text style={[UI.errorText, { marginTop: 6 }]}>{error}</Text>}
-          <View style={s.actions}>
-            <PressScale style={[UI.btnSecondary, s.actionBtn]} onPress={reset} disabled={busy}>
-              <Text style={UI.btnSecondaryText}>{c.clear}</Text>
+        {/* Bottom: a sticky "Sign" button while reading; the pad only once tapped. */}
+        {!signing ? (
+          <View style={[s.panel, { paddingBottom: screen.bottom + 12 }]}>
+            <PressScale style={[UI.btnPrimary, !d && UI.btnDisabled]} disabled={!d} onPress={() => setSigning(true)}>
+              <Feather name="edit-3" size={17} color={SHADES.carbon} />
+              <Text style={UI.btnPrimaryText}>{c.signOpen}</Text>
             </PressScale>
-            <PressScale style={[UI.btnPrimary, s.actionBtn, !canConfirm && UI.btnDisabled]} onPress={confirm} disabled={!canConfirm}>
-              {busy ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{c.confirm}</Text>}
-            </PressScale>
+            <Text style={[UI.small, { textAlign: 'center', marginTop: 6 }]}>{c.readFirst}</Text>
           </View>
-        </View>
+        ) : (
+          <View style={[s.panel, { paddingBottom: screen.bottom + 12 }]}>
+            <View style={s.panelHead}>
+              <Text style={[UI.title, { flex: 1 }]}>{c.signHere}</Text>
+              <TouchableOpacity onPress={() => setSigning(false)} disabled={busy} hitSlop={10} accessibilityRole="button">
+                <Text style={UI.link}>{c.readAgain}</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[UI.small, { marginBottom: 8 }]}>{c.signHint}</Text>
+            <SignaturePad key={padKey} height={170} onChange={setSig} />
+            {!!error && <Text style={[UI.errorText, { marginTop: 6 }]}>{error}</Text>}
+            <View style={s.actions}>
+              <PressScale style={[UI.btnSecondary, s.actionBtn]} onPress={reset} disabled={busy}>
+                <Text style={UI.btnSecondaryText}>{c.clear}</Text>
+              </PressScale>
+              <PressScale style={[UI.btnPrimary, s.actionBtn, !canConfirm && UI.btnDisabled]} onPress={confirm} disabled={!canConfirm}>
+                {busy ? <ActivityIndicator size="small" color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>{c.confirm}</Text>}
+              </PressScale>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -324,5 +344,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 12,
   },
   actions: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  panelHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   actionBtn: { flex: 1 },
 });

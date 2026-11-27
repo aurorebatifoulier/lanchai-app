@@ -145,9 +145,10 @@ export function rentalPaymentMethodKey(part: { currency: PayCurrency; method: Pa
   return part.method === 'cash' ? `cash_${part.currency.toLowerCase()}` : part.method;
 }
 
-/** "QR" / "Cash USD" — a payment part for staff and the agreement. */
+/** "Cash · LAK" / "QR · LAK" / "Bank transfer · USD" — ONE label format everywhere
+ *  (staff screens, audit notes, the agreement). */
 export function paymentPartLabel(part: { currency: PayCurrency; method: PayMethod }): string {
-  return part.method === 'cash' ? `Cash ${part.currency}` : PAY_METHODS.find(m => m.key === part.method)!.label;
+  return `${PAY_METHODS.find(m => m.key === part.method)!.label} · ${part.currency}`;
 }
 
 export const fmtMoney = (n: number, cur: PayCurrency) =>

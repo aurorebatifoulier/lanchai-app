@@ -54,6 +54,9 @@ test('pick-up: rental by QR in LAK, deposit in USD cash — everything written t
     payment: { rental: { currency: 'LAK', method: 'qr' }, deposit: { currency: 'USD', method: 'cash' } },
   });
   assert.deepEqual(got.collected, { rental: 300_000, deposit: 25 });
+  // The "Picked up" screen: whether the agreement email went out, and where.
+  assert.equal(typeof got.emailed, 'boolean');
+  assert.ok(got.email === null || typeof got.email === 'string');
   const r = (await db().doc('reservations/b1').get()).data()!;
   assert.equal(r.status, 'active');
   assert.equal(r.lastAction, 'handover');

@@ -41,7 +41,7 @@ export async function submitHandover(input: {
   idCheck: PickupIdCheck | null;
   phoneVerified: boolean;
   agreement: { id: string; method: AgreementMethod };
-}): Promise<{ rental: number; deposit: number }> {
+}): Promise<{ collected: { rental: number; deposit: number }; emailed: boolean; email: string | null }> {
   try {
     const r = await httpsCallable(functions, 'submitHandover')({
       items: input.items,
@@ -51,7 +51,8 @@ export async function submitHandover(input: {
       phoneVerified: input.phoneVerified,
       agreement: input.agreement,
     });
-    return (r.data as { collected: { rental: number; deposit: number } }).collected;
+    const out = r.data as { collected: { rental: number; deposit: number }; emailed?: boolean; email?: string | null };
+    return { collected: out.collected, emailed: out.emailed === true, email: out.email ?? null };
   } catch (err) {
     const e = err as { details?: { code?: string; quote?: HandoverQuote } };
     if (e?.details?.code === 'quote-changed') {
