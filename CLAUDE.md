@@ -1873,6 +1873,18 @@ a snapshot indefinitely).
     "Forbidden" = invoker missing. New callables set `invoker: 'public'` explicitly (team,
     returns, agreements).
 
+- **Admin reservation detail layout (2026-11-27).** `app/admin/reservations/[id].tsx`:
+  alerts → summary card (phase / Late / Deposit to settle / ID chips, product thumb ×
+  qty, dates + duration, the order's other items LIVE (`onSnapshot` on `orderId`), ONE
+  money line per phase) → renter on one line (call / WhatsApp; tap = renter sheet with
+  `RenterNameBlock`, phone edit / verify, give a code; no uid) → collapsible sections,
+  closed by default, key info in the closed row (Price details · ID document
+  (`RenterIdCard hideName bare`) · Agreement & checklists · History (`HistoryCard
+  onLatest`)) → sticky bottom bar (`screen.bottom`): ONE primary from `canDo` (Start
+  pick-up / Start return / Settle deposit / Record payment / Settle lost item / Review
+  damage) + "⋯" = ONE bottom sheet (menu → the existing confirmations, settlement,
+  damage review, renter, agreement). No bar when no action is allowed. Layout only —
+  every action / confirmation / rule is unchanged.
 - **Reservation state machine (2026-11-20) — THE source of truth for every admin action
   on a booking.** `functions/src/shared/reservationMachine.ts`: `phaseOf(r)` (13 phases from
   status + flags: booked (= pending_payment OR the legacy confirmed — both pay at pick-up;

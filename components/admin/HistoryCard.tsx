@@ -68,7 +68,12 @@ const LABELS: Record<string, string> = {
 const labelOf = (a: string) => LABELS[a] ?? (a.startsWith('claim.') ? `Claim ${a.slice(6).replace('_', ' ')}` : a.startsWith('stock.') ? 'Stock adjusted' : a);
 const when = (t?: Timestamp) => t ? t.toDate().toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
-export function HistoryCard({ reservationId, renterId }: { reservationId: string; renterId: string }) {
+// bare: no card / title (inside a collapsible section); hidden: loads but renders nothing
+// (a closed section still shows the latest entry through onLatest).
+export function HistoryCard({ reservationId, renterId, bare = false, hidden = false, onLatest }: {
+  reservationId: string; renterId: string; bare?: boolean; hidden?: boolean;
+  onLatest?: (label: string | null) => void;
+}) {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [all, setAll] = useState(false);
 
@@ -83,12 +88,17 @@ export function HistoryCard({ reservationId, renterId }: { reservationId: string
       setEntries([...byId.values()].sort((a, b) => (b.at?.toMillis() ?? 0) - (a.at?.toMillis() ?? 0)));
     });
   }, [reservationId, renterId]);
+  const latest = entries?.[0];
+  useEffect(() => {
+    onLatest?.(latest ? `${labelOf(latest.action)} · ${latest.byName} · ${when(latest.at)}` : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latest?.id]);
 
-  if (!entries || entries.length === 0) return null;
+  if (hidden || !entries || entries.length === 0) return null;
   const shown = all ? entries : entries.slice(0, 6);
   return (
-    <View style={[UI.card, UI.cardPadded, s.card]}>
-      <Text style={UI.title}>History</Text>
+    <View style={bare ? s.card : [UI.card, UI.cardPadded, s.card]}>
+      {!bare && <Text style={UI.title}>History</Text>}
       {shown.map(e => (
         <View key={e.id} style={s.row}>
           <View style={s.dot} />

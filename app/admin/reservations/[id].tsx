@@ -6,6 +6,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Text, TextInput } from '@/components/AppText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,10 +16,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Feather } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, type WriteBatch } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, writeBatch, onSnapshot, query, where, type WriteBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { auth } from '@/lib/auth';
-import { isPickupMissed, isBeforePickupDay } from '@/functions/src/shared/dates';
+import { isPickupMissed, isBeforePickupDay, vteDay } from '@/functions/src/shared/dates';
+import { ID_DOC_TYPES } from '@/functions/src/shared/identity';
+import { productThumb } from '@/utils/productImage';
+import { displayOrderId } from '@/utils/rentalDocs';
+import { SHADES } from '@/constants/brandShades';
+import { TYPE } from '@/constants/typography';
+import { useScreenInsets } from '@/components/account/ui';
+import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
 import type { BookingHold } from '@/lib/bookingHold';
 import {
   getUserProfile,
@@ -111,6 +121,7 @@ async function sendNotif(
 
 export default function AdminReservationDetailScreen() {
   const insets = useSafeAreaInsets();
+  const screen = useScreenInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   // Admin roles: staff never see fee waivers, settlement, lost/stolen or the no-show hold
@@ -185,6 +196,37 @@ export default function AdminReservationDetailScreen() {
         .finally(() => setLoading(false));
     }, () => setLoading(false));
   }, [id]);
+
+  // ── Layout state (2026-11-27 redesign — layout only) ─────────────────────────
+  // One bottom sheet at a time (iOS shows ONE Modal): the "⋯" menu, a confirmation,
+  // the settlement / damage review, the renter details or the agreement.
+  const [sheet, setSheet] = useState<null | 'menu' | 'confirm' | 'settle' | 'damage' | 'renter' | 'agreement'>(null);
+  // Collapsible sections — remembered while the screen is mounted.
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const toggleSection = useCallback((k: string) => setOpenSections(prev => {
+    const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n;
+  }), []);
+  const [barHeight, setBarHeight] = useState(0);
+  const [historyLatest, setHistoryLatest] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<{ status?: string; docType?: string } | null>(null);
+  // The order's other items, LIVE (their phase stays up to date).
+  const [orderLines, setOrderLines] = useState<RentalDoc[]>([]);
+  const orderIdLive = reservation?.orderId ?? null;
+  useEffect(() => {
+    if (!orderIdLive) { setOrderLines([]); return; }
+    return onSnapshot(query(collection(db, 'reservations'), where('orderId', '==', orderIdLive)),
+      snap => setOrderLines(snap.docs.map(x => ({ id: x.id, ...x.data() } as RentalDoc))), () => setOrderLines([]));
+  }, [orderIdLive]);
+  const renterIdLive = reservation?.renterId ?? null;
+  useEffect(() => {
+    if (!renterIdLive) return;
+    getDoc(doc(db, 'identityChecks', renterIdLive))
+      .then(x => setIdentity(x.exists() ? (x.data() as { status?: string; docType?: string }) : {}))
+      .catch(() => setIdentity(null));
+  }, [renterIdLive]);
+  // A confirmation that finished (or the phase that moved) closes its sheet.
+  useEffect(() => { if (sheet === 'confirm' && confirmAction === null && !actioning) setSheet(null); }, [sheet, confirmAction, actioning]);
+  useEffect(() => { setSheet(null); }, [livePhase]);
 
   // ── Action executor ───────────────────────────────────────────────────────
   const runAction = useCallback(async (
@@ -461,7 +503,6 @@ export default function AdminReservationDetailScreen() {
   // (functions/src/shared/reservationMachine.ts) — the rules enforce the same.
   const can = (a: MachineAction) => canDo(reservation, a, role);
   const phase = phaseOf(reservation);
-  const depositReturned = reservation.depositReturned ?? false;
   const badge           = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending_payment;
   const isReturnOverdue = status === 'active' && reservation.returnAt.toMillis() < Date.now();
 
@@ -498,52 +539,91 @@ export default function AdminReservationDetailScreen() {
         reservation.renterName
       : reservation.renterName;
 
+  // ── Layout data (presentation only) ──────────────────────────────────────────
+  const dueLine = (): { label: string; sub?: string } | null => {
+    const held = handoverDeposit?.depositCurrency && handoverDeposit.depositAmount != null
+      ? `${handoverDeposit.depositAmount.toLocaleString('en-US')} ${handoverDeposit.depositCurrency}` : depositDisplay;
+    const cur = reservation.chargeCurrency ?? handoverDeposit?.depositCurrency ?? 'LAK';
+    const giveBack = Math.max(0, depositHeldAmount - (reservation.depositAppliedToCharge ?? 0));
+    switch (phase) {
+      case 'booked': {
+        const booked = orderLines.length > 1 ? orderLines.filter(r => phaseOf(r) === 'booked') : [reservation];
+        const rent = booked.reduce((t, r) => t + (r.total ?? 0), 0);
+        const dep = booked.reduce((t, r) => t + (r.deposit ?? 0), 0);
+        return { label: `To collect at pick-up: ${fmtLak(rent + dep)}`, sub: `rental ${fmtLak(rent)} + deposit ${fmtLak(dep)}${booked.length > 1 ? ` · ${booked.length} items` : ''}` };
+      }
+      case 'pickup_refused': return { label: 'Pick-up refused — nothing collected' };
+      case 'out': return { label: `Deposit held: ${held}` };
+      case 'return_review': return { label: `Deposit held: ${held}`, sub: 'Damage to review by an owner' };
+      case 'to_settle_refund': return { label: `Give back: ${giveBack.toLocaleString('en-US')} ${cur}` };
+      case 'to_settle_balance': return { label: `Balance due: ${outstandingBalance.toLocaleString('en-US')} ${cur}` };
+      case 'lost_to_settle': return outstandingBalance > 0
+        ? { label: `Balance due: ${outstandingBalance.toLocaleString('en-US')} ${cur}`, sub: 'Lost item' }
+        : { label: `Give back: ${giveBack.toLocaleString('en-US')} ${cur}`, sub: 'Lost item' };
+      case 'settled': case 'lost_settled': return { label: 'Settled' };
+      case 'cancelled': case 'no_show_held': case 'no_show_lifted': return { label: 'Nothing charged' };
+      default: return null;
+    }
+  };
+  const money = dueLine();
+  const idLabel = identity == null ? null
+    : identity.status === 'on_file' ? `On file · ${ID_DOC_TYPES.find(t => t.key === identity.docType)?.label ?? 'ID document'}`
+    : identity.status === 'rejected' ? 'Declined' : 'No ID on file';
+  const checkNeeded = showsFirstRentalIdCheck(reservation);
+  const toSettle = phase === 'to_settle_refund' || phase === 'to_settle_balance' || phase === 'lost_to_settle';
+  const thumb = (product ? productThumb(product) : null) ?? reservation.productImage ?? null;
+  const otherItems = orderLines.filter(r => r.id !== reservation.id);
+  const agreementSummary = [
+    reservation.agreementSignedAt?.toMillis ? `Signed ${vteDay(reservation.agreementSignedAt.toMillis())}` : 'Not signed',
+    `pick-up ${reservation.handoverChecklist?.confirmedAt ? '✓' : '—'}`,
+    `return ${reservation.returnChecklist?.confirmedAt ? '✓' : '—'}`,
+  ].join(' · ');
+  const showAgreement = !!reservation.agreementId || ['pending_payment', 'confirmed'].includes(reservation.status);
+
+  // ONE primary action for the current phase (state machine), + the "⋯" menu.
+  const earlyDay = isBeforePickupDay(reservation.pickupAt?.toMillis() ?? 0);
+  const openConfirm = (fn: () => void) => { setActionError(null); fn(); setSheet('confirm'); };
+  const primary: { label: string; disabled?: boolean; note?: string | null; onPress: () => void } | null =
+    can('handover') ? {
+      label: 'Start pick-up', disabled: earlyDay,
+      note: earlyDay ? earlyHandoverPrompt(reservation.pickupAt?.toMillis() ?? 0) : null,
+      onPress: () => router.push(`/admin/pickup?ids=${id}`),
+    }
+    : can('return') ? { label: 'Start return', onPress: () => router.push(`/admin/return?ids=${id}`) }
+    : can('refund_deposit') ? { label: 'Settle deposit', onPress: () => setSheet('settle') }
+    : can('record_balance_paid') ? { label: 'Record payment', onPress: () => setSheet('settle') }
+    : can('settle_lost') ? { label: 'Settle lost item', onPress: () => setSheet('settle') }
+    : isShopOwner && phase === 'return_review' && reservation.chargeReviewPending ? { label: 'Review damage', onPress: () => setSheet('damage') }
+    : null;
+  const menu: { label: string; icon: React.ComponentProps<typeof Feather>['name']; danger?: boolean; onPress: () => void }[] = [
+    ...(can('refuse_pickup') ? [{ label: 'Refuse pick-up', icon: 'slash' as const, danger: true, onPress: () => openConfirm(() => setConfirmAction('refuse_pickup')) }] : []),
+    ...(can('no_show') && isPickupMissed(reservation.pickupAt.toMillis()) ? [{ label: 'Mark as no-show', icon: 'user-x' as const, danger: true, onPress: () => openConfirm(openNoShow) }] : []),
+    ...(can('lift_no_show') && renterHold?.reasons.includes('noShow') ? [{ label: 'Lift no-show hold', icon: 'unlock' as const, onPress: () => openConfirm(() => setConfirmAction('lift_hold')) }] : []),
+    ...(can('report_lost') ? [{ label: 'Report lost/stolen', icon: 'alert-triangle' as const, danger: true, onPress: () => openConfirm(() => setConfirmAction('lost')) }] : []),
+    ...(can('cancel') ? [{ label: 'Cancel reservation', icon: 'x-circle' as const, danger: true, onPress: () => openConfirm(openCancel) }] : []),
+    ...(showAgreement ? [{ label: 'Agreement · open or print', icon: 'printer' as const, onPress: () => setSheet('agreement') }] : []),
+    ...(can('report_incident') ? [{ label: 'Report an incident', icon: 'flag' as const, onPress: () => { setSheet(null); router.push(`/admin/incident?reservationId=${id}`); } }] : []),
+    { label: isShopOwner ? 'Renter details · phone · give a code' : 'Renter details · phone', icon: 'user' as const, onPress: () => setSheet('renter') },
+    ...(can('archive') ? [{ label: 'Archive (test / data fix)', icon: 'archive' as const, danger: true, onPress: () => openConfirm(() => { setArchiveReason(''); setConfirmAction('archive'); }) }] : []),
+  ];
+  const hasBar = !!primary || menu.some(m => m.icon !== 'user' && m.icon !== 'printer');
+  const endState = phase === 'archived' ? `Archived${reservation.archivedReason ? ` — ${reservation.archivedReason}` : ''}. Read only.`
+    : status === 'no_show' ? `No-show${reservation.noShowByName ? ` — marked by ${reservation.noShowByName}` : ''}${reservation.noShowHoldLiftedByName ? ` · hold lifted by ${reservation.noShowHoldLiftedByName}` : ''}`
+    : status === 'cancelled' ? 'This reservation has been cancelled.'
+    : status === 'returned' && reservation.returnFinalizedAt ? 'All done — item returned and deposit settled.'
+    : null;
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <View style={[d.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View style={[d.root, hasBar ? { paddingTop: screen.top } : screen.root]}>
       <StatusBar style="dark" />
       {header}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[d.scroll, { paddingBottom: 40 }]}
+        contentContainerStyle={[d.scroll, { paddingBottom: hasBar ? barHeight + 24 : screen.contentBottom }]}
       >
-        {/* ── First pick-up ID check reminder ──────────────────────────── */}
-        {showsFirstRentalIdCheck(reservation) && (
-          <View style={{ marginBottom: 10 }}>
-            <FirstRentalIdChip atCounter={reservation.idCheckAtCounter} />
-          </View>
-        )}
-
-        {/* ── Status + deposit chips ────────────────────────────────────── */}
-        <View style={[d.statusRow, isReturnOverdue && { backgroundColor: '#FFF1F2', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 }]}>
-          {isReturnOverdue ? (() => {
-            const sev = overdueSeverity(reservation.returnAt);
-            const { bg, fg } = overdueChipColors(sev);
-            return (
-              <View style={[d.statusBadge, { backgroundColor: bg }]}>
-                <Text style={[d.statusBadgeText, { color: fg }]}>{overdueLabel(reservation.returnAt)}</Text>
-              </View>
-            );
-          })() : (
-            <View style={[d.statusBadge, { backgroundColor: badge.bg }]}>
-              <Text style={[d.statusBadgeText, { color: badge.fg }]}>{badge.label}</Text>
-            </View>
-          )}
-          {depositReturned ? (
-            <View style={d.depositReturned}>
-              <Feather name="check-circle" size={12} color="#065F46" />
-              <Text style={d.depositReturnedText}>Deposit returned</Text>
-            </View>
-          ) : (
-            <View style={d.depositPending}>
-              <Text style={d.depositPendingText}>
-                {status === 'returned' ? `Return deposit: ${depositDisplay}` : `Deposit: ${depositDisplay}`}
-              </Text>
-            </View>
-          )}
-        </View>
-
+        {/* ── Alerts (only when present) ─────────────────────────────────── */}
         {/* Not picked up — an ALERT only: the normal pick-up flow below still works. */}
         {(status === 'pending_payment' || status === 'confirmed') && isPickupMissed(reservation.pickupAt.toMillis()) && (
           <View style={d.missedBanner}>
@@ -585,239 +665,141 @@ export default function AdminReservationDetailScreen() {
           </View>
         )}
 
-        {/* ── BOOKING INFO ──────────────────────────────────────────────── */}
-        <View style={d.card}>
-          <Text style={d.cardLabel}>Booking info</Text>
-          <InfoRow label="Product"  value={reservation.productName} />
-          <InfoRow
-            label="Quantity"
-            value={`${reservation.quantity} unit${reservation.quantity !== 1 ? 's' : ''}`}
-          />
-          <InfoRow
-            label="Duration"
-            value={`${reservation.durationDays} day${reservation.durationDays !== 1 ? 's' : ''} (24h)`}
-          />
-        </View>
-
-        {/* ── DATES ─────────────────────────────────────────────────────── */}
-        <View style={d.card}>
-          <Text style={d.cardLabel}>Dates</Text>
-          <InfoRow label="Pick-up" value={reservation.pickupLabel} />
-          <InfoRow label="Return"  value={reservation.returnLabel} />
-        </View>
-
-        {/* ── RENTER ────────────────────────────────────────────────────── */}
-        <View style={d.card}>
-          <Text style={d.cardLabel}>Renter</Text>
-          {/* Avatar + name */}
-          <View style={d.renterAvatarRow}>
-            <View style={d.renterAvatarCircle}>
-              {renterPhotoURL ? (
-                <ExpoImage
-                  source={{ uri: renterPhotoURL }}
-                  style={d.renterAvatarCircleImg}
-                  contentFit="cover"
-                />
-              ) : (
-                <Text style={d.renterAvatarInitial}>
-                  {(renterDisplayName?.charAt(0) ?? '?').toUpperCase()}
-                </Text>
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={d.renterAvatarName}>{renterDisplayName ?? '—'}</Text>
-              <Text style={d.renterIdSmall} numberOfLines={1}>{reservation.renterId}</Text>
-            </View>
-          </View>
-
-          {/* ── Phone identity & verification status ── */}
-          {editingPhone ? (
-            <View style={d.phoneEditSection}>
-              <View style={d.phoneEditInputRow}>
-                <TextInput
-                  style={d.phoneEditInput}
-                  value={phoneInput}
-                  onChangeText={setPhoneInput}
-                  placeholder="+8562012345678"
-                  placeholderTextColor={COLORS.fg3}
-                  keyboardType="phone-pad"
-                  autoFocus
-                  editable={!savingPhone}
-                />
-              </View>
-              {phoneError ? (
-                <Text style={d.phoneEditError}>{phoneError}</Text>
-              ) : null}
-              <View style={d.phoneEditBtns}>
-                <TouchableOpacity
-                  style={d.phoneEditCancelBtn}
-                  onPress={() => setEditingPhone(false)}
-                  disabled={savingPhone}
-                  activeOpacity={0.8}
-                >
-                  <Text style={d.phoneEditCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={d.phoneEditSaveBtn}
-                  onPress={handleSavePhone}
-                  disabled={savingPhone}
-                  activeOpacity={0.8}
-                >
-                  {savingPhone ? (
-                    <ActivityIndicator size="small" color={COLORS.carbon} />
-                  ) : (
-                    <Text style={d.phoneEditSaveText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={d.phoneVerifyRow}>
-              <View style={d.phoneVerifyLeft}>
-                <Feather name="phone" size={14} color={COLORS.fg3} />
-                <Text style={d.phoneVerifyNumber}>
-                  {identityPhone ?? 'No phone on file'}
-                </Text>
-              </View>
-              <View style={d.phoneVerifyRight}>
-                {identityPhone ? (
-                  phoneVerified ? (
-                    <View style={d.verifiedBadge}>
-                      <Feather name="check-circle" size={12} color="#065F46" />
-                      <Text style={d.verifiedBadgeText}>Verified</Text>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={d.unverifiedBadge}>
-                        <Feather name="clock" size={12} color="#92400E" />
-                        <Text style={d.unverifiedBadgeText}>Not verified</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={d.verifyBtn}
-                        onPress={handleVerifyPhone}
-                        disabled={verifyingPhone}
-                        activeOpacity={0.8}
-                      >
-                        {verifyingPhone ? (
-                          <ActivityIndicator size="small" color={COLORS.carbon} />
-                        ) : (
-                          <Text style={d.verifyBtnText}>Mark verified</Text>
-                        )}
-                      </TouchableOpacity>
-                    </>
-                  )
-                ) : (
-                  <View style={d.unverifiedBadge}>
-                    <Feather name="alert-circle" size={12} color="#92400E" />
-                    <Text style={d.unverifiedBadgeText}>Missing</Text>
-                  </View>
-                )}
-                <TouchableOpacity hitSlop={6} accessibilityRole="button" accessibilityLabel="Edit"
-                  style={d.editPhoneBtn}
-                  onPress={handleEditPhone}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="edit-2" size={13} color={COLORS.fg3} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {(phone || whatsapp) && (
-            <View style={d.contactRow}>
-              {phone && (
-                <TouchableOpacity
-                  style={d.contactBtn}
-                  onPress={() => Linking.openURL(`tel:${phone}`)}
-                  activeOpacity={0.75}
-                >
-                  <Feather name="phone" size={14} color={COLORS.carbon} />
-                  <Text style={d.contactBtnText}>{phone}</Text>
-                </TouchableOpacity>
-              )}
-              {whatsapp && (
-                <TouchableOpacity
-                  style={d.contactBtn}
-                  onPress={() =>
-                    Linking.openURL(`https://wa.me/${whatsapp.replace(/[^0-9+]/g, '')}`)
-                  }
-                  activeOpacity={0.75}
-                >
-                  <Feather name="message-circle" size={14} color={COLORS.carbon} />
-                  <Text style={d.contactBtnText}>WhatsApp</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
-
-        {/* ── TO SETTLE — never forgotten: a returned / lost booking whose deposit or
-            balance isn't settled yet, at the very top (state machine phases). ── */}
-        {(phase === 'to_settle_refund' || phase === 'to_settle_balance' || phase === 'lost_to_settle') && (
-          <View style={[d.card, d.settleCard]}>
-            <Text style={d.settleTitle}>
-              {phase === 'to_settle_refund' ? 'Deposit to settle · Refund now'
-                : phase === 'to_settle_balance' ? 'Balance due · Record payment'
-                : 'Lost item · to settle'}
-            </Text>
-            <SettlementActions
-              reservation={reservation}
-              confirmAction={confirmAction === 'deposit' || confirmAction === 'settle_outstanding' || confirmAction === 'write_off_outstanding' ? confirmAction : null}
-              setConfirmAction={setConfirmAction}
-              actioning={actioning}
-              setActioning={setActioning}
-              setActionError={setActionError}
-              onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
-            />
-          </View>
-        )}
-
-        {/* ── OWNER DECISIONS after a staff action ──────────────────────── */}
-        {isShopOwner && (
-          <DamageReviewCard reservation={reservation}
-            onDone={u => setReservation(prev => prev ? { ...prev, ...u } : prev)} />
+        {isShopOwner ? null : reservation.chargeReviewPending && (
+          <Text style={d.endStateText}>Damage charge waiting for an owner — the deposit is held.</Text>
         )}
         <PickupRefusedCard reservation={reservation} owner={isShopOwner}
           onDone={() => setReservation(prev => prev ? { ...prev, pickupRefusedOpen: false } : prev)} />
 
-        {/* ── ID DOCUMENT (admin only) ──────────────────────────────────── */}
-        <RenterIdCard renterId={reservation.renterId} />
-
-        {/* ── PRICE BREAKDOWN ───────────────────────────────────────────── */}
+        {/* ── SUMMARY ──────────────────────────────────────────────────────── */}
         <View style={d.card}>
-          <Text style={d.cardLabel}>Price breakdown</Text>
+          <View style={d.chipsWrap}>
+            {!!phase && (
+              <View style={[d.statusBadge, { backgroundColor: badge.bg }]}>
+                <Text style={[d.statusBadgeText, { color: badge.fg }]}>{PHASE_LABELS[phase]}</Text>
+              </View>
+            )}
+            {isReturnOverdue && (() => {
+              const { bg, fg } = overdueChipColors(overdueSeverity(reservation.returnAt));
+              return (
+                <View style={[d.statusBadge, { backgroundColor: bg }]}>
+                  <Text style={[d.statusBadgeText, { color: fg }]}>{overdueLabel(reservation.returnAt)}</Text>
+                </View>
+              );
+            })()}
+            {toSettle && (
+              <View style={[d.statusBadge, { backgroundColor: SHADES.amberLight }]}>
+                <Text style={[d.statusBadgeText, { color: SHADES.amberText }]}>Deposit to settle</Text>
+              </View>
+            )}
+            {checkNeeded ? <FirstRentalIdChip atCounter={reservation.idCheckAtCounter} />
+              : identity?.status === 'on_file' ? (
+                <View style={[d.statusBadge, { backgroundColor: SHADES.carbonLight }]}>
+                  <Text style={[d.statusBadgeText, { color: SHADES.carbon }]}>ID on file</Text>
+                </View>
+              ) : null}
+          </View>
+
+          <View style={d.productRow}>
+            {thumb ? <ExpoImage source={{ uri: thumb }} style={d.productThumb} contentFit="cover" />
+              : <View style={[d.productThumb, d.productThumbEmpty]}><Feather name="package" size={20} color={COLORS.fg3} /></View>}
+            <View style={{ flex: 1 }}>
+              <Text style={d.productName} numberOfLines={2}>{`${reservation.productName}${reservation.quantity > 1 ? ` × ${reservation.quantity}` : ''}`}</Text>
+              <Text style={d.productMeta}>{`${reservation.pickupLabel} → ${reservation.returnLabel}`}</Text>
+              <Text style={d.productMeta}>{`${reservation.durationDays} day${reservation.durationDays !== 1 ? 's' : ''}${reservation.orderId ? ` · ${displayOrderId(reservation) ?? reservation.orderId}` : ''}`}</Text>
+            </View>
+          </View>
+
+          {otherItems.length > 0 && (
+            <View style={d.orderList}>
+              <Text style={d.orderListTitle}>{`Same order · ${otherItems.length} other item${otherItems.length === 1 ? '' : 's'}`}</Text>
+              {otherItems.map(r => {
+                const ph = phaseOf(r);
+                return (
+                  <TouchableOpacity key={r.id} style={d.orderItem} activeOpacity={0.75}
+                    onPress={() => router.push(`/admin/reservations/${r.id}`)}>
+                    <Text style={d.orderItemName} numberOfLines={1}>{`${r.productName}${r.quantity > 1 ? ` × ${r.quantity}` : ''}`}</Text>
+                    <Text style={d.orderItemPhase} numberOfLines={1}>{ph ? PHASE_LABELS[ph] : r.status}</Text>
+                    <Feather name="chevron-right" size={15} color={COLORS.fg3} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {money && (
+            <View style={d.moneyBox}>
+              <Text style={d.moneyLabel}>{money.label}</Text>
+              {!!money.sub && <Text style={d.moneySub}>{money.sub}</Text>}
+            </View>
+          )}
+          {!!reservation.notes && <Text style={d.notesText} numberOfLines={3}>{`Note: ${reservation.notes}`}</Text>}
+          {!!endState && <Text style={d.endStateText}>{endState}</Text>}
+        </View>
+
+        {/* ── RENTER (one line) ────────────────────────────────────────────── */}
+        <View style={[d.card, d.renterRow]}>
+          <TouchableOpacity style={d.renterTap} onPress={() => setSheet('renter')} activeOpacity={0.75}
+            accessibilityRole="button" accessibilityLabel="Renter details">
+            <View style={d.renterAvatarCircle}>
+              {renterPhotoURL
+                ? <ExpoImage source={{ uri: renterPhotoURL }} style={d.renterAvatarCircleImg} contentFit="cover" />
+                : <Text style={d.renterAvatarInitial}>{(renterDisplayName?.charAt(0) ?? '?').toUpperCase()}</Text>}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={d.renterAvatarName} numberOfLines={1}>{renterDisplayName ?? '—'}</Text>
+              <Text style={[d.productMeta, { color: phoneVerified ? COLORS.success : COLORS.fg3 }]} numberOfLines={1}>
+                {identityPhone ? `${identityPhone} · ${phoneVerified ? 'verified' : 'not verified'}` : 'No phone on file'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          {!!phone && (
+            <TouchableOpacity style={d.iconBtn} onPress={() => Linking.openURL(`tel:${phone}`)}
+              accessibilityRole="button" accessibilityLabel="Call the renter">
+              <Feather name="phone" size={17} color={COLORS.carbon} />
+            </TouchableOpacity>
+          )}
+          {!!whatsapp && (
+            <TouchableOpacity style={d.iconBtn} onPress={() => Linking.openURL(`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`)}
+              accessibilityRole="button" accessibilityLabel="WhatsApp the renter">
+              <Feather name="message-circle" size={17} color={COLORS.carbon} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* ── COLLAPSIBLE SECTIONS (closed by default) ─────────────────────── */}
+        <Section title="Price details" summary={`Total ${fmtLak(reservation.total)} · deposit ${depositDisplay}`}
+          open={openSections.has('price')} onToggle={() => toggleSection('price')}>
           <InfoRow label="Rate"     value={`${fmtLak(reservation.pricePerDay)} / day`} />
           <InfoRow label="Subtotal" value={fmtLak(reservation.subtotal)} />
           {discountOf(reservation) && (
-            <InfoRow
-              label={discountOf(reservation)!.label}
-              value={`−${fmtLak(discountOf(reservation)!.amount)}`}
-              muted
-            />
+            <InfoRow label={discountOf(reservation)!.label} value={`−${fmtLak(discountOf(reservation)!.amount)}`} muted />
           )}
           <View style={d.divider} />
           <InfoRow label="Total to pay"         value={fmtLak(reservation.total)}   bold />
           <InfoRow label="Deposit (refundable)"  value={depositDisplay} muted />
-        </View>
-
-        {/* ── SETTLEMENT SUMMARY ───────────────────────────────────────── */}
-        {hasCharge && (
-          <SettlementSummary
-            chargeAmount={reservation.chargeAmount}
-            chargeReason={reservation.chargeReason}
-            lateChargeAmount={reservation.lateChargeAmount}
-            lateChargeReason={reservation.lateChargeReason}
-            depositAmount={depositHeldAmount}
-            depositCurrency={reservation.chargeCurrency!}
-            depositAppliedToCharge={reservation.depositAppliedToCharge ?? 0}
-            outstandingBalance={outstandingBalance}
-            outstandingSettled={reservation.outstandingSettled}
-            outstandingSettledBy={reservation.outstandingSettledBy}
-            outstandingWrittenOff={reservation.outstandingWrittenOff}
-            outstandingWrittenOffBy={reservation.outstandingWrittenOffBy}
-          />
-        )}
-
+          {!!reservation.handoverPayment && (
+            <InfoRow label="Collected at pick-up" muted
+              value={`${reservation.handoverPayment.rental.amount.toLocaleString('en-US')} ${reservation.handoverPayment.rental.currency} + ${reservation.handoverPayment.deposit.amount.toLocaleString('en-US')} ${reservation.handoverPayment.deposit.currency}`} />
+          )}
+          {hasCharge && (
+            <View style={{ marginTop: 8 }}>
+              <SettlementSummary
+                chargeAmount={reservation.chargeAmount}
+                chargeReason={reservation.chargeReason}
+                lateChargeAmount={reservation.lateChargeAmount}
+                lateChargeReason={reservation.lateChargeReason}
+                depositAmount={depositHeldAmount}
+                depositCurrency={reservation.chargeCurrency!}
+                depositAppliedToCharge={reservation.depositAppliedToCharge ?? 0}
+                outstandingBalance={outstandingBalance}
+                outstandingSettled={reservation.outstandingSettled}
+                outstandingSettledBy={reservation.outstandingSettledBy}
+                outstandingWrittenOff={reservation.outstandingWrittenOff}
+                outstandingWrittenOffBy={reservation.outstandingWrittenOffBy}
+              />
+            </View>
+          )}
         {/* ── WAIVED CHARGES (internal) ─────────────────────────────────── */}
         {isShopOwner && (reservation.lateChargeWaived || reservation.damageChargeWaived) && (() => {
           const cur = reservation.chargeCurrency ?? handoverDeposit?.depositCurrency ?? 'LAK';
@@ -894,86 +876,100 @@ export default function AdminReservationDetailScreen() {
           );
         })()}
 
-        {/* ── SETTLEMENT RECEIPT ───────────────────────────────────────── */}
-        {status === 'returned' && reservation.returnFinalizedAt && (
-          <View style={{ marginBottom: 12 }}>
-            <Text style={d.cardLabel}>Receipt</Text>
-            <RentalReceipt rental={reservation} vatPercent={vatPercent} staffView />
-          </View>
-        )}
+          {status === 'returned' && reservation.returnFinalizedAt && (
+            <View style={{ marginTop: 8 }}>
+              <RentalReceipt rental={reservation} vatPercent={vatPercent} staffView />
+            </View>
+          )}
+        </Section>
 
-        {/* ── NOTES ─────────────────────────────────────────────────────── */}
-        {!!reservation.notes && (
-          <View style={d.card}>
-            <Text style={d.cardLabel}>Notes</Text>
-            <Text style={d.notesText}>{reservation.notes}</Text>
-          </View>
-        )}
+        <Section title="ID document" summary={checkNeeded ? 'First rental — check ID' : idLabel ?? '…'}
+          open={openSections.has('id')} onToggle={() => toggleSection('id')}>
+          <RenterIdCard renterId={reservation.renterId} hideName bare />
+        </Section>
 
-        {/* ── META ──────────────────────────────────────────────────────── */}
-        <View style={d.metaRow}>
-          <Feather name="clock" size={12} color={COLORS.fg3} />
-          <Text style={d.metaText}>Created: {fmtTimestamp(reservation.createdAt)}</Text>
-        </View>
-
-        {/* ── RENTAL AGREEMENT ───────────────────────────────────────────── */}
-        {(reservation.agreementId || ['pending_payment', 'confirmed'].includes(reservation.status)) && (
-          <AgreementAdminCard reservation={reservation} />
-        )}
-
-        {/* ── CHECKLISTS ────────────────────────────────────────────────── */}
-        {(reservation.handoverChecklist?.confirmedAt || reservation.returnChecklist?.confirmedAt) && (
-          <View style={d.card}>
-            <Text style={d.cardLabel}>Checklists</Text>
+        {(showAgreement || reservation.handoverChecklist?.confirmedAt || reservation.returnChecklist?.confirmedAt) && (
+          <Section title="Agreement & checklists" summary={agreementSummary}
+            open={openSections.has('docs')} onToggle={() => toggleSection('docs')}>
+            {showAgreement && <AgreementAdminCard reservation={reservation} />}
             {reservation.handoverChecklist?.confirmedAt && (
-              <TouchableOpacity
-                style={d.checklistLinkRow}
-                onPress={() => router.push(`/admin/reservations/${id}/checklist?type=handover&mode=view`)}
-                activeOpacity={0.75}
-              >
+              <TouchableOpacity style={d.checklistLinkRow} activeOpacity={0.75}
+                onPress={() => router.push(`/admin/reservations/${id}/checklist?type=handover&mode=view`)}>
                 <Feather name="clipboard" size={14} color={COLORS.carbon} />
-                <Text style={d.checklistLinkText}>View handover checklist</Text>
+                <Text style={d.checklistLinkText}>View pick-up checklist</Text>
                 <Feather name="chevron-right" size={16} color={COLORS.fg3} />
               </TouchableOpacity>
             )}
             {reservation.returnChecklist?.confirmedAt && (
-              <TouchableOpacity
-                style={d.checklistLinkRow}
-                onPress={() => router.push(`/admin/reservations/${id}/checklist?type=return&mode=view`)}
-                activeOpacity={0.75}
-              >
+              <TouchableOpacity style={d.checklistLinkRow} activeOpacity={0.75}
+                onPress={() => router.push(`/admin/reservations/${id}/checklist?type=return&mode=view`)}>
                 <Feather name="clipboard" size={14} color={COLORS.carbon} />
                 <Text style={d.checklistLinkText}>View return checklist</Text>
                 <Feather name="chevron-right" size={16} color={COLORS.fg3} />
               </TouchableOpacity>
             )}
-          </View>
+          </Section>
         )}
 
-        {/* ── HISTORY — who did what (auditLog) ─────────────────────────── */}
-        <HistoryCard reservationId={reservation.id} renterId={reservation.renterId} />
+        <Section title="History" summary={historyLatest ?? `Created ${fmtTimestamp(reservation.createdAt)}`}
+          open={openSections.has('history')} onToggle={() => toggleSection('history')}>
+          <HistoryCard reservationId={reservation.id} renterId={reservation.renterId} bare onLatest={setHistoryLatest} />
+          <Text style={d.metaText}>{`Created: ${fmtTimestamp(reservation.createdAt)}`}</Text>
+        </Section>
+        {/* A closed History section still shows the latest entry (loaded, not rendered). */}
+        {!openSections.has('history') && (
+          <HistoryCard reservationId={reservation.id} renterId={reservation.renterId} hidden onLatest={setHistoryLatest} />
+        )}
+      </ScrollView>
 
-        {/* ── ACTIONS ────────────────────────────────────────────────────── */}
-        <View style={d.actionsCard}>
-          <Text style={d.cardLabel}>Actions</Text>
-          {!!phase && <Text style={d.endStateText}>{PHASE_LABELS[phase]}</Text>}
-
-          {/* Error banner */}
-          {actionError && (
-            <View style={d.errorBanner}>
-              <Feather name="alert-circle" size={14} color={COLORS.danger} />
-              <Text style={d.errorBannerText}>{actionError}</Text>
-            </View>
-          )}
-
-          {/* Loading spinner — while Firestore write is in flight */}
-          {actioning && (
-            <View style={d.actionLoading}>
-              <ActivityIndicator color={COLORS.amber} />
-            </View>
-          )}
-
-          {/* ── Confirm dialogs — only one open at a time ─────────────── */}
+      {/* ── STICKY ACTION BAR (above the Android nav bar) ──────────────────── */}
+      {hasBar && (
+        <View style={[d.bar, { paddingBottom: screen.bottom + 10 }]} onLayout={e => setBarHeight(e.nativeEvent.layout.height)}>
+          {!!actionError && <Text style={d.barError} numberOfLines={2}>{actionError}</Text>}
+          {!!primary?.note && <Text style={d.barNote} numberOfLines={2}>{primary.note}</Text>}
+          <View style={d.barRow}>
+            {primary ? (
+              <TouchableOpacity style={[d.primaryBtn, d.barPrimary, (primary.disabled || actioning) && { opacity: 0.45 }]}
+                disabled={primary.disabled || actioning} onPress={primary.onPress} activeOpacity={0.85}>
+                {actioning ? <ActivityIndicator color={COLORS.carbon} /> : <Text style={d.primaryBtnText}>{primary.label}</Text>}
+              </TouchableOpacity>
+            ) : <View style={{ flex: 1 }} />}
+            <TouchableOpacity style={d.moreBtn} onPress={() => { setActionError(null); setSheet('menu'); }}
+              accessibilityRole="button" accessibilityLabel="More actions">
+              <Feather name="more-horizontal" size={20} color={COLORS.carbon} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      {/* ── ONE bottom sheet: menu / confirmation / settlement / review / renter ── */}
+      <Modal visible={sheet !== null} transparent animationType="fade" statusBarTranslucent
+        onRequestClose={() => { if (!actioning) { setSheet(null); setConfirmAction(null); } }}>
+        <KeyboardAvoidingView style={d.sheetWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} accessibilityLabel="Close"
+            onPress={() => { if (!actioning) { setSheet(null); setConfirmAction(null); } }} />
+          <View style={[d.sheet, { paddingBottom: screen.bottom + 12 }]}>
+            <View style={d.sheetHandle} />
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}>
+              {!!actionError && sheet !== 'menu' && (
+                <View style={d.errorBanner}>
+                  <Feather name="alert-circle" size={14} color={COLORS.danger} />
+                  <Text style={d.errorBannerText}>{actionError}</Text>
+                </View>
+              )}
+              {actioning && <ActivityIndicator color={COLORS.amber} style={{ marginVertical: 8 }} />}
+              {sheet === 'menu' && (
+                <>
+                  <Text style={d.sheetTitle}>{phase ? PHASE_LABELS[phase] : 'Actions'}</Text>
+                  {menu.map(m => (
+                    <TouchableOpacity key={m.label} style={d.menuRow} onPress={m.onPress} activeOpacity={0.75}>
+                      <Feather name={m.icon} size={17} color={m.danger ? COLORS.danger : COLORS.carbon} />
+                      <Text style={[d.menuText, m.danger && { color: COLORS.danger }]}>{m.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
+              {sheet === 'confirm' && (
+                <>
           {/* D6: no return without a checklist — "Mark as returned" opens the checklist. */}
           {!actioning && confirmAction === 'lost' && (
             <ConfirmBox
@@ -1224,130 +1220,152 @@ export default function AdminReservationDetailScreen() {
             />
           )}
 
-          {/* ── Action buttons — shown only when no confirm is open ──── */}
-          {!actioning && confirmAction === null && (
-            <>
-              {/* Linear status transitions */}
-              {/* ONE pick-up: ID → condition → payment → the client signs (app/admin/pickup.tsx).
-                  An earlier DAY changes the booking (new price): blocked, explained. */}
-              {can('handover') && (() => {
-                const earlyDay = isBeforePickupDay(reservation.pickupAt?.toMillis() ?? 0);
-                return (
-                  <>
-                    <TouchableOpacity
-                      style={[d.primaryBtn, earlyDay && { opacity: 0.45 }]}
-                      disabled={earlyDay}
-                      onPress={() => router.push(`/admin/pickup?ids=${id}`)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={d.primaryBtnText}>Start pick-up</Text>
-                    </TouchableOpacity>
-                    {earlyDay && <Text style={d.endStateText}>{earlyHandoverPrompt(reservation.pickupAt?.toMillis() ?? 0)}</Text>}
-                  </>
-                );
-              })()}
-              {can('return') && (
-                <TouchableOpacity
-                  style={d.primaryBtn}
-                  onPress={() => router.push(`/admin/return?ids=${id}`)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={d.primaryBtnText}>Mark as returned</Text>
-                </TouchableOpacity>
+                </>
               )}
-
-              {/* Report lost/stolen — owner only, while the item is OUT (never after a return) */}
-              {can('report_lost') && (
-                <TouchableOpacity
-                  style={d.cancelLink}
-                  onPress={() => setConfirmAction('lost')}
-                  activeOpacity={0.7}
-                >
-                  <Text style={d.cancelLinkText}>Report lost/stolen</Text>
-                </TouchableOpacity>
-              )}
-
-              {!isShopOwner && reservation.chargeReviewPending && (
-                <Text style={d.endStateText}>Damage charge waiting for an owner — the deposit is held.</Text>
-              )}
-
-              {/* Refuse the pick-up (staff + owner): item not handed over, owners told */}
-              {can('refuse_pickup') && (
-                <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('refuse_pickup')} activeOpacity={0.7}>
-                  <Text style={d.cancelLinkText}>Refuse pick-up</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Internal incident on this booking (photos + notes, never shown to the renter) */}
-              {can('report_incident') && (
-                <TouchableOpacity style={d.cancelLink} onPress={() => router.push(`/admin/incident?reservationId=${id}`)} activeOpacity={0.7}>
-                  <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Report an incident</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* No-show — only once the pick-up day is over (alert, never automatic) */}
-              {can('no_show') && isPickupMissed(reservation.pickupAt.toMillis()) && (
-                <TouchableOpacity style={d.cancelLink} onPress={openNoShow} activeOpacity={0.7}>
-                  <Text style={d.cancelLinkText}>Mark as no-show</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Lift the renter's no-show hold */}
-              {can('lift_no_show') && renterHold?.reasons.includes('noShow') && (
-                <TouchableOpacity style={d.cancelLink} onPress={() => setConfirmAction('lift_hold')} activeOpacity={0.7}>
-                  <Text style={[d.cancelLinkText, { color: COLORS.carbon }]}>Lift no-show hold</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Cancel — only before pickup */}
-              {can('cancel') && (
-                <TouchableOpacity
-                  style={d.cancelLink}
-                  onPress={openCancel}
-                  activeOpacity={0.7}
-                >
-                  <Text style={d.cancelLinkText}>Cancel reservation</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Archive (owner, data fix) — closed bookings only, reason required */}
-              {can('archive') && (
-                <TouchableOpacity style={d.cancelLink} onPress={() => { setArchiveReason(''); setConfirmAction('archive'); }} activeOpacity={0.7}>
-                  <Text style={[d.cancelLinkText, { color: COLORS.fg3 }]}>Archive (test / data fix)</Text>
-                </TouchableOpacity>
-              )}
-              {phase === 'archived' && (
-                <View style={d.endState}>
-                  <Feather name="archive" size={15} color={COLORS.fg3} />
-                  <Text style={d.endStateText}>{`Archived${reservation.archivedReason ? ` — ${reservation.archivedReason}` : ''}. Read only.`}</Text>
-                </View>
-              )}
-
-              {/* End states */}
-              {status === 'no_show' && (
-                <View style={d.endState}>
-                  <Feather name="calendar" size={15} color={COLORS.fg3} />
-                  <Text style={d.endStateText}>
-                    {`No-show${reservation.noShowByName ? ` — marked by ${reservation.noShowByName}` : ''}${reservation.noShowHoldLiftedByName ? ` · hold lifted by ${reservation.noShowHoldLiftedByName}` : ''}`}
+              {sheet === 'settle' && toSettle && (
+                <>
+                  <Text style={d.sheetTitle}>
+                    {phase === 'to_settle_refund' ? 'Deposit to settle · Refund now'
+                      : phase === 'to_settle_balance' ? 'Balance due · Record payment' : 'Lost item · to settle'}
                   </Text>
-                </View>
+                  <SettlementActions
+                    reservation={reservation}
+                    confirmAction={confirmAction === 'deposit' || confirmAction === 'settle_outstanding' || confirmAction === 'write_off_outstanding' ? confirmAction : null}
+                    setConfirmAction={setConfirmAction}
+                    actioning={actioning}
+                    setActioning={setActioning}
+                    setActionError={setActionError}
+                    onSettled={u => setReservation(prev => prev ? { ...prev, ...u } : prev)}
+                  />
+                </>
               )}
-              {status === 'cancelled' && (
-                <View style={d.endState}>
-                  <Feather name="x-circle" size={15} color={COLORS.fg3} />
-                  <Text style={d.endStateText}>This reservation has been cancelled.</Text>
-                </View>
+              {sheet === 'damage' && isShopOwner && (
+                <DamageReviewCard reservation={reservation}
+                  onDone={u => { setReservation(prev => prev ? { ...prev, ...u } : prev); setSheet(null); }} />
               )}
-              {status === 'returned' && depositReturned && (
-                <View style={d.endState}>
-                  <Feather name="check-circle" size={15} color={COLORS.success} />
-                  <Text style={d.endStateText}>All done — item returned and deposit settled.</Text>
-                </View>
-              )}
-            </>
+              {sheet === 'agreement' && <AgreementAdminCard reservation={reservation} />}
+              {sheet === 'renter' && (
+                <>
+                  <Text style={d.sheetTitle}>Renter</Text>
+                  <RenterNameBlock renterId={reservation.renterId} />
+          {/* ── Phone identity & verification status ── */}
+          {editingPhone ? (
+            <View style={d.phoneEditSection}>
+              <View style={d.phoneEditInputRow}>
+                <TextInput
+                  style={d.phoneEditInput}
+                  value={phoneInput}
+                  onChangeText={setPhoneInput}
+                  placeholder="+8562012345678"
+                  placeholderTextColor={COLORS.fg3}
+                  keyboardType="phone-pad"
+                  autoFocus
+                  editable={!savingPhone}
+                />
+              </View>
+              {phoneError ? (
+                <Text style={d.phoneEditError}>{phoneError}</Text>
+              ) : null}
+              <View style={d.phoneEditBtns}>
+                <TouchableOpacity
+                  style={d.phoneEditCancelBtn}
+                  onPress={() => setEditingPhone(false)}
+                  disabled={savingPhone}
+                  activeOpacity={0.8}
+                >
+                  <Text style={d.phoneEditCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={d.phoneEditSaveBtn}
+                  onPress={handleSavePhone}
+                  disabled={savingPhone}
+                  activeOpacity={0.8}
+                >
+                  {savingPhone ? (
+                    <ActivityIndicator size="small" color={COLORS.carbon} />
+                  ) : (
+                    <Text style={d.phoneEditSaveText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={d.phoneVerifyRow}>
+              <View style={d.phoneVerifyLeft}>
+                <Feather name="phone" size={14} color={COLORS.fg3} />
+                <Text style={d.phoneVerifyNumber}>
+                  {identityPhone ?? 'No phone on file'}
+                </Text>
+              </View>
+              <View style={d.phoneVerifyRight}>
+                {identityPhone ? (
+                  phoneVerified ? (
+                    <View style={d.verifiedBadge}>
+                      <Feather name="check-circle" size={12} color="#065F46" />
+                      <Text style={d.verifiedBadgeText}>Verified</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={d.unverifiedBadge}>
+                        <Feather name="clock" size={12} color="#92400E" />
+                        <Text style={d.unverifiedBadgeText}>Not verified</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={d.verifyBtn}
+                        onPress={handleVerifyPhone}
+                        disabled={verifyingPhone}
+                        activeOpacity={0.8}
+                      >
+                        {verifyingPhone ? (
+                          <ActivityIndicator size="small" color={COLORS.carbon} />
+                        ) : (
+                          <Text style={d.verifyBtnText}>Mark verified</Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )
+                ) : (
+                  <View style={d.unverifiedBadge}>
+                    <Feather name="alert-circle" size={12} color="#92400E" />
+                    <Text style={d.unverifiedBadgeText}>Missing</Text>
+                  </View>
+                )}
+                <TouchableOpacity hitSlop={6} accessibilityRole="button" accessibilityLabel="Edit"
+                  style={d.editPhoneBtn}
+                  onPress={handleEditPhone}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="edit-2" size={13} color={COLORS.fg3} />
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
+
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
+// ── Section (collapsible; the key info stays visible when closed) ─────────────
+function Section({ title, summary, open, onToggle, children }: {
+  title: string; summary: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return (
+    <View style={d.card}>
+      <TouchableOpacity style={d.sectionHead} onPress={onToggle} activeOpacity={0.75}
+        accessibilityRole="button" accessibilityState={{ expanded: open }}>
+        <View style={{ flex: 1 }}>
+          <Text style={d.sectionTitle}>{title}</Text>
+          {!open && <Text style={d.sectionSummary} numberOfLines={1}>{summary}</Text>}
         </View>
-      </ScrollView>
+        <Feather name={open ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.fg3} />
+      </TouchableOpacity>
+      {open && <View style={{ marginTop: 8 }}>{children}</View>}
     </View>
   );
 }
@@ -1400,6 +1418,44 @@ const ir = StyleSheet.create({
 
 const d = StyleSheet.create({
   root:     { flex: 1, backgroundColor: COLORS.porcelain },
+
+  // ── Layout (2026-11-27): summary, renter line, sections, sticky bar, sheet ──
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  productRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  productThumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: SHADES.carbonLight },
+  productThumbEmpty: { alignItems: 'center', justifyContent: 'center' },
+  productName: { ...TYPE.cardTitle, color: COLORS.carbon },
+  productMeta: { ...TYPE.secondary, color: COLORS.fg3, marginTop: 2 },
+  orderList: { marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.softGray200, paddingTop: 8, gap: 2 },
+  orderListTitle: { ...TYPE.small, fontWeight: '700', color: COLORS.fg3, marginBottom: 2 },
+  orderItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, minHeight: 44 },
+  orderItemName: { ...TYPE.body, fontWeight: '600', color: COLORS.carbon, flex: 1 },
+  orderItemPhase: { ...TYPE.small, color: COLORS.fg3, maxWidth: '45%' },
+  moneyBox: { marginTop: 12, backgroundColor: SHADES.amberLight, borderRadius: 12, padding: 12, gap: 2 },
+  moneyLabel: { ...TYPE.cardTitle, color: COLORS.carbon },
+  moneySub: { ...TYPE.small, color: SHADES.carbonMuted },
+  renterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
+  renterTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: COLORS.softGray200, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
+  sectionTitle: { ...TYPE.cardTitle, color: COLORS.carbon },
+  sectionSummary: { ...TYPE.secondary, color: COLORS.fg3, marginTop: 2 },
+  bar: {
+    position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.white,
+    borderTopWidth: 1, borderTopColor: COLORS.softGray200, paddingHorizontal: 16, paddingTop: 10, gap: 6,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: -2 }, elevation: 8,
+  },
+  barRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  barPrimary: { flex: 1, marginTop: 0 },
+  barError: { ...TYPE.small, color: COLORS.danger },
+  barNote: { ...TYPE.small, color: SHADES.amberText, fontWeight: '600' },
+  moreBtn: { width: 48, height: 48, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.carbon, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white },
+  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(30,30,30,0.4)' },
+  sheet: { backgroundColor: COLORS.porcelain, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 16, paddingTop: 8, maxHeight: '88%' },
+  sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.softGray200, marginBottom: 10 },
+  sheetTitle: { ...TYPE.sectionTitle, color: COLORS.carbon, marginBottom: 4 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48, paddingHorizontal: 14, backgroundColor: COLORS.white, borderRadius: 14 },
+  menuText: { ...TYPE.body, fontWeight: '600', color: COLORS.carbon, flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   notFound: { fontSize: 14, fontWeight: '500', color: COLORS.fg3 },
 

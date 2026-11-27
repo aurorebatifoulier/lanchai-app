@@ -18,7 +18,9 @@ import {
 // View the photos (download URLs fetched on demand, never stored), add/replace a photo
 // taken at the counter, or decline it with a preset reason (blocks new bookings until a
 // new one is sent). All writes go through the adminIdentityAction callable.
-export function RenterIdCard({ renterId }: { renterId: string }) {
+// hideName: the reservation detail shows the renter once at the top (no repeat here);
+// bare: no card / title (inside a collapsible section).
+export function RenterIdCard({ renterId, hideName = false, bare = false }: { renterId: string; hideName?: boolean; bare?: boolean }) {
   const [identity, setIdentity] = useState<IdentityRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [urls, setUrls] = useState<string[]>([]);
@@ -80,8 +82,8 @@ export function RenterIdCard({ renterId }: { renterId: string }) {
   const typeLabel = ID_DOC_TYPES.find(t => t.key === identity?.docType)?.label ?? 'ID document';
 
   return (
-    <View style={s.card}>
-      <Text style={s.label}>ID document</Text>
+    <View style={bare ? undefined : s.card}>
+      {!bare && <Text style={s.label}>ID document</Text>}
       <Text style={s.status}>
         {onFile
           ? `${typeLabel} on file${identity?.source === 'counter' ? ' · photo taken at the shop' : ''}`
@@ -89,7 +91,7 @@ export function RenterIdCard({ renterId }: { renterId: string }) {
             ? `Declined — ${identity.rejection?.text ?? ''}`
             : 'No ID on file'}
       </Text>
-      <RenterNameBlock renterId={renterId} />
+      {!hideName && <RenterNameBlock renterId={renterId} />}
       {urls.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photos}>
           {urls.map(u => (
