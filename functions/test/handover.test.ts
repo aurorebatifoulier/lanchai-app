@@ -186,3 +186,17 @@ test('archived rentals don\'t count; refused pick-up → owner only (D2); renter
   await pickup(['b3'], OWNER);
   assert.equal((await db().doc('reservations/b3').get()).get('pickupRefusedOpen'), false);
 });
+
+test('evidence: at least 2 photos per item (even all Good); accessories recorded', async () => {
+  await booking('p1', 'pending_payment', 0);
+  const one = { ...goodChecklist('p1'), photos: goodChecklist('p1').photos.slice(0, 1) };
+  await rejects(pickup(['p1'], STAFF, { override: { items: [{ reservationId: 'p1', checklist: one }] } }), 'invalid-argument', 'photos-required');
+  const same = { ...goodChecklist('p1'), photos: [goodChecklist('p1').photos[0], goodChecklist('p1').photos[0]] };
+  await rejects(pickup(['p1'], STAFF, { override: { items: [{ reservationId: 'p1', checklist: same }] } }), 'invalid-argument', 'photos-required');
+  assert.equal((await db().doc('reservations/p1').get()).get('status'), 'pending_payment');
+  const acc = { ...goodChecklist('p1'), accessories: [{ name: 'Carrying bag', qty: 2, handedOver: true }, { name: 'Pump', qty: 1, handedOver: false }] };
+  await pickup(['p1'], STAFF, { override: { items: [{ reservationId: 'p1', checklist: acc }] } });
+  const r = (await db().doc('reservations/p1').get()).data()!;
+  assert.equal(r.handoverChecklist.photos.length, 2);
+  assert.deepEqual(r.handoverChecklist.accessories, [{ name: 'Carrying bag', qty: 2, handedOver: true }, { name: 'Pump', qty: 1, handedOver: false }]);
+});

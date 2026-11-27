@@ -5,7 +5,7 @@
 // several visits. Never mentions the internal late-return grace period.
 
 /** Bumped whenever the agreement's wording or layout changes (stamped on each agreement). */
-export const AGREEMENT_TEMPLATE_VERSION = '2026-11-27.5'; // .5: payment by part (rental / deposit currency + method)
+export const AGREEMENT_TEMPLATE_VERSION = '2026-11-27.6'; // .6: full checklist, accessories, defects, photos, deposit method
 
 export type AgreementMethod = 'signature' | 'paper';
 
@@ -61,7 +61,41 @@ export interface AgreementLine {
   condition: string[];
   /** Condition photos taken at pick-up; null on the blank form. */
   photoCount: number | null;
+  /** Template .6+: EVERY checklist point with its state and the staff note. */
+  checklist?: { label: string; rating: string; note: string | null }[];
+  /** Accessories handed over (product "What's included" × booked quantity); null = the
+   *  product has no list; [] never shown. */
+  accessories?: HandoverAccessory[] | null;
+  /** Points not Good at pick-up — "Already present at pick-up", never charged at return. */
+  defects?: string[];
+  /** Pick-up photos: local URIs on screen, small JPEG data URIs in the PDF. */
+  photos?: string[];
 }
+
+/** One accessory at pick-up (handoverChecklist.accessories). */
+export interface HandoverAccessory { name: string; qty: number; handedOver: boolean }
+
+/** A "What's included" line → name + quantity: "2 × Carrying bag", "Strap x2", "Pump". */
+export function parseIncluded(line: string): { name: string; qty: number } | null {
+  const t = line.trim();
+  if (!t) return null;
+  const lead = /^(\d{1,2})\s*[×xX*]\s*(.+)$/.exec(t);
+  if (lead) return { name: lead[2].trim(), qty: Math.max(1, Number(lead[1])) };
+  const tail = /^(.+?)\s*[×xX*]\s*(\d{1,2})$/.exec(t);
+  if (tail) return { name: tail[1].trim(), qty: Math.max(1, Number(tail[2])) };
+  return { name: t, qty: 1 };
+}
+
+/** The accessories to hand over for a booking line: each listed per unit × quantity. */
+export function accessoriesFor(whatsIncluded: unknown, quantity: number): HandoverAccessory[] | null {
+  const list = Array.isArray(whatsIncluded) ? whatsIncluded.filter((x): x is string => typeof x === 'string') : [];
+  const parsed = list.map(parseIncluded).filter((x): x is { name: string; qty: number } => !!x);
+  if (parsed.length === 0) return null;
+  return parsed.map(p => ({ name: p.name.slice(0, 80), qty: p.qty * Math.max(1, quantity), handedOver: true }));
+}
+
+/** Max pick-up photos printed per item in the PDF (the rest: "+ n more on file"). */
+export const AGREEMENT_PDF_PHOTOS_PER_ITEM = 8;
 
 export interface AgreementData {
   agreementId: string;
@@ -75,6 +109,8 @@ export interface AgreementData {
   paymentMethod: string | null;
   /** Deposit actually collected, all items (same handover currency), null on the blank form. */
   depositReceivedTotal: { amount: number; currency: string } | null;
+  /** How the deposit was paid ("cash", "bank transfer", "QR"), template .6+. */
+  depositPaymentMethod?: string | null;
   termsEffectiveDate: string;
   templateVersion: string;
 }
@@ -102,7 +138,7 @@ export const AGREEMENT_COPY = {
   rentalDays: (days: number, rate: string) => `${days} ${days === 1 ? 'day' : 'days'} × ${rate} LAK`,
   coupon: 'Coupon',
   rental: 'Rental',
-  rentalTotal: 'Rental after coupon',
+  rentalTotal: 'Rental after discount',
   deposit: 'Refundable deposit',
   depositDetail: (qty: number, unit: string) => `${qty} × ${unit} LAK`,
   depositReceived: 'Deposit received',
@@ -115,6 +151,14 @@ export const AGREEMENT_COPY = {
   condition: 'Condition at pick-up',
   photos: (n: number) => `${n} ${n === 1 ? 'photo' : 'photos'} on file`,
   allGood: 'All checked: good condition',
+  checklistTitle: 'Checked with you at pick-up',
+  accessoriesTitle: 'Accessories handed over',
+  noAccessories: 'No accessories listed for this item.',
+  notHandedOver: 'not handed over',
+  defectsTitle: 'Already present at pick-up',
+  defectsNote: 'Noted together at pick-up — not charged at return.',
+  photosTitle: 'Photos at pick-up',
+  morePhotos: (n: number) => `+ ${n} more ${n === 1 ? 'photo' : 'photos'} on file`,
   conditionBlank: 'Condition noted with you at pick-up:',
   rules: 'Key rules',
   keyRules: [

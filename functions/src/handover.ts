@@ -39,7 +39,11 @@ const fail = (code: string, message: string, status: FailStatus = 'failed-precon
 interface HandoverChecklistInput {
   categories: Record<string, { rating: ChecklistRating; note?: string }>;
   photos: string[];
+  accessories?: { name: string; qty: number; handedOver: boolean }[];
 }
+
+/** Evidence: at least this many pick-up photos per item, even when everything is Good. */
+export const MIN_HANDOVER_PHOTOS = 2;
 
 function parseChecklist(id: string, raw: unknown): HandoverChecklistInput {
   if (raw == null || typeof raw !== 'object') fail('checklist-incomplete', 'Rate every part of the item first.', 'invalid-argument');
@@ -56,7 +60,18 @@ function parseChecklist(id: string, raw: unknown): HandoverChecklistInput {
   if (photos.length > 20 || photos.some(p => p.length > 2000 || !p.includes(`reservations%2F${id}%2Fhandover%2F`))) {
     fail('invalid-photo', 'A photo is not from this pick-up.', 'invalid-argument');
   }
-  return { categories, photos };
+  if (new Set(photos).size < MIN_HANDOVER_PHOTOS) {
+    fail('photos-required', `Take at least ${MIN_HANDOVER_PHOTOS} photos of the item at pick-up.`, 'invalid-argument');
+  }
+  const rawAcc = Array.isArray(c.accessories) ? c.accessories as Record<string, unknown>[] : null;
+  if (rawAcc && rawAcc.length > 30) fail('invalid-request', 'Too many accessories.', 'invalid-argument');
+  const accessories = rawAcc?.map(a => {
+    const name = typeof a?.name === 'string' ? a.name.trim().slice(0, 80) : '';
+    const qty = typeof a?.qty === 'number' && Number.isInteger(a.qty) && a.qty >= 1 && a.qty <= 999 ? a.qty : 0;
+    if (!name || !qty) fail('invalid-request', 'Invalid accessory.', 'invalid-argument');
+    return { name, qty, handedOver: a.handedOver !== false };
+  });
+  return { categories, photos, ...(accessories ? { accessories } : {}) };
 }
 
 function parseIds(raw: unknown): string[] {

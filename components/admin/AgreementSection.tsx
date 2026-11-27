@@ -17,7 +17,7 @@ import {
   type HandoverInfo, type AgreementCapture,
 } from '@/lib/rentalAgreement';
 import { vteDay, vteReservationLabel } from '@/functions/src/shared/dates';
-import { AGREEMENT_COPY as A, type AgreementData } from '@/functions/src/shared/rentalAgreement';
+import { AGREEMENT_COPY as A, type AgreementData, type AgreementLine } from '@/functions/src/shared/rentalAgreement';
 
 // "Rental agreement" — step 4 of the Pick-up (app/admin/pickup.tsx). The client reads the
 // agreement and signs on the full-screen view (or staff photograph the signed paper
@@ -203,15 +203,17 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
                 l.couponDiscount > 0 ? `${A.rentalTotal}: ${l.total.toLocaleString('en-US')} LAK` : null,
                 `${A.deposit}: ${l.deposit.toLocaleString('en-US')} LAK (${A.depositDetail(l.quantity, l.depositPerUnit.toLocaleString('en-US'))})`,
                 l.depositReceived ? `${A.depositReceived}: ${fmtDepositReceived(l.depositReceived, l.deposit)}` : null,
-                `${A.condition}:`,
-                l.photoCount != null ? A.photos(l.photoCount) : null,
-                ...l.condition,
-              ]} />
+                ...(l.checklist ? [] : [`${A.condition}:`, l.photoCount != null ? A.photos(l.photoCount) : null, ...l.condition]),
+              ]}>
+                {l.checklist && <ConditionDetail line={l} />}
+              </Block>
             ))}
             <Block title={A.totals} lines={[
               d.paymentMethod ? A.paidAtPickup(d.rentalTotal.toLocaleString('en-US'), d.paymentMethod) : A.toPayAtPickup(d.rentalTotal.toLocaleString('en-US')),
               `${A.totalDeposit}: ${d.depositTotal.toLocaleString('en-US')} LAK`,
-              d.depositReceivedTotal ? `${A.depositReceived}: ${fmtDepositReceived(d.depositReceivedTotal, d.depositTotal)}` : null,
+              d.depositReceivedTotal
+                ? `${A.depositReceived}: ${fmtDepositReceived(d.depositReceivedTotal, d.depositTotal)}${d.depositPaymentMethod ? ` · ${d.depositPaymentMethod}` : ''}`
+                : null,
             ]} />
             <Block title={A.rules} lines={[...A.keyRules]} bullets />
             <Text style={[UI.small, { marginTop: 10 }]}>{A.terms(d.termsEffectiveDate)}</Text>
@@ -239,13 +241,55 @@ function SignModal({ visible, prepared, onClose, onConfirm }: {
   );
 }
 
-function Block({ title, lines, bullets }: { title: string; lines: (string | null)[]; bullets?: boolean }) {
+function Block({ title, lines, bullets, children }: { title: string; lines: (string | null)[]; bullets?: boolean; children?: React.ReactNode }) {
   return (
     <View style={[UI.card, s.block]}>
       <Text style={UI.title}>{title}</Text>
       {lines.filter((l): l is string => !!l).map((l, i) => (
         <Text key={i} style={s.blockLine}>{bullets ? `•  ${l}` : l}</Text>
       ))}
+      {children}
+    </View>
+  );
+}
+
+// Condition at pick-up (template .6): defects first (highlighted), every point with its
+// state + note, the accessories handed over, the photos — what the client signs for.
+function ConditionDetail({ line: l }: { line: AgreementLine }) {
+  return (
+    <View style={{ gap: 6, marginTop: 6 }}>
+      <Text style={s.subTitle}>{A.condition}</Text>
+      {l.defects?.length ? (
+        <View style={s.defects}>
+          <Text style={s.subTitle}>{A.defectsTitle}</Text>
+          {l.defects.map(d => <Text key={d} style={s.blockLine}>{d}</Text>)}
+          <Text style={UI.small}>{A.defectsNote}</Text>
+        </View>
+      ) : <Text style={s.blockLine}>{A.allGood}</Text>}
+      <Text style={s.subTitle}>{A.checklistTitle}</Text>
+      {(l.checklist ?? []).map(c => (
+        <View key={c.label} style={s.ckRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.blockLine}>{c.label}</Text>
+            {!!c.note && <Text style={UI.small}>{c.note}</Text>}
+          </View>
+          <Text style={[s.ckState, c.rating !== 'Good' && { color: SHADES.amberText }]}>{c.rating}</Text>
+        </View>
+      ))}
+      <Text style={s.subTitle}>{A.accessoriesTitle}</Text>
+      {l.accessories?.length
+        ? l.accessories.map(a => (
+          <Text key={a.name} style={s.blockLine}>{`•  ${a.qty} × ${a.name}${a.handedOver ? '' : ` (${A.notHandedOver})`}`}</Text>
+        ))
+        : <Text style={s.blockLine}>{A.noAccessories}</Text>}
+      {!!l.photos?.length && (
+        <>
+          <Text style={s.subTitle}>{A.photosTitle}</Text>
+          <View style={s.thumbs}>
+            {l.photos.map(u => <Image key={u} source={{ uri: u }} style={s.thumb} />)}
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -268,6 +312,12 @@ const s = StyleSheet.create({
   order: { fontSize: 13, fontWeight: '600', color: SHADES.carbonMuted },
   block: { padding: 14, gap: 3 },
   blockLine: { fontSize: 13.5, fontWeight: '500', color: SHADES.carbonMuted, lineHeight: 19 },
+  subTitle: { fontSize: 13, fontWeight: '700', color: SHADES.carbon, marginTop: 4 },
+  defects: { backgroundColor: SHADES.amberLight, borderRadius: 10, padding: 10, gap: 2, borderWidth: 1, borderColor: SHADES.amber },
+  ckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  ckState: { fontSize: 13, fontWeight: '700', color: SHADES.carbon },
+  thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: SHADES.carbonLight },
   accept: { fontSize: 15, fontWeight: '800', color: SHADES.carbon, marginTop: 10 },
   panel: {
     backgroundColor: SHADES.white, borderTopWidth: 0.5, borderTopColor: SHADES.border,

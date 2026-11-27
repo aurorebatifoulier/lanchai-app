@@ -233,6 +233,8 @@ function ConditionStep({ ids, docs, items, openItem, setOpenItem, setItem, ready
             index={n} count={ids.length} open={openItem === id || ids.length === 1}
             onToggle={() => setOpenItem(openItem === id ? null : id)}
             state={it} onChange={next => setItem(id, next)} reference={r.handoverChecklist?.categories ?? null}
+            referencePhotos={r.handoverChecklist?.photos ?? []}
+            referenceAccessories={r.handoverChecklist?.accessories}
             extra={(worst === 'damaged' || worst === 'unusable') && r.quantity > 1 ? (
               <UnitsStepper label={worst === 'unusable' ? 'Units unusable' : 'Units damaged'}
                 value={it.units} max={r.quantity} onChange={n2 => setItem(id, { ...it, units: n2 })} />

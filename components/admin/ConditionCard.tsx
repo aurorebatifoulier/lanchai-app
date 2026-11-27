@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Image, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Text, TextInput } from '@/components/AppText';
@@ -10,6 +10,7 @@ import { COLORS } from '@/constants/Colors';
 import { TYPE } from '@/constants/typography';
 import { askCamera } from '@/lib/mediaPermissions';
 import { CHECKLIST_CATEGORIES, type ChecklistRating } from '@/lib/firestore';
+import type { HandoverAccessory } from '@/functions/src/shared/rentalAgreement';
 
 // One item's condition checklist (Good / Fair / Damaged / Unusable per part, a note when
 // not Good, photos) — the Condition step of BOTH the 3-step return (app/admin/return.tsx)
@@ -23,14 +24,21 @@ export interface ConditionState {
   notes: Record<string, string>;
   photos: string[]; // local uris
   units: number;
+  /** Pick-up: the product's accessories to hand over (null = none listed; undefined = loading / return). */
+  accessories?: HandoverAccessory[] | null;
 }
+
+/** Pick-up: at least this many photos per item, even when everything is Good (evidence). */
+export const MIN_HANDOVER_PHOTOS = 2;
 export const emptyCondition = (): ConditionState => ({
   ratings: Object.fromEntries(CHECKLIST_CATEGORIES.map(c => [c.id, null])),
   notes: {}, photos: [], units: 1,
 });
 export const conditionComplete = (it: ConditionState) => CHECKLIST_CATEGORIES.every(c => it.ratings[c.id] != null);
 export const conditionNeedsPhoto = (it: ConditionState) => Object.values(it.ratings).some(r => r != null && r !== 'good');
-export const conditionReady = (it: ConditionState) => conditionComplete(it) && (!conditionNeedsPhoto(it) || it.photos.length > 0);
+/** minPhotos: pick-up = MIN_HANDOVER_PHOTOS; return = 0 (≥ 1 only when a part isn't Good). */
+export const conditionReady = (it: ConditionState, minPhotos = 0) => conditionComplete(it)
+  && it.photos.length >= minPhotos && (!conditionNeedsPhoto(it) || it.photos.length > 0);
 export const worstCondition = (it: ConditionState): ChecklistRating =>
   (Object.values(it.ratings).filter(Boolean) as ChecklistRating[])
     .reduce<ChecklistRating>((w, r) => (RATINGS.indexOf(r) > RATINGS.indexOf(w) ? r : w), 'good');
@@ -41,9 +49,10 @@ export const conditionPayload = (it: ConditionState, photos: string[]) => ({
     ...(it.notes[c.id]?.trim() ? { note: it.notes[c.id].trim() } : {}),
   }])),
   photos,
+  ...(it.accessories ? { accessories: it.accessories } : {}),
 });
 
-export function ConditionCard({ title, index, count, open, onToggle, state, onChange, reference, extra }: {
+export function ConditionCard({ title, index, count, open, onToggle, state, onChange, reference, referencePhotos, referenceAccessories, minPhotos = 0, extra }: {
   title: string;
   /** Position in the order (shown when count > 1). */
   index: number;
@@ -54,6 +63,11 @@ export function ConditionCard({ title, index, count, open, onToggle, state, onCh
   onChange: (next: ConditionState) => void;
   /** Return: what was recorded at pick-up, per part ("At pick-up: Fair — scratch"). */
   reference?: Record<string, { rating: ChecklistRating; note?: string }> | null;
+  /** Return: the pick-up photos (download URLs) and accessories handed over, to compare. */
+  referencePhotos?: string[];
+  referenceAccessories?: HandoverAccessory[] | null;
+  /** Pick-up: MIN_HANDOVER_PHOTOS. */
+  minPhotos?: number;
   /** Slot under the parts (the return's damaged-units stepper). */
   extra?: React.ReactNode;
 }) {
@@ -67,6 +81,8 @@ export function ConditionCard({ title, index, count, open, onToggle, state, onCh
     onChange({ ...it, photos: [...it.photos, ...r.assets.map(a => a.uri)].slice(0, 20) });
   };
   const needsPhoto = conditionNeedsPhoto(it);
+  const [zoom, setZoom] = useState<string | null>(null);
+  const missingMin = minPhotos > 0 && it.photos.length < minPhotos;
   return (
     <View style={[UI.card, UI.cardPadded, s.card]}>
       <TouchableOpacity onPress={onToggle} activeOpacity={0.8} style={s.itemHead} disabled={count === 1}>
@@ -79,12 +95,38 @@ export function ConditionCard({ title, index, count, open, onToggle, state, onCh
       </TouchableOpacity>
       {open && (
         <View style={{ gap: 12 }}>
+          {!!referencePhotos?.length && (
+            <View style={s.refBox}>
+              <Text style={s.catLabel}>Photos at pick-up · tap to compare</Text>
+              <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
+                {referencePhotos.map(u => (
+                  <TouchableOpacity key={u} onPress={() => setZoom(u)} accessibilityRole="button" accessibilityLabel="Open pick-up photo">
+                    <Image source={{ uri: u }} style={s.refThumb} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+          {referenceAccessories !== undefined && (
+            <View style={s.refBox}>
+              <Text style={s.catLabel}>Handed over at pick-up</Text>
+              {referenceAccessories?.length
+                ? referenceAccessories.map(a => (
+                  <Text key={a.name} style={UI.small}>{`${a.qty} × ${a.name}${a.handedOver ? '' : ' (not handed over)'}`}</Text>
+                ))
+                : <Text style={UI.small}>No accessories listed.</Text>}
+            </View>
+          )}
           {CHECKLIST_CATEGORIES.map(c => {
             const at = reference?.[c.id];
             return (
               <View key={c.id} style={s.cat}>
                 <Text style={s.catLabel}>{c.label}</Text>
-                {!!at && <Text style={UI.small}>{`At pick-up: ${RATING_LABELS[at.rating]}${at.note ? ` — ${at.note}` : ''}`}</Text>}
+                {!!at && (
+                  <Text style={[UI.small, at.rating !== 'good' && s.refBad]}>
+                    {`At pick-up: ${RATING_LABELS[at.rating]}${at.note ? ` — ${at.note}` : ''}${at.rating !== 'good' ? ' · already present' : ''}`}
+                  </Text>
+                )}
                 <View style={s.chips}>
                   {RATINGS.map(rt => {
                     const on = it.ratings[c.id] === rt;
@@ -106,7 +148,25 @@ export function ConditionCard({ title, index, count, open, onToggle, state, onCh
             );
           })}
           {extra}
-          <Text style={s.catLabel}>{needsPhoto ? 'Photos (required)' : 'Photos'}</Text>
+          {it.accessories !== undefined && (
+            <View style={s.cat}>
+              <Text style={s.catLabel}>Accessories handed over</Text>
+              {it.accessories === null ? (
+                <Text style={UI.small}>No accessories listed for this product (Product → Details → What’s included).</Text>
+              ) : it.accessories.map((a, i) => (
+                <TouchableOpacity key={a.name} style={s.accRow} activeOpacity={0.75} accessibilityRole="checkbox"
+                  accessibilityState={{ checked: a.handedOver }}
+                  onPress={() => onChange({ ...it, accessories: it.accessories!.map((x, j) => (j === i ? { ...x, handedOver: !x.handedOver } : x)) })}>
+                  <View style={[s.box, a.handedOver && s.boxOn]}>
+                    {a.handedOver && <Feather name="check" size={13} color={COLORS.white} />}
+                  </View>
+                  <Text style={[UI.body, { flex: 1 }]}>{`${a.qty} × ${a.name}`}</Text>
+                  {!a.handedOver && <Text style={[UI.small, s.refBad]}>Not handed over</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <Text style={s.catLabel}>{minPhotos > 0 ? `Photos (at least ${minPhotos})` : needsPhoto ? 'Photos (required)' : 'Photos'}</Text>
           {it.photos.length > 0 && (
             <ScrollView horizontal contentContainerStyle={{ gap: 8 }}>
               {it.photos.map(u => (
@@ -130,11 +190,18 @@ export function ConditionCard({ title, index, count, open, onToggle, state, onCh
               <Text style={[UI.btnSecondaryText, UI.btnCardText]}>From photos</Text>
             </TouchableOpacity>
           </View>
-          {needsPhoto && it.photos.length === 0 && (
+          {missingMin ? (
+            <Text style={UI.errorText}>{`Take at least ${minPhotos} photos of the item (${it.photos.length}/${minPhotos}).`}</Text>
+          ) : needsPhoto && it.photos.length === 0 && (
             <Text style={UI.errorText}>A part isn’t in good condition: add at least one photo.</Text>
           )}
         </View>
       )}
+      <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
+        <TouchableOpacity style={s.zoomBackdrop} activeOpacity={1} onPress={() => setZoom(null)} accessibilityRole="button" accessibilityLabel="Close photo">
+          {zoom && <Image source={{ uri: zoom }} style={s.zoomImage} resizeMode="contain" />}
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -152,4 +219,12 @@ const s = StyleSheet.create({
   remove: { position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(30,30,30,0.7)', alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   flex: { flex: 1 },
+  refBox: { gap: 6, backgroundColor: SHADES.carbonLight, borderRadius: 12, padding: 10 },
+  refThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: COLORS.softGray200 },
+  refBad: { color: SHADES.amberText, fontWeight: '700' },
+  accRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: SHADES.carbon, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white },
+  boxOn: { backgroundColor: SHADES.carbon },
+  zoomBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
+  zoomImage: { width: '100%', height: '85%' },
 });

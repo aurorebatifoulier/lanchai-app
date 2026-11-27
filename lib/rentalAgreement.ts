@@ -17,8 +17,8 @@ import { vteReservationLabel, vteDay } from '@/functions/src/shared/dates';
 import { CONTACT_EMAIL } from '@/functions/src/shared/shop';
 import { ID_DOC_TYPES } from '@/functions/src/shared/identity';
 import {
-  AGREEMENT_COPY as A, AGREEMENT_TEMPLATE_VERSION, agreementPdfPath, depositPerUnitOf, newAgreementId, paymentMethodLabel,
-  type AgreementData, type AgreementMethod,
+  AGREEMENT_COPY as A, AGREEMENT_TEMPLATE_VERSION, AGREEMENT_PDF_PHOTOS_PER_ITEM, agreementPdfPath, depositPerUnitOf, newAgreementId, paymentMethodLabel,
+  type AgreementData, type AgreementLine, type AgreementMethod, type HandoverAccessory,
 } from '@/functions/src/shared/rentalAgreement';
 import { toSignatureSvg, type Signature } from '@/components/SignaturePad';
 import { discountOf } from '@/functions/src/shared/promo';
@@ -44,11 +44,34 @@ export function conditionLines(categories: ChecklistData['categories'] | null | 
 
 /** What staff recorded at the handover (null = blank printable form). */
 export interface HandoverInfo {
-  items: Record<string, { condition: string[]; photoCount: number; depositReceived: { amount: number; currency: string } | null }>;
+  items: Record<string, {
+    condition: string[]; photoCount: number; depositReceived: { amount: number; currency: string } | null;
+    /** Pick-up flow (template .6): the categories as rated, accessories, photos (local URIs). */
+    categories?: ChecklistData['categories'];
+    accessories?: HandoverAccessory[] | null;
+    photos?: string[];
+  }>;
   /** handoverChecklist.rentalPaymentMethod key. */
   paymentMethod: string | null;
   /** Pick-up flow: how the rental was paid, as shown ("QR", "Cash USD · 48 USD"). */
   paymentLabel?: string | null;
+  /** Pick-up flow: how the deposit was paid ("cash", "bank transfer", "QR"). */
+  depositPaymentLabel?: string | null;
+}
+
+/** Every checklist point with its state + note (agreement, template .6). */
+export function checklistLines(categories: ChecklistData['categories'] | null | undefined) {
+  if (!categories) return [];
+  return CHECKLIST_CATEGORIES.filter(c => categories[c.id]?.rating).map(c => ({
+    label: c.label, rating: RATING_TEXT[categories[c.id].rating], note: categories[c.id].note?.trim() || null,
+  }));
+}
+
+/** Points not Good at pick-up → "Already present at pick-up" (never charged at return). */
+export function defectLines(categories: ChecklistData['categories'] | null | undefined): string[] {
+  if (!categories) return [];
+  return CHECKLIST_CATEGORIES.filter(c => categories[c.id]?.rating && categories[c.id].rating !== 'good')
+    .map(c => [c.label, RATING_TEXT[categories[c.id].rating], categories[c.id].note?.trim()].filter(Boolean).join(' · '));
 }
 
 interface RenterBlock { name: string; phone: string | null; email: string | null; idType: string | null; idCheckedAtLabel: string | null }
@@ -104,6 +127,12 @@ export function buildAgreementData(args: {
       depositReceived: h?.depositReceived ?? null,
       condition: h?.condition ?? [],
       photoCount: h ? h.photoCount : null,
+      ...(h?.categories ? {
+        checklist: checklistLines(h.categories),
+        defects: defectLines(h.categories),
+        accessories: h.accessories ?? null,
+        photos: h.photos ?? [],
+      } : {}),
     };
   });
   // Deposit received in total — only when every item was collected in one currency.
@@ -125,6 +154,7 @@ export function buildAgreementData(args: {
     rentalTotal: lines.reduce((s, l) => s + l.total, 0),
     depositTotal: lines.reduce((s, l) => s + l.deposit, 0),
     paymentMethod: handover?.paymentLabel ?? paymentMethodLabel(handover?.paymentMethod),
+    depositPaymentMethod: handover?.depositPaymentLabel ?? null,
     depositReceivedTotal,
     termsEffectiveDate: LEGAL_EFFECTIVE_DATE,
     templateVersion: AGREEMENT_TEMPLATE_VERSION,
@@ -139,6 +169,41 @@ const num = (n: number) => Math.round(n).toLocaleString('en-US');
 /** "140 USD (≈ 3,010,000 LAK)" — the amount actually collected, with the LAK figure. */
 export const fmtDepositReceived = (x: { amount: number; currency: string }, lakAmount: number) =>
   A.depositAmount(x.amount.toLocaleString('en-US', { maximumFractionDigits: 2 }), x.currency, num(lakAmount));
+
+/** Condition of one item (template .6): every point, defects, accessories, photo thumbnails. */
+function conditionHtml(l: AgreementLine): string {
+  const rows = (l.checklist ?? []).map(c => `<tr><td>${esc(c.label)}${c.note ? `<div class="muted small">${esc(c.note)}</div>` : ''}</td>`
+    + `<td class="r${c.rating === 'Good' ? '' : ' bad'}">${esc(c.rating)}</td></tr>`).join('');
+  const defects = l.defects?.length
+    ? `<div class="defects"><div class="label">${esc(A.defectsTitle)}</div>${l.defects.map(d => `<div>${esc(d)}</div>`).join('')}<div class="muted small">${esc(A.defectsNote)}</div></div>`
+    : `<div class="muted">${esc(A.allGood)}</div>`;
+  const acc = l.accessories === undefined ? '' : `<div class="label" style="margin-top:6px">${esc(A.accessoriesTitle)}</div>${l.accessories === null || l.accessories.length === 0
+    ? `<div class="muted">${esc(A.noAccessories)}</div>`
+    : `<ul>${l.accessories.map(a => `<li>${esc(`${a.qty} × ${a.name}`)}${a.handedOver ? '' : ` <strong>(${esc(A.notHandedOver)})</strong>`}</li>`).join('')}</ul>`}`;
+  const photos = l.photos ?? [];
+  const shown = photos.slice(0, AGREEMENT_PDF_PHOTOS_PER_ITEM);
+  const pics = photos.length ? `<div class="label" style="margin-top:6px">${esc(A.photosTitle)}</div>
+    <div class="thumbs">${shown.map(src => `<img src="${src}"/>`).join('')}</div>
+    ${(l.photoCount ?? photos.length) > shown.length ? `<div class="muted small">${esc(A.morePhotos((l.photoCount ?? photos.length) - shown.length))}</div>` : ''}` : '';
+  return `${defects}<table class="ck">${rows}</table>${acc}${pics}`;
+}
+
+/** Small JPEG data URIs of the pick-up photos for the PDF (~25–40 KB each). */
+async function pdfThumbs(data: AgreementData): Promise<AgreementData> {
+  const lines = await Promise.all(data.lines.map(async l => {
+    if (!l.photos?.length) return l;
+    const thumbs: string[] = [];
+    for (const uri of l.photos.slice(0, AGREEMENT_PDF_PHOTOS_PER_ITEM)) {
+      try {
+        const img = await manipulateAsync(uri, [{ resize: { width: 360 } }], { compress: 0.5, format: SaveFormat.JPEG, base64: true });
+        if (img.base64) thumbs.push(`data:image/jpeg;base64,${img.base64}`);
+      } catch { /* a photo that can't be read is still counted below */ }
+    }
+    return { ...l, photos: thumbs }; // "+ n more" counts from photoCount
+
+  }));
+  return { ...data, lines };
+}
 
 /** Safe inside a CSS string (page footer). */
 const cssText = (t: string) => t.replace(/[\\"\n]/g, ' ');
@@ -168,7 +233,7 @@ export function buildAgreementHtml(data: AgreementData, opts: {
         <div class="label">${esc(opts.blank ? A.conditionBlank : A.condition)}</div>
         ${opts.blank
           ? '<div class="blankline"></div><div class="blankline"></div>'
-          : `${l.photoCount != null ? `<div class="muted">${esc(A.photos(l.photoCount))}</div>` : ''}${l.condition.map(c => `<div>${esc(c)}</div>`).join('')}`}
+          : l.checklist ? conditionHtml(l) : `${l.photoCount != null ? `<div class="muted">${esc(A.photos(l.photoCount))}</div>` : ''}${l.condition.map(c => `<div>${esc(c)}</div>`).join('')}`}
       </div>
     </div>`).join('');
 
@@ -217,6 +282,11 @@ export function buildAgreementHtml(data: AgreementData, opts: {
   hr { border: none; border-top: 1px solid #ECECEA; margin: 10px 0; }
   .page { page-break-before: always; text-align: center; }
   .photo { max-width: 100%; max-height: 250mm; }
+  .ck td { padding: 1px 0; font-size: 11px; } .ck td.r { text-align: right; font-weight: 700; white-space: nowrap; }
+  .ck td.bad { color: #B45309; }
+  .defects { background: #FFF6DB; border: 1px solid #F4B400; border-radius: 8px; padding: 6px 8px; margin: 6px 0; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .thumbs img { width: 30mm; height: 30mm; object-fit: cover; border-radius: 4px; border: 1px solid #ECECEA; }
 </style></head><body>
   <div class="header"><div class="brand">LANCHAI</div><div class="tagline">Rent. Return. Repeat.</div></div>
   <h1>${esc(opts.paperPhotos ? A.paperTitle : A.title)}</h1>
@@ -240,7 +310,7 @@ export function buildAgreementHtml(data: AgreementData, opts: {
       ? A.paidAtPickup(num(data.rentalTotal), data.paymentMethod)
       : A.toPayAtPickup(num(data.rentalTotal)))}</td></tr>
     <tr><td>${esc(A.totalDeposit)}</td><td class="v">${lak(data.depositTotal)}</td></tr>
-    ${data.depositReceivedTotal && !opts.blank ? `<tr><td>${esc(A.depositReceived)}</td><td class="v">${esc(fmtDepositReceived(data.depositReceivedTotal, data.depositTotal))}</td></tr>` : ''}
+    ${data.depositReceivedTotal && !opts.blank ? `<tr><td>${esc(A.depositReceived)}</td><td class="v">${esc(fmtDepositReceived(data.depositReceivedTotal, data.depositTotal))}${data.depositPaymentMethod ? ` &middot; ${esc(data.depositPaymentMethod)}` : ''}</td></tr>` : ''}
   </table>
 
   <h2>${esc(A.rules)}</h2>
@@ -320,7 +390,7 @@ export async function uploadAgreement(args: {
   data: AgreementData; termsMarkdown: string; capture: AgreementCapture;
 }): Promise<{ agreementId: string; method: AgreementMethod }> {
   await requireSession();
-  const data = withFreshId(args.data);
+  const data = await pdfThumbs(withFreshId(args.data));
   const signedAtLabel = vteReservationLabel(Date.now());
   let html: string;
   if (args.capture.method === 'signature') {

@@ -1988,7 +1988,20 @@ a snapshot indefinitely).
   + `phoneVerified`, audit entries. After the commit: "Rental started" notification, ID
   flags + "ID verified" email (`sendIdVerifiedEmailOnce`), agreement email.
   `finalizeRentalAgreement` / `recordIdCheck` stay deployed for older builds only.
-  Agreement template `.5`. Admin labels: both statuses = "Booked" (list chip + filter,
+  **Condition evidence (2026-11-27, template `.6`):** ≥ `MIN_HANDOVER_PHOTOS` (2) photos
+  per item at pick-up even when all Good (`ConditionCard minPhotos` + server
+  `photos-required`, distinct photos); accessories = the product's "What's included"
+  (`accessoriesFor` / `parseIncluded` — "2 × Carrying bag", per unit × booked quantity,
+  `shared/rentalAgreement.ts`) ticked "handed over" at step 2 →
+  `handoverChecklist.accessories`; no list → "No accessories listed" (add them in the
+  product form → Details → What's included). The agreement (screen + PDF) shows per item:
+  "Already present at pick-up" (every point not Good, highlighted, "not charged at
+  return"), EVERY checklist point with its state + note, the accessories, and the photos
+  (PDF: 360 px JPEG thumbnails, ≤ `AGREEMENT_PDF_PHOTOS_PER_ITEM` (8) per item + "n more
+  on file"); "Rental after discount"; Totals "Deposit received: 200 USD · cash". The
+  return's step 1 shows the pick-up photos (tap to compare), the accessories handed over
+  and "At pick-up: Fair — … · already present" under each point.
+  Agreement template `.6`. Admin labels: both statuses = "Booked" (list chip + filter,
   calendar day = one "Pick-ups" section, month = one dot); renter labels unchanged
   ("Pending payment at pick-up", legacy "Confirmed").
 - **Handover = server only, with a PHYSICAL unit check (2026-11-20).** Every pick-up

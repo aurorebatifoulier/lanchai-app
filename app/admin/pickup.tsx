@@ -10,7 +10,10 @@ import { Text } from '@/components/AppText';
 import BackButton from '@/components/BackButton';
 import StepProgress from '@/components/StepProgress';
 import { UI, CheckLine, useScreenInsets } from '@/components/account/ui';
-import { ConditionCard, emptyCondition, conditionReady, worstCondition, conditionPayload, type ConditionState } from '@/components/admin/ConditionCard';
+import {
+  ConditionCard, emptyCondition, conditionReady, worstCondition, conditionPayload, MIN_HANDOVER_PHOTOS, type ConditionState,
+} from '@/components/admin/ConditionCard';
+import { accessoriesFor } from '@/functions/src/shared/rentalAgreement';
 import { useIdCheck, IdCheckSection } from '@/components/admin/IdCheckSection';
 import { RenterNameBlock } from '@/components/admin/RenterNameBlock';
 import { RefusePickupBox } from '@/components/admin/OwnerReview';
@@ -80,6 +83,21 @@ export default function AdminPickupScreen() {
     return () => unsubs.forEach(u => u());
   }, [ids]);
 
+  // Accessories to hand over: the product's "What's included" × booked quantity (once per item).
+  const loadedKey = ids.filter(id => docs[id]).join(',');
+  useEffect(() => {
+    for (const id of ids) {
+      const r = docs[id];
+      if (!r || items[id]?.accessories !== undefined) continue;
+      getDoc(doc(db, 'products', r.productId))
+        .then(p => setItems(prev => prev[id] && prev[id].accessories === undefined
+          ? { ...prev, [id]: { ...prev[id], accessories: accessoriesFor(p.get('whatsIncluded'), r.quantity) } }
+          : prev))
+        .catch(() => setItems(prev => (prev[id] ? { ...prev, [id]: { ...prev[id], accessories: null } } : prev)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedKey]);
+
   const first = docs[ids[0]] as RentalDoc | undefined;
   const renterId = first?.renterId ?? null;
   const idCheck = useIdCheck(renterId);
@@ -102,7 +120,7 @@ export default function AdminPickupScreen() {
   const loaded = ids.length > 0 && ids.every(id => docs[id]);
   const blockedId = loaded && !done && !busy ? ids.find(id => !canDo(docs[id], 'handover', role)) : undefined;
   const earlyDayMs = loaded ? ids.map(id => docs[id].pickupAt?.toMillis() ?? 0).find(ms => isBeforePickupDay(ms)) : undefined;
-  const conditionOk = ids.length > 0 && ids.every(id => items[id] && conditionReady(items[id]));
+  const conditionOk = ids.length > 0 && ids.every(id => items[id] && items[id].accessories !== undefined && conditionReady(items[id], MIN_HANDOVER_PHOTOS));
   const pay: PickupPayment | null = rentalPart.method && (split ? depositPart.method : true)
     ? {
       rental: { currency: rentalPart.currency, method: rentalPart.method },
@@ -133,14 +151,21 @@ export default function AdminPickupScreen() {
     const rent = quote.currencies[pay.rental.currency];
     if (!dep || !rent) return null;
     return {
-      items: Object.fromEntries(ids.map((id, i) => [id, {
-        condition: conditionLines(conditionPayload(items[id], []).categories as ChecklistData['categories']),
-        photoCount: items[id].photos.length,
-        depositReceived: { amount: dep.depositPerLine[i], currency: pay.deposit.currency },
-      }])),
+      items: Object.fromEntries(ids.map((id, i) => {
+        const categories = conditionPayload(items[id], []).categories as ChecklistData['categories'];
+        return [id, {
+          condition: conditionLines(categories),
+          photoCount: items[id].photos.length,
+          depositReceived: { amount: dep.depositPerLine[i], currency: pay.deposit.currency },
+          categories,
+          accessories: items[id].accessories ?? null,
+          photos: items[id].photos,
+        }];
+      })),
       paymentMethod: rentalPaymentMethodKey(pay.rental),
       paymentLabel: pay.rental.currency === 'LAK' ? paymentPartLabel(pay.rental)
         : `${paymentPartLabel(pay.rental)} · ${fmtMoney(rent.rental, pay.rental.currency)}`,
+      depositPaymentLabel: PAY_METHODS.find(m => m.key === pay.deposit.method)!.label.replace(/^(Cash|Bank transfer)$/, x => x.toLowerCase()),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quote, pay?.rental.currency, pay?.rental.method, pay?.deposit.currency, pay?.deposit.method, items, ids]);
@@ -258,6 +283,7 @@ export default function AdminPickupScreen() {
             <ConditionCard key={id} title={`${docs[id].productName}${docs[id].quantity > 1 ? ` × ${docs[id].quantity}` : ''}`}
               index={n} count={ids.length} open={openItem === id || ids.length === 1}
               onToggle={() => setOpenItem(openItem === id ? null : id)}
+              minPhotos={MIN_HANDOVER_PHOTOS}
               state={items[id]} onChange={next => { setItems(prev => ({ ...prev, [id]: next })); setSigned(null); }} />
           ))}
           {!!error && <Text style={[UI.errorText, { marginTop: 12 }]}>{error}</Text>}
@@ -265,7 +291,7 @@ export default function AdminPickupScreen() {
             onPress={toPayment} activeOpacity={0.85}>
             {busy ? <ActivityIndicator color={SHADES.carbon} /> : <Text style={UI.btnPrimaryText}>Next · Payment</Text>}
           </TouchableOpacity>
-          {!conditionOk && <Text style={[UI.small, { textAlign: 'center', marginTop: 8 }]}>Rate every part{ids.length > 1 ? ' of every item' : ''} first.</Text>}
+          {!conditionOk && <Text style={[UI.small, { textAlign: 'center', marginTop: 8 }]}>{`Rate every part and take at least ${MIN_HANDOVER_PHOTOS} photos${ids.length > 1 ? ' of every item' : ''}.`}</Text>}
         </ScrollView>
       ) : step === 2 && quote ? (
         <PaymentStep quote={quote} rentalPart={rentalPart} depositPart={depositPart} split={split}

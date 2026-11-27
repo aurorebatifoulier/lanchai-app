@@ -201,6 +201,8 @@ export type ChecklistCategoryId = typeof CHECKLIST_CATEGORIES[number]['id'];
 export interface ChecklistData {
   categories: Record<ChecklistCategoryId, { rating: ChecklistRating; note?: string }>;
   photos: string[];
+  /** Pick-up (2026-11-27+): accessories handed over (product "What's included" × qty). */
+  accessories?: { name: string; qty: number; handedOver: boolean }[];
   confirmedByName: string;
   confirmedAt: Timestamp;
   clientConfirmedByName: string;

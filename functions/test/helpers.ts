@@ -86,7 +86,8 @@ export async function seedBookingWorld() {
 export const CHECKLIST_IDS = ['mainItem', 'cleanliness', 'basicUsage', 'power', 'accessories', 'cables', 'protectiveCase', 'storageCase', 'other'];
 export const goodChecklist = (id: string) => ({
   categories: Object.fromEntries(CHECKLIST_IDS.map(k => [k, { rating: 'good' }])),
-  photos: [`https://firebasestorage.googleapis.com/v0/b/x/o/reservations%2F${id}%2Fhandover%2F1.jpg`],
+  photos: [1, 2].map(n => `https://firebasestorage.googleapis.com/v0/b/x/o/reservations%2F${id}%2Fhandover%2F${n}.jpg`),
+  accessories: [{ name: 'Carrying bag', qty: 1, handedOver: true }],
 });
 
 /** Uploads a signed agreement PDF for this order, as the app does before submitHandover. */
